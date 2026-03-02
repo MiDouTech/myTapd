@@ -26,11 +26,14 @@ public class WecomClient {
     private static final String GET_USER_DETAIL_URL = "https://qyapi.weixin.qq.com/cgi-bin/user/get";
     private static final String GET_DEPARTMENT_LIST_URL = "https://qyapi.weixin.qq.com/cgi-bin/department/list";
     private static final String GET_DEPARTMENT_USER_URL = "https://qyapi.weixin.qq.com/cgi-bin/user/list";
+    private static final String SEND_APP_MESSAGE_URL = "https://qyapi.weixin.qq.com/cgi-bin/message/send";
 
     private final WecomTokenManager tokenManager;
+    private final WecomProperties wecomProperties;
 
-    public WecomClient(WecomTokenManager tokenManager) {
+    public WecomClient(WecomTokenManager tokenManager, WecomProperties wecomProperties) {
         this.tokenManager = tokenManager;
+        this.wecomProperties = wecomProperties;
     }
 
     /**
@@ -162,6 +165,72 @@ public class WecomClient {
             }
         }
         return users;
+    }
+
+    /**
+     * 发送企微应用文本卡片消息
+     */
+    public void sendTextCardMessage(String toUser, String title, String description, String url, String btnText) {
+        if (toUser == null || toUser.trim().isEmpty()) {
+            log.warn("企微应用消息接收人为空，跳过发送");
+            return;
+        }
+
+        int agentId;
+        try {
+            agentId = Integer.parseInt(wecomProperties.getAgentId());
+        } catch (Exception ex) {
+            log.error("企微AgentId配置非法: {}", wecomProperties.getAgentId());
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企微AgentId配置非法");
+        }
+
+        String accessToken = tokenManager.getAccessToken();
+        String requestUrl = SEND_APP_MESSAGE_URL + "?access_token=" + accessToken;
+
+        JSONObject textCard = new JSONObject();
+        textCard.put("title", title == null ? "工单通知" : title);
+        textCard.put("description", description == null ? "" : description);
+        textCard.put("url", url == null ? "" : url);
+        textCard.put("btntxt", btnText == null ? "查看详情" : btnText);
+
+        JSONObject payload = new JSONObject();
+        payload.put("touser", toUser);
+        payload.put("msgtype", "textcard");
+        payload.put("agentid", agentId);
+        payload.put("textcard", textCard);
+
+        String response = HttpUtil.post(requestUrl, payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微应用消息失败: toUser={}, errMsg={}", toUser, errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用消息失败: " + errMsg);
+        }
+    }
+
+    /**
+     * 发送企微群机器人Markdown消息
+     */
+    public void sendGroupWebhookMarkdown(String webhookUrl, String markdownContent) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            log.warn("企微群Webhook地址为空，跳过发送");
+            return;
+        }
+
+        JSONObject markdown = new JSONObject();
+        markdown.put("content", markdownContent == null ? "" : markdownContent);
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "markdown");
+        payload.put("markdown", markdown);
+
+        String response = HttpUtil.post(webhookUrl, payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微群Webhook失败: webhookUrl={}, errMsg={}", webhookUrl, errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微群Webhook失败: " + errMsg);
+        }
     }
 
     /**

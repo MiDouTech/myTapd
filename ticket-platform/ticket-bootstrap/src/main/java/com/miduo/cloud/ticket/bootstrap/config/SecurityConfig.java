@@ -46,6 +46,7 @@ public class SecurityConfig {
                         "/swagger-ui.html",
                         "/v3/api-docs/**",
                         "/wecom/callback/**",
+                        "/api/wecom/callback/**",
                         "/ws/**"
                 ).permitAll()
                 .anyRequest().authenticated()

@@ -32,8 +32,21 @@ public enum TicketStatus {
         if (code == null) {
             return null;
         }
+        String normalized = code.trim();
+        if ("PENDING".equalsIgnoreCase(normalized)) {
+            return PENDING_ACCEPT;
+        }
+        if ("PENDING_DISPATCH".equalsIgnoreCase(normalized)) {
+            return PENDING_ASSIGN;
+        }
+        if ("PENDING_TEST".equalsIgnoreCase(normalized)) {
+            return PENDING_TEST_ACCEPT;
+        }
+        if ("PENDING_DEV".equalsIgnoreCase(normalized)) {
+            return PENDING_DEV_ACCEPT;
+        }
         for (TicketStatus status : values()) {
-            if (status.code.equals(code)) {
+            if (status.code.equalsIgnoreCase(normalized)) {
                 return status;
             }
         }
