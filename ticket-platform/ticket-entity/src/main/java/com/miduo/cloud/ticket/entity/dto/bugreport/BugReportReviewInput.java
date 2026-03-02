@@ -1,0 +1,16 @@
+package com.miduo.cloud.ticket.entity.dto.bugreport;
+
+import lombok.Data;
+
+import javax.validation.constraints.NotBlank;
+import java.io.Serializable;
+
+/**
+ * Bug简报审核入参
+ */
+@Data
+public class BugReportReviewInput implements Serializable {
+
+    @NotBlank(message = "审核意见不能为空")
+    private String reviewComment;
+}

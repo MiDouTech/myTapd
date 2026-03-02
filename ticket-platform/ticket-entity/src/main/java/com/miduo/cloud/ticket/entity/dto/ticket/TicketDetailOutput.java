@@ -68,6 +68,8 @@ public class TicketDetailOutput implements Serializable {
 
     private List<LogOutput> logs;
 
+    private List<BugReportOutput> bugReports;
+
     private Boolean isFollowed;
 
     @Data
@@ -103,6 +105,16 @@ public class TicketDetailOutput implements Serializable {
         private String oldValue;
         private String newValue;
         private String remark;
+        private Date createTime;
+    }
+
+    @Data
+    public static class BugReportOutput implements Serializable {
+        private Long id;
+        private String reportNo;
+        private String status;
+        private String statusLabel;
+        private Integer isAutoCreated;
         private Date createTime;
     }
 }

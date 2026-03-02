@@ -10,11 +10,11 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum BugReportStatus {
 
-    DRAFT("draft", "待填写"),
-    PENDING_REVIEW("pending_review", "待审核"),
-    REJECTED("rejected", "已退回"),
-    ARCHIVED("archived", "已归档"),
-    VOIDED("voided", "已作废");
+    DRAFT("DRAFT", "待填写"),
+    PENDING_REVIEW("PENDING_REVIEW", "待审核"),
+    REJECTED("REJECTED", "已退回"),
+    ARCHIVED("ARCHIVED", "已归档"),
+    VOIDED("VOIDED", "已作废");
 
     private final String code;
     private final String label;
