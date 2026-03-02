@@ -7,11 +7,11 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 系统用户PO - 映射 sys_user 表
+ * 部门PO - 映射 department 表
  */
 @Data
-@TableName("sys_user")
-public class SysUserPO implements Serializable {
+@TableName("department")
+public class DepartmentPO implements Serializable {
 
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
@@ -19,29 +19,14 @@ public class SysUserPO implements Serializable {
     @TableField("name")
     private String name;
 
-    @TableField("employee_no")
-    private String employeeNo;
+    @TableField("parent_id")
+    private Long parentId;
 
-    @TableField("department_id")
-    private Long departmentId;
+    @TableField("wecom_dept_id")
+    private Long wecomDeptId;
 
-    @TableField("email")
-    private String email;
-
-    @TableField("phone")
-    private String phone;
-
-    @TableField("position")
-    private String position;
-
-    @TableField("avatar_url")
-    private String avatarUrl;
-
-    @TableField("wecom_userid")
-    private String wecomUserid;
-
-    @TableField("account_status")
-    private Integer accountStatus;
+    @TableField("sort_order")
+    private Integer sortOrder;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;
