@@ -1,0 +1,34 @@
+:root {
+  --md-primary-color: #1675d1;
+  --md-header-bg: #f5f7fa;
+  --md-hover-bg: #f0f9ff;
+  --md-font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-size: var(--md-font-size);
+  background: #f5f7fa;
+  color: #303133;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--md-primary-color);
+  --el-button-border-color: var(--md-primary-color);
+  --el-button-hover-bg-color: #3388dd;
+  --el-button-hover-border-color: #3388dd;
+}
