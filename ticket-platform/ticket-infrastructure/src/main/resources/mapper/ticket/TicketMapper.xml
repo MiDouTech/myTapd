@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper">
+
+    <select id="selectTicketPage" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO">
+        SELECT t.*
+        FROM ticket t
+        WHERE t.deleted = 0
+        <if test="view == 'my_created'">
+            AND t.creator_id = #{currentUserId}
+        </if>
+        <if test="view == 'my_todo'">
+            AND t.assignee_id = #{currentUserId}
+            AND t.status NOT IN ('COMPLETED', 'CLOSED')
+        </if>
+        <if test="view == 'my_participated'">
+            AND t.id IN (
+                SELECT DISTINCT tl.ticket_id FROM ticket_log tl
+                WHERE tl.user_id = #{currentUserId} AND tl.deleted = 0
+            )
+        </if>
+        <if test="view == 'my_followed'">
+            AND t.id IN (
+                SELECT tf.ticket_id FROM ticket_follower tf
+                WHERE tf.user_id = #{currentUserId} AND tf.deleted = 0
+            )
+        </if>
+        <if test="ticketNo != null and ticketNo != ''">
+            AND t.ticket_no LIKE CONCAT(#{ticketNo}, '%')
+        </if>
+        <if test="title != null and title != ''">
+            AND t.title LIKE CONCAT('%', #{title}, '%')
+        </if>
+        <if test="categoryId != null">
+            AND t.category_id = #{categoryId}
+        </if>
+        <if test="status != null and status != ''">
+            AND t.status = #{status}
+        </if>
+        <if test="priority != null and priority != ''">
+            AND t.priority = #{priority}
+        </if>
+        <if test="creatorId != null">
+            AND t.creator_id = #{creatorId}
+        </if>
+        <if test="assigneeId != null">
+            AND t.assignee_id = #{assigneeId}
+        </if>
+        <if test="createTimeStart != null and createTimeStart != ''">
+            AND t.create_time &gt;= #{createTimeStart}
+        </if>
+        <if test="createTimeEnd != null and createTimeEnd != ''">
+            AND t.create_time &lt;= #{createTimeEnd}
+        </if>
+        <choose>
+            <when test="orderBy == 'priority'">
+                ORDER BY FIELD(t.priority, 'urgent', 'high', 'medium', 'low')
+                <if test="asc"> ASC</if>
+                <if test="!asc"> DESC</if>
+            </when>
+            <when test="orderBy == 'update_time'">
+                ORDER BY t.update_time
+                <if test="asc"> ASC</if>
+                <if test="!asc"> DESC</if>
+            </when>
+            <otherwise>
+                ORDER BY t.create_time
+                <if test="asc"> ASC</if>
+                <if test="!asc"> DESC</if>
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="selectFollowedTicketIds" resultType="java.lang.Long">
+        SELECT tf.ticket_id
+        FROM ticket_follower tf
+        WHERE tf.user_id = #{userId} AND tf.deleted = 0
+    </select>
+
+    <select id="selectParticipatedTicketIds" resultType="java.lang.Long">
+        SELECT DISTINCT tl.ticket_id
+        FROM ticket_log tl
+        WHERE tl.user_id = #{userId} AND tl.deleted = 0
+    </select>
+
+</mapper>
