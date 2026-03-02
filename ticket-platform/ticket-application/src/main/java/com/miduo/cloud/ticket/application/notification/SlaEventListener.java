@@ -4,11 +4,22 @@ import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.domain.common.event.SlaBreachedEvent;
 import com.miduo.cloud.ticket.domain.common.event.SlaWarningEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketUrgedEvent;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.HandlerGroupMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.HandlerGroupPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * SLA和催办事件监听器
@@ -20,9 +31,21 @@ public class SlaEventListener {
     private static final Logger log = LoggerFactory.getLogger(SlaEventListener.class);
 
     private final NotificationOrchestrator orchestrator;
+    private final WecomGroupPushService wecomGroupPushService;
+    private final TicketMapper ticketMapper;
+    private final TicketCategoryMapper ticketCategoryMapper;
+    private final HandlerGroupMapper handlerGroupMapper;
 
-    public SlaEventListener(NotificationOrchestrator orchestrator) {
+    public SlaEventListener(NotificationOrchestrator orchestrator,
+                            WecomGroupPushService wecomGroupPushService,
+                            TicketMapper ticketMapper,
+                            TicketCategoryMapper ticketCategoryMapper,
+                            HandlerGroupMapper handlerGroupMapper) {
         this.orchestrator = orchestrator;
+        this.wecomGroupPushService = wecomGroupPushService;
+        this.ticketMapper = ticketMapper;
+        this.ticketCategoryMapper = ticketCategoryMapper;
+        this.handlerGroupMapper = handlerGroupMapper;
     }
 
     @Async
@@ -39,9 +62,12 @@ public class SlaEventListener {
                 event.getThresholdMinutes(),
                 event.getSlaLevel());
 
-        // TODO: 查询工单处理人ID，向处理人及其上级发送通知
-        // 此处预留，待工单服务完善后补充处理人查询逻辑
-        log.info("SLA预警通知待分发（预留处理人查询）: ticketId={}", event.getTicketId());
+        TicketPO ticket = getTicket(event.getTicketId());
+        if (ticket != null && ticket.getAssigneeId() != null) {
+            orchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
+                    NotificationType.SLA_WARNING, title, content);
+        }
+        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
     }
 
     @Async
@@ -57,8 +83,24 @@ public class SlaEventListener {
                 event.getElapsedMinutes(),
                 event.getThresholdMinutes());
 
-        // TODO: 查询工单处理人ID及管理员，向处理人、上级和管理员发送通知
-        log.info("SLA超时通知待分发（预留处理人查询）: ticketId={}", event.getTicketId());
+        TicketPO ticket = getTicket(event.getTicketId());
+        if (ticket == null) {
+            return;
+        }
+
+        Set<Long> receivers = new LinkedHashSet<>();
+        if (ticket.getAssigneeId() != null) {
+            receivers.add(ticket.getAssigneeId());
+        }
+        Long groupLeaderId = resolveGroupLeaderId(ticket.getCategoryId());
+        if (groupLeaderId != null) {
+            receivers.add(groupLeaderId);
+        }
+        if (!receivers.isEmpty()) {
+            orchestrator.dispatchToUsers(new ArrayList<>(receivers), ticket.getId(), null,
+                    NotificationType.SLA_BREACHED, title, content);
+        }
+        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
     }
 
     @Async
@@ -77,5 +119,25 @@ public class SlaEventListener {
 
         orchestrator.dispatch(event.getHandlerId(), event.getTicketId(), null,
                 NotificationType.URGE, title, content);
+        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
+    }
+
+    private TicketPO getTicket(Long ticketId) {
+        if (ticketId == null) {
+            return null;
+        }
+        return ticketMapper.selectById(ticketId);
+    }
+
+    private Long resolveGroupLeaderId(Long categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+        TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
+        if (category == null || category.getDefaultGroupId() == null) {
+            return null;
+        }
+        HandlerGroupPO group = handlerGroupMapper.selectById(category.getDefaultGroupId());
+        return group != null ? group.getLeaderId() : null;
     }
 }

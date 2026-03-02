@@ -22,7 +22,7 @@ public enum TicketSource {
             return WEB;
         }
         for (TicketSource source : values()) {
-            if (source.code.equals(code)) {
+            if (source.code.equalsIgnoreCase(code)) {
                 return source;
             }
         }

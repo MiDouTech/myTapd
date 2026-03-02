@@ -8,12 +8,16 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
+import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
+import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -57,6 +61,9 @@ public class TicketApplicationService {
 
     @Resource
     private WorkflowApplicationService workflowService;
+
+    @Resource
+    private ApplicationEventPublisher eventPublisher;
 
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
@@ -106,6 +113,12 @@ public class TicketApplicationService {
 
         recordLog(ticket.getId(), currentUserId, TicketAction.CREATE.getCode(),
                 null, ticket.getStatus(), "创建工单: " + ticket.getTicketNo());
+
+        eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
+        if (ticket.getAssigneeId() != null) {
+            eventPublisher.publishEvent(new TicketAssignedEvent(
+                    ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
+        }
 
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
         return ticket.getId();
@@ -195,6 +208,9 @@ public class TicketApplicationService {
         recordLog(ticketId, currentUserId, TicketAction.ASSIGN.getCode(),
                 oldValue, newValue, input.getRemark());
 
+        eventPublisher.publishEvent(new TicketAssignedEvent(
+                ticketId, input.getAssigneeId(), oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
+
         log.info("工单分派: ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
     }
 
@@ -212,6 +228,7 @@ public class TicketApplicationService {
 
         ticket.setStatus(toStatus);
 
+        Long oldAssigneeId = ticket.getAssigneeId();
         if (input.getTargetUserId() != null) {
             ticket.setAssigneeId(input.getTargetUserId());
         }
@@ -232,6 +249,12 @@ public class TicketApplicationService {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
         }
 
+        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
+        if (input.getTargetUserId() != null && !input.getTargetUserId().equals(oldAssigneeId)) {
+            eventPublisher.publishEvent(new TicketAssignedEvent(
+                    ticketId, input.getTargetUserId(), oldAssigneeId, currentUserId, "PROCESS_ASSIGN"));
+        }
+
         log.info("工单处理: ticketId={}, {} -> {}", ticketId, fromStatus, toStatus);
     }
 
@@ -250,6 +273,8 @@ public class TicketApplicationService {
         recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
                 fromStatus, "CLOSED",
                 input != null ? input.getRemark() : null);
+
+        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
         log.info("工单关闭: ticketId={}", ticketId);
     }

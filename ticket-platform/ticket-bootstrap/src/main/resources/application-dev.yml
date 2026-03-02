@@ -48,6 +48,8 @@ wecom:
   callback-token: YOUR_CALLBACK_TOKEN
   callback-aes-key: YOUR_CALLBACK_AES_KEY
   trusted-domain: ticket.company.com
+  mq:
+    enabled: false
 
 jwt:
   secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
