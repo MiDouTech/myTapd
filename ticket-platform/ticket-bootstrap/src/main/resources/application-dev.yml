@@ -40,6 +40,22 @@ spring:
         max-idle: 8
         min-idle: 0
 
+wecom:
+  corp-id: YOUR_CORP_ID
+  agent-id: YOUR_AGENT_ID
+  secret: YOUR_APP_SECRET
+  contact-secret: YOUR_CONTACT_SECRET
+  callback-token: YOUR_CALLBACK_TOKEN
+  callback-aes-key: YOUR_CALLBACK_AES_KEY
+  trusted-domain: ticket.company.com
+
+jwt:
+  secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
+  access-token-expire: 1800
+  refresh-token-expire: 604800
+  token-prefix: "Bearer "
+  header-name: Authorization
+
 logging:
   level:
     com.miduo.cloud.ticket: debug
