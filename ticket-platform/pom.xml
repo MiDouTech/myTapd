@@ -41,6 +41,7 @@
         <springdoc.version>1.8.0</springdoc.version>
         <fastjson2.version>2.0.47</fastjson2.version>
         <minio.version>8.5.7</minio.version>
+        <flyway.version>8.5.13</flyway.version>
     </properties>
 
     <dependencyManagement>
@@ -139,6 +140,18 @@
                 <groupId>io.minio</groupId>
                 <artifactId>minio</artifactId>
                 <version>${minio.version}</version>
+            </dependency>
+
+            <!-- ==================== 数据库迁移 ==================== -->
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-mysql</artifactId>
+                <version>${flyway.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
