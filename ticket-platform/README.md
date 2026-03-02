@@ -6,14 +6,14 @@
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| 后端语言 | Java | 17 LTS |
-| Web 框架 | Spring Boot | 3.2.5 |
-| ORM | MyBatis-Plus | 3.5.7 |
+| 后端语言 | Java | 8+ |
+| Web 框架 | Spring Boot | 2.7.18 |
+| ORM | MyBatis-Plus | 3.5.3.1 |
 | 数据库 | MySQL | 8.0 |
 | 缓存 | Redis | 7.x |
 | 文件存储 | MinIO | 8.5.7 |
 | 认证 | Spring Security + JWT | - |
-| API 文档 | SpringDoc OpenAPI | 2.3.0 |
+| API 文档 | SpringDoc OpenAPI | 1.8.0 |
 
 ## 项目结构
 
@@ -49,7 +49,7 @@ bootstrap → controller → application → domain ← infrastructure
 
 ### 1. 环境准备
 
-- JDK 17+
+- JDK 8+
 - Maven 3.8+
 - Docker & Docker Compose
 

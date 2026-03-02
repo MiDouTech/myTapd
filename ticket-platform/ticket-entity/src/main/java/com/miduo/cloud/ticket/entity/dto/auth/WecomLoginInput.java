@@ -1,6 +1,6 @@
 package com.miduo.cloud.ticket.entity.dto.auth;
 
-import jakarta.validation.constraints.NotBlank;
+import javax.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.io.Serializable;
