@@ -1,7 +1,7 @@
 package com.miduo.cloud.ticket.common.dto.common;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 import lombok.Data;
 
 import java.io.Serializable;

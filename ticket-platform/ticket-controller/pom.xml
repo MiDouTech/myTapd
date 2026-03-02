@@ -33,10 +33,10 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- API 文档 -->
+        <!-- API 文档 (springdoc 1.x for Spring Boot 2.x) -->
         <dependency>
             <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <artifactId>springdoc-openapi-ui</artifactId>
         </dependency>
     </dependencies>
 </project>

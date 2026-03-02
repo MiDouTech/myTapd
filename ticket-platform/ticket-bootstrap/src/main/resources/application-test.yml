@@ -6,11 +6,10 @@ spring:
     username: root
     password: root123456
 
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      database: 1
+  redis:
+    host: localhost
+    port: 6379
+    database: 1
 
 logging:
   level:
