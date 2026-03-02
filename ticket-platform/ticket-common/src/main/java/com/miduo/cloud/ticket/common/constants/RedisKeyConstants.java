@@ -22,4 +22,7 @@ public final class RedisKeyConstants {
     public static final String NOTIFY_AGGREGATE_PREFIX = "notify:aggregate:";
 
     public static final String TRACK_READ_PREFIX = "track:read:";
+
+    public static final String WS_USER_SESSION_PREFIX = "ws:user:session:";
+    public static final String SLA_CHECK_LOCK = "sla:check:lock";
 }

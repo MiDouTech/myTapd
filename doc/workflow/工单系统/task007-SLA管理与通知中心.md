@@ -13,33 +13,36 @@
 
 ## 二、交付物清单
 
-| 序号 | 交付物 | 路径/说明 |
-|------|--------|-----------|
-| 1 | SLA 策略配置 | 按优先级配置响应/解决时限 |
-| 2 | 工作时间计算 | WorkingTimeCalculator（排除非工作时间、节假日） |
-| 3 | SLA 计时器 | sla_timer 表、运行/暂停/超时状态 |
-| 4 | 定时检查任务 | SlaCheckJob 每分钟扫描，触发预警/超时事件 |
-| 5 | 预警与升级 | 50% 绿、25%~50% 黄、<25% 橙、超时红，通知层级递增 |
-| 6 | SLA 暂停规则 | 已挂起、待验收状态暂停计时 |
-| 7 | 站内通知 | 通知列表 API、WebSocket 实时推送 |
-| 8 | 通知编排器 | NotificationOrchestrator 按事件类型分发 |
-| 9 | 多渠道发送器 | SiteNotificationSender、WecomAppMessageSender、WecomGroupWebhookSender、EmailSender |
-| 10 | 消息合并 | 同一工单 5 分钟内多次变更合并为一条 |
-| 11 | 通知偏好 | notification_preference 用户配置 |
-| 12 | 催办 | 创建人催办，通知处理人 |
+| 序号 | 交付物 | 路径/说明 | 状态 |
+|------|--------|-----------|------|
+| 1 | SLA 策略配置 | `ticket-application/.../sla/SlaApplicationService.java` + `SlaPolicyController.java` | ✅完成 |
+| 2 | 工作时间计算 | `ticket-application/.../sla/WorkingTimeCalculator.java`（排除非工作时间、节假日） | ✅完成 |
+| 3 | SLA 计时器 | `ticket-application/.../sla/SlaTimerService.java` + `SlaTimerPO.java` | ✅完成 |
+| 4 | 定时检查任务 | `ticket-job/.../handler/SlaCheckJobHandler.java` 每分钟扫描 | ✅完成 |
+| 5 | 预警与升级 | `SlaLevel` 枚举 + `SlaWarningEvent/SlaBreachedEvent` 事件 | ✅完成 |
+| 6 | SLA 暂停规则 | `SlaTimerService.pauseTimers()` / `resumeTimers()` | ✅完成 |
+| 7 | 站内通知 | `NotificationController.java` + `NotificationWebSocketHandler.java` | ✅完成 |
+| 8 | 通知编排器 | `ticket-application/.../notification/NotificationOrchestrator.java` | ✅完成 |
+| 9 | 多渠道发送器 | `SiteNotificationSender` / `WecomAppMessageSender` / `WecomGroupWebhookSender` / `EmailSender` | ✅完成 |
+| 10 | 消息合并 | `NotificationOrchestrator.shouldAggregate()` 通过 Redis 实现5分钟合并 | ✅完成 |
+| 11 | 通知偏好 | `NotificationPreferencePO` + `NotificationApplicationService.getPreferences/updatePreferences` | ✅完成 |
+| 12 | 催办 | `TicketUrgeController.java` + `TicketUrgedEvent` | ✅完成 |
 
-## 三、接口清单（需填接口编号）
+## 三、接口清单
 
-| 接口 | 方法 | 路径 | 说明 |
-|------|------|------|------|
-| SLA 策略列表 | GET | /api/sla/policy/list | SLA 策略列表 |
-| SLA 策略创建 | POST | /api/sla/policy/create | 新增策略 |
-| 通知列表 | GET | /api/notification/page | 站内通知分页 |
-| 通知已读 | PUT | /api/notification/read/{id} | 标记已读 |
-| 通知偏好 | GET | /api/notification/preference | 获取偏好 |
-| 通知偏好更新 | PUT | /api/notification/preference/update | 更新偏好 |
-| 催办 | POST | /api/ticket/urge/{id} | 催办工单 |
-| WebSocket | - | /ws/notification | 实时通知推送 |
+| 接口编号 | 接口 | 方法 | 路径 | 说明 |
+|------|------|------|------|------|
+| API000001 | SLA 策略列表 | GET | /api/sla/policy/list | SLA 策略列表 |
+| API000002 | SLA 策略创建 | POST | /api/sla/policy/create | 新增策略 |
+| API000003 | SLA 策略更新 | PUT | /api/sla/policy/update | 更新策略 |
+| API000004 | 通知列表 | GET | /api/notification/page | 站内通知分页 |
+| API000005 | 通知已读 | PUT | /api/notification/read/{id} | 标记已读 |
+| API000006 | 全部标记已读 | PUT | /api/notification/read/all | 全部标记已读 |
+| API000007 | 未读数量 | GET | /api/notification/unread/count | 未读通知数量 |
+| API000008 | 通知偏好 | GET | /api/notification/preference | 获取偏好 |
+| API000009 | 通知偏好更新 | PUT | /api/notification/preference/update | 更新偏好 |
+| API000010 | 催办 | POST | /api/ticket/urge/{id} | 催办工单 |
+| - | WebSocket | - | /ws/notification | 实时通知推送 |
 
 ## 四、验收标准
 
