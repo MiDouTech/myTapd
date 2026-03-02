@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.miduo.cloud</groupId>
+        <artifactId>ticket-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>ticket-entity</artifactId>
+    <name>ticket-entity</name>
+    <description>DTO模块 - 请求/响应对象，按业务模块分目录</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.miduo.cloud</groupId>
+            <artifactId>ticket-common</artifactId>
+        </dependency>
+    </dependencies>
+</project>
