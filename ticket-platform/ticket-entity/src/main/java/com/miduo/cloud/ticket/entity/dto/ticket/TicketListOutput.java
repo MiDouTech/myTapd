@@ -1,0 +1,50 @@
+package com.miduo.cloud.ticket.entity.dto.ticket;
+
+import lombok.Data;
+
+import java.io.Serializable;
+import java.util.Date;
+
+@Data
+public class TicketListOutput implements Serializable {
+
+    private Long id;
+
+    private String ticketNo;
+
+    private String title;
+
+    private Long categoryId;
+
+    private String categoryName;
+
+    private String priority;
+
+    private String priorityLabel;
+
+    private String status;
+
+    private String statusLabel;
+
+    private Long creatorId;
+
+    private String creatorName;
+
+    private Long assigneeId;
+
+    private String assigneeName;
+
+    private String source;
+
+    private String sourceLabel;
+
+    private Date expectedTime;
+
+    private Date createTime;
+
+    private Date updateTime;
+
+    private Date resolvedAt;
+
+    private Date closedAt;
+}
