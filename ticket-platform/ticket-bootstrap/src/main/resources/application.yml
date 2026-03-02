@@ -12,6 +12,16 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    encoding: UTF-8
+    validate-on-migrate: true
+    out-of-order: false
+    table: flyway_schema_history
+    clean-disabled: true
 
 mybatis-plus:
   global-config:
@@ -44,3 +54,5 @@ logging:
   level:
     com.miduo.cloud.ticket: debug
     org.springframework.security: warn
+    org.flywaydb: debug
+    org.springframework.boot.autoconfigure.flyway: debug
