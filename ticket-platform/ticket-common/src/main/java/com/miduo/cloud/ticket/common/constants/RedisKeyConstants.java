@@ -9,6 +9,9 @@ public final class RedisKeyConstants {
     }
 
     public static final String WECOM_ACCESS_TOKEN = "wecom:access_token";
+    public static final String WECOM_CONTACT_ACCESS_TOKEN = "wecom:access_token:contact";
+
+    public static final String JWT_REFRESH_TOKEN_PREFIX = "jwt:refresh:";
 
     public static final String CACHE_CATEGORIES = "cache:categories";
     public static final String CACHE_WORKFLOW_PREFIX = "cache:workflow:";
