@@ -33,6 +33,11 @@ public enum ErrorCode {
     WORKFLOW_VALIDATION_FAILED(3003, "工作流校验失败"),
 
     SLA_BREACH(4001, "SLA已超时"),
+    SLA_POLICY_NOT_FOUND(4002, "SLA策略不存在"),
+    SLA_WARNING(4003, "SLA预警"),
+
+    NOTIFICATION_NOT_FOUND(4101, "通知不存在"),
+    NOTIFICATION_PREFERENCE_ERROR(4102, "通知偏好配置错误"),
 
     WECOM_AUTH_FAILED(5001, "企业微信认证失败"),
     WECOM_API_ERROR(5002, "企业微信API调用失败"),

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaTimerMapper">
+
+    <select id="selectRunningTimers" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO">
+        SELECT id, ticket_id, sla_policy_id, timer_type, status,
+               threshold_minutes, elapsed_minutes, start_at, pause_at,
+               deadline, breached_at, completed_at, is_warned, is_breached,
+               create_time, update_time, create_by, update_by, deleted
+        FROM sla_timer
+        WHERE status = 'RUNNING'
+          AND deleted = 0
+    </select>
+
+    <update id="batchUpdateStatus" parameterType="java.util.List">
+        <foreach collection="list" item="item" separator=";">
+            UPDATE sla_timer
+            SET status = #{item.status},
+                elapsed_minutes = #{item.elapsedMinutes},
+                is_warned = #{item.isWarned},
+                is_breached = #{item.isBreached},
+                breached_at = #{item.breachedAt},
+                update_time = NOW()
+            WHERE id = #{item.id}
+              AND deleted = 0
+        </foreach>
+    </update>
+
+</mapper>
