@@ -1,12 +1,17 @@
 import type { PageOutput } from '@/types/common'
 import type {
   TicketAssignInput,
+  TicketBugCustomerInfoInput,
+  TicketBugDevInfoInput,
+  TicketBugTestInfoInput,
   TicketCloseInput,
   TicketCreateInput,
   TicketDetailOutput,
   TicketListOutput,
+  TicketNodeDurationOutput,
   TicketPageInput,
   TicketProcessInput,
+  TicketTimeTrackOutput,
 } from '@/types/ticket'
 import request from '@/utils/request'
 
@@ -80,4 +85,58 @@ export function followTicket(id: number): Promise<void> {
  */
 export function unfollowTicket(id: number): Promise<void> {
   return request.del<void>(`/ticket/follow/${id}`)
+}
+
+/**
+ * 记录工单首次阅读轨迹
+ * 接口编号：API000020
+ * 产品文档功能：4.4.6 全链路时间追踪 - 首次阅读记录
+ */
+export function trackTicketRead(id: number): Promise<void> {
+  return request.post<void>(`/ticket/${id}/track/read`)
+}
+
+/**
+ * 更新缺陷工单客服信息
+ * 接口编号：API000021
+ * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区
+ */
+export function updateBugCustomerInfo(id: number, data: TicketBugCustomerInfoInput): Promise<void> {
+  return request.put<void>(`/ticket/bug/customer-info/${id}`, data)
+}
+
+/**
+ * 更新缺陷工单测试信息
+ * 接口编号：API000022
+ * 产品文档功能：4.2.3 缺陷工单详情页 - 测试信息区
+ */
+export function updateBugTestInfo(id: number, data: TicketBugTestInfoInput): Promise<void> {
+  return request.put<void>(`/ticket/bug/test-info/${id}`, data)
+}
+
+/**
+ * 更新缺陷工单开发信息
+ * 接口编号：API000023
+ * 产品文档功能：4.2.3 缺陷工单详情页 - 开发信息区
+ */
+export function updateBugDevInfo(id: number, data: TicketBugDevInfoInput): Promise<void> {
+  return request.put<void>(`/ticket/bug/dev-info/${id}`, data)
+}
+
+/**
+ * 获取工单时间追踪链
+ * 接口编号：API000024
+ * 产品文档功能：4.4.6 全链路时间追踪 - 时间链
+ */
+export function getTicketTimeTrack(id: number): Promise<TicketTimeTrackOutput> {
+  return request.get<TicketTimeTrackOutput>(`/ticket/${id}/time-track`)
+}
+
+/**
+ * 获取工单节点耗时统计
+ * 接口编号：API000025
+ * 产品文档功能：4.4.6 全链路时间追踪 - 节点耗时
+ */
+export function getTicketNodeDuration(id: number): Promise<TicketNodeDurationOutput> {
+  return request.get<TicketNodeDurationOutput>(`/ticket/${id}/node-duration`)
 }

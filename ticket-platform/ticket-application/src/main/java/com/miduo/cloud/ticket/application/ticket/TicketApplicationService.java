@@ -8,15 +8,21 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
+import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
+import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -63,6 +69,16 @@ public class TicketApplicationService {
     private WorkflowApplicationService workflowService;
 
     @Resource
+    private BugReportMapper bugReportMapper;
+
+    @Resource
+    private BugReportTicketMapper bugReportTicketMapper;
+
+    @Resource
+    private TicketTimeTrackApplicationService ticketTimeTrackService;
+
+    @Resource
+    private TicketBugApplicationService ticketBugApplicationService;
     private ApplicationEventPublisher eventPublisher;
 
     @Transactional(rollbackFor = Exception.class)
@@ -113,6 +129,14 @@ public class TicketApplicationService {
 
         recordLog(ticket.getId(), currentUserId, TicketAction.CREATE.getCode(),
                 null, ticket.getStatus(), "创建工单: " + ticket.getTicketNo());
+        ticketTimeTrackService.recordCreate(ticket.getId(), currentUserId, ticket.getStatus(),
+                "创建工单: " + ticket.getTicketNo());
+
+        eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
+        if (ticket.getAssigneeId() != null) {
+            eventPublisher.publishEvent(new TicketAssignedEvent(
+                    ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
+        }
 
         eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
         if (ticket.getAssigneeId() != null) {
@@ -207,6 +231,11 @@ public class TicketApplicationService {
         String newValue = String.valueOf(input.getAssigneeId());
         recordLog(ticketId, currentUserId, TicketAction.ASSIGN.getCode(),
                 oldValue, newValue, input.getRemark());
+        ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, input.getAssigneeId(),
+                ticket.getStatus(), ticket.getStatus(), input.getRemark());
+
+        eventPublisher.publishEvent(new TicketAssignedEvent(
+                ticketId, input.getAssigneeId(), oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
 
         eventPublisher.publishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
                 oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
@@ -223,14 +252,17 @@ public class TicketApplicationService {
 
         String fromStatus = ticket.getStatus();
         String toStatus = input.getTargetStatus();
+        Long oldAssigneeId = ticket.getAssigneeId();
 
         workflowService.validateTransition(ticket.getWorkflowId(), fromStatus, toStatus);
 
         ticket.setStatus(toStatus);
 
+        Long oldAssigneeId = ticket.getAssigneeId();
         if (input.getTargetUserId() != null) {
             ticket.setAssigneeId(input.getTargetUserId());
         }
+        Long newAssigneeId = ticket.getAssigneeId();
 
         if (workflowService.isTerminalStatus(ticket.getWorkflowId(), toStatus)) {
             if ("COMPLETED".equals(toStatus)) {
@@ -241,14 +273,25 @@ public class TicketApplicationService {
 
         ticketMapper.updateById(ticket);
 
+        if ("COMPLETED".equalsIgnoreCase(toStatus) || "CLOSED".equalsIgnoreCase(toStatus)) {
+            eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
+        }
+
         recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
                 fromStatus, toStatus, input.getRemark());
+        String transitionAction = ticketTimeTrackService.resolveTransitionAction(fromStatus, toStatus);
+        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, transitionAction,
+                fromStatus, toStatus, oldAssigneeId, newAssigneeId, input.getRemark());
 
         if (input.getRemark() != null && !input.getRemark().isEmpty()) {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
         }
 
         eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
+        if (input.getTargetUserId() != null && !input.getTargetUserId().equals(oldAssigneeId)) {
+            eventPublisher.publishEvent(new TicketAssignedEvent(
+                    ticketId, input.getTargetUserId(), oldAssigneeId, currentUserId, "PROCESS_ASSIGN"));
+        }
 
         log.info("工单处理: ticketId={}, {} -> {}", ticketId, fromStatus, toStatus);
     }
@@ -261,13 +304,20 @@ public class TicketApplicationService {
         }
 
         String fromStatus = ticket.getStatus();
+        Long assigneeId = ticket.getAssigneeId();
         ticket.setStatus("CLOSED");
         ticket.setClosedAt(new Date());
         ticketMapper.updateById(ticket);
 
+        eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
+
         recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
                 fromStatus, "CLOSED",
                 input != null ? input.getRemark() : null);
+        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
+                fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
+
+        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
         eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
@@ -370,6 +420,10 @@ public class TicketApplicationService {
                 log.warn("解析自定义字段失败: ticketId={}", ticket.getId(), e);
             }
         }
+
+        output.setBugCustomerInfo(ticketBugApplicationService.getCustomerInfo(ticket.getId()));
+        output.setBugTestInfo(ticketBugApplicationService.getTestInfo(ticket.getId()));
+        output.setBugDevInfo(ticketBugApplicationService.getDevInfo(ticket.getId()));
 
         List<TicketAttachmentPO> attachments = attachmentMapper.selectList(
                 new LambdaQueryWrapper<TicketAttachmentPO>()
@@ -477,6 +531,39 @@ public class TicketApplicationService {
                 lo.setCreateTime(l.getCreateTime());
                 return lo;
             }).collect(Collectors.toList()));
+        }
+
+        List<BugReportTicketPO> bugReportTickets = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getTicketId, ticket.getId())
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+        );
+        if (bugReportTickets != null && !bugReportTickets.isEmpty()) {
+            Set<Long> reportIds = bugReportTickets.stream()
+                    .map(BugReportTicketPO::getReportId)
+                    .collect(Collectors.toSet());
+            List<BugReportPO> reportList = bugReportMapper.selectBatchIds(reportIds);
+            Map<Long, BugReportPO> reportMap = reportList.stream()
+                    .collect(Collectors.toMap(BugReportPO::getId, r -> r));
+
+            output.setBugReports(bugReportTickets.stream().map(rt -> {
+                TicketDetailOutput.BugReportOutput bo = new TicketDetailOutput.BugReportOutput();
+                BugReportPO report = reportMap.get(rt.getReportId());
+                if (report != null) {
+                    bo.setId(report.getId());
+                    bo.setReportNo(report.getReportNo());
+                    bo.setStatus(report.getStatus());
+                    BugReportStatus brStatus = BugReportStatus.fromCode(report.getStatus());
+                    bo.setStatusLabel(brStatus != null ? brStatus.getLabel() : report.getStatus());
+                    bo.setCreateTime(report.getCreateTime());
+                } else {
+                    bo.setId(rt.getReportId());
+                }
+                bo.setIsAutoCreated(rt.getIsAutoCreated());
+                return bo;
+            }).collect(Collectors.toList()));
+        } else {
+            output.setBugReports(Collections.emptyList());
         }
 
         if (currentUserId != null) {

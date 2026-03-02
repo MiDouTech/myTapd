@@ -68,6 +68,22 @@ public class TicketDetailOutput implements Serializable {
 
     private List<LogOutput> logs;
 
+    private List<BugReportOutput> bugReports;
+    /**
+     * 缺陷工单-客服信息
+     */
+    private TicketBugCustomerInfoOutput bugCustomerInfo;
+
+    /**
+     * 缺陷工单-测试信息
+     */
+    private TicketBugTestInfoOutput bugTestInfo;
+
+    /**
+     * 缺陷工单-开发信息
+     */
+    private TicketBugDevInfoOutput bugDevInfo;
+
     private Boolean isFollowed;
 
     @Data
@@ -103,6 +119,16 @@ public class TicketDetailOutput implements Serializable {
         private String oldValue;
         private String newValue;
         private String remark;
+        private Date createTime;
+    }
+
+    @Data
+    public static class BugReportOutput implements Serializable {
+        private Long id;
+        private String reportNo;
+        private String status;
+        private String statusLabel;
+        private Integer isAutoCreated;
         private Date createTime;
     }
 }

@@ -50,6 +50,10 @@ management:
     health:
       show-details: always
 
+wecom:
+  mq:
+    enabled: false
+
 logging:
   level:
     com.miduo.cloud.ticket: debug

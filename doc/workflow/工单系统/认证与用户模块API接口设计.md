@@ -177,7 +177,7 @@
 | /actuator/** | 监控端点 |
 | /swagger-ui/** | API文档 |
 | /v3/api-docs/** | API文档数据 |
-| /wecom/callback/** | 企微回调接口 |
+| /api/wecom/callback/** | 企微回调接口 |
 
 ### RBAC角色
 

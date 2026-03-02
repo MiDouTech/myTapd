@@ -1,9 +1,11 @@
 package com.miduo.cloud.ticket.application.workflow;
 
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.workflow.model.WorkflowState;
 import com.miduo.cloud.ticket.domain.workflow.model.WorkflowTransition;
@@ -44,6 +46,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final SysUserMapper sysUserMapper;
     private final WorkflowEngine workflowEngine;
     private final WorkflowAppService workflowAppService;
+    private final TicketTimeTrackApplicationService ticketTimeTrackService;
     private final ApplicationEventPublisher eventPublisher;
 
     public TicketWorkflowAppService(TicketMapper ticketMapper,
@@ -51,12 +54,14 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      SysUserMapper sysUserMapper,
                                      WorkflowEngine workflowEngine,
                                      WorkflowAppService workflowAppService,
+                                     TicketTimeTrackApplicationService ticketTimeTrackService,
                                      ApplicationEventPublisher eventPublisher) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.sysUserMapper = sysUserMapper;
         this.workflowEngine = workflowEngine;
         this.workflowAppService = workflowAppService;
+        this.ticketTimeTrackService = ticketTimeTrackService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -104,6 +109,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String userRole = resolveUserRole(operatorId, ticket);
         String oldStatus = ticket.getStatus();
         String targetStatus = input.getTargetStatus();
+        Long oldAssigneeId = ticket.getAssigneeId();
 
         boolean valid = workflowEngine.transit(
                 workflow.getStates(), workflow.getTransitions(),
@@ -119,9 +125,16 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         ticketMapper.updateById(ticket);
 
         saveTicketLog(ticketId, operatorId, "TRANSIT", oldStatus, targetStatus, input.getRemark());
+        String transitionAction = ticketTimeTrackService.resolveTransitionAction(oldStatus, targetStatus);
+        ticketTimeTrackService.recordStatusTrack(ticketId, operatorId, transitionAction,
+                oldStatus, targetStatus, oldAssigneeId, ticket.getAssigneeId(), input.getRemark());
 
         eventPublisher.publishEvent(
                 new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
+
+        if ("COMPLETED".equalsIgnoreCase(targetStatus) || "CLOSED".equalsIgnoreCase(targetStatus)) {
+            eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, targetStatus, operatorId, new Date()));
+        }
     }
 
     /**
@@ -146,6 +159,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         ticketMapper.updateById(ticket);
 
         saveTicketLog(ticketId, operatorId, "TRANSFER", null, null, input.getReason());
+        ticketTimeTrackService.recordTransfer(ticketId, operatorId, previousAssigneeId,
+                input.getTargetUserId(), ticket.getStatus(), input.getReason());
 
         eventPublisher.publishEvent(
                 new TicketAssignedEvent(ticketId, input.getTargetUserId(),
@@ -178,10 +193,13 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         }
 
         String oldStatus = ticket.getStatus();
+        Long oldAssigneeId = ticket.getAssigneeId();
         ticket.setStatus(targetStatus);
         ticketMapper.updateById(ticket);
 
         saveTicketLog(ticketId, operatorId, "RETURN", oldStatus, targetStatus, input.getReason());
+        ticketTimeTrackService.recordReturn(ticketId, operatorId, oldStatus, targetStatus,
+                oldAssigneeId, ticket.getAssigneeId(), input.getReason());
 
         eventPublisher.publishEvent(
                 new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
