@@ -258,7 +258,6 @@ public class TicketApplicationService {
 
         ticket.setStatus(toStatus);
 
-        Long oldAssigneeId = ticket.getAssigneeId();
         if (input.getTargetUserId() != null) {
             ticket.setAssigneeId(input.getTargetUserId());
         }
