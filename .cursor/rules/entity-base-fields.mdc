@@ -1,0 +1,274 @@
+---
+alwaysApply: true
+---
+
+# 数据库实体类基础字段规范
+
+## 🎯 核心要求
+所有数据库表对象的实体类必须包含标准的基础字段，支持逻辑删除、数据审计和时间跟踪。
+
+## 📝 基础字段规范
+
+### 必需基础字段
+每个实体类都必须包含以下基础字段：
+
+1. **主键字段**：`id` - 唯一标识
+2. **时间字段**：`createTime`、`updateTime` - 创建和更新时间
+3. **操作人字段**：`createBy`、`updateBy` - 创建人和更新人
+4. **逻辑删除字段**：`deleted` - 逻辑删除标志
+
+## 💻 BaseEntity基类模板
+
+### 推荐使用继承方式
+```java
+package com.miduo.cloud.mbg.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+/**
+ * 基础实体类，包含所有表的公共字段
+ * 
+ * @author 米多团队
+ */
+@Data
+public class BaseEntity implements Serializable {
+    
+    /**
+     * 主键ID
+     */
+    @TableId(value = "id", type = IdType.AUTO)
+    private Long id;
+    
+    /**
+     * 创建时间
+     */
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    private Date createTime;
+    
+    /**
+     * 更新时间
+     */
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    private Date updateTime;
+    
+    /**
+     * 创建人
+     */
+    @TableField(value = "create_by", fill = FieldFill.INSERT)
+    private String createBy;
+    
+    /**
+     * 更新人
+     */
+    @TableField(value = "update_by", fill = FieldFill.INSERT_UPDATE)
+    private String updateBy;
+    
+    /**
+     * 逻辑删除标志（0:未删除 1:已删除）
+     */
+    @TableLogic
+    @TableField(value = "deleted")
+    private Integer deleted;
+}
+```
+
+### 业务实体类继承示例
+```java
+package com.miduo.cloud.mbg.entity.customer;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import javax.validation.constraints.*;
+
+/**
+ * 客户实体类
+ * 
+ * @author 米多团队
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@TableName("crm_customer")
+public class Customer extends BaseEntity {
+    
+    /**
+     * 商户编号
+     */
+    @NotBlank(message = "商户编号不能为空")
+    @TableField("customer_code")
+    private String customerCode;
+    
+    /**
+     * 公司名称
+     */
+    @NotBlank(message = "公司名称不能为空")
+    @Size(max = 100, message = "公司名称长度不能超过100个字符")
+    @TableField("company_name")
+    private String companyName;
+    
+    // 其他业务字段...
+}
+```
+
+## 🗄️ 数据库表结构规范
+
+### 基础字段定义
+所有业务表都必须包含以下基础字段：
+
+```sql
+-- 基础字段模板
+CREATE TABLE `业务表名` (
+  `id` bigint(20) NOT NULL COMMENT '主键ID',
+  
+  -- 业务字段...
+  
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_by` varchar(50) NOT NULL DEFAULT '' COMMENT '创建人',
+  `update_by` varchar(50) NOT NULL DEFAULT '' COMMENT '更新人',
+  `deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '逻辑删除标志（0:未删除 1:已删除）',
+  
+  PRIMARY KEY (`id`),
+  KEY `idx_create_time` (`create_time`),
+  KEY `idx_deleted` (`deleted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务表注释';
+```
+
+### 字段说明
+- **`id`**: 使用bigint类型，支持雪花算法生成的长整型ID，默认规则从1开始自增
+- **`create_time`**: 记录创建时间，自动填充
+- **`update_time`**: 记录更新时间，自动更新
+- **`create_by`**: 记录创建人，通过拦截器自动填充
+- **`update_by`**: 记录更新人，通过拦截器自动填充
+- **`deleted`**: 逻辑删除标志，0表示未删除，1表示已删除
+
+## ⚙️ MyBatis-Plus配置
+
+### 1. 自动填充配置
+```java
+@Component
+public class MetaObjectHandler implements com.baomidou.mybatisplus.core.handlers.MetaObjectHandler {
+    
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        LocalDateTime now = LocalDateTime.now();
+        String currentUser = getCurrentUser(); // 获取当前登录用户
+        
+        this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, now);
+        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, now);
+        this.strictInsertFill(metaObject, "createBy", String.class, currentUser);
+        this.strictInsertFill(metaObject, "updateBy", String.class, currentUser);
+    }
+    
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        LocalDateTime now = LocalDateTime.now();
+        String currentUser = getCurrentUser(); // 获取当前登录用户
+        
+        this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, now);
+        this.strictUpdateFill(metaObject, "updateBy", String.class, currentUser);
+    }
+    
+    private String getCurrentUser() {
+        // 从Security Context或Session中获取当前用户
+        return "system"; // 临时返回
+    }
+}
+```
+
+### 2. 逻辑删除全局配置
+```yaml
+# application.yml
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted  # 全局逻辑删除字段名
+      logic-delete-value: 1        # 逻辑删除值
+      logic-not-delete-value: 0    # 逻辑未删除值
+```
+
+## 📋 实体类生成路径
+
+### 统一生成位置
+所有实体类必须生成在指定路径：
+```
+miduo-basebackend/miduo-mbg/src/main/java/com/miduo/cloud/mbg/entity/
+├── BaseEntity.java          # 基础实体类
+├── auth/           # 认证服务
+├── customer/       # 客户管理服务
+│   ├── Customer.java           # 客户实体
+│   ├── CustomerLevel.java      # 客户等级实体
+│   └── CustomerTag.java        # 客户标签实体
+└── product/        # 商品管理服务
+│   └──  Product.java            # 产品实体
+└── ...                     # 其他业务实体
+```
+
+## ✅ 开发检查清单
+
+### 创建新实体类时必须检查：
+- [ ] **继承BaseEntity**：所有业务实体都必须继承BaseEntity
+- [ ] **@TableName注解**：正确配置表名映射
+- [ ] **@TableField注解**：字段映射配置正确
+- [ ] **验证注解**：使用JSR-303验证注解
+- [ ] **Lombok注解**：使用@Data、@EqualsAndHashCode(callSuper = true)
+- [ ] **包路径正确**：确保在com.miduo.cloud.mbg.entity包下
+
+### 数据库表创建时必须检查：
+- [ ] **基础字段完整**：包含所有6个基础字段
+- [ ] **字段类型正确**：按照规范定义字段类型
+- [ ] **索引创建**：为create_time和deleted字段创建索引
+- [ ] **注释完整**：表和字段都有完整的中文注释
+- [ ] **字符集正确**：使用utf8mb4字符集
+
+## 🚫 严格禁止
+
+### 不允许的做法：
+- ❌ 实体类不继承BaseEntity
+- ❌ 缺少任何基础字段
+- ❌ 使用物理删除代替逻辑删除
+- ❌ 手动管理创建时间和更新时间
+- ❌ 基础字段使用错误的数据类型
+- ❌ 遗漏@TableLogic注解
+
+### 特殊情况处理：
+- **系统表**：如果是纯配置表，可以不包含部分审计字段，但必须包含id和deleted
+- **关联表**：多对多关联表可以简化，但建议仍保留基础字段
+- **日志表**：日志表通常不需要逻辑删除，但需要时间字段
+
+## 📖 示例参考
+
+### 查看现有实现：
+- 基础实体类：[BaseEntity.java](mdc:miduo-basebackend/miduo-mbg/src/main/java/com/miduo/cloud/mbg/entity/BaseEntity.java)
+- 产品实体示例：[Product.java](mdc:miduo-basebackend/miduo-mbg/src/main/java/com/miduo/cloud/mbg/entity/Product.java)
+- 项目结构规范：[project-structure.mdc](mdc:.cursor/rules/project-structure.mdc)
+- 代码生成路径：[code-generation-paths.mdc](mdc:.cursor/rules/code-generation-paths.mdc)
+
+## 🔄 逻辑删除使用说明
+
+### Service层使用
+```java
+// 逻辑删除（推荐）
+customerMapper.deleteById(id);  // 自动设置deleted=1
+
+// 物理删除（谨慎使用）
+customerMapper.delete(new LambdaQueryWrapper<Customer>()
+    .eq(Customer::getId, id)
+    .eq(Customer::getDeleted, 1)); // 只删除已逻辑删除的记录
+```
+
+### 查询时自动过滤
+```java
+// 自动过滤已删除记录
+List<Customer> customers = customerMapper.selectList(null);
+
+// 查询包含已删除记录（需要特殊处理）
+// 使用原生SQL或者临时禁用逻辑删除
+```
+
+---
+**重要提醒**：每个数据库实体类都必须遵循此规范，确保数据完整性和系统的可维护性！

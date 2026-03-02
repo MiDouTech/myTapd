@@ -1,0 +1,146 @@
+---
+alwaysApply: true
+---
+
+# API接口编号管理规范
+
+## 🎯 核心要求
+每次生成API接口后，必须在注释中填写接口编号，同时更新设计文档，确保接口编码与产品文档功能点一一对应。
+
+## 📝 接口编号规则
+
+### 编码格式
+- **格式**：API + 6位自增编码
+- **示例**：API000001、API000002、API000003
+- **起始编号**：API000001
+
+### 编号分配原则
+1. **按模块递增**：同一模块内的接口编号连续分配
+2. **功能对应**：每个接口编号对应产品文档中的具体功能点
+3. **全局唯一**：整个项目中接口编号不重复
+
+## 💻 代码注释规范
+
+### Controller接口注释模板
+```java
+/**
+ * 分页查询客户列表
+ * 接口编号：API000001
+ * 产品文档功能：客户列表查看功能（第五章第一节第1条）
+ * 
+ * @param query 分页查询参数
+ * @return 客户列表分页结果
+ */
+@GetMapping("/page")
+@ApiOperation(value = "分页查询客户列表", notes = "接口编号：API000001")
+public CommonResult<PageResult<CustomerListResponse>> getCustomerPage(@Valid CustomerPageQuery query) {
+    // 实现代码
+}
+```
+
+### 前端API注释模板
+```typescript
+/**
+ * 分页查询客户列表
+ * 接口编号：API000001
+ * 产品文档功能：客户列表查看功能（第五章第一节第1条）
+ */
+export const getCustomerPage = (params: CustomerPageQuery): Promise<PageResult<Customer>> => {
+  return http.get('/api/customer/page', { params })
+}
+```
+
+## 📄 设计文档更新要求
+
+### 文档更新位置
+设计文档路径：[miduo-md/workflow/](mdc:miduo-md/workflow/)
+
+### 功能接口对应关系文档
+创建或更新：[功能接口对应关系.md](mdc:miduo-md/workflow/功能接口对应关系.md)
+
+### 文档格式模板
+```markdown
+# 功能接口对应关系
+
+## 客户管理模块
+
+| 接口编号 | 接口名称 | HTTP方法 | 接口路径 | 产品文档功能点 | 开发状态 |
+|---------|---------|----------|----------|---------------|----------|
+| API000001 | 分页查询客户列表 | GET | /api/customer/page | 第五章（一）第1节：查看客户列表流程 | ✅已完成 |
+| API000002 | 获取客户详情 | GET | /api/customer/detail/{id} | 第五章（一）第2节：查看客户详情流程 | ✅已完成 |
+| API000003 | 新增客户 | POST | /api/customer/create | 第五章（一）第3节：新增客户流程 | 🚧开发中 |
+| API000004 | 修改客户信息 | PUT | /api/customer/update/{id} | 第五章（一）第4节：编辑客户流程 | ⏳待开发 |
+| API000005 | 设置客户等级 | PUT | /api/customer/level/{customerId} | 第五章（一）第5节：设置客户等级流程 | ⏳待开发 |
+```
+
+## 🔢 编号分配策略
+
+### 模块编号范围（建议）
+- **客户管理模块**：API000001 - API000099
+- **客户等级模块**：API000100 - API000199  
+- **标签管理模块**：API000200 - API000299
+- **产品管理模块**：API000300 - API000399
+- **SSO认证模块**：API000400 - API000499
+
+### 接口类型编号规律
+- **查询接口（GET）**：模块起始编号开始
+- **新增接口（POST）**：查询接口后递增
+- **修改接口（PUT）**：新增接口后递增
+- **删除接口（DELETE）**：修改接口后递增
+
+## 📋 API设计文档更新
+
+### 创建API设计文档
+文件路径：[客户管理模块API接口设计.md](mdc:miduo-md/workflow/客户管理模块API接口设计.md)
+
+### API文档内容要求
+1. **接口编号**：每个接口标明唯一编号
+2. **功能描述**：对应产品文档功能点
+3. **请求参数**：详细的参数说明
+4. **响应格式**：统一的返回结构
+5. **业务规则**：相关的业务逻辑说明
+6. **错误码**：可能的错误情况
+
+## ✅ 开发流程要求
+
+### 1. 生成接口前
+- 查看[功能接口对应关系.md](mdc:miduo-md/workflow/功能接口对应关系.md)确认下一个可用编号
+- 在产品文档中找到对应的功能点描述
+
+### 2. 生成接口时
+- 在Controller类的方法注释中添加接口编号
+- 在@ApiOperation注解的notes中添加接口编号
+- 确保接口路径符合RESTful规范
+
+### 3. 生成接口后
+- 立即更新[功能接口对应关系.md](mdc:miduo-md/workflow/功能接口对应关系.md)
+- 更新或创建对应的API设计文档
+- 在前端API封装中添加相同的接口编号注释
+
+### 4. 测试验证
+- 确认接口编号在整个项目中唯一
+- 验证接口功能与产品文档功能点一致
+- 检查设计文档更新完整性
+
+## 🚫 注意事项
+
+### 严格禁止
+- ❌ 重复使用已分配的接口编号
+- ❌ 跳过编号或不按顺序分配
+- ❌ 修改已发布接口的编号
+- ❌ 在注释中省略接口编号
+
+### 特殊情况处理
+- **接口废弃**：保留编号，标记为已废弃，不重新分配
+- **接口合并**：新接口使用新编号，旧接口标记为已废弃
+- **功能拆分**：原接口保持编号，新增功能使用新编号
+
+## 📖 示例参考
+
+查看现有代码实现：
+- 产品管理模块接口示例：[ProductController.java](mdc:miduo-basebackend/miduo-controller/src/main/java/com/miduo/cloud/controller/product/ProductController.java)
+- 项目结构规范：[project-structure.mdc](mdc:.cursor/rules/project-structure.mdc)
+- 后端编码规范：[backend-java-standards.mdc](mdc:.cursor/rules/backend-java-standards.mdc)
+
+---
+**重要提醒**：每次生成API接口都必须遵循此规范，确保接口编号管理的完整性和一致性！

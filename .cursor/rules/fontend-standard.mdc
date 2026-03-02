@@ -1,0 +1,62 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+
+_通用规范，适用于 Vue 项目开发_
+
+---
+
+## 1. 文件规范
+
+### 行尾序列
+
+统一使用 **LF (Unix-style)** 换行符，禁用 CRLF（Windows-style）。
+
+```bash
+# .gitattributes 示例
+* text=auto eol=lf
+```
+
+---
+
+## 2. 目录组织结构
+
+**减少嵌套，优先扁平化**
+
+```text
+src/
+├── api/                  # API 请求模块
+├── assets/               # 静态资源（图片、字体等）
+├── components/           # 全局组件
+│   ├── coupon-picker.vue
+├── composables/          # Vue Composition API 钩子 (Vue 3)
+├── directives/           # Vue 指令
+├── layouts/              # 页面布局组件
+├── libs/                 # 第三方工具库封装
+├── plugins/              # Vue 插件
+├── router/               # 路由配置
+├── store/                # 状态管理 (Vuex/Pinia)
+├── styles/               # 📌 样式（避免嵌套）
+│   ├── _mixins.scss      # SCSS 混合（可选）
+│   ├── _variables.scss   # SCSS 变量
+│   └── common.scss         # 主样式入口
+├── types/                # TypeScript 类型声明
+├── utils/                # 工具函数
+└── App.vue               # 主入口
+```
+
+---
+
+## 3. 命名约定
+
+### 通用规则
+
+| 类型                    | 命名风格      | 示例                                         | 规则说明                                                |
+| ----------------------- | ------------- | -------------------------------------------- | ------------------------------------------------------- |
+| **目录/文件**           | kebab-case    | `user-profile/`<br>`custom-switch.vue`       | 小写字母 + 中划线                                       |
+| **变量/方法/api 接口**  | camelCase     | `isLoading`<br>`fetchData()`<br>`apiGetUser` | 首字母小写，后续单词首字母大写，api 接口使用 `api` 前缀 |
+| **类名/组件 name 属性** | PascalCase    | `class UserService`<br>`name: ConfigPanel`   | 首字母大写                                              |
+| **事件**                | kebab-case    | `status-change`                              | 小写字母 + 中划线                                       |
+| **常量**                | CONSTANT_CASE | `MAX_ITEMS`                                  | 全大写 + 下划线，仅限**真正不可变值**（如配置项、枚举） |

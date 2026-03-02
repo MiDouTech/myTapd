@@ -1,0 +1,86 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# 前端页面样式开发规范
+
+## 📊 分页组件规范
+- **每页条数**：10/20/50/100条，默认20条
+- **分页信息**：显示"共X条"
+- **页码导航**：支持页码跳转和页面切换，加上背景
+
+```vue
+<el-pagination
+  :current-page="currentPage"
+  :page-size="pageSize"
+  :total="total"
+  :page-sizes="[10, 20, 50, 100]"
+  layout="total, sizes, prev, pager, next, jumper"
+  background               
+  @size-change="handleSizeChange"
+  @current-change="handleCurrentChange"
+/>
+```
+
+## 📋 表格样式规范
+- **样式**：无边框，行分隔线，表头浅灰背景
+- **多选**：按需显示复选框列
+- **排序**：按需支持列排序
+- **对齐**：表头和表格内容居中对齐
+
+```vue
+<el-table
+  :data="tableData"
+  :border="false"
+  :stripe="true"
+  :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+  @selection-change="handleSelectionChange"
+  @sort-change="handleSortChange"
+>
+  <!-- 多选列（按需） -->
+  <el-table-column v-if="showSelection" type="selection" width="55" align="center" />
+  
+  <!-- 数据列 -->
+  <el-table-column prop="name" label="名称" sortable="custom" :show-overflow-tooltip="true" />
+  
+  <!-- 操作列 -->
+  <el-table-column label="操作" width="120" align="center" fixed="right">
+    <template #default="{ row }">
+      <!-- 单个操作 -->
+      <el-button v-if="singleOperation" type="primary" link @click="handleSingleOperation(row)">
+        {{ singleOperationText }}
+      </el-button>
+      
+      <!-- 多个操作（下拉） -->
+      <el-dropdown v-else @command="(command) => handleMultipleOperation(command, row)">
+        <el-button type="primary" link>
+          操作 <el-icon><arrow-down /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="operation in operations" :key="operation.command" :command="operation.command">
+              {{ operation.label }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </template>
+  </el-table-column>
+</el-table>
+```
+
+## 🎨 样式规范
+- **主色调**：#1675d1（米多蓝）
+- **表头背景**：#f5f7fa
+- **悬停背景**：#f0f9ff
+- **字体**：14px，表头font-weight: 500，数据font-weight: 400
+
+## 📱 响应式设计
+- **移动端**：表格水平滚动，操作列固定右侧
+- **平板端**：列宽自适应，保持完整分页功能
+
+## ⚠️ 注意事项
+- 所有数据表格必须遵循此规范
+- 使用Element Plus组件库
+- 保持界面一致性和用户体验

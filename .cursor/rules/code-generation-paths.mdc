@@ -1,0 +1,172 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 代码生成路径规范
+
+## 🎯 核心原则
+严格按照项目结构生成代码，前后端分离开发：
+
+## 📁 后端代码路径
+**所有Java后端代码必须生成在**: [miduo-basebackend/](mdc:miduo-basebackend/)
+
+### 后端模块结构示例
+```
+miduo-basebackend/
+├── miduo-controller/src/main/java/com/miduo/cloud/controller/
+│   ├── auth/           # 认证控制器（例）
+│   └── workbench/      # 工作台控制器（例）
+├── miduo-service/src/main/java/com/miduo/cloud/service/
+│   ├── auth/           # 认证服务（例）
+│   └── workbench/      # 工作台服务（例）
+├── miduo-mbg/          # 数据访问层模块（MyBatis-Plus Generator）
+│   ├── src/main/java/com/miduo/cloud/mbg/
+│   │   ├── entity/     # 数据库实体类
+│   │   │   ├── BaseEntity.java      # 基础实体类（包含公共字段）
+│   │   │   ├── auth/                # 认证相关实体（例）
+│   │   │   │   ├── Department.java          # 部门实体（例）
+│   │   │   │   └── WeworkQrcode.java        # 企业微信二维码实体（例）
+│   │   │   └── workbench/           # 工作台实体（例）
+│   │   │       ├── SysShortcutCategory.java # 快捷入口分类实体（例）
+│   │   │       └── SysSsoAppConfigExt.java  # SSO应用配置扩展实体（例）
+│   │   └── mapper/     # MyBatis Mapper接口
+│   │       ├── auth/                # 认证Mapper接口（例）
+│   │       │   ├── DepartmentMapper.java（例）
+│   │       │   └── WeworkQrcodeMapper.java（例）
+│   │       └── workbench/           # 工作台Mapper接口（例）
+│   │           ├── SysShortcutCategoryMapper.java
+│   │           └── SysSsoAppConfigExtMapper.java
+│   └── src/main/resources/
+│       └── mapper/     # MyBatis XML映射文件
+│           ├── auth/                # 认证Mapper XML（例）
+│           │   └── WeworkQrcodeMapper.xml（例）
+│           └── workbench/           # 工作台Mapper XML（例）
+│               └── SysSsoAppConfigExtMapper.xml（例）
+├── miduo-entity/src/main/java/com/miduo/cloud/entity/
+│   ├── dto/            # DTO数据传输对象
+│   │   ├── customer/    # 客户请求DTO（例）
+│   │   └── workbench/   # 工作台请求DTO（例）
+│   │   └── common/     # 通用DTO
+│   └── po/             # 实体类
+├── miduo-common/src/main/java/com/miduo/cloud/common/
+│   ├── dto/            # 基础通用DTO
+│   ├── enums/          # 枚举类
+│   ├── util/           # 工具类
+│   └── constants/      # 常量类
+└── miduo-mini/src/main/java/com/miduo/cloud/
+```
+
+### 后端代码示例路径
+- Controller: `miduo-basebackend/miduo-controller/src/main/java/com/miduo/cloud/controller/customer/CustomerController.java`
+- Service: `miduo-basebackend/miduo-service/src/main/java/com/miduo/cloud/service/customer/CustomerService.java`
+- ServiceImpl: `miduo-basebackend/miduo-service/src/main/java/com/miduo/cloud/service/customer/impl/CustomerServiceImpl.java`
+- Entity: `miduo-basebackend/miduo-mbg/src/main/java/com/miduo/cloud/mbg/entity/customer/Customer.java`
+- Mapper: `miduo-basebackend/miduo-mbg/src/main/java/com/miduo/cloud/mbg/mapper/customer/CustomerMapper.java`
+- Mapper XML: `miduo-basebackend/miduo-mbg/src/main/resources/mapper/CustomerMapper.xml`
+- **DTO请求对象**: `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/request/customer/CustomerCreateRequest.java`
+- **DTO响应对象**: `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/response/customer/CustomerDetailResponse.java`
+
+## 📦 DTO生成路径规范
+
+### 路径别名约定
+为了简化路径表示，使用以下别名约定：
+- **@miduo/** = `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/`
+- **@request/** = `request/` (请求DTO目录)
+- **@response/** = `response/` (响应DTO目录)
+- **@common/** = `common/` (通用DTO目录)
+
+### DTO文件结构
+```
+@miduo/
+├── @request/
+│   ├── @customer/            # 客户请求DTO
+│   │   ├── CustomerCreateRequest.java
+│   │   ├── CustomerUpdateRequest.java
+│   │   ├── CustomerPageQuery.java
+│   │   └── CustomerLevelCreateRequest.java
+│   ├── @product/             # 产品请求DTO
+│   │   ├── ProductCreateRequest.java
+│   │   └── ProductUpdateRequest.java
+│   └── @auth/                # 认证请求DTO
+├── @response/
+│   ├── @customer/            # 客户响应DTO
+│   │   ├── CustomerDetailResponse.java
+│   │   ├── CustomerListResponse.java
+│   │   └── CustomerLevelResponse.java
+│   ├── @product/             # 产品响应DTO
+│   │   └── ProductDetailResponse.java
+│   └── @auth/                # 认证响应DTO
+└── @common/                  # 通用DTO
+    ├── BasePageQuery.java
+    └── CommonResult.java
+```
+
+### 完整路径映射示例
+- `@miduo/@request/@customer/CustomerCreateRequest.java` 
+  → `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/request/customer/CustomerCreateRequest.java`
+- `@miduo/@response/@customer/CustomerDetailResponse.java`
+  → `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/response/customer/CustomerDetailResponse.java`
+- `@miduo/@common/BasePageQuery.java`
+  → `miduo-basebackend/miduo-entity/src/main/java/com/miduo/cloud/entity/dto/common/BasePageQuery.java`
+
+## 🎨 前端代码路径
+**所有Vue前端代码必须生成在**: [miduo-frontend/](mdc:miduo-frontend/)
+
+### 前端目录结构
+```
+miduo-frontend/
+├── src/
+│   ├── views/
+│   │   ├── customer/           # 客户管理页面
+│   │   │   ├── CustomerList.vue
+│   │   │   ├── CustomerDetail.vue
+│   │   │   ├── CustomerForm.vue
+│   │   │   └── CustomerLevel.vue
+│   │   ├── product/            # 商品管理页面
+│   │   └── auth/              # 认证页面
+│   ├── components/
+│   │   ├── layout/            # 布局组件
+│   │   └── common/            # 通用组件
+│   ├── stores/
+│   │   ├── customer.ts        # 客户状态管理
+│   │   └── auth.ts            # 认证状态管理
+│   ├── api/
+│   │   ├── customer.ts        # 客户API
+│   │   └── auth.ts            # 认证API
+│   └── router/
+│       └── index.ts           # 路由配置
+```
+
+### 前端代码示例路径
+- 页面组件: `miduo-frontend/src/views/customer/CustomerList.vue`
+- API封装: `miduo-frontend/src/api/customer.ts`
+- 状态管理: `miduo-frontend/src/stores/customer.ts`
+
+## 🚫 严格禁止
+- 在 `miduo-basebackend/` 目录下生成前端代码
+- 在 `miduo-frontend/` 目录下生成后端代码
+- 在项目根目录直接生成业务代码
+- 混合前后端代码在同一目录
+
+## ✅ 生成代码时的要求
+1. **后端代码生成**：始终使用 `miduo-basebackend/` 作为根路径
+2. **前端代码生成**：始终使用 `miduo-frontend/` 作为根路径  
+3. **DTO生成路径**：严格按照 `@miduo/@request/@业务模块/` 或 `@miduo/@response/@业务模块/` 路径约定生成
+   - 请求DTO: `@miduo/@request/@customer/` 
+   - 响应DTO: `@miduo/@response/@customer/`
+   - 通用DTO: `@miduo/@common/`
+4. **实体类生成**：生成在 `miduo-mbg` 模块下
+5. **Mapper生成**：生成在 `miduo-mbg` 模块下
+6. 按照现有的模块结构和包路径生成代码
+7. 遵循各自的编码规范和命名约定
+8. 生成删除方法时，采用逻辑删除，即对象中的deleted字段标识标记删除，不能直接使用物理删除deleteById等方法
+9. 禁止生成伪代码和临时代码，必须是正确的业务逻辑
+
+## 🚫 DTO生成严格禁止
+- ❌ 禁止在 `miduo-common` 模块下生成业务DTO（业务DTO必须在miduo-entity模块）
+- ❌ 禁止使用错误的包路径结构
+- ✅ 必须使用 `com.miduo.cloud.entity.dto.request.业务模块` 包路径（请求DTO）
+- ✅ 必须使用 `com.miduo.cloud.entity.dto.response.业务模块` 包路径（响应DTO）
+- ✅ 必须使用 `com.miduo.cloud.entity.dto.common` 包路径（通用DTO）
+- ❌ 禁止混淆实体类和DTO的生成位置

@@ -1,0 +1,88 @@
+---
+alwaysApply: true
+---
+# 米多敏捷协助平台项目结构指导
+
+## 项目概述
+这是一个前后端分离的全栈项目，采用现代化技术栈构建米多敏捷协助平台。
+
+## 项目结构
+- **后端项目**: [miduo-basebackend/](mdc:miduo-basebackend/) - Spring Boot多模块Maven项目
+- **前端项目**: [miduo-frontend/](mdc:miduo-frontend/) - Vue3+TypeScript前端项目
+- **文档目录**: [miduo-md/](mdc:miduo-md/) - 包含规范、需求和流程文档
+  - `standard/` - 技术规范和代码规范
+  - `business/` - 业务需求文档
+  - `workflow/` - 流程文档
+
+## 开发原则
+1. **严格分层架构** - Controller → Service → Mapper，严禁跨层调用
+2. **前后端分离** - API接口设计遵循RESTful规范
+3. **模块化开发** - 按业务模块划分（CRM、商品、SSO等）
+4. **文档驱动** - 所有开发都要参考业务需求文档
+5. **规范优先** - 严格遵循编码规范和界面规范
+
+## 技术栈
+**后端**: Spring Boot 2.2.5 + MyBatis-Plus 3.4.3.2 + Redis 3.12.0 + MySQL + JDK 8
+**前端**: Vue3 + Vite6 + TypeScript + Scss + Element Plus + Pinia + axios
+
+## 开发流程
+1. 查看 `miduo-md/business/` 下的具体业务需求
+2. 参考 `miduo-md/standard/` 下的技术规范
+3. 按照分层架构进行代码实现
+4. **后端代码生成**: 所有Java代码生成在 `miduo-basebackend/` 目录下
+5. **前端代码生成**: 所有Vue组件和前端代码生成在 `miduo-frontend/` 目录下
+6. 前端遵循三列布局和主色调 #1675d1
+7. 流程文档统一放到 `miduo-md/workflow/@业务流程` 目录
+8. **数据库sql代码生成**: 所有数据库sql代码生成在 `miduo-md/database/` 目录下，同时文件命名需加上日期,id遵循从1开始自增的规则
+9. **dao层和实体类代码生成**: 所有dao层和实体类代码生成在 `miduo-basebackend/miduo-mbg` 模块下
+10. **DTO接口对象代码生成**: 所有DTO（请求/响应对象）代码生成在 `miduo-basebackend/miduo-entity` 模块下，严格按照 `@miduo/dto/@业务模块/` 路径约定
+11. **基于RESTful规范下的接口路径命名细则**: 
+  （11.1）分页查询的接口路径命名为/page,无分页的列表查询/list,明细查询为/detail,创建为/create,编辑为/update,删除为/delete,
+  （11.2）涉及到明细的操作为/功能/{id}，例如明细删除为/delete/{id}
+12. 每次生成的代码无论前端还是后端，涉及到开发的所有服务，必须通过编译，以及可以正常启动服务，才算完成开发流程
+13. 每次生成的task文档都需要和产品md文档进行校验之后，确认功能点没有遗漏，预留不做的功能需要提供空接口预留
+14. 每次生成接口后在注释中填写接口编号，同时需要修改设计文档，对应的功能中生成一个唯一编码，并与产品文档对应起来，接口编码生成规则：API+自增编码，如API000001，API000002
+15. 严格按序执行：task001→task002→task003 ...
+16. 接口编号管理：每个API都分配了唯一编号，需要更新设计文档
+17. **nacos相关配置**: 所有nacos相关配置的yml文件生成在 `miduo-md/nacos-config` 模块下
+18. **业务模块相关流程task文档**: 所有业务模块相关流程task生成在 `miduo-md/workflow/@业务模块` 模块下，如：业务模块task001,业务模块task002
+19. **测试用例文档和相关测试流程文档**: 所有测试用例文档和相关测试流程文档生成在 `miduo-md/todo/test-todo` 模块下
+20. **测试用例执行情况和代码质量报告文档**: 所有测试用例执行情况和代码质量报告文档生成在 `miduo-md/workflow/test` 模块下
+21. 禁止生成伪代码和临时代码，禁止使用默认值和设置默认对象，必须是正确的业务逻辑
+22. 数据库表设计时，id必须为从1开始的自增id
+23. 测试时必须使用真实数据，禁止mock
+24. 禁止在代码中直接使用常量，应该使用枚举，枚举类统一放置到com.miduo.cloud.common.enums下
+25. **controller层代码规范**：
+    （25.1）controller层不允许直接创建包含业务逻辑的private方法，只能调用service层或util包下的工具类方法
+    （25.2）controller层禁止直接操作Mapper进行数据库访问，所有数据访问必须通过service层
+    （25.3）非业务相关的工具方法应该抽取到com.miduo.cloud.common.util包下
+    （25.4）权限验证、参数校验等业务逻辑应该放到对应的service层实现
+    （25.5）controller层只负责接收请求、调用service、返回响应，保持轻量化
+26. aspect的逻辑放到对应模块的com.miduo.cloud.aspect下
+27. 禁止注解类写sql，如需使用原生sql语句查询必须放置到mapper.xml文件中
+28. 方法内获取对象和参数时，需要做判空处理，避免空指针异常
+29. 非参数类的常量，如redis的key等，应该放到miduo-common模块的com.miduo.cloud.common.constants下
+30. controller的请求体内禁止出现Map<String, Object>类型，如有参数，应该建立一个结构体，结构体内有相应属性字段
+
+# 强制红线 · 前后端安全墙
+> 任何逾越以下规则的代码将立即被阻断，且**不允许自动修复**，仅输出 diff 提示。
+
+---
+# 前端组件化红线
+| 规则 | 阈值 | 正则/示例 | 正确姿势 |
+| ---- | ---- | --------- | -------- |
+| 组件嵌套深度 | ≤ 2 层 | `<A><B><C/></B></A>` | 抽成 `<A><CompositeC/></A>` |
+| props 透传层数 | ≤ 2 层 | `<A x={x}><B x={x}><C x={x}/></B></A>` | 新建 Context 或 Composite 组件 |
+| 递归调用深度 | ≤ 3 层 | 组件自身 >3 次 | 扁平列表 + id 索引 |
+| 文件范围 | .vue .tsx .jsx only | 其余后缀无视 | - |
+| 快速扫描 | 正则先行 | `<(\w+)(?:\s\[^>]*)?>(?:\s*<(\w+)(?:\s\[^>]*)?>(?:\s*<(\w+)(?:\s\[^>]*)?>(?:\s*<(\w+)(?:\s\[^>]*)?>){3,}){3,}){3,}` | 匹配即阻断 |
+
+# 后端数据库红线
+| 规则 | 阈值 | 违规示例 | 正确姿势 |
+| ---- | ---- | -------- | -------- |
+| 循环内单次查询 | 0 次 | `for(id:list){dao.selectById(id)}` | 一次性 `selectByIds(list)` |
+| batch 下限 | 1 条 | 循环体里出现 ≥1 次 SQL 调用 | 先 `IN`/`EXISTS` 捞全量，内存 Map 处理 |
+| 强制索引 | 必须 | `LIKE '%abc'` 前置模糊 | 后置模糊或全文索引 |
+| 内存优先 | true | 先单条再组装 | 先批量查完，再 `List→Map→get` |
+| 异步编排查询 | 强制 | 多个无耦合条件 | CompletableFuture / 线程池并行分段查询，最后汇总 |
+| AST 关键词 | 阻断 | `for\(\s*.*:.*\)\s*\{.*dao.*selectOne|selectById|findById` | 出现即阻断 |
