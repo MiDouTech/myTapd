@@ -17,6 +17,9 @@ public enum NotificationType {
     SLA_BREACHED("SLA_BREACHED", "SLA超时"),
     COMMENT("COMMENT", "工单评论"),
     URGE("URGE", "催办"),
+    REPORT_SUBMITTED("REPORT_SUBMITTED", "简报提审"),
+    REPORT_APPROVED("REPORT_APPROVED", "简报审核通过"),
+    REPORT_REJECTED("REPORT_REJECTED", "简报审核驳回"),
     REPORT_REMIND("REPORT_REMIND", "简报提醒");
 
     private final String code;

@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationServi
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.workflow.model.WorkflowState;
 import com.miduo.cloud.ticket.domain.workflow.model.WorkflowTransition;
@@ -130,6 +131,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         eventPublisher.publishEvent(
                 new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
+
+        if ("COMPLETED".equalsIgnoreCase(targetStatus) || "CLOSED".equalsIgnoreCase(targetStatus)) {
+            eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, targetStatus, operatorId, new Date()));
+        }
     }
 
     /**

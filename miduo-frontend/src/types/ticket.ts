@@ -170,6 +170,15 @@ export interface TicketLogOutput {
   createTime?: string
 }
 
+export interface TicketBugReportOutput {
+  id: number
+  reportNo?: string
+  status?: string
+  statusLabel?: string
+  isAutoCreated?: number
+  createTime?: string
+}
+
 export interface TicketDetailOutput {
   id: number
   ticketNo: string
@@ -200,6 +209,7 @@ export interface TicketDetailOutput {
   attachments?: TicketAttachmentOutput[]
   comments?: TicketCommentOutput[]
   logs?: TicketLogOutput[]
+  bugReports?: TicketBugReportOutput[]
   bugCustomerInfo?: TicketBugCustomerInfoInput
   bugTestInfo?: TicketBugTestInfoInput
   bugDevInfo?: TicketBugDevInfoInput

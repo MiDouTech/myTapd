@@ -8,11 +8,16 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
+import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
@@ -20,6 +25,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUser
 import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +67,12 @@ public class TicketApplicationService {
 
     @Resource
     private WorkflowApplicationService workflowService;
+
+    @Resource
+    private BugReportMapper bugReportMapper;
+
+    @Resource
+    private BugReportTicketMapper bugReportTicketMapper;
 
     @Resource
     private TicketTimeTrackApplicationService ticketTimeTrackService;
@@ -252,6 +264,10 @@ public class TicketApplicationService {
 
         ticketMapper.updateById(ticket);
 
+        if ("COMPLETED".equalsIgnoreCase(toStatus) || "CLOSED".equalsIgnoreCase(toStatus)) {
+            eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
+        }
+
         recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
                 fromStatus, toStatus, input.getRemark());
         String transitionAction = ticketTimeTrackService.resolveTransitionAction(fromStatus, toStatus);
@@ -283,6 +299,8 @@ public class TicketApplicationService {
         ticket.setStatus("CLOSED");
         ticket.setClosedAt(new Date());
         ticketMapper.updateById(ticket);
+
+        eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
 
         recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
                 fromStatus, "CLOSED",
@@ -502,6 +520,39 @@ public class TicketApplicationService {
                 lo.setCreateTime(l.getCreateTime());
                 return lo;
             }).collect(Collectors.toList()));
+        }
+
+        List<BugReportTicketPO> bugReportTickets = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getTicketId, ticket.getId())
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+        );
+        if (bugReportTickets != null && !bugReportTickets.isEmpty()) {
+            Set<Long> reportIds = bugReportTickets.stream()
+                    .map(BugReportTicketPO::getReportId)
+                    .collect(Collectors.toSet());
+            List<BugReportPO> reportList = bugReportMapper.selectBatchIds(reportIds);
+            Map<Long, BugReportPO> reportMap = reportList.stream()
+                    .collect(Collectors.toMap(BugReportPO::getId, r -> r));
+
+            output.setBugReports(bugReportTickets.stream().map(rt -> {
+                TicketDetailOutput.BugReportOutput bo = new TicketDetailOutput.BugReportOutput();
+                BugReportPO report = reportMap.get(rt.getReportId());
+                if (report != null) {
+                    bo.setId(report.getId());
+                    bo.setReportNo(report.getReportNo());
+                    bo.setStatus(report.getStatus());
+                    BugReportStatus brStatus = BugReportStatus.fromCode(report.getStatus());
+                    bo.setStatusLabel(brStatus != null ? brStatus.getLabel() : report.getStatus());
+                    bo.setCreateTime(report.getCreateTime());
+                } else {
+                    bo.setId(rt.getReportId());
+                }
+                bo.setIsAutoCreated(rt.getIsAutoCreated());
+                return bo;
+            }).collect(Collectors.toList()));
+        } else {
+            output.setBugReports(Collections.emptyList());
         }
 
         if (currentUserId != null) {

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
+ * 缺陷工单客服信息PO
  * 缺陷工单客服信息
  */
 @Data
