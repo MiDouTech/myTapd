@@ -7,7 +7,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 系统用户PO
+ * 系统用户PO - 映射 sys_user 表
  */
 @Data
 @TableName("sys_user")
@@ -34,11 +34,11 @@ public class SysUserPO implements Serializable {
     @TableField("position")
     private String position;
 
-    @TableField("wecom_userid")
-    private String wecomUserid;
-
     @TableField("avatar_url")
     private String avatarUrl;
+
+    @TableField("wecom_userid")
+    private String wecomUserid;
 
     @TableField("account_status")
     private Integer accountStatus;

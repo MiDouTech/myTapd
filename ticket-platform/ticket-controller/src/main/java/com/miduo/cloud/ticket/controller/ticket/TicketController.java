@@ -1,0 +1,133 @@
+package com.miduo.cloud.ticket.controller.ticket;
+
+import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
+import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
+import javax.validation.Valid;
+
+@RestController
+@RequestMapping("/api/ticket")
+@Tag(name = "工单管理", description = "工单核心管理接口")
+public class TicketController {
+
+    @Resource
+    private TicketApplicationService ticketService;
+
+    /**
+     * 创建工单
+     * 接口编号：API000006
+     * 产品文档功能：4.2.1 工单创建 - 选择分类→加载模板→填写→提交
+     */
+    @PostMapping("/create")
+    @Operation(summary = "创建工单", description = "接口编号：API000006")
+    public ApiResult<Long> createTicket(@Valid @RequestBody TicketCreateInput input) {
+        Long currentUserId = getCurrentUserId();
+        Long ticketId = ticketService.createTicket(input, currentUserId);
+        return ApiResult.success(ticketId);
+    }
+
+    /**
+     * 分页查询工单列表
+     * 接口编号：API000007
+     * 产品文档功能：4.2.2 工单列表与筛选 - 多视图(我创建的/我待办的/我参与的/我关注的/所有工单)
+     */
+    @GetMapping("/page")
+    @Operation(summary = "分页查询工单列表", description = "接口编号：API000007")
+    public ApiResult<PageOutput<TicketListOutput>> getTicketPage(@Valid TicketPageInput input) {
+        Long currentUserId = getCurrentUserId();
+        PageOutput<TicketListOutput> page = ticketService.getTicketPage(input, currentUserId);
+        return ApiResult.success(page);
+    }
+
+    /**
+     * 获取工单详情
+     * 接口编号：API000008
+     * 产品文档功能：4.2.3 工单详情与操作 - 基本信息、描述、自定义字段、附件、评论
+     */
+    @GetMapping("/detail/{id}")
+    @Operation(summary = "获取工单详情", description = "接口编号：API000008")
+    public ApiResult<TicketDetailOutput> getTicketDetail(@PathVariable Long id) {
+        Long currentUserId = getCurrentUserId();
+        TicketDetailOutput detail = ticketService.getTicketDetail(id, currentUserId);
+        return ApiResult.success(detail);
+    }
+
+    /**
+     * 手动分派工单
+     * 接口编号：API000009
+     * 产品文档功能：4.5.1 分派策略 - 手动分派指定处理人
+     */
+    @PutMapping("/assign/{id}")
+    @Operation(summary = "手动分派工单", description = "接口编号：API000009")
+    public ApiResult<Void> assignTicket(@PathVariable Long id,
+                                        @Valid @RequestBody TicketAssignInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketService.assignTicket(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 处理工单并流转
+     * 接口编号：API000010
+     * 产品文档功能：4.2.3 核心操作 - 处理、转派、挂起、恢复、验收通过/不通过
+     */
+    @PutMapping("/process/{id}")
+    @Operation(summary = "处理工单并流转", description = "接口编号：API000010")
+    public ApiResult<Void> processTicket(@PathVariable Long id,
+                                         @Valid @RequestBody TicketProcessInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketService.processTicket(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 关闭工单
+     * 接口编号：API000011
+     * 产品文档功能：4.2.3 核心操作 - 关闭工单
+     */
+    @PutMapping("/close/{id}")
+    @Operation(summary = "关闭工单", description = "接口编号：API000011")
+    public ApiResult<Void> closeTicket(@PathVariable Long id,
+                                       @RequestBody(required = false) TicketCloseInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketService.closeTicket(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 关注工单
+     * 接口编号：API000012
+     * 产品文档功能：4.2.3 核心操作 - 关注工单动态
+     */
+    @PostMapping("/follow/{id}")
+    @Operation(summary = "关注工单", description = "接口编号：API000012")
+    public ApiResult<Void> followTicket(@PathVariable Long id) {
+        Long currentUserId = getCurrentUserId();
+        ticketService.followTicket(id, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 取消关注工单
+     * 接口编号：API000013
+     * 产品文档功能：4.2.3 核心操作 - 取消关注工单
+     */
+    @DeleteMapping("/follow/{id}")
+    @Operation(summary = "取消关注工单", description = "接口编号：API000013")
+    public ApiResult<Void> unfollowTicket(@PathVariable Long id) {
+        Long currentUserId = getCurrentUserId();
+        ticketService.unfollowTicket(id, currentUserId);
+        return ApiResult.success();
+    }
+
+    private Long getCurrentUserId() {
+        // TODO: Task003集成SecurityContext后替换为真实用户ID
+        return 1L;
+    }
+}
