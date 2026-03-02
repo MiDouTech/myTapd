@@ -65,6 +65,78 @@ export interface TicketCloseInput {
   remark?: string
 }
 
+export interface TicketBugCustomerInfoInput {
+  merchantNo?: string
+  companyName?: string
+  merchantAccount?: string
+  problemDesc?: string
+  expectedResult?: string
+  sceneCode?: string
+  problemScreenshot?: string
+}
+
+export interface TicketBugTestInfoInput {
+  reproduceEnv?: string
+  reproduceSteps?: string
+  actualResult?: string
+  impactScope?: string
+  severityLevel?: string
+  moduleName?: string
+  reproduceScreenshot?: string
+  testRemark?: string
+}
+
+export interface TicketBugDevInfoInput {
+  rootCause?: string
+  fixSolution?: string
+  gitBranch?: string
+  impactAssessment?: string
+  devRemark?: string
+}
+
+export interface TicketTimeTrackItem {
+  id: number
+  userId?: number
+  userName?: string
+  userRole?: string
+  action?: string
+  actionLabel?: string
+  fromStatus?: string
+  toStatus?: string
+  fromUserId?: number
+  fromUserName?: string
+  toUserId?: number
+  toUserName?: string
+  remark?: string
+  isFirstRead?: boolean
+  timestamp?: string
+}
+
+export interface TicketTimeTrackOutput {
+  ticketId: number
+  tracks?: TicketTimeTrackItem[]
+}
+
+export interface TicketNodeDurationItem {
+  id: number
+  nodeName?: string
+  assigneeId?: number
+  assigneeName?: string
+  assigneeRole?: string
+  arriveAt?: string
+  firstReadAt?: string
+  startProcessAt?: string
+  leaveAt?: string
+  waitDurationSec?: number
+  processDurationSec?: number
+  totalDurationSec?: number
+}
+
+export interface TicketNodeDurationOutput {
+  ticketId: number
+  nodes?: TicketNodeDurationItem[]
+}
+
 export interface TicketAttachmentOutput {
   id: number
   fileName: string
@@ -138,5 +210,8 @@ export interface TicketDetailOutput {
   comments?: TicketCommentOutput[]
   logs?: TicketLogOutput[]
   bugReports?: TicketBugReportOutput[]
+  bugCustomerInfo?: TicketBugCustomerInfoInput
+  bugTestInfo?: TicketBugTestInfoInput
+  bugDevInfo?: TicketBugDevInfoInput
   isFollowed?: boolean
 }

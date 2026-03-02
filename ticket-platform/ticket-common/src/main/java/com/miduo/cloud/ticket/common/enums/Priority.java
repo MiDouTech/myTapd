@@ -24,7 +24,7 @@ public enum Priority {
             return MEDIUM;
         }
         for (Priority priority : values()) {
-            if (priority.code.equals(code)) {
+            if (priority.code.equalsIgnoreCase(code)) {
                 return priority;
             }
         }

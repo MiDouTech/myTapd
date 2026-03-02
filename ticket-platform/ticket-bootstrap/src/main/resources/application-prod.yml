@@ -28,6 +28,10 @@ spring:
     password: ${REDIS_PASSWORD:}
     database: 0
 
+wecom:
+  mq:
+    enabled: false
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl

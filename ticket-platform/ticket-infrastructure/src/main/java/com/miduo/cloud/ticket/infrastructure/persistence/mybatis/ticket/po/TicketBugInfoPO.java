@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 
 /**
  * 缺陷工单客服信息PO
+ * 缺陷工单客服信息
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -34,4 +35,7 @@ public class TicketBugInfoPO extends BaseEntity {
 
     @TableField("scene_code")
     private String sceneCode;
+
+    @TableField("problem_screenshot")
+    private String problemScreenshot;
 }

@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.workflow;
 
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.workflow.AvailableActionOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.ReturnInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TransferInput;
@@ -19,8 +20,6 @@ import javax.validation.Valid;
 @RestController
 @RequestMapping("/api/ticket")
 public class TicketWorkflowController {
-
-    private static final Long MOCK_OPERATOR_ID = 1L;
 
     private final TicketWorkflowAppService ticketWorkflowAppService;
 
@@ -84,6 +83,7 @@ public class TicketWorkflowController {
      * 获取当前登录用户ID（待Task003 JWT认证完成后替换）
      */
     private Long getCurrentUserId() {
-        return MOCK_OPERATOR_ID;
+        Long userId = SecurityUtil.getCurrentUserId();
+        return userId != null ? userId : 1L;
     }
 }

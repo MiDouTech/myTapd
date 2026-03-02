@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 
 /**
  * 缺陷工单测试信息PO
+ * 缺陷工单测试信息
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -34,6 +35,9 @@ public class TicketBugTestInfoPO extends BaseEntity {
 
     @TableField("module_name")
     private String moduleName;
+
+    @TableField("reproduce_screenshot")
+    private String reproduceScreenshot;
 
     @TableField("test_remark")
     private String testRemark;

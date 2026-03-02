@@ -1,10 +1,9 @@
 package com.miduo.cloud.ticket.controller.ticket;
 
+import com.miduo.cloud.ticket.application.ticket.TicketUrgeApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
-import com.miduo.cloud.ticket.domain.common.event.TicketUrgedEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,10 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/ticket")
 public class TicketUrgeController {
 
-    private final ApplicationEventPublisher eventPublisher;
+    private final TicketUrgeApplicationService ticketUrgeApplicationService;
 
-    public TicketUrgeController(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
+    public TicketUrgeController(TicketUrgeApplicationService ticketUrgeApplicationService) {
+        this.ticketUrgeApplicationService = ticketUrgeApplicationService;
     }
 
     /**
@@ -33,12 +32,7 @@ public class TicketUrgeController {
     @PostMapping("/urge/{id}")
     public ApiResult<Void> urgeTicket(@PathVariable("id") Long ticketId) {
         Long currentUserId = getCurrentUserId();
-
-        // TODO: 待工单核心服务完善后，此处需查询工单处理人ID
-        // 当前预留接口，发布催办事件
-        Long handlerId = null;
-        eventPublisher.publishEvent(new TicketUrgedEvent(ticketId, currentUserId, handlerId));
-
+        ticketUrgeApplicationService.urgeByTicketId(ticketId, currentUserId);
         return ApiResult.success();
     }
 
