@@ -63,6 +63,10 @@ public class TicketApplicationService {
     private WorkflowApplicationService workflowService;
 
     @Resource
+    private TicketTimeTrackApplicationService ticketTimeTrackService;
+
+    @Resource
+    private TicketBugApplicationService ticketBugApplicationService;
     private ApplicationEventPublisher eventPublisher;
 
     @Transactional(rollbackFor = Exception.class)
@@ -113,6 +117,8 @@ public class TicketApplicationService {
 
         recordLog(ticket.getId(), currentUserId, TicketAction.CREATE.getCode(),
                 null, ticket.getStatus(), "创建工单: " + ticket.getTicketNo());
+        ticketTimeTrackService.recordCreate(ticket.getId(), currentUserId, ticket.getStatus(),
+                "创建工单: " + ticket.getTicketNo());
 
         eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
         if (ticket.getAssigneeId() != null) {
@@ -207,6 +213,8 @@ public class TicketApplicationService {
         String newValue = String.valueOf(input.getAssigneeId());
         recordLog(ticketId, currentUserId, TicketAction.ASSIGN.getCode(),
                 oldValue, newValue, input.getRemark());
+        ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, input.getAssigneeId(),
+                ticket.getStatus(), ticket.getStatus(), input.getRemark());
 
         eventPublisher.publishEvent(new TicketAssignedEvent(
                 ticketId, input.getAssigneeId(), oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
@@ -223,6 +231,7 @@ public class TicketApplicationService {
 
         String fromStatus = ticket.getStatus();
         String toStatus = input.getTargetStatus();
+        Long oldAssigneeId = ticket.getAssigneeId();
 
         workflowService.validateTransition(ticket.getWorkflowId(), fromStatus, toStatus);
 
@@ -232,6 +241,7 @@ public class TicketApplicationService {
         if (input.getTargetUserId() != null) {
             ticket.setAssigneeId(input.getTargetUserId());
         }
+        Long newAssigneeId = ticket.getAssigneeId();
 
         if (workflowService.isTerminalStatus(ticket.getWorkflowId(), toStatus)) {
             if ("COMPLETED".equals(toStatus)) {
@@ -244,6 +254,9 @@ public class TicketApplicationService {
 
         recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
                 fromStatus, toStatus, input.getRemark());
+        String transitionAction = ticketTimeTrackService.resolveTransitionAction(fromStatus, toStatus);
+        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, transitionAction,
+                fromStatus, toStatus, oldAssigneeId, newAssigneeId, input.getRemark());
 
         if (input.getRemark() != null && !input.getRemark().isEmpty()) {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
@@ -266,6 +279,7 @@ public class TicketApplicationService {
         }
 
         String fromStatus = ticket.getStatus();
+        Long assigneeId = ticket.getAssigneeId();
         ticket.setStatus("CLOSED");
         ticket.setClosedAt(new Date());
         ticketMapper.updateById(ticket);
@@ -273,6 +287,8 @@ public class TicketApplicationService {
         recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
                 fromStatus, "CLOSED",
                 input != null ? input.getRemark() : null);
+        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
+                fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
 
         eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
@@ -375,6 +391,10 @@ public class TicketApplicationService {
                 log.warn("解析自定义字段失败: ticketId={}", ticket.getId(), e);
             }
         }
+
+        output.setBugCustomerInfo(ticketBugApplicationService.getCustomerInfo(ticket.getId()));
+        output.setBugTestInfo(ticketBugApplicationService.getTestInfo(ticket.getId()));
+        output.setBugDevInfo(ticketBugApplicationService.getDevInfo(ticket.getId()));
 
         List<TicketAttachmentPO> attachments = attachmentMapper.selectList(
                 new LambdaQueryWrapper<TicketAttachmentPO>()
