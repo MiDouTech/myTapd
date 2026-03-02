@@ -68,6 +68,21 @@ public class TicketDetailOutput implements Serializable {
 
     private List<LogOutput> logs;
 
+    /**
+     * 缺陷工单-客服信息
+     */
+    private TicketBugCustomerInfoOutput bugCustomerInfo;
+
+    /**
+     * 缺陷工单-测试信息
+     */
+    private TicketBugTestInfoOutput bugTestInfo;
+
+    /**
+     * 缺陷工单-开发信息
+     */
+    private TicketBugDevInfoOutput bugDevInfo;
+
     private Boolean isFollowed;
 
     @Data

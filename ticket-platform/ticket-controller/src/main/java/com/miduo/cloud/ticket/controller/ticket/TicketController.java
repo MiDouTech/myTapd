@@ -1,8 +1,11 @@
 package com.miduo.cloud.ticket.controller.ticket;
 
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +21,12 @@ public class TicketController {
 
     @Resource
     private TicketApplicationService ticketService;
+
+    @Resource
+    private TicketBugApplicationService ticketBugApplicationService;
+
+    @Resource
+    private TicketTimeTrackApplicationService ticketTimeTrackApplicationService;
 
     /**
      * 创建工单
@@ -126,8 +135,87 @@ public class TicketController {
         return ApiResult.success();
     }
 
+    /**
+     * 记录首次阅读轨迹
+     * 接口编号：API000020
+     * 产品文档功能：4.4.6 全链路时间追踪 - 首次阅读时间记录
+     */
+    @PostMapping("/{id}/track/read")
+    @Operation(summary = "记录工单阅读轨迹", description = "接口编号：API000020")
+    public ApiResult<Void> trackRead(@PathVariable Long id) {
+        Long currentUserId = getCurrentUserId();
+        ticketTimeTrackApplicationService.recordReadTrack(id, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 更新缺陷工单客服信息
+     * 接口编号：API000021
+     * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区
+     */
+    @PutMapping("/bug/customer-info/{id}")
+    @Operation(summary = "更新缺陷工单客服信息", description = "接口编号：API000021")
+    public ApiResult<Void> updateBugCustomerInfo(@PathVariable Long id,
+                                                 @RequestBody TicketBugCustomerInfoInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketBugApplicationService.updateCustomerInfo(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 更新缺陷工单测试信息
+     * 接口编号：API000022
+     * 产品文档功能：4.2.3 缺陷工单详情页 - 测试信息区
+     */
+    @PutMapping("/bug/test-info/{id}")
+    @Operation(summary = "更新缺陷工单测试信息", description = "接口编号：API000022")
+    public ApiResult<Void> updateBugTestInfo(@PathVariable Long id,
+                                             @RequestBody TicketBugTestInfoInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketBugApplicationService.updateTestInfo(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 更新缺陷工单开发信息
+     * 接口编号：API000023
+     * 产品文档功能：4.2.3 缺陷工单详情页 - 开发信息区
+     */
+    @PutMapping("/bug/dev-info/{id}")
+    @Operation(summary = "更新缺陷工单开发信息", description = "接口编号：API000023")
+    public ApiResult<Void> updateBugDevInfo(@PathVariable Long id,
+                                            @RequestBody TicketBugDevInfoInput input) {
+        Long currentUserId = getCurrentUserId();
+        ticketBugApplicationService.updateDevInfo(id, input, currentUserId);
+        return ApiResult.success();
+    }
+
+    /**
+     * 获取工单时间追踪链
+     * 接口编号：API000024
+     * 产品文档功能：4.4.6 全链路时间追踪 - 时间追踪链展示
+     */
+    @GetMapping("/{id}/time-track")
+    @Operation(summary = "获取工单时间追踪链", description = "接口编号：API000024")
+    public ApiResult<TicketTimeTrackOutput> getTimeTrack(@PathVariable Long id) {
+        TicketTimeTrackOutput output = ticketTimeTrackApplicationService.getTimeTrack(id);
+        return ApiResult.success(output);
+    }
+
+    /**
+     * 获取工单节点耗时统计
+     * 接口编号：API000025
+     * 产品文档功能：4.4.6 全链路时间追踪 - 节点耗时统计
+     */
+    @GetMapping("/{id}/node-duration")
+    @Operation(summary = "获取工单节点耗时统计", description = "接口编号：API000025")
+    public ApiResult<TicketNodeDurationOutput> getNodeDuration(@PathVariable Long id) {
+        TicketNodeDurationOutput output = ticketTimeTrackApplicationService.getNodeDuration(id);
+        return ApiResult.success(output);
+    }
+
     private Long getCurrentUserId() {
-        // TODO: Task003集成SecurityContext后替换为真实用户ID
-        return 1L;
+        Long userId = SecurityUtil.getCurrentUserId();
+        return userId != null ? userId : 1L;
     }
 }
