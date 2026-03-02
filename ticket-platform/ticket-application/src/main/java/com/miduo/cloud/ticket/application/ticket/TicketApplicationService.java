@@ -138,6 +138,12 @@ public class TicketApplicationService {
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
         }
 
+        eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
+        if (ticket.getAssigneeId() != null) {
+            eventPublisher.publishEvent(new TicketAssignedEvent(ticket.getId(), ticket.getAssigneeId(),
+                    null, currentUserId, "CREATE_ASSIGN"));
+        }
+
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
         return ticket.getId();
     }
@@ -231,6 +237,9 @@ public class TicketApplicationService {
         eventPublisher.publishEvent(new TicketAssignedEvent(
                 ticketId, input.getAssigneeId(), oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
 
+        eventPublisher.publishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
+                oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
+
         log.info("工单分派: ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
     }
 
@@ -307,6 +316,8 @@ public class TicketApplicationService {
                 input != null ? input.getRemark() : null);
         ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
                 fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
+
+        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
         eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
