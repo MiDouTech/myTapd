@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.mapper.TicketDashboardMapper">
+
+    <select id="selectStatusCounts" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.StatusCountRow">
+        SELECT LOWER(t.status) AS status, COUNT(1) AS total
+        FROM ticket t
+        WHERE t.deleted = 0
+        GROUP BY LOWER(t.status)
+    </select>
+
+    <select id="selectSlaBreachedTicketCount" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT st.ticket_id)
+        FROM sla_timer st
+        WHERE st.deleted = 0
+          AND st.is_breached = 1
+    </select>
+
+    <select id="selectCreatedTrend" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyCountRow">
+        SELECT DATE_FORMAT(t.create_time, '%Y-%m-%d') AS day, COUNT(1) AS total
+        FROM ticket t
+        WHERE t.deleted = 0
+          AND t.create_time &gt;= #{startTime}
+          AND t.create_time &lt; #{endTime}
+        GROUP BY DATE_FORMAT(t.create_time, '%Y-%m-%d')
+        ORDER BY day ASC
+    </select>
+
+    <select id="selectClosedTrend" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyCountRow">
+        SELECT DATE_FORMAT(t.closed_at, '%Y-%m-%d') AS day, COUNT(1) AS total
+        FROM ticket t
+        WHERE t.deleted = 0
+          AND t.closed_at IS NOT NULL
+          AND t.closed_at &gt;= #{startTime}
+          AND t.closed_at &lt; #{endTime}
+        GROUP BY DATE_FORMAT(t.closed_at, '%Y-%m-%d')
+        ORDER BY day ASC
+    </select>
+
+    <select id="countOpenBefore" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM ticket t
+        WHERE t.deleted = 0
+          AND t.create_time &lt; #{startTime}
+          AND (t.closed_at IS NULL OR t.closed_at &gt;= #{startTime})
+    </select>
+
+    <select id="selectCategoryDistribution" resultType="com.miduo.cloud.ticket.entity.dto.dashboard.DashboardCategoryDistributionOutput">
+        SELECT
+            t.category_id AS categoryId,
+            COALESCE(c.name, '未分类') AS categoryName,
+            COUNT(1) AS ticketCount,
+            0 AS percentage
+        FROM ticket t
+        LEFT JOIN ticket_category c ON t.category_id = c.id AND c.deleted = 0
+        WHERE t.deleted = 0
+        GROUP BY t.category_id, c.name
+        ORDER BY ticketCount DESC
+    </select>
+
+    <select id="selectEfficiency" resultType="com.miduo.cloud.ticket.entity.dto.dashboard.DashboardEfficiencyOutput">
+        SELECT
+            COALESCE(ROUND(AVG(CASE WHEN st.timer_type = 'RESPONSE' THEN st.elapsed_minutes END), 2), 0) AS avgResponseMinutes,
+            COALESCE(ROUND(AVG(CASE WHEN st.timer_type = 'RESOLVE' THEN st.elapsed_minutes END), 2), 0) AS avgResolveMinutes,
+            (SELECT COUNT(1) FROM ticket t2 WHERE t2.deleted = 0 AND LOWER(t2.status) IN ('completed', 'closed')) AS completedCount,
+            (SELECT COUNT(1) FROM ticket t3 WHERE t3.deleted = 0) AS totalCount,
+            0 AS completionRate
+        FROM sla_timer st
+        WHERE st.deleted = 0
+    </select>
+
+    <select id="selectSlaAchievement" resultType="com.miduo.cloud.ticket.entity.dto.dashboard.DashboardSlaAchievementOutput">
+        SELECT
+            COUNT(1) AS totalCount,
+            COALESCE(SUM(CASE WHEN st.is_breached = 0 THEN 1 ELSE 0 END), 0) AS achievedCount,
+            COALESCE(SUM(CASE WHEN st.is_breached = 1 THEN 1 ELSE 0 END), 0) AS breachedCount,
+            0 AS achievementRate
+        FROM sla_timer st
+        WHERE st.deleted = 0
+          AND st.timer_type = 'RESOLVE'
+    </select>
+
+    <select id="selectWorkloadTop" resultType="com.miduo.cloud.ticket.entity.dto.dashboard.DashboardWorkloadOutput">
+        SELECT
+            t.assignee_id AS assigneeId,
+            COALESCE(u.name, '未知用户') AS assigneeName,
+            COUNT(1) AS totalCount,
+            SUM(CASE WHEN LOWER(t.status) IN ('completed', 'closed') THEN 0 ELSE 1 END) AS processingCount,
+            SUM(CASE WHEN LOWER(t.status) IN ('completed', 'closed') THEN 1 ELSE 0 END) AS completedCount
+        FROM ticket t
+        LEFT JOIN sys_user u ON t.assignee_id = u.id AND u.deleted = 0
+        WHERE t.deleted = 0
+          AND t.assignee_id IS NOT NULL
+        GROUP BY t.assignee_id, u.name
+        ORDER BY totalCount DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
