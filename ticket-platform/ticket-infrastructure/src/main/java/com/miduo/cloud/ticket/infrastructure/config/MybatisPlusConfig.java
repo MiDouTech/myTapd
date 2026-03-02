@@ -8,6 +8,8 @@ import org.apache.ibatis.reflection.MetaObject;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Date;
 
@@ -45,7 +47,14 @@ public class MybatisPlusConfig {
             }
 
             private String getCurrentUser() {
-                // TODO: Task003 中集成 SecurityContext 获取当前用户
+                try {
+                    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                    if (authentication != null && authentication.isAuthenticated()
+                            && !"anonymousUser".equals(authentication.getPrincipal())) {
+                        return authentication.getName();
+                    }
+                } catch (Exception ignored) {
+                }
                 return "system";
             }
         };
