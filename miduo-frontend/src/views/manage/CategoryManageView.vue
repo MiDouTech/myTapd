@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { createCategory, getCategoryDetail, getCategoryTree, updateCategory } from '@/api/category'
+import {
+  createCategory,
+  deleteCategory,
+  getCategoryDetail,
+  getCategoryTree,
+  updateCategory,
+} from '@/api/category'
 import type { CategoryCreateInput, CategoryTreeOutput, CategoryUpdateInput } from '@/types/category'
-import { notifySuccess, notifyWarning } from '@/utils/feedback'
+import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const treeLoading = ref(false)
 const detailLoading = ref(false)
@@ -17,6 +23,16 @@ const editForm = reactive<CategoryUpdateInput>({
   sortOrder: 0,
   isActive: 1,
 })
+
+function resetEditForm(): void {
+  editForm.name = ''
+  editForm.templateId = undefined
+  editForm.workflowId = undefined
+  editForm.slaPolicyId = undefined
+  editForm.defaultGroupId = undefined
+  editForm.sortOrder = 0
+  editForm.isActive = 1
+}
 
 const createForm = reactive<CategoryCreateInput>({
   name: '',
@@ -136,8 +152,27 @@ async function handleUpdateCategory(): Promise<void> {
   }
 }
 
-function handleDeletePlaceholder(): void {
-  notifyWarning('后端暂未提供分类删除接口，已预留前端入口。')
+async function handleDeleteCategory(): Promise<void> {
+  if (!selectedCategoryId.value) {
+    notifyWarning('请先选择分类节点')
+    return
+  }
+  const categoryId = selectedCategoryId.value
+  try {
+    await confirmAction('删除后不可恢复，请确认是否删除当前分类？')
+  } catch {
+    return
+  }
+  submitLoading.value = true
+  try {
+    await deleteCategory(categoryId)
+    notifySuccess('分类删除成功')
+    selectedCategoryId.value = undefined
+    resetEditForm()
+    await loadCategoryTree()
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -188,9 +223,9 @@ onMounted(async () => {
                 type="danger"
                 link
                 :disabled="!selectedCategoryId"
-                @click="handleDeletePlaceholder"
+                @click="handleDeleteCategory"
               >
-                删除（预留）
+                删除
               </el-button>
             </el-space>
           </div>

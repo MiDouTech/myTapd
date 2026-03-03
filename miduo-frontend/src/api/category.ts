@@ -41,3 +41,12 @@ export function createCategory(data: CategoryCreateInput): Promise<number> {
 export function updateCategory(id: number, data: CategoryUpdateInput): Promise<void> {
   return request.put<void>(`/category/update/${id}`, data)
 }
+
+/**
+ * 删除分类
+ * 接口编号：API000422
+ * 产品文档功能：4.3.1 工单分类体系 - 删除分类
+ */
+export function deleteCategory(id: number): Promise<void> {
+  return request.del<void>(`/category/delete/${id}`)
+}

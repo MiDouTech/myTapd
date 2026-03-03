@@ -10,8 +10,10 @@ import com.miduo.cloud.ticket.entity.dto.category.CategoryDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.category.CategoryTreeOutput;
 import com.miduo.cloud.ticket.entity.dto.category.CategoryUpdateInput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketTemplateMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketTemplatePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.HandlerGroupMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.HandlerGroupPO;
@@ -37,6 +39,9 @@ public class CategoryApplicationService {
 
     @Resource
     private TicketTemplateMapper templateMapper;
+
+    @Resource
+    private TicketMapper ticketMapper;
 
     @Resource
     private WorkflowMapper workflowMapper;
@@ -125,6 +130,34 @@ public class CategoryApplicationService {
         }
 
         categoryMapper.updateById(existing);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCategory(Long id) {
+        TicketCategoryPO existing = categoryMapper.selectById(id);
+        if (existing == null) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "分类不存在");
+        }
+
+        Long childCount = categoryMapper.selectCount(new LambdaQueryWrapper<TicketCategoryPO>()
+                .eq(TicketCategoryPO::getParentId, id));
+        if (childCount != null && childCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "当前分类存在子分类，无法删除");
+        }
+
+        Long templateCount = templateMapper.selectCount(new LambdaQueryWrapper<TicketTemplatePO>()
+                .eq(TicketTemplatePO::getCategoryId, id));
+        if (templateCount != null && templateCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "当前分类已关联模板，无法删除");
+        }
+
+        Long ticketCount = ticketMapper.selectCount(new LambdaQueryWrapper<TicketPO>()
+                .eq(TicketPO::getCategoryId, id));
+        if (ticketCount != null && ticketCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "当前分类已关联工单，无法删除");
+        }
+
+        categoryMapper.deleteById(id);
     }
 
     private void validateCategoryLevel(Integer level, Long parentId) {

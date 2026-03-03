@@ -15,6 +15,7 @@
 | API000002 | 获取分类详情 | GET | /api/category/detail/{id} | 返回分类详情含关联信息 |
 | API000003 | 新增分类 | POST | /api/category/create | 创建新分类节点 |
 | API000004 | 修改分类 | PUT | /api/category/update/{id} | 更新分类信息 |
+| API000422 | 删除分类 | DELETE | /api/category/delete/{id} | 删除叶子分类节点 |
 | API000005 | 模板列表 | GET | /api/template/list | 按分类查询工单模板 |
 | API000006 | 创建工单 | POST | /api/ticket/create | 创建新工单并触发工作流 |
 | API000007 | 工单分页 | GET | /api/ticket/page | 多视图分页查询工单 |
@@ -103,6 +104,14 @@
 
 - **路径**：`PUT /api/category/update/{id}`
 - **请求体**：name, templateId, workflowId, slaPolicyId, defaultGroupId, sortOrder, isActive（均为可选）
+
+### API000422 删除分类
+
+- **路径**：`DELETE /api/category/delete/{id}`
+- **业务规则**：
+  - 分类存在子分类时不可删除
+  - 分类已关联模板时不可删除
+  - 分类已关联工单时不可删除
 
 ### API000005 模板列表
 
