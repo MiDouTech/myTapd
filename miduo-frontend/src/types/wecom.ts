@@ -6,6 +6,8 @@ export interface WecomGroupBindingListOutput {
   defaultCategoryName?: string
   webhookUrl?: string
   isActive: number
+  createBy?: string
+  updateBy?: string
   createTime?: string
   updateTime?: string
 }

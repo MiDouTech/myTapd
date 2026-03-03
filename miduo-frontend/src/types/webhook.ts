@@ -18,6 +18,8 @@ export interface WebhookConfigOutput {
   lastSuccessTime?: string
   lastFailTime?: string
   lastFailReason?: string
+  createBy?: string
+  updateBy?: string
   createTime?: string
   updateTime?: string
 }

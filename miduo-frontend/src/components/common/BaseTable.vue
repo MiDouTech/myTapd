@@ -4,6 +4,9 @@ interface Props {
   loading?: boolean
   showSelection?: boolean
   rowKey?: string
+  rowClassName?:
+    | string
+    | ((payload: { row: Record<string, unknown>; rowIndex: number }) => string)
 }
 
 defineProps<Props>()
@@ -26,6 +29,7 @@ const emit = defineEmits<{
     :stripe="true"
     :header-cell-style="{ backgroundColor: '#f5f7fa' }"
     :row-key="rowKey || 'id'"
+    :row-class-name="rowClassName"
     v-loading="loading"
     class="base-table"
     @selection-change="(rows: unknown[]) => emit('selectionChange', rows)"

@@ -7,6 +7,8 @@ import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { NotificationPreferenceOutput } from '@/types/notification'
+import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue'
+import WecomGroupBindingPanel from '@/views/manage/components/WecomGroupBindingPanel.vue'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const route = useRoute()
@@ -152,13 +154,8 @@ function handlePreferencePaginationChange(payload: { pageNum: number; pageSize: 
   normalizePreferencePage()
 }
 
-function openIntegrationSection(section: IntegrationSection): void {
-  activeTab.value = 'integration'
-  activeSection.value = section
-}
-
 function handleSaveBasicSettings(): void {
-  notifyWarning('基础参数配置将在 Task020 继续深化，本阶段仅完成配置框架落地')
+  notifyWarning('基础参数配置暂未接入后端持久化，当前仅保留页面配置能力。')
 }
 
 onMounted(async () => {
@@ -199,7 +196,7 @@ onMounted(async () => {
         </el-form>
 
         <el-alert
-          title="基础参数能力已完成框架落地，深度配置与持久化将在 Task020 完成。"
+          title="基础参数用于系统全局默认值配置，保存前请确认与运维规范一致。"
           type="info"
           :closable="false"
           show-icon
@@ -252,39 +249,11 @@ onMounted(async () => {
       <el-tab-pane label="集成设置" name="integration">
         <el-tabs v-model="activeSection" class="integration-tabs">
           <el-tab-pane label="Webhook配置" name="webhook">
-            <el-card shadow="never" class="integration-card">
-              <template #header>
-                <div class="integration-header">
-                  <span>Webhook配置（Task020 预留）</span>
-                  <el-button type="primary" link @click="openIntegrationSection('webhook')">
-                    保持当前路由状态
-                  </el-button>
-                </div>
-              </template>
-              <p class="integration-text">
-                已预留 Webhook 配置容器与路由状态（tab=integration&amp;section=webhook），高级能力在
-                Task020 完成闭环。
-              </p>
-              <EmptyState description="Webhook 规则管理将在 Task020 完成。" />
-            </el-card>
+            <WebhookConfigPanel />
           </el-tab-pane>
 
           <el-tab-pane label="企微群绑定" name="wecom">
-            <el-card shadow="never" class="integration-card">
-              <template #header>
-                <div class="integration-header">
-                  <span>企微群绑定（Task020 预留）</span>
-                  <el-button type="primary" link @click="openIntegrationSection('wecom')">
-                    保持当前路由状态
-                  </el-button>
-                </div>
-              </template>
-              <p class="integration-text">
-                已预留企微群绑定容器与路由状态（tab=integration&amp;section=wecom），后续在 Task020
-                打通绑定与验证流程。
-              </p>
-              <EmptyState description="企微群绑定能力将在 Task020 完成。" />
-            </el-card>
+            <WecomGroupBindingPanel />
           </el-tab-pane>
         </el-tabs>
       </el-tab-pane>
@@ -315,22 +284,5 @@ onMounted(async () => {
 
 .integration-tabs {
   margin-top: 4px;
-}
-
-.integration-card {
-  min-height: 240px;
-}
-
-.integration-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.integration-text {
-  margin: 0 0 12px;
-  color: #606266;
-  font-size: 13px;
-  line-height: 20px;
 }
 </style>
