@@ -75,6 +75,38 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'bug-report',
+        name: 'bugReportList',
+        component: () => import('@/views/bugreport/BugReportListView.vue'),
+        meta: {
+          title: 'Bug简报',
+        },
+      },
+      {
+        path: 'bug-report/detail/:id',
+        name: 'bugReportDetail',
+        component: () => import('@/views/bugreport/BugReportDetailView.vue'),
+        meta: {
+          title: 'Bug简报详情',
+        },
+      },
+      {
+        path: 'bug-report/edit/:id?',
+        name: 'bugReportEdit',
+        component: () => import('@/views/bugreport/BugReportEditView.vue'),
+        meta: {
+          title: 'Bug简报编辑',
+        },
+      },
+      {
+        path: 'bug-report/statistics',
+        name: 'bugReportStatistics',
+        component: () => import('@/views/bugreport/BugReportStatisticsView.vue'),
+        meta: {
+          title: 'Bug简报统计',
+        },
+      },
+      {
         path: 'notification',
         name: 'notificationCenter',
         component: () => import('@/views/notification/NotificationCenterView.vue'),

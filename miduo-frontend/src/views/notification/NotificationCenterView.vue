@@ -164,10 +164,7 @@ function resolveTarget(row: NotificationOutput): { path: string; query?: Record<
   }
   if (row.reportId) {
     return {
-      path: '/report',
-      query: {
-        reportId: String(row.reportId),
-      },
+      path: `/bug-report/detail/${row.reportId}`,
     }
   }
   return null
