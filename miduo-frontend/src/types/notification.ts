@@ -3,6 +3,8 @@ import type { PageQuery } from './common'
 export interface NotificationPageInput extends PageQuery {
   type?: string
   isRead?: number
+  createTimeStart?: string
+  createTimeEnd?: string
 }
 
 export interface NotificationOutput {
@@ -44,4 +46,12 @@ export interface NotificationPreferenceUpdateItem {
 
 export interface NotificationPreferenceUpdateInput {
   items: NotificationPreferenceUpdateItem[]
+}
+
+export interface NotificationRealtimePayload {
+  notificationId?: number
+  type?: string
+  title?: string
+  content?: string
+  timestamp?: number
 }
