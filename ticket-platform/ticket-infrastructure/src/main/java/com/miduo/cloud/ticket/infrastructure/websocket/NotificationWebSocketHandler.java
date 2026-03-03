@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.miduo.cloud.ticket.domain.common.event.NotificationSendEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -66,7 +67,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     /**
      * 监听通知发送事件，通过WebSocket实时推送
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onNotificationSend(NotificationSendEvent event) {
         Long userId = event.getUserId();
         WebSocketSession session = userSessions.get(userId);

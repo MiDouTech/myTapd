@@ -627,10 +627,18 @@ public class TicketApplicationService {
     }
 
     private void safePublishEvent(Object event) {
-        if (eventPublisher == null) {
-            log.error("事件发布器未注入，已跳过事件发布: eventType={}", event != null ? event.getClass().getSimpleName() : "null");
+        if (event == null) {
+            log.warn("事件对象为空，已跳过事件发布");
             return;
         }
-        eventPublisher.publishEvent(event);
+        if (eventPublisher == null) {
+            log.error("事件发布器未注入，已跳过事件发布: eventType={}", event.getClass().getSimpleName());
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(event);
+        } catch (Exception ex) {
+            log.error("事件发布失败，已降级跳过: eventType={}", event.getClass().getSimpleName(), ex);
+        }
     }
 }

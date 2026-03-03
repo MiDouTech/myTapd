@@ -1,9 +1,10 @@
 package com.miduo.cloud.ticket.application.ticket;
 
 import com.miduo.cloud.ticket.domain.common.event.TicketTimeTrackRecordedEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * 工单时间追踪事件监听器
@@ -18,7 +19,7 @@ public class TicketTimeTrackEventListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTimeTrackRecorded(TicketTimeTrackRecordedEvent event) {
         nodeDurationApplicationService.handleTrackEvent(event);
     }
