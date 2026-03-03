@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   assignTicket,
@@ -32,6 +32,7 @@ import { notifySuccess } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
@@ -273,6 +274,13 @@ async function toggleFollow(): Promise<void> {
     notifySuccess('关注成功')
   }
   await loadAll()
+}
+
+function openBugReportDetail(reportId?: number): void {
+  if (!reportId) {
+    return
+  }
+  router.push(`/bug-report/detail/${reportId}`)
 }
 
 async function saveCustomerInfo(): Promise<void> {
@@ -683,6 +691,42 @@ watch(
         <el-table-column label="上传时间" align="center" width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-card shadow="never">
+      <template #header>
+        <div class="section-title">关联Bug简报</div>
+      </template>
+      <EmptyState v-if="!detail?.bugReports?.length" description="暂无关联Bug简报" />
+      <el-table
+        v-else
+        :data="detail.bugReports"
+        :border="false"
+        :stripe="true"
+        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+      >
+        <el-table-column prop="reportNo" label="简报编号" min-width="180" align="center" />
+        <el-table-column label="状态" width="140" align="center">
+          <template #default="{ row }">
+            {{ row.statusLabel || row.status || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="关联方式" width="120" align="center">
+          <template #default="{ row }">
+            {{ row.isAutoCreated === 1 ? '自动' : '手动' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="关联时间" width="180" align="center">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="openBugReportDetail(row.id)">查看简报</el-button>
           </template>
         </el-table-column>
       </el-table>

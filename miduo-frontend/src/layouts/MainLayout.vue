@@ -4,6 +4,7 @@ import {
   ArrowDown,
   Bell,
   DataAnalysis,
+  Document,
   Files,
   Fold,
   Grid,
@@ -45,6 +46,15 @@ const menuItems: MenuItem[] = [
   { index: '/ticket/all', title: '所有工单', icon: Files },
   { index: '/ticket/kanban', title: '工单看板', icon: Grid },
   { index: '/report', title: '报表中心', icon: Histogram },
+  {
+    index: 'bugReport',
+    title: 'Bug简报',
+    icon: Document,
+    children: [
+      { index: '/bug-report', title: '简报列表', icon: Document },
+      { index: '/bug-report/statistics', title: '统计看板', icon: Histogram },
+    ],
+  },
   { index: '/notification', title: '通知中心', icon: Bell },
   {
     index: 'manage',
@@ -68,6 +78,15 @@ const activeMenu = computed(() => {
   }
   if (route.path === '/ticket/create') {
     return '/ticket/mine'
+  }
+  if (route.path.startsWith('/bug-report/detail/')) {
+    return '/bug-report'
+  }
+  if (route.path.startsWith('/bug-report/edit/')) {
+    return '/bug-report'
+  }
+  if (route.path === '/bug-report/edit') {
+    return '/bug-report'
   }
   return route.path
 })
@@ -104,12 +123,7 @@ async function handleOpenNotification(notification: NotificationOutput): Promise
     return
   }
   if (notification.reportId) {
-    await router.push({
-      path: '/report',
-      query: {
-        reportId: String(notification.reportId),
-      },
-    })
+    await router.push(`/bug-report/detail/${notification.reportId}`)
     return
   }
   await router.push('/notification')
