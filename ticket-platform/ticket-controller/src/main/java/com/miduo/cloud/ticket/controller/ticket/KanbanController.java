@@ -2,6 +2,9 @@ package com.miduo.cloud.ticket.controller.ticket;
 
 import com.miduo.cloud.ticket.application.ticket.KanbanApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.ticket.KanbanColumnOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.KanbanMoveInput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +52,10 @@ public class KanbanController {
     }
 
     private Long getCurrentUserId() {
-        return 1L;
+        Long userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

@@ -5,6 +5,8 @@ import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -216,6 +218,9 @@ public class TicketController {
 
     private Long getCurrentUserId() {
         Long userId = SecurityUtil.getCurrentUserId();
-        return userId != null ? userId : 1L;
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

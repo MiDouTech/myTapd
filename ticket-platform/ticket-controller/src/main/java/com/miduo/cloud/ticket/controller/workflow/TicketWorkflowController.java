@@ -2,6 +2,8 @@ package com.miduo.cloud.ticket.controller.workflow;
 
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.workflow.AvailableActionOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.ReturnInput;
@@ -80,10 +82,13 @@ public class TicketWorkflowController {
     }
 
     /**
-     * 获取当前登录用户ID（待Task003 JWT认证完成后替换）
+     * 获取当前登录用户ID
      */
     private Long getCurrentUserId() {
         Long userId = SecurityUtil.getCurrentUserId();
-        return userId != null ? userId : 1L;
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }
