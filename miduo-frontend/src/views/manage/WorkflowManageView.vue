@@ -23,6 +23,8 @@ import { formatDateTime } from '@/utils/formatter'
 
 interface ListQuery {
   keyword: string
+  orderBy?: string
+  asc: boolean
   pageNum: number
   pageSize: number
 }
@@ -48,12 +50,16 @@ const workflowQuery = reactive<
   keyword: '',
   mode: '',
   isActive: undefined,
+  orderBy: undefined,
+  asc: false,
   pageNum: 1,
   pageSize: 20,
 })
 
 const handlerGroupQuery = reactive<ListQuery>({
   keyword: '',
+  orderBy: undefined,
+  asc: false,
   pageNum: 1,
   pageSize: 20,
 })
@@ -80,11 +86,45 @@ const filteredWorkflowList = computed(() => {
   })
 })
 
+function sortRows<T extends Record<string, unknown>>(
+  rows: T[],
+  orderBy: string | undefined,
+  asc: boolean,
+): T[] {
+  const result = [...rows]
+  if (!orderBy) {
+    return result
+  }
+  result.sort((a, b) => {
+    const left = a[orderBy]
+    const right = b[orderBy]
+    if (left === right) {
+      return 0
+    }
+    if (left === undefined || left === null) {
+      return 1
+    }
+    if (right === undefined || right === null) {
+      return -1
+    }
+    if (typeof left === 'number' && typeof right === 'number') {
+      return asc ? left - right : right - left
+    }
+    const compared = String(left).localeCompare(String(right), 'zh-CN')
+    return asc ? compared : -compared
+  })
+  return result
+}
+
+const sortedWorkflowList = computed(() => {
+  return sortRows(filteredWorkflowList.value, workflowQuery.orderBy, workflowQuery.asc)
+})
+
 const workflowTotal = computed(() => filteredWorkflowList.value.length)
 
 const pagedWorkflowList = computed(() => {
   const start = (workflowQuery.pageNum - 1) * workflowQuery.pageSize
-  return filteredWorkflowList.value.slice(start, start + workflowQuery.pageSize)
+  return sortedWorkflowList.value.slice(start, start + workflowQuery.pageSize)
 })
 
 const filteredHandlerGroupList = computed(() => {
@@ -99,11 +139,15 @@ const filteredHandlerGroupList = computed(() => {
   })
 })
 
+const sortedHandlerGroupList = computed(() => {
+  return sortRows(filteredHandlerGroupList.value, handlerGroupQuery.orderBy, handlerGroupQuery.asc)
+})
+
 const handlerGroupTotal = computed(() => filteredHandlerGroupList.value.length)
 
 const pagedHandlerGroupList = computed(() => {
   const start = (handlerGroupQuery.pageNum - 1) * handlerGroupQuery.pageSize
-  return filteredHandlerGroupList.value.slice(start, start + handlerGroupQuery.pageSize)
+  return sortedHandlerGroupList.value.slice(start, start + handlerGroupQuery.pageSize)
 })
 
 const detailStateRows = computed<Record<string, unknown>[]>(() => {
@@ -184,6 +228,8 @@ function handleWorkflowReset(): void {
   workflowQuery.keyword = ''
   workflowQuery.mode = ''
   workflowQuery.isActive = undefined
+  workflowQuery.orderBy = undefined
+  workflowQuery.asc = false
   workflowQuery.pageNum = 1
 }
 
@@ -200,6 +246,8 @@ function handleHandlerGroupSearch(): void {
 
 function handleHandlerGroupReset(): void {
   handlerGroupQuery.keyword = ''
+  handlerGroupQuery.orderBy = undefined
+  handlerGroupQuery.asc = false
   handlerGroupQuery.pageNum = 1
 }
 
@@ -207,6 +255,22 @@ function handleHandlerGroupPaginationChange(payload: { pageNum: number; pageSize
   handlerGroupQuery.pageNum = payload.pageNum
   handlerGroupQuery.pageSize = payload.pageSize
   normalizeHandlerGroupPage()
+}
+
+function handleWorkflowSortChange(payload: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
+  workflowQuery.orderBy = payload.order && payload.prop ? payload.prop : undefined
+  workflowQuery.asc = payload.order === 'ascending'
+}
+
+function handleHandlerGroupSortChange(payload: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
+  handlerGroupQuery.orderBy = payload.order && payload.prop ? payload.prop : undefined
+  handlerGroupQuery.asc = payload.order === 'ascending'
 }
 
 function handleLeaderChange(): void {
@@ -362,23 +426,27 @@ onMounted(async () => {
 
       <EmptyState v-if="!workflowLoading && workflowTotal === 0" description="暂无工作流数据" />
       <template v-else>
-        <BaseTable :data="pagedWorkflowList" :loading="workflowLoading">
-          <el-table-column prop="name" label="工作流名称" min-width="160" />
+        <BaseTable
+          :data="pagedWorkflowList"
+          :loading="workflowLoading"
+          @sort-change="handleWorkflowSortChange"
+        >
+          <el-table-column prop="name" label="工作流名称" min-width="160" sortable="custom" />
           <el-table-column label="模式" width="120">
             <template #default="{ row }">
               <el-tag :type="getModeTagType(row.mode)">{{ row.modeLabel || row.mode }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="stateCount" label="状态数" width="100" />
-          <el-table-column prop="transitionCount" label="流转数" width="100" />
+          <el-table-column prop="stateCount" label="状态数" width="100" sortable="custom" />
+          <el-table-column prop="transitionCount" label="流转数" width="100" sortable="custom" />
           <el-table-column label="启用状态" width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.isActive)">{{ row.isActive === 1 ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="更新时间" width="180">
+          <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
             <template #default="{ row }">
-              {{ formatDateTime(row.createTime) }}
+              {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="120" align="center" fixed="right">
@@ -424,8 +492,12 @@ onMounted(async () => {
 
       <EmptyState v-if="!handlerGroupLoading && handlerGroupTotal === 0" description="暂无处理组数据" />
       <template v-else>
-        <BaseTable :data="pagedHandlerGroupList" :loading="handlerGroupLoading">
-          <el-table-column prop="name" label="处理组名称" min-width="140" />
+        <BaseTable
+          :data="pagedHandlerGroupList"
+          :loading="handlerGroupLoading"
+          @sort-change="handleHandlerGroupSortChange"
+        >
+          <el-table-column prop="name" label="处理组名称" min-width="140" sortable="custom" />
           <el-table-column
             prop="description"
             label="说明"
@@ -439,7 +511,7 @@ onMounted(async () => {
             :show-overflow-tooltip="true"
           />
           <el-table-column prop="leaderName" label="组长" width="120" />
-          <el-table-column prop="memberCount" label="成员数" width="90" />
+          <el-table-column prop="memberCount" label="成员数" width="90" sortable="custom" />
           <el-table-column label="成员名单" min-width="200" :show-overflow-tooltip="true">
             <template #default="{ row }">
               {{ formatMemberNames(row) }}
@@ -450,9 +522,9 @@ onMounted(async () => {
               <el-tag :type="getStatusTagType(row.isActive)">{{ row.isActive === 1 ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="更新时间" width="180">
+          <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
             <template #default="{ row }">
-              {{ formatDateTime(row.createTime) }}
+              {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>
           </el-table-column>
         </BaseTable>
