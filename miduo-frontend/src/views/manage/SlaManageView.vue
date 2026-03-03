@@ -24,6 +24,8 @@ const query = reactive({
   keyword: '',
   priority: '',
   isActive: undefined as number | undefined,
+  orderBy: undefined as string | undefined,
+  asc: false,
   pageNum: 1,
   pageSize: 20,
 })
@@ -51,11 +53,37 @@ const filteredPolicyList = computed(() => {
   })
 })
 
-const total = computed(() => filteredPolicyList.value.length)
+const sortedPolicyList = computed(() => {
+  const sorted = [...filteredPolicyList.value]
+  if (!query.orderBy) {
+    return sorted
+  }
+  sorted.sort((a, b) => {
+    const left = a[query.orderBy as keyof SlaPolicyOutput]
+    const right = b[query.orderBy as keyof SlaPolicyOutput]
+    if (left === right) {
+      return 0
+    }
+    if (left === undefined || left === null) {
+      return 1
+    }
+    if (right === undefined || right === null) {
+      return -1
+    }
+    if (typeof left === 'number' && typeof right === 'number') {
+      return query.asc ? left - right : right - left
+    }
+    const compared = String(left).localeCompare(String(right), 'zh-CN')
+    return query.asc ? compared : -compared
+  })
+  return sorted
+})
+
+const total = computed(() => sortedPolicyList.value.length)
 
 const pagedPolicyList = computed(() => {
   const start = (query.pageNum - 1) * query.pageSize
-  return filteredPolicyList.value.slice(start, start + query.pageSize)
+  return sortedPolicyList.value.slice(start, start + query.pageSize)
 })
 
 function normalizePage(): void {
@@ -97,6 +125,8 @@ function handleReset(): void {
   query.keyword = ''
   query.priority = ''
   query.isActive = undefined
+  query.orderBy = undefined
+  query.asc = false
   query.pageNum = 1
 }
 
@@ -104,6 +134,14 @@ function handlePaginationChange(payload: { pageNum: number; pageSize: number }):
   query.pageNum = payload.pageNum
   query.pageSize = payload.pageSize
   normalizePage()
+}
+
+function handleSortChange(payload: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
+  query.orderBy = payload.order && payload.prop ? payload.prop : undefined
+  query.asc = payload.order === 'ascending'
 }
 
 function openCreateDialog(): void {
@@ -280,8 +318,8 @@ onMounted(async () => {
 
       <EmptyState v-if="!tableLoading && total === 0" description="暂无SLA策略" />
       <template v-else>
-        <BaseTable :data="pagedPolicyList" :loading="tableLoading">
-          <el-table-column prop="name" label="策略名称" min-width="140" />
+        <BaseTable :data="pagedPolicyList" :loading="tableLoading" @sort-change="handleSortChange">
+          <el-table-column prop="name" label="策略名称" min-width="140" sortable="custom" />
           <el-table-column label="优先级" width="100">
             <template #default="{ row }">
               <el-tag :type="getPriorityTagType(row.priority)">
@@ -289,10 +327,10 @@ onMounted(async () => {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="responseTime" label="响应时限(分钟)" width="130" />
-          <el-table-column prop="resolveTime" label="解决时限(分钟)" width="130" />
-          <el-table-column prop="warningPct" label="预警阈值(%)" width="120" />
-          <el-table-column prop="criticalPct" label="超时阈值(%)" width="120" />
+          <el-table-column prop="responseTime" label="响应时限(分钟)" width="130" sortable="custom" />
+          <el-table-column prop="resolveTime" label="解决时限(分钟)" width="130" sortable="custom" />
+          <el-table-column prop="warningPct" label="预警阈值(%)" width="120" sortable="custom" />
+          <el-table-column prop="criticalPct" label="超时阈值(%)" width="120" sortable="custom" />
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
               <el-switch
@@ -304,7 +342,7 @@ onMounted(async () => {
               />
             </template>
           </el-table-column>
-          <el-table-column prop="updateTime" label="更新时间" width="180">
+          <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
             <template #default="{ row }">
               {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>

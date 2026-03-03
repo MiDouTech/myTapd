@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { getDepartmentTree, getUserList } from '@/api/user'
+import { getDepartmentTree } from '@/api/department'
+import { getUserList } from '@/api/user'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import type { DepartmentTreeOutput, UserListInput, UserListOutput } from '@/types/user'
+import type { DepartmentTreeOutput } from '@/types/department'
+import type { UserListInput, UserListOutput } from '@/types/user'
 import { formatDateTime } from '@/utils/formatter'
 
 const departmentLoading = ref(false)
@@ -21,6 +23,8 @@ const detailUser = ref<UserListOutput>()
 const query = reactive({
   keyword: '',
   accountStatus: undefined as number | undefined,
+  orderBy: undefined as string | undefined,
+  asc: false,
   pageNum: 1,
   pageSize: 20,
 })
@@ -30,11 +34,37 @@ const treeProps = {
   children: 'children',
 }
 
-const total = computed(() => userList.value.length)
+const sortedUserList = computed(() => {
+  const sorted = [...userList.value]
+  if (!query.orderBy) {
+    return sorted
+  }
+  sorted.sort((a, b) => {
+    const left = a[query.orderBy as keyof UserListOutput]
+    const right = b[query.orderBy as keyof UserListOutput]
+    if (left === right) {
+      return 0
+    }
+    if (left === undefined || left === null) {
+      return 1
+    }
+    if (right === undefined || right === null) {
+      return -1
+    }
+    if (typeof left === 'number' && typeof right === 'number') {
+      return query.asc ? left - right : right - left
+    }
+    const result = String(left).localeCompare(String(right), 'zh-CN')
+    return query.asc ? result : -result
+  })
+  return sorted
+})
+
+const total = computed(() => sortedUserList.value.length)
 
 const pagedUserList = computed(() => {
   const start = (query.pageNum - 1) * query.pageSize
-  return userList.value.slice(start, start + query.pageSize)
+  return sortedUserList.value.slice(start, start + query.pageSize)
 })
 
 function normalizePage(): void {
@@ -126,6 +156,8 @@ function handleSearch(): void {
 function handleReset(): void {
   query.keyword = ''
   query.accountStatus = undefined
+  query.orderBy = undefined
+  query.asc = false
   query.pageNum = 1
   void loadUsers()
 }
@@ -134,6 +166,14 @@ function handlePaginationChange(payload: { pageNum: number; pageSize: number }):
   query.pageNum = payload.pageNum
   query.pageSize = payload.pageSize
   normalizePage()
+}
+
+function handleSortChange(payload: {
+  prop: string
+  order: 'ascending' | 'descending' | null
+}): void {
+  query.orderBy = payload.order && payload.prop ? payload.prop : undefined
+  query.asc = payload.order === 'ascending'
 }
 
 function openDetail(row: UserListOutput): void {
@@ -205,10 +245,10 @@ onMounted(async () => {
 
         <EmptyState v-if="!tableLoading && total === 0" description="暂无用户数据" />
         <template v-else>
-          <BaseTable :data="pagedUserList" :loading="tableLoading">
-            <el-table-column prop="name" label="姓名" min-width="120" />
-            <el-table-column prop="employeeNo" label="工号" min-width="120" />
-            <el-table-column prop="departmentName" label="部门" min-width="120" />
+          <BaseTable :data="pagedUserList" :loading="tableLoading" @sort-change="handleSortChange">
+            <el-table-column prop="name" label="姓名" min-width="120" sortable="custom" />
+            <el-table-column prop="employeeNo" label="工号" min-width="120" sortable="custom" />
+            <el-table-column prop="departmentName" label="部门" min-width="120" sortable="custom" />
             <el-table-column label="账号状态" width="110">
               <template #default="{ row }">
                 <el-tag :type="getStatusTagType(row.accountStatus)">
@@ -224,7 +264,7 @@ onMounted(async () => {
             <el-table-column prop="email" label="邮箱" min-width="180" :show-overflow-tooltip="true" />
             <el-table-column prop="phone" label="手机号" width="140" />
             <el-table-column prop="position" label="职位" min-width="120" />
-            <el-table-column prop="createTime" label="创建时间" width="180">
+            <el-table-column prop="createTime" label="创建时间" width="180" sortable="custom">
               <template #default="{ row }">
                 {{ formatDateTime(row.createTime) }}
               </template>

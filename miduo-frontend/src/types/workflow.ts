@@ -9,6 +9,7 @@ export interface WorkflowListOutput {
   stateCount: number
   transitionCount: number
   createTime?: string
+  updateTime?: string
 }
 
 export interface WorkflowDetailStateItem {
@@ -57,6 +58,7 @@ export interface HandlerGroupListOutput {
   memberCount: number
   members: HandlerGroupMemberOutput[]
   createTime?: string
+  updateTime?: string
 }
 
 export interface HandlerGroupCreateInput {

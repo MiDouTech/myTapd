@@ -6,13 +6,104 @@ import type {
 } from '@/types/workflow'
 import request from '@/utils/request'
 
+interface WorkflowListRawOutput {
+  id: number
+  name: string
+  mode: string
+  modeLabel?: string
+  description?: string
+  isBuiltin?: number
+  isActive: number
+  stateCount?: number
+  transitionCount?: number
+  createTime?: string
+  updateTime?: string
+}
+
+interface WorkflowDetailRawOutput {
+  id: number
+  name: string
+  mode: string
+  modeLabel?: string
+  description?: string
+  isBuiltin?: number
+  isActive: number
+  states?: WorkflowDetailOutput['states']
+  transitions?: WorkflowDetailOutput['transitions']
+  createTime?: string
+  updateTime?: string
+}
+
+interface HandlerGroupRawOutput {
+  id: number
+  name: string
+  description?: string
+  skillTags?: string
+  isActive: number
+  leaderId?: number
+  leaderName?: string
+  memberCount?: number
+  members?: HandlerGroupListOutput['members']
+  createTime?: string
+  updateTime?: string
+}
+
+function normalizeWorkflowListItem(item: WorkflowListRawOutput): WorkflowListOutput {
+  return {
+    id: item.id,
+    name: item.name,
+    mode: item.mode,
+    modeLabel: item.modeLabel,
+    description: item.description,
+    isBuiltin: item.isBuiltin,
+    isActive: item.isActive,
+    stateCount: item.stateCount ?? 0,
+    transitionCount: item.transitionCount ?? 0,
+    createTime: item.createTime,
+    updateTime: item.updateTime || item.createTime,
+  }
+}
+
+function normalizeWorkflowDetail(item: WorkflowDetailRawOutput): WorkflowDetailOutput {
+  return {
+    id: item.id,
+    name: item.name,
+    mode: item.mode,
+    modeLabel: item.modeLabel,
+    description: item.description,
+    isBuiltin: item.isBuiltin,
+    isActive: item.isActive,
+    states: item.states || [],
+    transitions: item.transitions || [],
+    createTime: item.createTime,
+    updateTime: item.updateTime || item.createTime,
+  }
+}
+
+function normalizeHandlerGroup(item: HandlerGroupRawOutput): HandlerGroupListOutput {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    skillTags: item.skillTags,
+    isActive: item.isActive,
+    leaderId: item.leaderId,
+    leaderName: item.leaderName || '-',
+    memberCount: item.memberCount ?? item.members?.length ?? 0,
+    members: item.members || [],
+    createTime: item.createTime,
+    updateTime: item.updateTime || item.createTime,
+  }
+}
+
 /**
  * 查询工作流列表
  * 接口编号：API000012
  * 产品文档功能：4.4 工作流引擎 - 工作流列表
  */
-export function getWorkflowList(): Promise<WorkflowListOutput[]> {
-  return request.get<WorkflowListOutput[]>('/workflow/list')
+export async function getWorkflowList(): Promise<WorkflowListOutput[]> {
+  const result = await request.get<WorkflowListRawOutput[]>('/workflow/list')
+  return result.map(normalizeWorkflowListItem)
 }
 
 /**
@@ -20,8 +111,9 @@ export function getWorkflowList(): Promise<WorkflowListOutput[]> {
  * 接口编号：API000013
  * 产品文档功能：4.4 工作流引擎 - 工作流详情
  */
-export function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
-  return request.get<WorkflowDetailOutput>(`/workflow/detail/${id}`)
+export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
+  const result = await request.get<WorkflowDetailRawOutput>(`/workflow/detail/${id}`)
+  return normalizeWorkflowDetail(result)
 }
 
 /**
@@ -29,8 +121,9 @@ export function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
  * 接口编号：API000018
  * 产品文档功能：4.5 分派与路由 - 处理组管理
  */
-export function getHandlerGroupList(): Promise<HandlerGroupListOutput[]> {
-  return request.get<HandlerGroupListOutput[]>('/handler-group/list')
+export async function getHandlerGroupList(): Promise<HandlerGroupListOutput[]> {
+  const result = await request.get<HandlerGroupRawOutput[]>('/handler-group/list')
+  return result.map(normalizeHandlerGroup)
 }
 
 /**

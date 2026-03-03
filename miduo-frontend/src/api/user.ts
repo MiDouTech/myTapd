@@ -1,9 +1,4 @@
-import type {
-  CurrentUserOutput,
-  DepartmentTreeOutput,
-  UserListInput,
-  UserListOutput,
-} from '@/types/user'
+import type { CurrentUserOutput, UserListInput, UserListOutput } from '@/types/user'
 import request from '@/utils/request'
 
 /**
@@ -22,13 +17,4 @@ export function getCurrentUser(): Promise<CurrentUserOutput> {
  */
 export function getUserList(params?: UserListInput): Promise<UserListOutput[]> {
   return request.get<UserListOutput[]>('/user/list', { params })
-}
-
-/**
- * 组织架构树
- * 接口编号：API000404
- * 产品文档功能：4.10.1 组织架构与用户管理
- */
-export function getDepartmentTree(): Promise<DepartmentTreeOutput[]> {
-  return request.get<DepartmentTreeOutput[]>('/department/tree')
 }
