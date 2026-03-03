@@ -31,6 +31,7 @@
 | 分类详情 | GET  | /api/category/detail/{id}| 分类编辑         |
 | 分类创建 | POST | /api/category/create     | 分类管理         |
 | 分类更新 | PUT  | /api/category/update/{id}| 分类管理         |
+| 分类删除 | DELETE | /api/category/delete/{id}| 分类管理         |
 | 模板列表 | GET  | /api/template/list       | 创建工单         |
 | 工单创建 | POST | /api/ticket/create       | 创建工单         |
 | 工单分页 | GET  | /api/ticket/page         | 工单列表         |

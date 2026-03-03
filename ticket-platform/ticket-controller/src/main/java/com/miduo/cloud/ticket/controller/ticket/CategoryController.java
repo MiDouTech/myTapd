@@ -70,4 +70,16 @@ public class CategoryController {
         categoryService.updateCategory(id, input);
         return ApiResult.success();
     }
+
+    /**
+     * 删除分类
+     * 接口编号：API000422
+     * 产品文档功能：4.3.1 工单分类体系 - 删除分类
+     */
+    @DeleteMapping("/delete/{id}")
+    @Operation(summary = "删除分类", description = "接口编号：API000422")
+    public ApiResult<Void> deleteCategory(@PathVariable Long id) {
+        categoryService.deleteCategory(id);
+        return ApiResult.success();
+    }
 }

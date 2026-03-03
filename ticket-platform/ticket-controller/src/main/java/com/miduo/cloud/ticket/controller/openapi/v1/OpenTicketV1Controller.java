@@ -4,7 +4,10 @@ import com.miduo.cloud.ticket.application.dashboard.DashboardApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.dashboard.DashboardOverviewOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketDetailOutput;
@@ -93,6 +96,10 @@ public class OpenTicketV1Controller {
     }
 
     private Long getCurrentUserId() {
-        return 1L;
+        Long userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

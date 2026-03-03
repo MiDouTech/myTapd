@@ -3,6 +3,9 @@ package com.miduo.cloud.ticket.controller.bugreport;
 import com.miduo.cloud.ticket.application.bugreport.BugReportApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.bugreport.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -130,7 +133,10 @@ public class BugReportController {
     }
 
     private Long getCurrentUserId() {
-        // TODO: Task003集成SecurityContext后替换
-        return 1L;
+        Long userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

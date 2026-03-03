@@ -2,6 +2,9 @@ package com.miduo.cloud.ticket.controller.ticket;
 
 import com.miduo.cloud.ticket.application.ticket.TicketUrgeApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,9 +41,12 @@ public class TicketUrgeController {
 
     /**
      * 获取当前登录用户ID
-     * TODO: Task003中集成SecurityContext后替换
      */
     private Long getCurrentUserId() {
-        return 1L;
+        Long userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

@@ -108,7 +108,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     /**
      * 从WebSocket会话中提取用户ID
      * 通过URL查询参数 ?userId=xxx 传递
-     * TODO: Task003完成后改为从JWT Token中提取
      */
     private Long extractUserId(WebSocketSession session) {
         String query = session.getUri() != null ? session.getUri().getQuery() : null;
