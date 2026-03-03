@@ -16,4 +16,8 @@ public class NotificationPageInput extends PageInput implements Serializable {
     private String type;
 
     private Integer isRead;
+
+    private String createTimeStart;
+
+    private String createTimeEnd;
 }

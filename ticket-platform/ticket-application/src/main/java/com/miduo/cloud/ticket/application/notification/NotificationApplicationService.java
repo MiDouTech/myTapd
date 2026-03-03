@@ -16,6 +16,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.notification.po
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.notification.po.NotificationPreferencePO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -52,6 +53,12 @@ public class NotificationApplicationService extends BaseApplicationService {
         }
         if (input.getIsRead() != null) {
             wrapper.eq(NotificationPO::getIsRead, input.getIsRead());
+        }
+        if (StringUtils.hasText(input.getCreateTimeStart())) {
+            wrapper.ge(NotificationPO::getCreateTime, input.getCreateTimeStart());
+        }
+        if (StringUtils.hasText(input.getCreateTimeEnd())) {
+            wrapper.le(NotificationPO::getCreateTime, input.getCreateTimeEnd());
         }
 
         wrapper.orderByDesc(NotificationPO::getCreateTime);

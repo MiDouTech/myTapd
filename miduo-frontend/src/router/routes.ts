@@ -75,6 +75,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'notification',
+        name: 'notificationCenter',
+        component: () => import('@/views/notification/NotificationCenterView.vue'),
+        meta: {
+          title: '通知中心',
+        },
+      },
+      {
         path: 'manage/category',
         name: 'manageCategory',
         component: () => import('@/views/manage/CategoryManageView.vue'),
