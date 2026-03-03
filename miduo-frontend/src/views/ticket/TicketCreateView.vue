@@ -158,7 +158,8 @@ onMounted(() => {
         <el-tree-select
           v-model="form.categoryId"
           :data="categoryTree"
-          :props="{ label: 'name', children: 'children' }"
+          :props="{ value: 'id', label: 'name', children: 'children' }"
+          node-key="id"
           placeholder="请选择分类"
           check-strictly
           clearable
