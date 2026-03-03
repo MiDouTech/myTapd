@@ -21,6 +21,10 @@
         </dependency>
         <dependency>
             <groupId>com.miduo.cloud</groupId>
+            <artifactId>ticket-entity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.miduo.cloud</groupId>
             <artifactId>ticket-common</artifactId>
         </dependency>
 
