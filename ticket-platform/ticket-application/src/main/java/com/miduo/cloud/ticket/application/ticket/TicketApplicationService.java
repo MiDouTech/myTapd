@@ -22,7 +22,6 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
-import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -79,6 +78,8 @@ public class TicketApplicationService {
 
     @Resource
     private TicketBugApplicationService ticketBugApplicationService;
+
+    @Resource
     private ApplicationEventPublisher eventPublisher;
 
     @Transactional(rollbackFor = Exception.class)
@@ -136,12 +137,6 @@ public class TicketApplicationService {
         if (ticket.getAssigneeId() != null) {
             eventPublisher.publishEvent(new TicketAssignedEvent(
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
-        }
-
-        eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
-        if (ticket.getAssigneeId() != null) {
-            eventPublisher.publishEvent(new TicketAssignedEvent(ticket.getId(), ticket.getAssigneeId(),
-                    null, currentUserId, "CREATE_ASSIGN"));
         }
 
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
@@ -234,9 +229,6 @@ public class TicketApplicationService {
         ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, input.getAssigneeId(),
                 ticket.getStatus(), ticket.getStatus(), input.getRemark());
 
-        eventPublisher.publishEvent(new TicketAssignedEvent(
-                ticketId, input.getAssigneeId(), oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
-
         eventPublisher.publishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
                 oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
 
@@ -315,8 +307,6 @@ public class TicketApplicationService {
                 input != null ? input.getRemark() : null);
         ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
                 fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
-
-        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
         eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
