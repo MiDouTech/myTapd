@@ -14,9 +14,10 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.Sys
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -48,7 +49,7 @@ public class TicketEventNotificationListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCreated(TicketCreatedEvent event) {
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null) {
@@ -68,7 +69,7 @@ public class TicketEventNotificationListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null || event.getAssigneeId() == null) {
@@ -88,7 +89,7 @@ public class TicketEventNotificationListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null) {

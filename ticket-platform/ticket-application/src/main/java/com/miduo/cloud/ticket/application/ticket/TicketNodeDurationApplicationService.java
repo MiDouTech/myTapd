@@ -164,7 +164,7 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
 
     private void openNode(Long ticketId, String status, Long toUserId, Date arriveAt) {
         TicketNodeDurationPO openNode = getOpenNode(ticketId);
-        if (openNode != null && status.equals(normalize(openNode.getNodeName()))) {
+        if (openNode != null && status != null && status.equals(normalize(openNode.getNodeName()))) {
             if (toUserId != null && !toUserId.equals(openNode.getAssigneeId())) {
                 openNode.setAssigneeId(toUserId);
                 openNode.setAssigneeRole(resolveAssigneeRole(toUserId, status));

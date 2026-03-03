@@ -12,9 +12,10 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.HandlerGroupPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -49,7 +50,7 @@ public class SlaEventListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onSlaWarning(SlaWarningEvent event) {
         log.info("接收到SLA预警事件: ticketId={}, timerType={}, level={}",
                 event.getTicketId(), event.getTimerType(), event.getSlaLevel());
@@ -71,7 +72,7 @@ public class SlaEventListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onSlaBreached(SlaBreachedEvent event) {
         log.info("接收到SLA超时事件: ticketId={}, timerType={}",
                 event.getTicketId(), event.getTimerType());
@@ -104,7 +105,7 @@ public class SlaEventListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketUrged(TicketUrgedEvent event) {
         log.info("接收到催办事件: ticketId={}, urgerId={}, handlerId={}",
                 event.getTicketId(), event.getUrgerId(), event.getHandlerId());
