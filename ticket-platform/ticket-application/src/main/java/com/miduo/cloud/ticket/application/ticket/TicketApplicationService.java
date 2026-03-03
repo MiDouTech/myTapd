@@ -133,9 +133,9 @@ public class TicketApplicationService {
         ticketTimeTrackService.recordCreate(ticket.getId(), currentUserId, ticket.getStatus(),
                 "创建工单: " + ticket.getTicketNo());
 
-        eventPublisher.publishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
+        safePublishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
         if (ticket.getAssigneeId() != null) {
-            eventPublisher.publishEvent(new TicketAssignedEvent(
+            safePublishEvent(new TicketAssignedEvent(
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
         }
 
@@ -229,7 +229,7 @@ public class TicketApplicationService {
         ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, input.getAssigneeId(),
                 ticket.getStatus(), ticket.getStatus(), input.getRemark());
 
-        eventPublisher.publishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
+        safePublishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
                 oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
 
         log.info("工单分派: ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
@@ -265,7 +265,7 @@ public class TicketApplicationService {
         ticketMapper.updateById(ticket);
 
         if ("COMPLETED".equalsIgnoreCase(toStatus) || "CLOSED".equalsIgnoreCase(toStatus)) {
-            eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
+            safePublishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
         }
 
         recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
@@ -278,9 +278,9 @@ public class TicketApplicationService {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
         }
 
-        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
+        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
         if (input.getTargetUserId() != null && !input.getTargetUserId().equals(oldAssigneeId)) {
-            eventPublisher.publishEvent(new TicketAssignedEvent(
+            safePublishEvent(new TicketAssignedEvent(
                     ticketId, input.getTargetUserId(), oldAssigneeId, currentUserId, "PROCESS_ASSIGN"));
         }
 
@@ -300,7 +300,7 @@ public class TicketApplicationService {
         ticket.setClosedAt(new Date());
         ticketMapper.updateById(ticket);
 
-        eventPublisher.publishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
+        safePublishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
 
         recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
                 fromStatus, "CLOSED",
@@ -308,7 +308,7 @@ public class TicketApplicationService {
         ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
                 fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
 
-        eventPublisher.publishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
+        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
 
         log.info("工单关闭: ticketId={}", ticketId);
     }
@@ -624,5 +624,13 @@ public class TicketApplicationService {
         comment.setContent(content);
         comment.setType(CommentType.OPERATION.getCode());
         commentMapper.insert(comment);
+    }
+
+    private void safePublishEvent(Object event) {
+        if (eventPublisher == null) {
+            log.error("事件发布器未注入，已跳过事件发布: eventType={}", event != null ? event.getClass().getSimpleName() : "null");
+            return;
+        }
+        eventPublisher.publishEvent(event);
     }
 }
