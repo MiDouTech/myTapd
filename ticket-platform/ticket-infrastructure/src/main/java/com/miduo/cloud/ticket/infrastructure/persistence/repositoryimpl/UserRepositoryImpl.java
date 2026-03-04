@@ -6,12 +6,16 @@ import com.miduo.cloud.ticket.domain.user.model.User;
 import com.miduo.cloud.ticket.domain.user.repository.UserRepository;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserRoleMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.model.UserRoleCodePair;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserRolePO;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -139,6 +143,25 @@ public class UserRepositoryImpl implements UserRepository {
             return new ArrayList<>();
         }
         return sysUserMapper.selectRoleCodesByUserId(userId);
+    }
+
+    @Override
+    public Map<Long, List<String>> findRoleCodesByUserIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<UserRoleCodePair> pairs = sysUserMapper.selectRoleCodesByUserIds(userIds);
+        if (pairs == null || pairs.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, List<String>> roleCodeMap = new HashMap<>();
+        for (UserRoleCodePair pair : pairs) {
+            if (pair == null || pair.getUserId() == null || pair.getRoleCode() == null) {
+                continue;
+            }
+            roleCodeMap.computeIfAbsent(pair.getUserId(), key -> new ArrayList<>()).add(pair.getRoleCode());
+        }
+        return roleCodeMap;
     }
 
     @Override

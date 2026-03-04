@@ -117,8 +117,14 @@ public class UserApplicationService extends BaseApplicationService {
             deptNameMap = departments.stream()
                     .collect(Collectors.toMap(Department::getId, Department::getName, (a, b) -> a));
         }
+        List<Long> userIds = users.stream()
+                .map(User::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        Map<Long, List<String>> roleCodeMap = userRepository.findRoleCodesByUserIds(userIds);
 
         Map<Long, String> finalDeptNameMap = deptNameMap;
+        Map<Long, List<String>> finalRoleCodeMap = roleCodeMap;
         return users.stream().map(user -> {
             UserListOutput output = new UserListOutput();
             output.setId(user.getId());
@@ -132,7 +138,7 @@ public class UserApplicationService extends BaseApplicationService {
             output.setGender(user.getGender());
             output.setAvatarUrl(user.getAvatarUrl());
             output.setAccountStatus(user.getAccountStatus());
-            output.setRoleCodes(userRepository.findRoleCodes(user.getId()));
+            output.setRoleCodes(finalRoleCodeMap.getOrDefault(user.getId(), Collections.emptyList()));
             output.setCreateTime(user.getCreateTime());
             return output;
         }).collect(Collectors.toList());
@@ -176,6 +182,12 @@ public class UserApplicationService extends BaseApplicationService {
             Integer targetGender = input.getGender();
             users = users.stream()
                     .filter(u -> targetGender.equals(u.getGender()))
+                    .collect(Collectors.toList());
+        }
+        if (input.getSyncStatus() != null) {
+            Integer targetSyncStatus = input.getSyncStatus();
+            users = users.stream()
+                    .filter(u -> targetSyncStatus.equals(u.getSyncStatus()))
                     .collect(Collectors.toList());
         }
 
@@ -224,6 +236,9 @@ public class UserApplicationService extends BaseApplicationService {
         output.setWecomUseridMasked(maskWecomUserid(user.getWecomUserid()));
         output.setAccountStatus(user.getAccountStatus());
         output.setAccountStatusName(mapAccountStatusName(user.getAccountStatus()));
+        output.setSyncStatus(user.getSyncStatus());
+        output.setSyncStatusName(mapSyncStatusName(user.getSyncStatus()));
+        output.setSyncTime(user.getSyncTime());
         output.setRoleCodes(userRepository.findRoleCodes(user.getId()));
         output.setCreateTime(user.getCreateTime());
         return output;
@@ -245,6 +260,9 @@ public class UserApplicationService extends BaseApplicationService {
         output.setWecomUseridMasked(maskWecomUserid(user.getWecomUserid()));
         output.setAccountStatus(user.getAccountStatus());
         output.setAccountStatusName(mapAccountStatusName(user.getAccountStatus()));
+        output.setSyncStatus(user.getSyncStatus());
+        output.setSyncStatusName(mapSyncStatusName(user.getSyncStatus()));
+        output.setSyncTime(user.getSyncTime());
         output.setCreateTime(user.getCreateTime());
         return output;
     }
@@ -292,6 +310,22 @@ public class UserApplicationService extends BaseApplicationService {
                 return "男";
             case 2:
                 return "女";
+            default:
+                return "未知";
+        }
+    }
+
+    private String mapSyncStatusName(Integer syncStatus) {
+        if (syncStatus == null) {
+            return "未知";
+        }
+        switch (syncStatus) {
+            case 0:
+                return "未同步";
+            case 1:
+                return "成功";
+            case 2:
+                return "失败/失效";
             default:
                 return "未知";
         }

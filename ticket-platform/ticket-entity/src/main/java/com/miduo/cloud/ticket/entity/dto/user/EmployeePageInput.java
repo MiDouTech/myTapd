@@ -30,4 +30,9 @@ public class EmployeePageInput extends PageInput {
      * 性别（0:未知 1:男 2:女）
      */
     private Integer gender;
+
+    /**
+     * 同步状态（0:未同步 1:成功 2:失败/失效）
+     */
+    private Integer syncStatus;
 }

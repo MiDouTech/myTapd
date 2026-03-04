@@ -144,6 +144,12 @@ public class WecomSyncApplicationService extends BaseApplicationService {
             output.setTotalCount(logPO.getTotalCount());
             output.setSuccessCount(logPO.getSuccessCount());
             output.setFailCount(logPO.getFailCount());
+            output.setDepartmentCreatedCount(result.getDepartmentCreatedCount());
+            output.setDepartmentUpdatedCount(result.getDepartmentUpdatedCount());
+            output.setDepartmentDisabledCount(result.getDepartmentDisabledCount());
+            output.setUserCreatedCount(result.getUserCreatedCount());
+            output.setUserUpdatedCount(result.getUserUpdatedCount());
+            output.setUserDisabledCount(result.getUserDisabledCount());
             output.setErrorMessage(logPO.getErrorMessage());
             output.setStartTime(logPO.getStartTime());
             output.setEndTime(logPO.getEndTime());

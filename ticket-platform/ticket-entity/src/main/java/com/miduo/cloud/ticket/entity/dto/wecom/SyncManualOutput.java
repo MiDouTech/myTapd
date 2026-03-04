@@ -15,6 +15,12 @@ public class SyncManualOutput implements Serializable {
     private Integer totalCount;
     private Integer successCount;
     private Integer failCount;
+    private Integer departmentCreatedCount;
+    private Integer departmentUpdatedCount;
+    private Integer departmentDisabledCount;
+    private Integer userCreatedCount;
+    private Integer userUpdatedCount;
+    private Integer userDisabledCount;
     private String errorMessage;
     private Date startTime;
     private Date endTime;

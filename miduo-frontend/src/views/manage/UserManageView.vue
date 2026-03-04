@@ -50,6 +50,7 @@ const query = reactive({
   keyword: '',
   accountStatus: undefined as number | undefined,
   gender: undefined as number | undefined,
+  syncStatus: undefined as number | undefined,
   pageNum: 1,
   pageSize: 20,
   orderBy: undefined as string | undefined,
@@ -111,6 +112,28 @@ function getAccountStatusLabel(status?: number): string {
     4: '离职',
   }
   return status === undefined ? '未知' : map[status] || '未知'
+}
+
+function getUserSyncStatusLabel(syncStatus?: number): string {
+  const map: Record<number, string> = {
+    0: '未同步',
+    1: '成功',
+    2: '失败/失效',
+  }
+  return syncStatus === undefined ? '未知' : map[syncStatus] || '未知'
+}
+
+function getUserSyncStatusType(syncStatus?: number): 'success' | 'warning' | 'danger' | 'info' {
+  if (syncStatus === 1) {
+    return 'success'
+  }
+  if (syncStatus === 2) {
+    return 'danger'
+  }
+  if (syncStatus === 0) {
+    return 'warning'
+  }
+  return 'info'
 }
 
 function getGenderLabel(gender?: number): string {
@@ -211,6 +234,7 @@ async function loadEmployees(): Promise<void> {
       keyword: query.keyword.trim() || undefined,
       accountStatus: query.accountStatus,
       gender: query.gender,
+      syncStatus: query.syncStatus,
       pageNum: query.pageNum,
       pageSize: query.pageSize,
       orderBy: query.orderBy,
@@ -281,6 +305,7 @@ function handleReset(): void {
   query.keyword = ''
   query.accountStatus = undefined
   query.gender = undefined
+  query.syncStatus = undefined
   query.pageNum = 1
   query.pageSize = 20
   query.orderBy = undefined
@@ -317,9 +342,18 @@ async function handleManualSync(): Promise<void> {
   syncLoading.value = true
   try {
     const result = await manualSyncOrganization()
-    notifySuccess(
-      `同步完成：总数${result.totalCount}，成功${result.successCount}，失败${result.failCount}`,
-    )
+    const summary = [
+      `总数${result.totalCount}`,
+      `成功${result.successCount}`,
+      `失败${result.failCount}`,
+      `部门+${result.departmentCreatedCount ?? 0}`,
+      `部门~${result.departmentUpdatedCount ?? 0}`,
+      `部门停用${result.departmentDisabledCount ?? 0}`,
+      `用户+${result.userCreatedCount ?? 0}`,
+      `用户~${result.userUpdatedCount ?? 0}`,
+      `用户离职${result.userDisabledCount ?? 0}`,
+    ]
+    notifySuccess(`同步完成：${summary.join('，')}`)
     await Promise.all([loadDepartmentTree(), loadEmployees(), loadLatestSyncStatus()])
     if (syncLogDialogVisible.value) {
       await loadSyncLogs()
@@ -400,6 +434,13 @@ onMounted(async () => {
               <el-option label="男" :value="1" />
               <el-option label="女" :value="2" />
               <el-option label="未知" :value="0" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="同步状态">
+            <el-select v-model="query.syncStatus" clearable placeholder="全部状态">
+              <el-option label="未同步" :value="0" />
+              <el-option label="成功" :value="1" />
+              <el-option label="失败/失效" :value="2" />
             </el-select>
           </el-form-item>
           <el-form-item>
@@ -486,6 +527,18 @@ onMounted(async () => {
                       </el-tag>
                     </template>
                   </el-table-column>
+                  <el-table-column prop="syncStatus" label="同步状态" width="120" sortable="custom">
+                    <template #default="{ row }">
+                      <el-tag :type="getUserSyncStatusType(row.syncStatus)">
+                        {{ row.syncStatusName || getUserSyncStatusLabel(row.syncStatus) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="syncTime" label="同步时间" width="180" sortable="custom">
+                    <template #default="{ row }">
+                      {{ formatDateTime(row.syncTime) }}
+                    </template>
+                  </el-table-column>
                   <el-table-column prop="createTime" label="创建时间" width="180" sortable="custom">
                     <template #default="{ row }">
                       {{ formatDateTime(row.createTime) }}
@@ -557,6 +610,14 @@ onMounted(async () => {
           <el-tag :type="getAccountStatusType(detailUser.accountStatus)">
             {{ detailUser.accountStatusName || getAccountStatusLabel(detailUser.accountStatus) }}
           </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="同步状态">
+          <el-tag :type="getUserSyncStatusType(detailUser.syncStatus)">
+            {{ detailUser.syncStatusName || getUserSyncStatusLabel(detailUser.syncStatus) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="同步时间">
+          {{ formatDateTime(detailUser.syncTime) }}
         </el-descriptions-item>
         <el-descriptions-item label="角色">
           {{ formatRoleCodes(detailUser.roleCodes) }}

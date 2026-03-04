@@ -25,5 +25,8 @@ public class EmployeePageOutput implements Serializable {
     private String wecomUseridMasked;
     private Integer accountStatus;
     private String accountStatusName;
+    private Integer syncStatus;
+    private String syncStatusName;
+    private Date syncTime;
     private Date createTime;
 }
