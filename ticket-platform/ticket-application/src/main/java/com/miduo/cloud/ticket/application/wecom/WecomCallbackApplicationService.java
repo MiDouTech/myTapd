@@ -65,18 +65,23 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         String plainXml = callbackCryptoService.decryptMessage(msgSignature, timestamp, nonce, encrypted);
         Map<String, String> messageMap = WecomXmlParser.parseFirstLevel(plainXml);
         WecomCallbackMessageDTO message = buildMessage(messageMap, plainXml);
+        log.info("收到企微回调消息: msgId={}, msgType={}, chatId={}, fromWecomUserid={}",
+                message.getMsgId(), message.getMsgType(), message.getChatId(), message.getFromWecomUserid());
 
         if (isDuplicate(message.getMsgId())) {
             saveDuplicateLog(message);
+            log.info("企微回调消息去重命中: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
             return;
         }
 
         if (!"text".equalsIgnoreCase(message.getMsgType())) {
             saveIgnoredLog(message, "非文本消息已忽略");
+            log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本消息", message.getMsgId(), message.getMsgType());
             return;
         }
 
         messagePublisher.publish(message);
+        log.info("企微回调消息已投递异步处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
     }
 
     private WecomCallbackMessageDTO buildMessage(Map<String, String> messageMap, String plainXml) {

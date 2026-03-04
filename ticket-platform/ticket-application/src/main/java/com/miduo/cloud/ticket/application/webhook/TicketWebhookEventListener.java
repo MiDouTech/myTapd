@@ -30,6 +30,8 @@ public class TicketWebhookEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCreated(TicketCreatedEvent event) {
         try {
+            log.info("接收工单创建事件并触发Webhook分发: eventId={}, ticketId={}, categoryId={}, priority={}",
+                    event.getEventId(), event.getTicketId(), event.getCategoryId(), event.getPriority());
             TicketCreatedPayload payload = new TicketCreatedPayload();
             payload.setCategoryId(event.getCategoryId());
             payload.setPriority(event.getPriority());
@@ -43,6 +45,8 @@ public class TicketWebhookEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
         try {
+            log.info("接收工单状态变更事件并触发Webhook分发: eventId={}, ticketId={}, oldStatus={}, newStatus={}, operatorId={}",
+                    event.getEventId(), event.getTicketId(), event.getOldStatus(), event.getNewStatus(), event.getOperatorId());
             TicketStatusChangedPayload payload = new TicketStatusChangedPayload();
             payload.setOldStatus(event.getOldStatus());
             payload.setNewStatus(event.getNewStatus());
@@ -57,6 +61,9 @@ public class TicketWebhookEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
         try {
+            log.info("接收工单分派事件并触发Webhook分发: eventId={}, ticketId={}, assigneeId={}, previousAssigneeId={}, operatorId={}, assignType={}",
+                    event.getEventId(), event.getTicketId(), event.getAssigneeId(),
+                    event.getPreviousAssigneeId(), event.getOperatorId(), event.getAssignType());
             TicketAssignedPayload payload = new TicketAssignedPayload();
             payload.setAssigneeId(event.getAssigneeId());
             payload.setPreviousAssigneeId(event.getPreviousAssigneeId());

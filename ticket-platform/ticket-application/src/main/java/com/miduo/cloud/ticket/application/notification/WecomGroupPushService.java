@@ -34,14 +34,20 @@ public class WecomGroupPushService extends BaseApplicationService {
      */
     public void pushByTicket(Long ticketId, String title, String content) {
         if (ticketId == null) {
+            log.debug("企微群推送跳过：ticketId为空");
             return;
         }
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
+            log.warn("企微群推送跳过：工单不存在, ticketId={}", ticketId);
             return;
         }
+        log.debug("开始企微群推送: ticketId={}, sourceChatId={}, categoryId={}",
+                ticketId, ticket.getSourceChatId(), ticket.getCategoryId());
         List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
         if (bindings.isEmpty()) {
+            log.debug("企微群推送跳过：未找到匹配群绑定, ticketId={}, sourceChatId={}, categoryId={}",
+                    ticketId, ticket.getSourceChatId(), ticket.getCategoryId());
             return;
         }
 
@@ -49,12 +55,23 @@ public class WecomGroupPushService extends BaseApplicationService {
         for (WecomGroupBindingPO binding : bindings) {
             String webhookUrl = binding.getWebhookUrl();
             if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+                log.debug("企微群推送跳过：绑定缺少Webhook地址, bindingId={}, chatId={}",
+                        binding.getId(), binding.getChatId());
                 continue;
             }
             if (!pushedWebhookUrls.add(webhookUrl)) {
+                log.debug("企微群推送去重：重复Webhook地址已跳过, bindingId={}, chatId={}",
+                        binding.getId(), binding.getChatId());
                 continue;
             }
-            groupWebhookSender.sendToWebhook(webhookUrl, title, content);
+            try {
+                log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
+                        ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
+                groupWebhookSender.sendToWebhook(webhookUrl, title, content);
+            } catch (Exception ex) {
+                log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
+                        ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
+            }
         }
     }
 
@@ -78,5 +95,17 @@ public class WecomGroupPushService extends BaseApplicationService {
             wrapper.eq(WecomGroupBindingPO::getDefaultCategoryId, categoryId);
         }
         return groupBindingMapper.selectList(wrapper);
+    }
+
+    private String sanitizeWebhookUrl(String webhookUrl) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            return "";
+        }
+        String normalized = webhookUrl.trim();
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            return normalized.substring(0, queryIndex) + "?***";
+        }
+        return normalized;
     }
 }
