@@ -129,6 +129,7 @@ public class UserApplicationService extends BaseApplicationService {
             output.setEmail(user.getEmail());
             output.setPhone(user.getPhone());
             output.setPosition(user.getPosition());
+            output.setGender(user.getGender());
             output.setAvatarUrl(user.getAvatarUrl());
             output.setAccountStatus(user.getAccountStatus());
             output.setRoleCodes(userRepository.findRoleCodes(user.getId()));
@@ -171,6 +172,12 @@ public class UserApplicationService extends BaseApplicationService {
                     .filter(u -> targetStatus.equals(u.getAccountStatus()))
                     .collect(Collectors.toList());
         }
+        if (input.getGender() != null) {
+            Integer targetGender = input.getGender();
+            users = users.stream()
+                    .filter(u -> targetGender.equals(u.getGender()))
+                    .collect(Collectors.toList());
+        }
 
         Map<Long, String> deptNameMap = buildDepartmentNameMap(users);
         int total = users.size();
@@ -211,6 +218,8 @@ public class UserApplicationService extends BaseApplicationService {
         output.setEmailMasked(maskEmail(user.getEmail()));
         output.setPhoneMasked(maskPhone(user.getPhone()));
         output.setPosition(user.getPosition());
+        output.setGender(user.getGender());
+        output.setGenderName(mapGenderName(user.getGender()));
         output.setAvatarUrl(user.getAvatarUrl());
         output.setWecomUseridMasked(maskWecomUserid(user.getWecomUserid()));
         output.setAccountStatus(user.getAccountStatus());
@@ -230,6 +239,8 @@ public class UserApplicationService extends BaseApplicationService {
         output.setEmailMasked(maskEmail(user.getEmail()));
         output.setPhoneMasked(maskPhone(user.getPhone()));
         output.setPosition(user.getPosition());
+        output.setGender(user.getGender());
+        output.setGenderName(mapGenderName(user.getGender()));
         output.setAvatarUrl(user.getAvatarUrl());
         output.setWecomUseridMasked(maskWecomUserid(user.getWecomUserid()));
         output.setAccountStatus(user.getAccountStatus());
@@ -267,6 +278,20 @@ public class UserApplicationService extends BaseApplicationService {
                 return "停用";
             case 4:
                 return "离职";
+            default:
+                return "未知";
+        }
+    }
+
+    private String mapGenderName(Integer gender) {
+        if (gender == null) {
+            return "未知";
+        }
+        switch (gender) {
+            case 1:
+                return "男";
+            case 2:
+                return "女";
             default:
                 return "未知";
         }

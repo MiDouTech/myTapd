@@ -98,6 +98,10 @@ public class DepartmentRepositoryImpl implements DepartmentRepository {
         dept.setParentId(po.getParentId());
         dept.setWecomDeptId(po.getWecomDeptId());
         dept.setSortOrder(po.getSortOrder());
+        dept.setDeptStatus(po.getDeptStatus());
+        dept.setSyncStatus(po.getSyncStatus());
+        dept.setSyncTime(po.getSyncTime());
+        dept.setLeaderWecomUserid(po.getLeaderWecomUserid());
         dept.setCreateTime(po.getCreateTime());
         dept.setUpdateTime(po.getUpdateTime());
         dept.setChildren(new ArrayList<>());
@@ -111,6 +115,10 @@ public class DepartmentRepositoryImpl implements DepartmentRepository {
         po.setParentId(dept.getParentId());
         po.setWecomDeptId(dept.getWecomDeptId());
         po.setSortOrder(dept.getSortOrder());
+        po.setDeptStatus(dept.getDeptStatus());
+        po.setSyncStatus(dept.getSyncStatus());
+        po.setSyncTime(dept.getSyncTime());
+        po.setLeaderWecomUserid(dept.getLeaderWecomUserid());
         return po;
     }
 }

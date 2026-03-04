@@ -28,6 +28,18 @@ public class DepartmentPO implements Serializable {
     @TableField("sort_order")
     private Integer sortOrder;
 
+    @TableField("dept_status")
+    private Integer deptStatus;
+
+    @TableField("sync_status")
+    private Integer syncStatus;
+
+    @TableField("sync_time")
+    private Date syncTime;
+
+    @TableField("leader_wecom_userid")
+    private String leaderWecomUserid;
+
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;
 

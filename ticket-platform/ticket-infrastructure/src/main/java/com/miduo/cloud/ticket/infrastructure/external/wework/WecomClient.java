@@ -78,6 +78,7 @@ public class WecomClient {
         detail.setMobile(json.getString("mobile"));
         detail.setEmail(json.getString("email"));
         detail.setPosition(json.getString("position"));
+        detail.setGender(parseGender(json.getString("gender")));
         detail.setAvatar(json.getString("avatar"));
         detail.setStatus(json.getIntValue("status"));
 
@@ -151,6 +152,7 @@ public class WecomClient {
                 detail.setMobile(userJson.getString("mobile"));
                 detail.setEmail(userJson.getString("email"));
                 detail.setPosition(userJson.getString("position"));
+                detail.setGender(parseGender(userJson.getString("gender")));
                 detail.setAvatar(userJson.getString("avatar"));
                 detail.setStatus(userJson.getIntValue("status"));
 
@@ -242,6 +244,21 @@ public class WecomClient {
         return baseUrl + path;
     }
 
+    private Integer parseGender(String gender) {
+        if (gender == null || gender.trim().isEmpty()) {
+            return 0;
+        }
+        try {
+            int value = Integer.parseInt(gender.trim());
+            if (value == 1 || value == 2) {
+                return value;
+            }
+        } catch (NumberFormatException ignored) {
+            // 按未知性别处理，避免解析异常影响同步流程
+        }
+        return 0;
+    }
+
     /**
      * 企微用户身份（code换取后）
      */
@@ -261,6 +278,7 @@ public class WecomClient {
         private String mobile;
         private String email;
         private String position;
+        private Integer gender;
         private String avatar;
         private Integer status;
         private List<Long> departmentIds;

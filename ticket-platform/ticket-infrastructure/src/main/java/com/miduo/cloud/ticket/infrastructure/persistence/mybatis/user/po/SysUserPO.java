@@ -34,6 +34,9 @@ public class SysUserPO implements Serializable {
     @TableField("position")
     private String position;
 
+    @TableField("gender")
+    private Integer gender;
+
     @TableField("avatar_url")
     private String avatarUrl;
 
@@ -42,6 +45,12 @@ public class SysUserPO implements Serializable {
 
     @TableField("account_status")
     private Integer accountStatus;
+
+    @TableField("sync_status")
+    private Integer syncStatus;
+
+    @TableField("sync_time")
+    private Date syncTime;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;

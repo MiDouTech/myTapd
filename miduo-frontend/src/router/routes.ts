@@ -143,7 +143,7 @@ export const routes: RouteRecordRaw[] = [
         name: 'manageUser',
         component: () => import('@/views/manage/UserManageView.vue'),
         meta: {
-          title: '用户管理',
+          title: '组织账号管理',
         },
       },
       {

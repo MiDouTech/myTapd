@@ -25,4 +25,9 @@ public class EmployeePageInput extends PageInput {
      * 账号状态（1:在职 2:停用 4:离职）
      */
     private Integer accountStatus;
+
+    /**
+     * 性别（0:未知 1:男 2:女）
+     */
+    private Integer gender;
 }

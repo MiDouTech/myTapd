@@ -20,6 +20,7 @@ public class UserListOutput implements Serializable {
     private String email;
     private String phone;
     private String position;
+    private Integer gender;
     private String avatarUrl;
     private Integer accountStatus;
     private List<String> roleCodes;

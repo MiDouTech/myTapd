@@ -105,8 +105,17 @@ public class WecomSyncService extends BaseApplicationService {
                             existing.setSortOrder(wecomDept.getOrder());
                             changed = true;
                         }
+                        if (!Integer.valueOf(1).equals(existing.getDeptStatus())) {
+                            existing.setDeptStatus(1);
+                            changed = true;
+                        }
+                        if (!Integer.valueOf(1).equals(existing.getSyncStatus())) {
+                            existing.setSyncStatus(1);
+                            changed = true;
+                        }
 
                         if (changed) {
+                            existing.setSyncTime(new Date());
                             departmentRepository.save(existing);
                             updated++;
                         }
@@ -115,6 +124,9 @@ public class WecomSyncService extends BaseApplicationService {
                         newDept.setName(wecomDept.getName());
                         newDept.setWecomDeptId(wecomDept.getId());
                         newDept.setSortOrder(wecomDept.getOrder() != null ? wecomDept.getOrder() : 0);
+                        newDept.setDeptStatus(1);
+                        newDept.setSyncStatus(1);
+                        newDept.setSyncTime(new Date());
 
                         Department saved = departmentRepository.save(newDept);
                         existingMap.put(wecomDept.getId(), saved);
@@ -210,6 +222,10 @@ public class WecomSyncService extends BaseApplicationService {
                             existing.setPosition(wecomUser.getPosition());
                             changed = true;
                         }
+                        if (wecomUser.getGender() != null && !wecomUser.getGender().equals(existing.getGender())) {
+                            existing.setGender(wecomUser.getGender());
+                            changed = true;
+                        }
                         if (wecomUser.getAvatar() != null && !wecomUser.getAvatar().equals(existing.getAvatarUrl())) {
                             existing.setAvatarUrl(wecomUser.getAvatar());
                             changed = true;
@@ -226,8 +242,13 @@ public class WecomSyncService extends BaseApplicationService {
                             existing.setAccountStatus(mappedStatus);
                             changed = true;
                         }
+                        if (!Integer.valueOf(1).equals(existing.getSyncStatus())) {
+                            existing.setSyncStatus(1);
+                            changed = true;
+                        }
 
                         if (changed) {
+                            existing.setSyncTime(new Date());
                             userRepository.save(existing);
                             updated++;
                         }
@@ -237,9 +258,12 @@ public class WecomSyncService extends BaseApplicationService {
                         newUser.setPhone(wecomUser.getMobile());
                         newUser.setEmail(wecomUser.getEmail());
                         newUser.setPosition(wecomUser.getPosition());
+                        newUser.setGender(wecomUser.getGender());
                         newUser.setAvatarUrl(wecomUser.getAvatar());
                         newUser.setWecomUserid(wecomUser.getUserId());
                         newUser.setAccountStatus(mapWecomStatus(wecomUser.getStatus()));
+                        newUser.setSyncStatus(1);
+                        newUser.setSyncTime(new Date());
 
                         Long mainDeptId = resolveMainDepartment(wecomUser.getMainDepartment(), wecomDeptMap);
                         newUser.setDepartmentId(mainDeptId);
@@ -278,6 +302,8 @@ public class WecomSyncService extends BaseApplicationService {
             case 2:
                 return 2;
             case 4:
+                return 4;
+            case 5:
                 return 4;
             default:
                 return 4;
