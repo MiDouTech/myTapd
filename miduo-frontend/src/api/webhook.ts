@@ -4,6 +4,8 @@ import type {
   WebhookConfigOutput,
   WebhookConfigPageInput,
   WebhookConfigUpdateInput,
+  WebhookDispatchLogOutput,
+  WebhookDispatchLogPageInput,
 } from '@/types/webhook'
 import request from '@/utils/request'
 
@@ -68,4 +70,15 @@ export function updateWebhookConfig(id: number, data: WebhookConfigUpdateInput):
  */
 export function deleteWebhookConfig(id: number): Promise<void> {
   return request.del<void>(`/webhook/config/delete/${id}`)
+}
+
+/**
+ * 分页查询Webhook推送日志
+ * 接口编号：API000431
+ * 产品文档功能：4.11 开放能力 - Webhook推送日志排障
+ */
+export function getWebhookDispatchLogPage(
+  params: WebhookDispatchLogPageInput,
+): Promise<PageOutput<WebhookDispatchLogOutput>> {
+  return request.get<PageOutput<WebhookDispatchLogOutput>>('/webhook/config/dispatch-log/page', { params })
 }

@@ -28,6 +28,7 @@
 | API000419 | 创建Webhook配置 | POST | /api/webhook/config/create | 创建Webhook配置 |
 | API000420 | 更新Webhook配置 | PUT | /api/webhook/config/update/{id} | 更新Webhook配置 |
 | API000421 | 删除Webhook配置 | DELETE | /api/webhook/config/delete/{id} | 删除Webhook配置（逻辑删除） |
+| API000431 | 分页查询Webhook推送日志 | GET | /api/webhook/config/dispatch-log/page | Webhook推送日志排障查询 |
 
 ---
 
@@ -82,13 +83,49 @@
 }
 ```
 
+### 2.4 Webhook推送日志分页查询（API000431）
+
+请求示例：
+
+```http
+GET /api/webhook/config/dispatch-log/page?pageNum=1&pageSize=20&ticketId=1001&status=FAIL
+```
+
+响应示例：
+
+```json
+{
+  "records": [
+    {
+      "id": 2001,
+      "webhookConfigId": 11,
+      "eventType": "TICKET_CREATED",
+      "ticketId": 1001,
+      "requestUrl": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?***",
+      "attemptNo": 1,
+      "maxAttempts": 3,
+      "status": "FAIL",
+      "responseCode": 400,
+      "failReason": "HTTP 400 body={\"errcode\":40008,\"errmsg\":\"invalid message type\"}",
+      "durationMs": 221,
+      "dispatchTime": "2026-03-04 15:33:21"
+    }
+  ],
+  "total": 1,
+  "pageNum": 1,
+  "pageSize": 20,
+  "totalPages": 1
+}
+```
+
 ---
 
 ## 3. 安全与鉴权
 
 1. `/api/v1/**` 开放接口仍受 JWT 鉴权控制；调用方需携带 `Authorization: Bearer <token>`。
 2. Webhook 推送支持在 Header 中透传 `X-Webhook-Secret`（当配置了 secret）。
-3. 接口统一返回 `ApiResult<T>` 结构，code=200 表示成功。
+3. 当Webhook地址为企微群机器人地址（`qyapi.weixin.qq.com/cgi-bin/webhook/send`）时，系统会自动按官方规范转为 `msgtype=text` 的消息体，避免 `40008 invalid message type`。
+4. 接口统一返回 `ApiResult<T>` 结构，code=200 表示成功。
 
 ---
 
