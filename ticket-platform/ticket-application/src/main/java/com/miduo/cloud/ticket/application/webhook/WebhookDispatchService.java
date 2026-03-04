@@ -16,8 +16,12 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Webhook事件推送服务
@@ -40,18 +44,99 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (eventType == null) {
             return;
         }
-        List<WebhookConfigPO> configs = webhookConfigMapper.selectActiveByEventType(eventType.getCode());
+        List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
         if (configs == null || configs.isEmpty()) {
+            log.debug("Webhook分发跳过：无启用配置, eventType={}, ticketId={}", eventType.getCode(), ticketId);
             return;
         }
+        List<WebhookConfigPO> subscribedConfigs = filterSubscribedConfigs(configs, eventType);
+        if (subscribedConfigs.isEmpty()) {
+            log.debug("Webhook分发跳过：无配置订阅该事件, eventType={}, ticketId={}", eventType.getCode(), ticketId);
+            return;
+        }
+        log.info("Webhook事件分发开始: eventType={}, ticketId={}, subscriberCount={}",
+                eventType.getCode(), ticketId, subscribedConfigs.size());
 
         TicketSnapshot snapshot = buildTicketSnapshot(ticketId);
         WebhookPayload payload = buildPayload(eventType, ticketId, snapshot, eventData);
         String payloadJson = JSON.toJSONString(payload);
 
-        for (WebhookConfigPO config : configs) {
+        for (WebhookConfigPO config : subscribedConfigs) {
             pushToWebhook(config, eventType, payloadJson);
         }
+    }
+
+    private List<WebhookConfigPO> filterSubscribedConfigs(List<WebhookConfigPO> configs, WebhookEventType eventType) {
+        if (configs == null || configs.isEmpty() || eventType == null) {
+            return new ArrayList<>();
+        }
+        String targetEventType = normalizeEventCode(eventType.getCode());
+        List<WebhookConfigPO> result = new ArrayList<>();
+        for (WebhookConfigPO config : configs) {
+            Set<String> subscribedEventTypes = parseEventTypes(config.getEventTypes());
+            if (subscribedEventTypes.contains(targetEventType)) {
+                result.add(config);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 兼容历史数据格式：支持CSV和JSON数组两种存储结构。
+     */
+    private Set<String> parseEventTypes(String rawEventTypes) {
+        Set<String> result = new LinkedHashSet<>();
+        if (rawEventTypes == null || rawEventTypes.trim().isEmpty()) {
+            return result;
+        }
+        String normalized = rawEventTypes.trim();
+
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            try {
+                List<String> jsonEventTypes = JSON.parseArray(normalized, String.class);
+                if (jsonEventTypes != null) {
+                    for (String item : jsonEventTypes) {
+                        String code = normalizeEventCode(item);
+                        if (code != null) {
+                            result.add(code);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("解析Webhook事件类型JSON失败，将回退CSV解析: rawEventTypes={}", rawEventTypes, ex);
+            }
+        }
+
+        if (!result.isEmpty()) {
+            return result;
+        }
+
+        String[] parts = normalized.split("[,，]");
+        for (String part : parts) {
+            String code = normalizeEventCode(part);
+            if (code != null) {
+                result.add(code);
+            }
+        }
+        return result;
+    }
+
+    private String normalizeEventCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String normalized = code.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if ((normalized.startsWith("\"") && normalized.endsWith("\""))
+                || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return normalized.toUpperCase(Locale.ROOT);
     }
 
     private TicketSnapshot buildTicketSnapshot(Long ticketId) {
