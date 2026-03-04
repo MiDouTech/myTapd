@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="ticket-controller" />
+        <module name="ticket-common" />
+        <module name="ticket-infrastructure" />
+        <module name="ticket-domain" />
+        <module name="ticket-job" />
+        <module name="ticket-bootstrap" />
+        <module name="ticket-entity" />
+        <module name="ticket-application" />
+      </profile>
+    </annotationProcessing>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="ticket-application" options="-parameters" />
+      <module name="ticket-bootstrap" options="-parameters" />
+      <module name="ticket-common" options="-parameters" />
+      <module name="ticket-controller" options="-parameters" />
+      <module name="ticket-domain" options="-parameters" />
+      <module name="ticket-entity" options="-parameters" />
+      <module name="ticket-infrastructure" options="-parameters" />
+      <module name="ticket-job" options="-parameters" />
+      <module name="ticket-platform" options="-parameters" />
+    </option>
+  </component>
+</project>

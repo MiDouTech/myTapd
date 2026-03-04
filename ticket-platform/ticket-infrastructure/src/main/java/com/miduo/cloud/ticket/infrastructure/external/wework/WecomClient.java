@@ -22,18 +22,18 @@ public class WecomClient {
 
     private static final Logger log = LoggerFactory.getLogger(WecomClient.class);
 
-    private static final String GET_USER_INFO_URL = "https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo";
-    private static final String GET_USER_DETAIL_URL = "https://qyapi.weixin.qq.com/cgi-bin/user/get";
-    private static final String GET_DEPARTMENT_LIST_URL = "https://qyapi.weixin.qq.com/cgi-bin/department/list";
-    private static final String GET_DEPARTMENT_USER_URL = "https://qyapi.weixin.qq.com/cgi-bin/user/list";
-    private static final String SEND_APP_MESSAGE_URL = "https://qyapi.weixin.qq.com/cgi-bin/message/send";
+    private static final String GET_USER_INFO_PATH = "/cgi-bin/auth/getuserinfo";
+    private static final String GET_USER_DETAIL_PATH = "/cgi-bin/user/get";
+    private static final String GET_DEPARTMENT_LIST_PATH = "/cgi-bin/department/list";
+    private static final String GET_DEPARTMENT_USER_PATH = "/cgi-bin/user/list";
+    private static final String SEND_APP_MESSAGE_PATH = "/cgi-bin/message/send";
 
     private final WecomTokenManager tokenManager;
-    private final WecomProperties wecomProperties;
+    private final WeworkRuntimeConfigProvider runtimeConfigProvider;
 
-    public WecomClient(WecomTokenManager tokenManager, WecomProperties wecomProperties) {
+    public WecomClient(WecomTokenManager tokenManager, WeworkRuntimeConfigProvider runtimeConfigProvider) {
         this.tokenManager = tokenManager;
-        this.wecomProperties = wecomProperties;
+        this.runtimeConfigProvider = runtimeConfigProvider;
     }
 
     /**
@@ -41,7 +41,7 @@ public class WecomClient {
      */
     public WecomUserIdentity getUserInfoByCode(String code) {
         String accessToken = tokenManager.getAccessToken();
-        String url = GET_USER_INFO_URL + "?access_token=" + accessToken + "&code=" + code;
+        String url = buildApiUrl(GET_USER_INFO_PATH) + "?access_token=" + accessToken + "&code=" + code;
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
@@ -62,7 +62,7 @@ public class WecomClient {
      */
     public WecomUserDetail getUserDetail(String wecomUserId) {
         String accessToken = tokenManager.getContactAccessToken();
-        String url = GET_USER_DETAIL_URL + "?access_token=" + accessToken + "&userid=" + wecomUserId;
+        String url = buildApiUrl(GET_USER_DETAIL_PATH) + "?access_token=" + accessToken + "&userid=" + wecomUserId;
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
@@ -97,7 +97,7 @@ public class WecomClient {
      */
     public List<WecomDepartment> getDepartmentList() {
         String accessToken = tokenManager.getContactAccessToken();
-        String url = GET_DEPARTMENT_LIST_URL + "?access_token=" + accessToken;
+        String url = buildApiUrl(GET_DEPARTMENT_LIST_PATH) + "?access_token=" + accessToken;
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
@@ -128,7 +128,7 @@ public class WecomClient {
      */
     public List<WecomUserDetail> getDepartmentUsers(Long departmentId) {
         String accessToken = tokenManager.getContactAccessToken();
-        String url = GET_DEPARTMENT_USER_URL
+        String url = buildApiUrl(GET_DEPARTMENT_USER_PATH)
                 + "?access_token=" + accessToken
                 + "&department_id=" + departmentId;
         String response = HttpUtil.get(url);
@@ -178,14 +178,15 @@ public class WecomClient {
 
         int agentId;
         try {
-            agentId = Integer.parseInt(wecomProperties.getAgentId());
+            String configAgentId = runtimeConfigProvider.getRuntimeConfig().getAgentId();
+            agentId = Integer.parseInt(configAgentId);
         } catch (Exception ex) {
-            log.error("企微AgentId配置非法: {}", wecomProperties.getAgentId());
+            log.error("企微AgentId配置非法");
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企微AgentId配置非法");
         }
 
         String accessToken = tokenManager.getAccessToken();
-        String requestUrl = SEND_APP_MESSAGE_URL + "?access_token=" + accessToken;
+        String requestUrl = buildApiUrl(SEND_APP_MESSAGE_PATH) + "?access_token=" + accessToken;
 
         JSONObject textCard = new JSONObject();
         textCard.put("title", title == null ? "工单通知" : title);
@@ -231,6 +232,14 @@ public class WecomClient {
             log.error("发送企微群Webhook失败: webhookUrl={}, errMsg={}", webhookUrl, errMsg);
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微群Webhook失败: " + errMsg);
         }
+    }
+
+    private String buildApiUrl(String path) {
+        String baseUrl = runtimeConfigProvider.getRuntimeConfig().getApiBaseUrl();
+        if (baseUrl.endsWith("/")) {
+            return baseUrl.substring(0, baseUrl.length() - 1) + path;
+        }
+        return baseUrl + path;
     }
 
     /**

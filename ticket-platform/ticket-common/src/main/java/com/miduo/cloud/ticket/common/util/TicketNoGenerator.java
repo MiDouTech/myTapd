@@ -4,12 +4,13 @@ import com.miduo.cloud.ticket.common.constants.AppConstants;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 工单编号生成器
- * 格式: 前缀-YYYYMMDD-序号
- * 例: WO-20260228-001, BUG-20260228-015
+ * 格式: 前缀-YYYYMMDD-序号-随机段
+ * 例: WO-20260228-001-4821, BUG-20260228-015-9032
  */
 public class TicketNoGenerator {
 
@@ -34,6 +35,8 @@ public class TicketNoGenerator {
     private static String generate(String prefix) {
         String datePart = LocalDate.now().format(DATE_FORMATTER);
         long seq = SEQUENCE.incrementAndGet();
-        return String.format("%s-%s-%03d", prefix, datePart, seq);
+        // 进程重启后序列会归零，增加随机段避免与历史工单号冲突
+        int randomPart = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return String.format("%s-%s-%03d-%04d", prefix, datePart, seq % 1000, randomPart);
     }
 }

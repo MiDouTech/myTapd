@@ -25,11 +25,11 @@ public class WecomTokenManager {
     private static final String GET_TOKEN_URL = "https://qyapi.weixin.qq.com/cgi-bin/gettoken";
     private static final long TOKEN_EXPIRE_BUFFER_SECONDS = 600;
 
-    private final WecomProperties wecomProperties;
+    private final WeworkRuntimeConfigProvider runtimeConfigProvider;
     private final StringRedisTemplate stringRedisTemplate;
 
-    public WecomTokenManager(WecomProperties wecomProperties, StringRedisTemplate stringRedisTemplate) {
-        this.wecomProperties = wecomProperties;
+    public WecomTokenManager(WeworkRuntimeConfigProvider runtimeConfigProvider, StringRedisTemplate stringRedisTemplate) {
+        this.runtimeConfigProvider = runtimeConfigProvider;
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
@@ -37,27 +37,32 @@ public class WecomTokenManager {
      * 获取应用access_token（带缓存）
      */
     public String getAccessToken() {
-        return getToken(RedisKeyConstants.WECOM_ACCESS_TOKEN, wecomProperties.getSecret());
+        WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+        return getToken(RedisKeyConstants.WECOM_ACCESS_TOKEN, config.getCorpId(), config.getSecret());
     }
 
     /**
      * 获取通讯录access_token（带缓存）
      */
     public String getContactAccessToken() {
-        String contactSecret = wecomProperties.getContactSecret();
+        WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+        String contactSecret = config.getContactSecret();
         if (contactSecret == null || contactSecret.isEmpty()) {
             return getAccessToken();
         }
-        return getToken(RedisKeyConstants.WECOM_ACCESS_TOKEN + ":contact", contactSecret);
+        return getToken(RedisKeyConstants.WECOM_CONTACT_ACCESS_TOKEN, config.getCorpId(), contactSecret);
     }
 
-    private String getToken(String cacheKey, String secret) {
+    private String getToken(String cacheKey, String corpId, String secret) {
+        if (corpId == null || corpId.trim().isEmpty() || secret == null || secret.trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企业微信配置不完整，请先配置corpId和corpSecret");
+        }
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cached != null && !cached.isEmpty()) {
             return cached;
         }
 
-        String url = GET_TOKEN_URL + "?corpid=" + wecomProperties.getCorpId() + "&corpsecret=" + secret;
+        String url = GET_TOKEN_URL + "?corpid=" + corpId + "&corpsecret=" + secret;
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
@@ -82,6 +87,7 @@ public class WecomTokenManager {
      */
     public void refreshAccessToken() {
         stringRedisTemplate.delete(RedisKeyConstants.WECOM_ACCESS_TOKEN);
+        stringRedisTemplate.delete(RedisKeyConstants.WECOM_CONTACT_ACCESS_TOKEN);
         getAccessToken();
     }
 }

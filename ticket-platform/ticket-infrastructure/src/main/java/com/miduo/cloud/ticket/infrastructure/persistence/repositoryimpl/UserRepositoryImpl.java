@@ -68,6 +68,14 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public List<User> findAll() {
+        LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByAsc(SysUserPO::getId);
+        List<SysUserPO> list = sysUserMapper.selectList(wrapper);
+        return list.stream().map(this::convertToModel).collect(Collectors.toList());
+    }
+
+    @Override
     public List<User> findByDepartmentId(Long departmentId) {
         if (departmentId == null) {
             return new ArrayList<>();

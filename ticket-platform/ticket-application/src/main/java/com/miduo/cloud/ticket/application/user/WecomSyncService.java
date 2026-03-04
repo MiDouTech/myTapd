@@ -9,6 +9,7 @@ import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,20 +41,41 @@ public class WecomSyncService extends BaseApplicationService {
      */
     @Transactional
     public void syncAll() {
-        log.info("开始全量同步企微通讯录...");
+        syncAllWithResult();
+    }
 
-        syncDepartments();
-        syncUsers();
+    /**
+     * 全量同步通讯录并返回统计结果
+     */
+    @Transactional
+    public SyncResult syncAllWithResult() {
+        log.info("开始全量同步企微通讯录...");
+        Date startTime = new Date();
+
+        SyncPartResult deptResult = syncDepartments();
+        SyncPartResult userResult = syncUsers();
 
         log.info("企微通讯录全量同步完成");
+        Date endTime = new Date();
+
+        SyncResult result = new SyncResult();
+        result.setStartTime(startTime);
+        result.setEndTime(endTime);
+        result.setTotalCount(deptResult.getTotalCount() + userResult.getTotalCount());
+        result.setSuccessCount(deptResult.getSuccessCount() + userResult.getSuccessCount());
+        result.setFailCount(deptResult.getFailCount() + userResult.getFailCount());
+        result.setErrorMessage(deptResult.getErrorMessage() + userResult.getErrorMessage());
+        return result;
     }
 
     /**
      * 同步部门
      */
-    private void syncDepartments() {
+    private SyncPartResult syncDepartments() {
         log.info("开始同步企微部门...");
+        SyncPartResult result = new SyncPartResult();
         List<WecomClient.WecomDepartment> wecomDepts = wecomClient.getDepartmentList();
+        result.setTotalCount(wecomDepts == null ? 0 : wecomDepts.size());
 
         Map<Long, Department> existingMap = departmentRepository.findAll().stream()
                 .filter(d -> d.getWecomDeptId() != null)
@@ -62,54 +84,65 @@ public class WecomSyncService extends BaseApplicationService {
         int created = 0;
         int updated = 0;
 
-        for (WecomClient.WecomDepartment wecomDept : wecomDepts) {
-            Department existing = existingMap.get(wecomDept.getId());
+        if (wecomDepts != null) {
+            for (WecomClient.WecomDepartment wecomDept : wecomDepts) {
+                try {
+                    Department existing = existingMap.get(wecomDept.getId());
 
-            if (existing != null) {
-                boolean changed = false;
-                if (!wecomDept.getName().equals(existing.getName())) {
-                    existing.setName(wecomDept.getName());
-                    changed = true;
-                }
+                    if (existing != null) {
+                        boolean changed = false;
+                        if (!wecomDept.getName().equals(existing.getName())) {
+                            existing.setName(wecomDept.getName());
+                            changed = true;
+                        }
 
-                Long localParentId = resolveParentId(wecomDept.getParentId(), existingMap);
-                if (!java.util.Objects.equals(localParentId, existing.getParentId())) {
-                    existing.setParentId(localParentId);
-                    changed = true;
-                }
-                if (wecomDept.getOrder() != null && !wecomDept.getOrder().equals(existing.getSortOrder())) {
-                    existing.setSortOrder(wecomDept.getOrder());
-                    changed = true;
-                }
+                        Long localParentId = resolveParentId(wecomDept.getParentId(), existingMap);
+                        if (!java.util.Objects.equals(localParentId, existing.getParentId())) {
+                            existing.setParentId(localParentId);
+                            changed = true;
+                        }
+                        if (wecomDept.getOrder() != null && !wecomDept.getOrder().equals(existing.getSortOrder())) {
+                            existing.setSortOrder(wecomDept.getOrder());
+                            changed = true;
+                        }
 
-                if (changed) {
-                    departmentRepository.save(existing);
-                    updated++;
-                }
-            } else {
-                Department newDept = new Department();
-                newDept.setName(wecomDept.getName());
-                newDept.setWecomDeptId(wecomDept.getId());
-                newDept.setSortOrder(wecomDept.getOrder() != null ? wecomDept.getOrder() : 0);
+                        if (changed) {
+                            departmentRepository.save(existing);
+                            updated++;
+                        }
+                    } else {
+                        Department newDept = new Department();
+                        newDept.setName(wecomDept.getName());
+                        newDept.setWecomDeptId(wecomDept.getId());
+                        newDept.setSortOrder(wecomDept.getOrder() != null ? wecomDept.getOrder() : 0);
 
-                Department saved = departmentRepository.save(newDept);
-                existingMap.put(wecomDept.getId(), saved);
-                created++;
+                        Department saved = departmentRepository.save(newDept);
+                        existingMap.put(wecomDept.getId(), saved);
+                        created++;
+                    }
+                } catch (Exception ex) {
+                    result.setFailCount(result.getFailCount() + 1);
+                    result.appendError("部门[" + wecomDept.getId() + "]同步失败: " + ex.getMessage() + "; ");
+                }
             }
         }
 
-        for (WecomClient.WecomDepartment wecomDept : wecomDepts) {
-            if (wecomDept.getParentId() != null && wecomDept.getParentId() > 0) {
-                Department current = existingMap.get(wecomDept.getId());
-                Department parent = existingMap.get(wecomDept.getParentId());
-                if (current != null && parent != null && !parent.getId().equals(current.getParentId())) {
-                    current.setParentId(parent.getId());
-                    departmentRepository.save(current);
+        if (wecomDepts != null) {
+            for (WecomClient.WecomDepartment wecomDept : wecomDepts) {
+                if (wecomDept.getParentId() != null && wecomDept.getParentId() > 0) {
+                    Department current = existingMap.get(wecomDept.getId());
+                    Department parent = existingMap.get(wecomDept.getParentId());
+                    if (current != null && parent != null && !parent.getId().equals(current.getParentId())) {
+                        current.setParentId(parent.getId());
+                        departmentRepository.save(current);
+                    }
                 }
             }
         }
 
         log.info("部门同步完成: 新增={}, 更新={}", created, updated);
+        result.setSuccessCount(created + updated + Math.max(result.getTotalCount() - created - updated - result.getFailCount(), 0));
+        return result;
     }
 
     private Long resolveParentId(Long wecomParentId, Map<Long, Department> existingMap) {
@@ -123,8 +156,9 @@ public class WecomSyncService extends BaseApplicationService {
     /**
      * 同步用户（遍历所有部门的成员）
      */
-    private void syncUsers() {
+    private SyncPartResult syncUsers() {
         log.info("开始同步企微用户...");
+        SyncPartResult result = new SyncPartResult();
 
         List<Department> allDepts = departmentRepository.findAll();
         Map<Long, Department> wecomDeptMap = allDepts.stream()
@@ -153,69 +187,77 @@ public class WecomSyncService extends BaseApplicationService {
                     continue;
                 }
                 processedUserIds.add(wecomUser.getUserId());
+                result.setTotalCount(result.getTotalCount() + 1);
 
-                User existing = userRepository.findByWecomUserid(wecomUser.getUserId());
+                try {
+                    User existing = userRepository.findByWecomUserid(wecomUser.getUserId());
 
-                if (existing != null) {
-                    boolean changed = false;
-                    if (wecomUser.getName() != null && !wecomUser.getName().equals(existing.getName())) {
-                        existing.setName(wecomUser.getName());
-                        changed = true;
-                    }
-                    if (wecomUser.getMobile() != null && !wecomUser.getMobile().equals(existing.getPhone())) {
-                        existing.setPhone(wecomUser.getMobile());
-                        changed = true;
-                    }
-                    if (wecomUser.getEmail() != null && !wecomUser.getEmail().equals(existing.getEmail())) {
-                        existing.setEmail(wecomUser.getEmail());
-                        changed = true;
-                    }
-                    if (wecomUser.getPosition() != null && !wecomUser.getPosition().equals(existing.getPosition())) {
-                        existing.setPosition(wecomUser.getPosition());
-                        changed = true;
-                    }
-                    if (wecomUser.getAvatar() != null && !wecomUser.getAvatar().equals(existing.getAvatarUrl())) {
-                        existing.setAvatarUrl(wecomUser.getAvatar());
-                        changed = true;
-                    }
+                    if (existing != null) {
+                        boolean changed = false;
+                        if (wecomUser.getName() != null && !wecomUser.getName().equals(existing.getName())) {
+                            existing.setName(wecomUser.getName());
+                            changed = true;
+                        }
+                        if (wecomUser.getMobile() != null && !wecomUser.getMobile().equals(existing.getPhone())) {
+                            existing.setPhone(wecomUser.getMobile());
+                            changed = true;
+                        }
+                        if (wecomUser.getEmail() != null && !wecomUser.getEmail().equals(existing.getEmail())) {
+                            existing.setEmail(wecomUser.getEmail());
+                            changed = true;
+                        }
+                        if (wecomUser.getPosition() != null && !wecomUser.getPosition().equals(existing.getPosition())) {
+                            existing.setPosition(wecomUser.getPosition());
+                            changed = true;
+                        }
+                        if (wecomUser.getAvatar() != null && !wecomUser.getAvatar().equals(existing.getAvatarUrl())) {
+                            existing.setAvatarUrl(wecomUser.getAvatar());
+                            changed = true;
+                        }
 
-                    Long mainDeptId = resolveMainDepartment(wecomUser.getMainDepartment(), wecomDeptMap);
-                    if (mainDeptId != null && !mainDeptId.equals(existing.getDepartmentId())) {
-                        existing.setDepartmentId(mainDeptId);
-                        changed = true;
+                        Long mainDeptId = resolveMainDepartment(wecomUser.getMainDepartment(), wecomDeptMap);
+                        if (mainDeptId != null && !mainDeptId.equals(existing.getDepartmentId())) {
+                            existing.setDepartmentId(mainDeptId);
+                            changed = true;
+                        }
+
+                        Integer mappedStatus = mapWecomStatus(wecomUser.getStatus());
+                        if (!mappedStatus.equals(existing.getAccountStatus())) {
+                            existing.setAccountStatus(mappedStatus);
+                            changed = true;
+                        }
+
+                        if (changed) {
+                            userRepository.save(existing);
+                            updated++;
+                        }
+                    } else {
+                        User newUser = new User();
+                        newUser.setName(wecomUser.getName());
+                        newUser.setPhone(wecomUser.getMobile());
+                        newUser.setEmail(wecomUser.getEmail());
+                        newUser.setPosition(wecomUser.getPosition());
+                        newUser.setAvatarUrl(wecomUser.getAvatar());
+                        newUser.setWecomUserid(wecomUser.getUserId());
+                        newUser.setAccountStatus(mapWecomStatus(wecomUser.getStatus()));
+
+                        Long mainDeptId = resolveMainDepartment(wecomUser.getMainDepartment(), wecomDeptMap);
+                        newUser.setDepartmentId(mainDeptId);
+
+                        User saved = userRepository.save(newUser);
+                        userRepository.assignRole(saved.getId(), 4L);
+                        created++;
                     }
-
-                    Integer mappedStatus = mapWecomStatus(wecomUser.getStatus());
-                    if (!mappedStatus.equals(existing.getAccountStatus())) {
-                        existing.setAccountStatus(mappedStatus);
-                        changed = true;
-                    }
-
-                    if (changed) {
-                        userRepository.save(existing);
-                        updated++;
-                    }
-                } else {
-                    User newUser = new User();
-                    newUser.setName(wecomUser.getName());
-                    newUser.setPhone(wecomUser.getMobile());
-                    newUser.setEmail(wecomUser.getEmail());
-                    newUser.setPosition(wecomUser.getPosition());
-                    newUser.setAvatarUrl(wecomUser.getAvatar());
-                    newUser.setWecomUserid(wecomUser.getUserId());
-                    newUser.setAccountStatus(mapWecomStatus(wecomUser.getStatus()));
-
-                    Long mainDeptId = resolveMainDepartment(wecomUser.getMainDepartment(), wecomDeptMap);
-                    newUser.setDepartmentId(mainDeptId);
-
-                    User saved = userRepository.save(newUser);
-                    userRepository.assignRole(saved.getId(), 4L);
-                    created++;
+                } catch (Exception ex) {
+                    result.setFailCount(result.getFailCount() + 1);
+                    result.appendError("用户[" + wecomUser.getUserId() + "]同步失败: " + ex.getMessage() + "; ");
                 }
             }
         }
 
         log.info("用户同步完成: 新增={}, 更新={}", created, updated);
+        result.setSuccessCount(created + updated + Math.max(result.getTotalCount() - created - updated - result.getFailCount(), 0));
+        return result;
     }
 
     private Long resolveMainDepartment(Long wecomDeptId, Map<Long, Department> wecomDeptMap) {
@@ -239,6 +281,31 @@ public class WecomSyncService extends BaseApplicationService {
                 return 4;
             default:
                 return 4;
+        }
+    }
+
+    @lombok.Data
+    public static class SyncResult {
+        private Date startTime;
+        private Date endTime;
+        private Integer totalCount;
+        private Integer successCount;
+        private Integer failCount;
+        private String errorMessage;
+    }
+
+    @lombok.Data
+    private static class SyncPartResult {
+        private Integer totalCount = 0;
+        private Integer successCount = 0;
+        private Integer failCount = 0;
+        private String errorMessage = "";
+
+        public void appendError(String error) {
+            if (error == null) {
+                return;
+            }
+            this.errorMessage = this.errorMessage + error;
         }
     }
 }

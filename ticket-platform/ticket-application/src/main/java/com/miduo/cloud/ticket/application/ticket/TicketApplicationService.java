@@ -130,8 +130,7 @@ public class TicketApplicationService {
 
         recordLog(ticket.getId(), currentUserId, TicketAction.CREATE.getCode(),
                 null, ticket.getStatus(), "创建工单: " + ticket.getTicketNo());
-        ticketTimeTrackService.recordCreate(ticket.getId(), currentUserId, ticket.getStatus(),
-                "创建工单: " + ticket.getTicketNo());
+        safeRecordCreateTrack(ticket, currentUserId);
 
         safePublishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
         if (ticket.getAssigneeId() != null) {
@@ -639,6 +638,19 @@ public class TicketApplicationService {
             eventPublisher.publishEvent(event);
         } catch (Exception ex) {
             log.error("事件发布失败，已降级跳过: eventType={}", event.getClass().getSimpleName(), ex);
+        }
+    }
+
+    private void safeRecordCreateTrack(TicketPO ticket, Long currentUserId) {
+        if (ticket == null || ticket.getId() == null) {
+            return;
+        }
+        try {
+            ticketTimeTrackService.recordCreate(ticket.getId(), currentUserId, ticket.getStatus(),
+                    "创建工单: " + ticket.getTicketNo());
+        } catch (Exception ex) {
+            // 时间追踪为衍生链路，失败时降级，避免影响主创建流程
+            log.error("记录工单创建时间追踪失败，已降级跳过: ticketId={}", ticket.getId(), ex);
         }
     }
 }

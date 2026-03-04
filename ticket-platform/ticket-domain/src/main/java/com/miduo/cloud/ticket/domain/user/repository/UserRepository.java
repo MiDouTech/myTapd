@@ -20,6 +20,11 @@ public interface UserRepository {
     User findByWecomUserid(String wecomUserid);
 
     /**
+     * 查询所有用户
+     */
+    List<User> findAll();
+
+    /**
      * 查询所有激活用户
      */
     List<User> findAllActive();
