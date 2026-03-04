@@ -117,6 +117,33 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>cleanup-obsolete-flyway-migration</id>
+                        <phase>process-resources</phase>
+                        <configuration>
+                            <target>
+                                <!--
+                                    历史版本曾将组织账号增强脚本命名为 V11。
+                                    即使源码已删除，IDE增量编译可能在 target/classes 残留旧文件，
+                                    导致与 V11__init_webhook_dispatch_log.sql 发生版本冲突。
+                                    这里在资源处理阶段兜底删除旧迁移文件，避免本地启动失败。
+                                -->
+                                <delete file="${project.build.outputDirectory}/db/migration/V11__enhance_org_account_management.sql"
+                                        quiet="true"/>
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
