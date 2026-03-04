@@ -12,6 +12,8 @@ import lombok.Data;
 import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -176,19 +178,30 @@ public class WebhookDispatchService extends BaseApplicationService {
         int retryTimes = config.getMaxRetryTimes() == null ? 0 : Math.max(config.getMaxRetryTimes(), 0);
         boolean success = false;
         String failReason = null;
+        String safeUrl = sanitizeWebhookUrl(config.getUrl());
 
         for (int i = 0; i <= retryTimes; i++) {
+            int attempt = i + 1;
             try {
-                int responseCode = doHttpPost(config, eventType, payloadJson);
-                if (responseCode >= 200 && responseCode < 300) {
+                log.debug("Webhook推送尝试: configId={}, eventType={}, attempt={}/{}, url={}",
+                        config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl);
+                HttpPostResult result = doHttpPost(config, eventType, payloadJson);
+                if (result.getResponseCode() >= 200 && result.getResponseCode() < 300) {
                     success = true;
+                    log.info("Webhook推送成功: configId={}, eventType={}, attempt={}/{}, url={}, responseCode={}",
+                            config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl, result.getResponseCode());
                     break;
                 }
-                failReason = "HTTP " + responseCode;
+                String responseBodySummary = summarize(result.getResponseBody(), 300);
+                failReason = "HTTP " + result.getResponseCode()
+                        + (responseBodySummary == null ? "" : " body=" + responseBodySummary);
+                log.warn("Webhook推送响应非2xx: configId={}, eventType={}, attempt={}/{}, url={}, responseCode={}, responseBody={}",
+                        config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl,
+                        result.getResponseCode(), responseBodySummary);
             } catch (Exception ex) {
                 failReason = ex.getMessage();
-                log.warn("Webhook推送失败: configId={}, attempt={}, reason={}",
-                        config.getId(), i + 1, ex.getMessage());
+                log.warn("Webhook推送异常: configId={}, eventType={}, attempt={}/{}, url={}, reason={}",
+                        config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl, ex.getMessage(), ex);
             }
         }
 
@@ -196,40 +209,110 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (success) {
             config.setLastSuccessTime(now);
             config.setLastFailReason(null);
+            config.setLastFailTime(null);
         } else {
             config.setLastFailTime(now);
-            config.setLastFailReason(failReason);
+            config.setLastFailReason(summarize(failReason, 900));
+            log.error("Webhook推送最终失败: configId={}, eventType={}, url={}, reason={}",
+                    config.getId(), eventType.getCode(), safeUrl, summarize(failReason, 300));
         }
         webhookConfigMapper.updateById(config);
     }
 
-    private int doHttpPost(WebhookConfigPO config,
-                           WebhookEventType eventType,
-                           String payloadJson) throws Exception {
+    private HttpPostResult doHttpPost(WebhookConfigPO config,
+                                      WebhookEventType eventType,
+                                      String payloadJson) throws Exception {
         URL url = new URL(config.getUrl());
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
-        connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-        connection.setRequestProperty("X-Webhook-Event", eventType.getCode());
-        if (config.getSecret() != null && !config.getSecret().trim().isEmpty()) {
-            connection.setRequestProperty("X-Webhook-Secret", config.getSecret().trim());
-        }
-        int timeoutMs = config.getTimeoutMs() == null ? DEFAULT_TIMEOUT_MS : Math.max(config.getTimeoutMs(), 1000);
-        connection.setConnectTimeout(timeoutMs);
-        connection.setReadTimeout(timeoutMs);
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
+            connection.setRequestProperty("X-Webhook-Event", eventType.getCode());
+            if (config.getSecret() != null && !config.getSecret().trim().isEmpty()) {
+                connection.setRequestProperty("X-Webhook-Secret", config.getSecret().trim());
+            }
+            int timeoutMs = config.getTimeoutMs() == null ? DEFAULT_TIMEOUT_MS : Math.max(config.getTimeoutMs(), 1000);
+            connection.setConnectTimeout(timeoutMs);
+            connection.setReadTimeout(timeoutMs);
 
-        byte[] bytes = payloadJson.getBytes(StandardCharsets.UTF_8);
-        try (OutputStream outputStream = connection.getOutputStream()) {
-            outputStream.write(bytes);
-            outputStream.flush();
+            byte[] bytes = payloadJson.getBytes(StandardCharsets.UTF_8);
+            try (OutputStream outputStream = connection.getOutputStream()) {
+                outputStream.write(bytes);
+                outputStream.flush();
+            }
+            int responseCode = connection.getResponseCode();
+            String responseBody = readResponseBody(connection, responseCode);
+
+            HttpPostResult result = new HttpPostResult();
+            result.setResponseCode(responseCode);
+            result.setResponseBody(responseBody);
+            return result;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
-        return connection.getResponseCode();
+    }
+
+    private String readResponseBody(HttpURLConnection connection, int responseCode) {
+        InputStream inputStream = null;
+        try {
+            if (responseCode >= 200 && responseCode < 400) {
+                inputStream = connection.getInputStream();
+            } else {
+                inputStream = connection.getErrorStream();
+            }
+            if (inputStream == null) {
+                return null;
+            }
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, len);
+            }
+            return new String(outputStream.toByteArray(), StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            log.debug("读取Webhook响应体失败: {}", ex.getMessage());
+            return null;
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     private String formatNow() {
         SimpleDateFormat sdf = new SimpleDateFormat(AppConstants.DATETIME_FORMAT);
         return sdf.format(new Date());
+    }
+
+    private String sanitizeWebhookUrl(String webhookUrl) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            return "";
+        }
+        String normalized = webhookUrl.trim();
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            return normalized.substring(0, queryIndex) + "?***";
+        }
+        return normalized;
+    }
+
+    private String summarize(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "...";
     }
 
     @Data
@@ -251,5 +334,11 @@ public class WebhookDispatchService extends BaseApplicationService {
         private String priority;
         private Long creatorId;
         private Long assigneeId;
+    }
+
+    @Data
+    private static class HttpPostResult {
+        private int responseCode;
+        private String responseBody;
     }
 }

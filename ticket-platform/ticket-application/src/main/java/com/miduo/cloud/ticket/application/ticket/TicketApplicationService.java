@@ -12,6 +12,7 @@ import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
+import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
@@ -635,6 +636,13 @@ public class TicketApplicationService {
             return;
         }
         try {
+            if (event instanceof DomainEvent) {
+                DomainEvent domainEvent = (DomainEvent) event;
+                log.info("发布领域事件: eventType={}, eventId={}, occurredAt={}",
+                        domainEvent.getEventType(), domainEvent.getEventId(), domainEvent.getOccurredAt());
+            } else {
+                log.info("发布事件: eventType={}", event.getClass().getSimpleName());
+            }
             eventPublisher.publishEvent(event);
         } catch (Exception ex) {
             log.error("事件发布失败，已降级跳过: eventType={}", event.getClass().getSimpleName(), ex);

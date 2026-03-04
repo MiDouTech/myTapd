@@ -52,9 +52,12 @@ public class WecomMessageProcessor extends BaseApplicationService {
         if (message == null) {
             return;
         }
+        log.info("开始处理企微回调消息: msgId={}, chatId={}, fromWecomUserid={}",
+                message.getMsgId(), message.getChatId(), message.getFromWecomUserid());
 
         if (isDuplicate(message)) {
             saveLog(message, null, null, WecomBotMessageStatus.DUPLICATE, "重复消息");
+            log.info("企微回调消息重复，已记录日志并跳过: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
             return;
         }
 
@@ -82,6 +85,8 @@ public class WecomMessageProcessor extends BaseApplicationService {
                     : WecomBotMessageStatus.FAIL;
             saveLog(message, parseResult, commandResult.getTicketId(), status,
                     parseResult.isSuccess() ? null : parseResult.getErrorMessage());
+            log.info("企微回调消息处理完成: msgId={}, chatId={}, status={}, ticketId={}",
+                    message.getMsgId(), message.getChatId(), status.getCode(), commandResult.getTicketId());
         } catch (Exception ex) {
             log.error("企微消息处理失败: msgId={}, chatId={}", message.getMsgId(), message.getChatId(), ex);
             saveLog(message, null, null, WecomBotMessageStatus.FAIL, ex.getMessage());
