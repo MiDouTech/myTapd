@@ -21,4 +21,16 @@
         ORDER BY id ASC
     </select>
 
+    <select id="selectRoleCodesByUserIds" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.model.UserRoleCodePair">
+        SELECT ur.user_id AS userId,
+               r.role_code AS roleCode
+        FROM sys_user_role ur
+        INNER JOIN sys_role r ON ur.role_id = r.id AND r.deleted = 0
+        WHERE ur.user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+          AND ur.deleted = 0
+    </select>
+
 </mapper>

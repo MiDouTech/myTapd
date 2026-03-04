@@ -27,6 +27,7 @@ public class WecomClient {
     private static final String GET_DEPARTMENT_LIST_PATH = "/cgi-bin/department/list";
     private static final String GET_DEPARTMENT_USER_PATH = "/cgi-bin/user/list";
     private static final String SEND_APP_MESSAGE_PATH = "/cgi-bin/message/send";
+    private static final Long ROOT_DEPARTMENT_ID = 1L;
 
     private final WecomTokenManager tokenManager;
     private final WeworkRuntimeConfigProvider runtimeConfigProvider;
@@ -83,12 +84,10 @@ public class WecomClient {
         detail.setStatus(json.getIntValue("status"));
 
         JSONArray deptIds = json.getJSONArray("department");
-        if (deptIds != null && !deptIds.isEmpty()) {
-            detail.setDepartmentIds(deptIds.toJavaList(Long.class));
-            detail.setMainDepartment(deptIds.getLong(0));
-        } else {
-            detail.setDepartmentIds(new ArrayList<>());
-        }
+        detail.setDepartmentIds(parseLongList(deptIds));
+        detail.setMainDepartment(resolveMainDepartment(json, detail.getDepartmentIds()));
+        detail.setDirectLeaders(parseStringList(json.getJSONArray("direct_leader")));
+        detail.setLeaderInDepartments(parseIntegerList(json.getJSONArray("is_leader_in_dept")));
 
         return detail;
     }
@@ -118,6 +117,9 @@ public class WecomClient {
                 dept.setName(deptJson.getString("name"));
                 dept.setParentId(deptJson.getLong("parentid"));
                 dept.setOrder(deptJson.getIntValue("order"));
+                List<String> leaders = parseStringList(deptJson.getJSONArray("department_leader"));
+                dept.setLeaderWecomUserids(leaders);
+                dept.setPrimaryLeaderWecomUserid(leaders.isEmpty() ? null : leaders.get(0));
                 departments.add(dept);
             }
         }
@@ -128,16 +130,25 @@ public class WecomClient {
      * 获取部门下的成员列表（详情）
      */
     public List<WecomUserDetail> getDepartmentUsers(Long departmentId) {
+        return getDepartmentUsers(departmentId, false);
+    }
+
+    /**
+     * 获取部门下的成员列表（支持递归子部门）
+     */
+    public List<WecomUserDetail> getDepartmentUsers(Long departmentId, boolean fetchChild) {
         String accessToken = tokenManager.getContactAccessToken();
+        Long targetDepartmentId = departmentId == null ? ROOT_DEPARTMENT_ID : departmentId;
         String url = buildApiUrl(GET_DEPARTMENT_USER_PATH)
                 + "?access_token=" + accessToken
-                + "&department_id=" + departmentId;
+                + "&department_id=" + targetDepartmentId
+                + "&fetch_child=" + (fetchChild ? 1 : 0);
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
         if (json == null || json.getIntValue("errcode") != 0) {
             String errMsg = json != null ? json.getString("errmsg") : "response is null";
-            log.error("获取部门成员失败, deptId={}, error={}", departmentId, errMsg);
+            log.error("获取部门成员失败, deptId={}, fetchChild={}, error={}", targetDepartmentId, fetchChild, errMsg);
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "获取部门成员失败: " + errMsg);
         }
 
@@ -157,12 +168,10 @@ public class WecomClient {
                 detail.setStatus(userJson.getIntValue("status"));
 
                 JSONArray deptIds = userJson.getJSONArray("department");
-                if (deptIds != null && !deptIds.isEmpty()) {
-                    detail.setDepartmentIds(deptIds.toJavaList(Long.class));
-                    detail.setMainDepartment(deptIds.getLong(0));
-                } else {
-                    detail.setDepartmentIds(new ArrayList<>());
-                }
+                detail.setDepartmentIds(parseLongList(deptIds));
+                detail.setMainDepartment(resolveMainDepartment(userJson, detail.getDepartmentIds()));
+                detail.setDirectLeaders(parseStringList(userJson.getJSONArray("direct_leader")));
+                detail.setLeaderInDepartments(parseIntegerList(userJson.getJSONArray("is_leader_in_dept")));
                 users.add(detail);
             }
         }
@@ -259,6 +268,38 @@ public class WecomClient {
         return 0;
     }
 
+    private Long resolveMainDepartment(JSONObject userJson, List<Long> departmentIds) {
+        Long mainDepartment = userJson.getLong("main_department");
+        if (mainDepartment != null) {
+            return mainDepartment;
+        }
+        if (departmentIds == null || departmentIds.isEmpty()) {
+            return null;
+        }
+        return departmentIds.get(0);
+    }
+
+    private List<Long> parseLongList(JSONArray array) {
+        if (array == null || array.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return array.toJavaList(Long.class);
+    }
+
+    private List<Integer> parseIntegerList(JSONArray array) {
+        if (array == null || array.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return array.toJavaList(Integer.class);
+    }
+
+    private List<String> parseStringList(JSONArray array) {
+        if (array == null || array.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return array.toJavaList(String.class);
+    }
+
     /**
      * 企微用户身份（code换取后）
      */
@@ -283,6 +324,8 @@ public class WecomClient {
         private Integer status;
         private List<Long> departmentIds;
         private Long mainDepartment;
+        private List<String> directLeaders;
+        private List<Integer> leaderInDepartments;
     }
 
     /**
@@ -294,5 +337,7 @@ public class WecomClient {
         private String name;
         private Long parentId;
         private Integer order;
+        private List<String> leaderWecomUserids;
+        private String primaryLeaderWecomUserid;
     }
 }

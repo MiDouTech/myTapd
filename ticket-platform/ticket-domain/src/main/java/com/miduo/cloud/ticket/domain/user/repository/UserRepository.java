@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.domain.user.repository;
 import com.miduo.cloud.ticket.domain.user.model.User;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户仓储接口
@@ -58,6 +59,11 @@ public interface UserRepository {
      * 查询用户角色编码列表
      */
     List<String> findRoleCodes(Long userId);
+
+    /**
+     * 批量查询用户角色编码
+     */
+    Map<Long, List<String>> findRoleCodesByUserIds(List<Long> userIds);
 
     /**
      * 为用户分配角色

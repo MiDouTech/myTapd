@@ -19,6 +19,7 @@ export interface EmployeePageQuery extends PageQuery {
   keyword?: string
   accountStatus?: number
   gender?: number
+  syncStatus?: number
 }
 
 export interface EmployeePageRecord {
@@ -36,6 +37,9 @@ export interface EmployeePageRecord {
   wecomUseridMasked?: string
   accountStatus?: number
   accountStatusName?: string
+  syncStatus?: number
+  syncStatusName?: string
+  syncTime?: string
   createTime?: string
 }
 
@@ -48,6 +52,12 @@ export interface SyncManualOutput {
   totalCount: number
   successCount: number
   failCount: number
+  departmentCreatedCount?: number
+  departmentUpdatedCount?: number
+  departmentDisabledCount?: number
+  userCreatedCount?: number
+  userUpdatedCount?: number
+  userDisabledCount?: number
   errorMessage?: string
   startTime?: string
   endTime?: string
