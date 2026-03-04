@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.entity.dto.user;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -16,5 +17,10 @@ public class DepartmentTreeOutput implements Serializable {
     private Long parentId;
     private Long wecomDeptId;
     private Integer sortOrder;
+    private Integer deptStatus;
+    private Integer syncStatus;
+    private Date syncTime;
+    private Integer directUserCount;
+    private Integer totalUserCount;
     private List<DepartmentTreeOutput> children;
 }

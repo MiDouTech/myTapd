@@ -64,7 +64,7 @@ const menuItems: MenuItem[] = [
       { index: '/manage/category', title: '分类管理', icon: Setting },
       { index: '/manage/workflow', title: '工作流管理', icon: Setting },
       { index: '/manage/sla', title: 'SLA管理', icon: Setting },
-      { index: '/manage/user', title: '用户管理', icon: Setting },
+      { index: '/manage/user', title: '组织账号管理', icon: Setting },
       { index: '/manage/settings', title: '系统设置', icon: Setting },
     ],
   },

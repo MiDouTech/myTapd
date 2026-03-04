@@ -19,6 +19,8 @@ public class EmployeePageOutput implements Serializable {
     private String emailMasked;
     private String phoneMasked;
     private String position;
+    private Integer gender;
+    private String genderName;
     private String avatarUrl;
     private String wecomUseridMasked;
     private Integer accountStatus;

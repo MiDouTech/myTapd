@@ -20,9 +20,12 @@ public class User implements Serializable {
     private String email;
     private String phone;
     private String position;
+    private Integer gender;
     private String avatarUrl;
     private String wecomUserid;
     private Integer accountStatus;
+    private Integer syncStatus;
+    private Date syncTime;
     private List<String> roleCodes;
     private Date createTime;
     private Date updateTime;

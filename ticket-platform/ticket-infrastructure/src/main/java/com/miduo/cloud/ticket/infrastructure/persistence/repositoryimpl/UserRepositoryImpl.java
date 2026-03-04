@@ -168,9 +168,12 @@ public class UserRepositoryImpl implements UserRepository {
         user.setEmail(po.getEmail());
         user.setPhone(po.getPhone());
         user.setPosition(po.getPosition());
+        user.setGender(po.getGender());
         user.setAvatarUrl(po.getAvatarUrl());
         user.setWecomUserid(po.getWecomUserid());
         user.setAccountStatus(po.getAccountStatus());
+        user.setSyncStatus(po.getSyncStatus());
+        user.setSyncTime(po.getSyncTime());
         user.setCreateTime(po.getCreateTime());
         user.setUpdateTime(po.getUpdateTime());
         return user;
@@ -185,9 +188,12 @@ public class UserRepositoryImpl implements UserRepository {
         po.setEmail(user.getEmail());
         po.setPhone(user.getPhone());
         po.setPosition(user.getPosition());
+        po.setGender(user.getGender());
         po.setAvatarUrl(user.getAvatarUrl());
         po.setWecomUserid(user.getWecomUserid());
         po.setAccountStatus(user.getAccountStatus());
+        po.setSyncStatus(user.getSyncStatus());
+        po.setSyncTime(user.getSyncTime());
         return po;
     }
 }

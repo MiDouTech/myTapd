@@ -17,6 +17,10 @@ public class Department implements Serializable {
     private Long parentId;
     private Long wecomDeptId;
     private Integer sortOrder;
+    private Integer deptStatus;
+    private Integer syncStatus;
+    private Date syncTime;
+    private String leaderWecomUserid;
     private Date createTime;
     private Date updateTime;
 
