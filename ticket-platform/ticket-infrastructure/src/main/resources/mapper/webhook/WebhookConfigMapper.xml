@@ -2,12 +2,11 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper">
 
-    <select id="selectActiveByEventType" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO">
+    <select id="selectAllActive" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO">
         SELECT *
         FROM webhook_config wc
         WHERE wc.deleted = 0
           AND wc.is_active = 1
-          AND FIND_IN_SET(#{eventType}, wc.event_types)
         ORDER BY wc.id ASC
     </select>
 
