@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.webhook;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
@@ -35,6 +36,7 @@ import java.util.Set;
 public class WebhookDispatchService extends BaseApplicationService {
 
     private static final int DEFAULT_TIMEOUT_MS = 5000;
+    private static final int WECOM_TEXT_MAX_BYTES = 1900;
     private static final int MAX_REQUEST_BODY_LENGTH = 8000;
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
@@ -190,6 +192,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         boolean success = false;
         String failReason = null;
         String safeUrl = sanitizeWebhookUrl(config.getUrl());
+        String outboundPayloadJson = resolveOutboundPayload(config, eventType, ticketId, payloadJson);
 
         for (int i = 0; i <= retryTimes; i++) {
             int attempt = i + 1;
@@ -201,7 +204,7 @@ public class WebhookDispatchService extends BaseApplicationService {
             try {
                 log.debug("Webhook推送尝试: configId={}, eventType={}, attempt={}/{}, url={}",
                         config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl);
-                HttpPostResult result = doHttpPost(config, eventType, payloadJson);
+                HttpPostResult result = doHttpPost(config, eventType, outboundPayloadJson);
                 responseCode = result.getResponseCode();
                 responseBody = result.getResponseBody();
                 if (result.getResponseCode() >= 200 && result.getResponseCode() < 300) {
@@ -225,7 +228,7 @@ public class WebhookDispatchService extends BaseApplicationService {
                         config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl, ex.getMessage(), ex);
             } finally {
                 long durationMs = System.currentTimeMillis() - startMs;
-                saveDispatchLog(config, eventType, ticketId, safeUrl, payloadJson, attempt, retryTimes + 1,
+                saveDispatchLog(config, eventType, ticketId, safeUrl, outboundPayloadJson, attempt, retryTimes + 1,
                         currentSuccess ? WebhookDispatchStatus.SUCCESS : WebhookDispatchStatus.FAIL,
                         responseCode, responseBody, currentFailReason, durationMs);
             }
@@ -285,6 +288,117 @@ public class WebhookDispatchService extends BaseApplicationService {
                     config == null ? null : config.getId(),
                     ex.getMessage(), ex);
         }
+    }
+
+    private String resolveOutboundPayload(WebhookConfigPO config,
+                                          WebhookEventType eventType,
+                                          Long ticketId,
+                                          String payloadJson) {
+        if (config == null || config.getUrl() == null || config.getUrl().trim().isEmpty()) {
+            return payloadJson;
+        }
+        if (!isWecomRobotWebhook(config.getUrl())) {
+            return payloadJson;
+        }
+        return buildWecomRobotTextPayload(eventType, ticketId, payloadJson);
+    }
+
+    private boolean isWecomRobotWebhook(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+        String normalized = url.trim().toLowerCase(Locale.ROOT);
+        return normalized.contains("qyapi.weixin.qq.com/cgi-bin/webhook/send");
+    }
+
+    /**
+     * 适配企业微信机器人Webhook格式，避免返回40008（invalid message type）。
+     * 文档：https://developer.work.weixin.qq.com/document/path/91770
+     */
+    private String buildWecomRobotTextPayload(WebhookEventType eventType, Long ticketId, String rawPayloadJson) {
+        JSONObject sourcePayload = null;
+        try {
+            sourcePayload = JSON.parseObject(rawPayloadJson);
+        } catch (Exception ex) {
+            log.warn("解析Webhook原始负载失败，企微消息将降级输出简版文本: {}", ex.getMessage());
+        }
+
+        String eventName = safeJsonString(sourcePayload, "eventName");
+        String eventTime = safeJsonString(sourcePayload, "eventTime");
+        JSONObject ticket = sourcePayload == null ? null : sourcePayload.getJSONObject("ticket");
+        Object data = sourcePayload == null ? null : sourcePayload.get("data");
+
+        StringBuilder content = new StringBuilder();
+        content.append("【工单事件通知】\n");
+        content.append("事件：")
+                .append(eventName == null || eventName.isEmpty() ? eventType.getCode() : eventName)
+                .append(" (").append(eventType.getCode()).append(")\n");
+        if (eventTime != null && !eventTime.isEmpty()) {
+            content.append("时间：").append(eventTime).append("\n");
+        }
+        content.append("工单ID：").append(ticketId == null ? "-" : ticketId).append("\n");
+        if (ticket != null) {
+            content.append("工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
+            content.append("标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
+            content.append("状态：").append(safeJsonString(ticket, "status", "-")).append("\n");
+            content.append("优先级：").append(safeJsonString(ticket, "priority", "-")).append("\n");
+        }
+        if (data != null) {
+            String dataJson = JSON.toJSONString(data);
+            if (dataJson != null && !dataJson.trim().isEmpty()) {
+                content.append("变更：").append(dataJson);
+            }
+        }
+
+        String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
+        JSONObject text = new JSONObject();
+        text.put("content", normalizedContent);
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "text");
+        payload.put("text", text);
+        return JSON.toJSONString(payload);
+    }
+
+    private String safeJsonString(JSONObject jsonObject, String key) {
+        return safeJsonString(jsonObject, key, null);
+    }
+
+    private String safeJsonString(JSONObject jsonObject, String key, String defaultValue) {
+        if (jsonObject == null || key == null || key.trim().isEmpty()) {
+            return defaultValue;
+        }
+        String value = jsonObject.getString(key);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return value.trim();
+    }
+
+    private String truncateByUtf8Bytes(String value, int maxBytes) {
+        if (value == null) {
+            return "";
+        }
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length <= maxBytes) {
+            return value;
+        }
+        String suffix = "...(内容已截断)";
+        int suffixBytes = suffix.getBytes(StandardCharsets.UTF_8).length;
+        int allowBytes = Math.max(0, maxBytes - suffixBytes);
+        int currentBytes = 0;
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            byte[] charBytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8);
+            if (currentBytes + charBytes.length > allowBytes) {
+                break;
+            }
+            result.append(c);
+            currentBytes += charBytes.length;
+        }
+        result.append(suffix);
+        return result.toString();
     }
 
     private HttpPostResult doHttpPost(WebhookConfigPO config,

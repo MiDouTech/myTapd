@@ -1,12 +1,15 @@
 package com.miduo.cloud.ticket.controller.webhook;
 
 import com.miduo.cloud.ticket.application.webhook.WebhookConfigApplicationService;
+import com.miduo.cloud.ticket.application.webhook.WebhookDispatchLogApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigCreateInput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigPageInput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigUpdateInput;
+import com.miduo.cloud.ticket.entity.dto.webhook.WebhookDispatchLogOutput;
+import com.miduo.cloud.ticket.entity.dto.webhook.WebhookDispatchLogPageInput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +25,12 @@ import javax.validation.Valid;
 public class WebhookConfigController {
 
     private final WebhookConfigApplicationService webhookConfigService;
+    private final WebhookDispatchLogApplicationService webhookDispatchLogService;
 
-    public WebhookConfigController(WebhookConfigApplicationService webhookConfigService) {
+    public WebhookConfigController(WebhookConfigApplicationService webhookConfigService,
+                                   WebhookDispatchLogApplicationService webhookDispatchLogService) {
         this.webhookConfigService = webhookConfigService;
+        this.webhookDispatchLogService = webhookDispatchLogService;
     }
 
     /**
@@ -83,5 +89,16 @@ public class WebhookConfigController {
     public ApiResult<Void> delete(@PathVariable Long id) {
         webhookConfigService.delete(id);
         return ApiResult.success();
+    }
+
+    /**
+     * 分页查询Webhook推送日志
+     * 接口编号：API000431
+     * 产品文档功能：4.11 开放能力 - Webhook推送日志排障
+     */
+    @Operation(summary = "分页查询Webhook推送日志", description = "接口编号：API000431")
+    @GetMapping("/dispatch-log/page")
+    public ApiResult<PageOutput<WebhookDispatchLogOutput>> dispatchLogPage(@Valid WebhookDispatchLogPageInput input) {
+        return ApiResult.success(webhookDispatchLogService.page(input));
     }
 }

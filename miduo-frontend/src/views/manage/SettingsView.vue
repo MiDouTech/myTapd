@@ -8,6 +8,7 @@ import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { NotificationPreferenceOutput } from '@/types/notification'
 import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue'
+import WebhookDispatchLogPanel from '@/views/manage/components/WebhookDispatchLogPanel.vue'
 import WecomGroupBindingPanel from '@/views/manage/components/WecomGroupBindingPanel.vue'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 
@@ -15,7 +16,7 @@ const route = useRoute()
 const router = useRouter()
 
 const tabValues = ['basic', 'notification', 'integration'] as const
-const sectionValues = ['webhook', 'wecom'] as const
+const sectionValues = ['webhook', 'webhookLog', 'wecom'] as const
 
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
@@ -250,6 +251,10 @@ onMounted(async () => {
         <el-tabs v-model="activeSection" class="integration-tabs">
           <el-tab-pane label="Webhook配置" name="webhook">
             <WebhookConfigPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="Webhook推送日志" name="webhookLog">
+            <WebhookDispatchLogPanel />
           </el-tab-pane>
 
           <el-tab-pane label="企微群绑定" name="wecom">
