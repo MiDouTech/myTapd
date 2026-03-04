@@ -35,20 +35,20 @@ public class WeworkRuntimeConfigProvider {
 
         RuntimeConfig config = new RuntimeConfig();
         if (dbConfig != null) {
-            config.setCorpId(dbConfig.getCorpId());
-            config.setAgentId(dbConfig.getAgentId());
-            config.setSecret(weworkSecretCodec.decode(dbConfig.getCorpSecret()));
-            config.setContactSecret(weworkSecretCodec.decode(dbConfig.getCorpSecret()));
+            config.setCorpId(normalize(dbConfig.getCorpId()));
+            config.setAgentId(normalize(dbConfig.getAgentId()));
+            config.setSecret(normalize(weworkSecretCodec.decode(dbConfig.getCorpSecret())));
+            config.setContactSecret(normalize(weworkSecretCodec.decode(dbConfig.getCorpSecret())));
             config.setApiBaseUrl(defaultIfBlank(dbConfig.getApiBaseUrl(), "https://qyapi.weixin.qq.com"));
             config.setConnectTimeoutMs(defaultIfNull(dbConfig.getConnectTimeoutMs(), 10000));
             config.setReadTimeoutMs(defaultIfNull(dbConfig.getReadTimeoutMs(), 30000));
             return config;
         }
 
-        config.setCorpId(wecomProperties.getCorpId());
-        config.setAgentId(wecomProperties.getAgentId());
-        config.setSecret(wecomProperties.getSecret());
-        config.setContactSecret(defaultIfBlank(wecomProperties.getContactSecret(), wecomProperties.getSecret()));
+        config.setCorpId(normalize(wecomProperties.getCorpId()));
+        config.setAgentId(normalize(wecomProperties.getAgentId()));
+        config.setSecret(normalize(wecomProperties.getSecret()));
+        config.setContactSecret(defaultIfBlank(normalize(wecomProperties.getContactSecret()), config.getSecret()));
         config.setApiBaseUrl("https://qyapi.weixin.qq.com");
         config.setConnectTimeoutMs(10000);
         config.setReadTimeoutMs(30000);
@@ -61,6 +61,14 @@ public class WeworkRuntimeConfigProvider {
 
     private Integer defaultIfNull(Integer value, Integer defaultValue) {
         return value == null ? defaultValue : value;
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     @lombok.Data

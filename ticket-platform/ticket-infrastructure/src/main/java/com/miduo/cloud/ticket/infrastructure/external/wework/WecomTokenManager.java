@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -24,6 +25,9 @@ public class WecomTokenManager {
 
     private static final String GET_TOKEN_URL = "https://qyapi.weixin.qq.com/cgi-bin/gettoken";
     private static final long TOKEN_EXPIRE_BUFFER_SECONDS = 600;
+    private static final String CONFIG_GUIDE_MESSAGE =
+            "请在【系统设置 -> 集成设置 -> 企微连接配置】填写corpId与corpSecret，" +
+                    "或在启动参数中设置wecom.corp-id、wecom.secret";
 
     private final WeworkRuntimeConfigProvider runtimeConfigProvider;
     private final StringRedisTemplate stringRedisTemplate;
@@ -54,21 +58,29 @@ public class WecomTokenManager {
     }
 
     private String getToken(String cacheKey, String corpId, String secret) {
-        if (corpId == null || corpId.trim().isEmpty() || secret == null || secret.trim().isEmpty()) {
-            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企业微信配置不完整，请先配置corpId和corpSecret");
-        }
+        String normalizedCorpId = normalize(corpId);
+        String normalizedSecret = normalize(secret);
+        validateTokenConfig(normalizedCorpId, normalizedSecret);
+
         String cached = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cached != null && !cached.isEmpty()) {
             return cached;
         }
 
-        String url = GET_TOKEN_URL + "?corpid=" + corpId + "&corpsecret=" + secret;
+        String url = GET_TOKEN_URL + "?corpid=" + normalizedCorpId + "&corpsecret=" + normalizedSecret;
         String response = HttpUtil.get(url);
         JSONObject json = JSON.parseObject(response);
 
         if (json == null || json.getIntValue("errcode") != 0) {
             String errMsg = json != null ? json.getString("errmsg") : "response is null";
             log.error("获取企微access_token失败: {}", errMsg);
+            if (isInvalidCorpIdError(errMsg)) {
+                throw BusinessException.of(
+                        ErrorCode.WECOM_API_ERROR,
+                        "获取企微access_token失败: invalid corpid。请检查corpId是否为企微企业ID（通常以ww开头）；"
+                                + CONFIG_GUIDE_MESSAGE
+                );
+            }
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "获取企微access_token失败: " + errMsg);
         }
 
@@ -80,6 +92,49 @@ public class WecomTokenManager {
         log.info("获取企微access_token成功，缓存{}秒", cacheSeconds);
 
         return accessToken;
+    }
+
+    private void validateTokenConfig(String corpId, String secret) {
+        if (corpId == null || corpId.isEmpty() || secret == null || secret.isEmpty()) {
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企业微信配置不完整，" + CONFIG_GUIDE_MESSAGE);
+        }
+        if (isPlaceholderValue(corpId) || isPlaceholderValue(secret)) {
+            throw BusinessException.of(
+                    ErrorCode.WECOM_API_ERROR,
+                    "检测到企业微信占位配置（如YOUR_CORP_ID），请填写真实企微参数；" + CONFIG_GUIDE_MESSAGE
+            );
+        }
+        if (!corpId.startsWith("ww")) {
+            throw BusinessException.of(
+                    ErrorCode.WECOM_API_ERROR,
+                    "corpId格式不正确，企业微信CorpID通常以ww开头；" + CONFIG_GUIDE_MESSAGE
+            );
+        }
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isPlaceholderValue(String value) {
+        if (value == null) {
+            return false;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith("YOUR_")
+                || normalized.contains("PLACEHOLDER")
+                || normalized.contains("REPLACE_ME");
+    }
+
+    private boolean isInvalidCorpIdError(String errMsg) {
+        if (errMsg == null || errMsg.trim().isEmpty()) {
+            return false;
+        }
+        return errMsg.toLowerCase(Locale.ROOT).contains("invalid corpid");
     }
 
     /**
