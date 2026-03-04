@@ -3,11 +3,14 @@ package com.miduo.cloud.ticket.application.webhook;
 import com.alibaba.fastjson2.JSON;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
+import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookDispatchLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookDispatchLogPO;
 import lombok.Data;
 import org.springframework.stereotype.Service;
 
@@ -32,13 +35,19 @@ import java.util.Set;
 public class WebhookDispatchService extends BaseApplicationService {
 
     private static final int DEFAULT_TIMEOUT_MS = 5000;
+    private static final int MAX_REQUEST_BODY_LENGTH = 8000;
+    private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
+    private static final int MAX_FAIL_REASON_LENGTH = 900;
 
     private final WebhookConfigMapper webhookConfigMapper;
+    private final WebhookDispatchLogMapper webhookDispatchLogMapper;
     private final TicketMapper ticketMapper;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
+                                  WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
+        this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
     }
 
@@ -49,11 +58,13 @@ public class WebhookDispatchService extends BaseApplicationService {
         List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
         if (configs == null || configs.isEmpty()) {
             log.debug("Webhook分发跳过：无启用配置, eventType={}, ticketId={}", eventType.getCode(), ticketId);
+            saveSkippedDispatchLog(eventType, ticketId, "无启用Webhook配置");
             return;
         }
         List<WebhookConfigPO> subscribedConfigs = filterSubscribedConfigs(configs, eventType);
         if (subscribedConfigs.isEmpty()) {
             log.debug("Webhook分发跳过：无配置订阅该事件, eventType={}, ticketId={}", eventType.getCode(), ticketId);
+            saveSkippedDispatchLog(eventType, ticketId, "无配置订阅该事件");
             return;
         }
         log.info("Webhook事件分发开始: eventType={}, ticketId={}, subscriberCount={}",
@@ -64,7 +75,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         String payloadJson = JSON.toJSONString(payload);
 
         for (WebhookConfigPO config : subscribedConfigs) {
-            pushToWebhook(config, eventType, payloadJson);
+            pushToWebhook(config, eventType, ticketId, payloadJson);
         }
     }
 
@@ -174,7 +185,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         return payload;
     }
 
-    private void pushToWebhook(WebhookConfigPO config, WebhookEventType eventType, String payloadJson) {
+    private void pushToWebhook(WebhookConfigPO config, WebhookEventType eventType, Long ticketId, String payloadJson) {
         int retryTimes = config.getMaxRetryTimes() == null ? 0 : Math.max(config.getMaxRetryTimes(), 0);
         boolean success = false;
         String failReason = null;
@@ -182,26 +193,41 @@ public class WebhookDispatchService extends BaseApplicationService {
 
         for (int i = 0; i <= retryTimes; i++) {
             int attempt = i + 1;
+            long startMs = System.currentTimeMillis();
+            Integer responseCode = null;
+            String responseBody = null;
+            String currentFailReason = null;
+            boolean currentSuccess = false;
             try {
                 log.debug("Webhook推送尝试: configId={}, eventType={}, attempt={}/{}, url={}",
                         config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl);
                 HttpPostResult result = doHttpPost(config, eventType, payloadJson);
+                responseCode = result.getResponseCode();
+                responseBody = result.getResponseBody();
                 if (result.getResponseCode() >= 200 && result.getResponseCode() < 300) {
                     success = true;
+                    currentSuccess = true;
                     log.info("Webhook推送成功: configId={}, eventType={}, attempt={}/{}, url={}, responseCode={}",
                             config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl, result.getResponseCode());
                     break;
                 }
                 String responseBodySummary = summarize(result.getResponseBody(), 300);
-                failReason = "HTTP " + result.getResponseCode()
+                currentFailReason = "HTTP " + result.getResponseCode()
                         + (responseBodySummary == null ? "" : " body=" + responseBodySummary);
+                failReason = currentFailReason;
                 log.warn("Webhook推送响应非2xx: configId={}, eventType={}, attempt={}/{}, url={}, responseCode={}, responseBody={}",
                         config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl,
                         result.getResponseCode(), responseBodySummary);
             } catch (Exception ex) {
-                failReason = ex.getMessage();
+                currentFailReason = ex.getMessage();
+                failReason = currentFailReason;
                 log.warn("Webhook推送异常: configId={}, eventType={}, attempt={}/{}, url={}, reason={}",
                         config.getId(), eventType.getCode(), attempt, retryTimes + 1, safeUrl, ex.getMessage(), ex);
+            } finally {
+                long durationMs = System.currentTimeMillis() - startMs;
+                saveDispatchLog(config, eventType, ticketId, safeUrl, payloadJson, attempt, retryTimes + 1,
+                        currentSuccess ? WebhookDispatchStatus.SUCCESS : WebhookDispatchStatus.FAIL,
+                        responseCode, responseBody, currentFailReason, durationMs);
             }
         }
 
@@ -212,11 +238,53 @@ public class WebhookDispatchService extends BaseApplicationService {
             config.setLastFailTime(null);
         } else {
             config.setLastFailTime(now);
-            config.setLastFailReason(summarize(failReason, 900));
+            config.setLastFailReason(summarize(failReason, MAX_FAIL_REASON_LENGTH));
             log.error("Webhook推送最终失败: configId={}, eventType={}, url={}, reason={}",
                     config.getId(), eventType.getCode(), safeUrl, summarize(failReason, 300));
         }
         webhookConfigMapper.updateById(config);
+    }
+
+    private void saveSkippedDispatchLog(WebhookEventType eventType, Long ticketId, String reason) {
+        saveDispatchLog(null, eventType, ticketId, null, null, 0, 0, WebhookDispatchStatus.SKIPPED,
+                null, null, reason, null);
+    }
+
+    private void saveDispatchLog(WebhookConfigPO config,
+                                 WebhookEventType eventType,
+                                 Long ticketId,
+                                 String requestUrl,
+                                 String requestBody,
+                                 Integer attemptNo,
+                                 Integer maxAttempts,
+                                 WebhookDispatchStatus status,
+                                 Integer responseCode,
+                                 String responseBody,
+                                 String failReason,
+                                 Long durationMs) {
+        try {
+            WebhookDispatchLogPO logPO = new WebhookDispatchLogPO();
+            logPO.setWebhookConfigId(config == null ? null : config.getId());
+            logPO.setEventType(eventType == null ? null : eventType.getCode());
+            logPO.setTicketId(ticketId);
+            logPO.setRequestUrl(summarize(requestUrl, 500));
+            logPO.setRequestBody(summarize(requestBody, MAX_REQUEST_BODY_LENGTH));
+            logPO.setAttemptNo(attemptNo);
+            logPO.setMaxAttempts(maxAttempts);
+            logPO.setStatus(status == null ? null : status.getCode());
+            logPO.setResponseCode(responseCode);
+            logPO.setResponseBody(summarize(responseBody, MAX_RESPONSE_BODY_LENGTH));
+            logPO.setFailReason(summarize(failReason, MAX_FAIL_REASON_LENGTH));
+            logPO.setDurationMs(durationMs);
+            logPO.setDispatchTime(new Date());
+            webhookDispatchLogMapper.insert(logPO);
+        } catch (Exception ex) {
+            log.error("保存Webhook分发日志失败: eventType={}, ticketId={}, configId={}, reason={}",
+                    eventType == null ? null : eventType.getCode(),
+                    ticketId,
+                    config == null ? null : config.getId(),
+                    ex.getMessage(), ex);
+        }
     }
 
     private HttpPostResult doHttpPost(WebhookConfigPO config,
