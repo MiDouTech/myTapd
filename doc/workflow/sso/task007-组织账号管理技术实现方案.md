@@ -39,11 +39,11 @@
 
 ## 3. 数据模型与字段设计
 
-## 3.1 数据库变更（Flyway V11）
+## 3.1 数据库变更（Flyway V12）
 
 新增脚本：
 
-- `ticket-platform/ticket-bootstrap/src/main/resources/db/migration/V11__enhance_org_account_management.sql`
+- `ticket-platform/ticket-bootstrap/src/main/resources/db/migration/V12__enhance_org_account_management.sql`
 
 变更内容：
 
