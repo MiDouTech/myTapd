@@ -36,13 +36,13 @@ spring:
         min-idle: 0
 
 wecom:
-  corp-id: 
-  agent-id: 
-  secret: 
-  contact-secret: 
-  callback-token: 
-  callback-aes-key: 
-  trusted-domain: 
+  corp-id:
+  agent-id:
+  secret:
+  contact-secret:
+  callback-token:
+  callback-aes-key:
+  trusted-domain:
   mq:
     enabled: false
 
@@ -56,6 +56,8 @@ jwt:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+dev-login:
+  enabled: true
 
 logging:
   level:
