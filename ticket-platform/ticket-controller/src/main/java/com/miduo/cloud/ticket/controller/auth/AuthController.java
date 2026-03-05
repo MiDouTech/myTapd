@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.auth;
 
 import com.miduo.cloud.ticket.application.auth.AuthApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.entity.dto.auth.DevLoginInput;
 import com.miduo.cloud.ticket.entity.dto.auth.LoginOutput;
 import com.miduo.cloud.ticket.entity.dto.auth.RefreshTokenInput;
 import com.miduo.cloud.ticket.entity.dto.auth.WecomLoginInput;
@@ -49,6 +50,18 @@ public class AuthController {
     @PostMapping("/refresh")
     public ApiResult<LoginOutput> refreshToken(@Valid @RequestBody RefreshTokenInput input) {
         LoginOutput output = authApplicationService.refreshToken(input);
+        return ApiResult.success(output);
+    }
+
+    /**
+     * 测试环境硬编码账号登录
+     * 接口编号：API000402
+     * 产品文档功能：测试环境专用（dev-login.enabled=true 时生效）
+     */
+    @Operation(summary = "测试账号登录", description = "接口编号：API000402。仅在 dev-login.enabled=true 时可用，生产环境禁止开启")
+    @PostMapping("/dev/login")
+    public ApiResult<LoginOutput> devLogin(@Valid @RequestBody DevLoginInput input) {
+        LoginOutput output = authApplicationService.devLogin(input);
         return ApiResult.success(output);
     }
 }

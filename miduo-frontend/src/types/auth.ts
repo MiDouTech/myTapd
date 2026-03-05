@@ -2,6 +2,11 @@ export interface WecomLoginInput {
   code: string
 }
 
+export interface DevLoginInput {
+  username: string
+  password: string
+}
+
 export interface RefreshTokenInput {
   refreshToken: string
 }

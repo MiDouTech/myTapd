@@ -7,10 +7,12 @@ import com.miduo.cloud.ticket.domain.user.model.Department;
 import com.miduo.cloud.ticket.domain.user.model.User;
 import com.miduo.cloud.ticket.domain.user.repository.DepartmentRepository;
 import com.miduo.cloud.ticket.domain.user.repository.UserRepository;
+import com.miduo.cloud.ticket.entity.dto.auth.DevLoginInput;
 import com.miduo.cloud.ticket.entity.dto.auth.LoginOutput;
 import com.miduo.cloud.ticket.entity.dto.auth.RefreshTokenInput;
 import com.miduo.cloud.ticket.entity.dto.auth.WecomLoginInput;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,12 @@ import java.util.List;
  */
 @Service
 public class AuthApplicationService extends BaseApplicationService {
+
+    private static final String DEV_USERNAME = "admin";
+    private static final String DEV_PASSWORD = "admin2026";
+
+    @Value("${dev-login.enabled:false}")
+    private boolean devLoginEnabled;
 
     private final WecomClient wecomClient;
     private final UserRepository userRepository;
@@ -87,6 +95,39 @@ public class AuthApplicationService extends BaseApplicationService {
         List<String> roleCodes = userRepository.findRoleCodes(user.getId());
         user.setRoleCodes(roleCodes);
 
+        return buildLoginOutput(user);
+    }
+
+    /**
+     * 测试环境硬编码账号登录（仅 dev-login.enabled=true 时可用）
+     * 接口编号：API000402
+     */
+    @Transactional
+    public LoginOutput devLogin(DevLoginInput input) {
+        if (!devLoginEnabled) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "当前环境不允许使用测试登录");
+        }
+        if (!DEV_USERNAME.equals(input.getUsername()) || !DEV_PASSWORD.equals(input.getPassword())) {
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED, "测试账号或密码错误");
+        }
+
+        User user = userRepository.findByWecomUserid("DEV_ADMIN");
+        if (user == null) {
+            user = new User();
+            user.setName("测试管理员");
+            user.setWecomUserid("DEV_ADMIN");
+            user.setAccountStatus(1);
+            user = userRepository.save(user);
+            userRepository.assignRole(user.getId(), 1L);
+            log.info("自动创建测试管理员账号: id={}", user.getId());
+        }
+
+        if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
+        }
+
+        List<String> roleCodes = userRepository.findRoleCodes(user.getId());
+        user.setRoleCodes(roleCodes);
         return buildLoginOutput(user);
     }
 

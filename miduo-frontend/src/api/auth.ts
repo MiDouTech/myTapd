@@ -1,4 +1,4 @@
-import type { LoginOutput, RefreshTokenInput, WecomLoginInput } from '@/types/auth'
+import type { DevLoginInput, LoginOutput, RefreshTokenInput, WecomLoginInput } from '@/types/auth'
 import request from '@/utils/request'
 
 /**
@@ -17,4 +17,13 @@ export function wecomLogin(data: WecomLoginInput): Promise<LoginOutput> {
  */
 export function refreshToken(data: RefreshTokenInput): Promise<LoginOutput> {
   return request.post<LoginOutput>('/auth/refresh', data)
+}
+
+/**
+ * 测试环境硬编码账号登录
+ * 接口编号：API000402
+ * 产品文档功能：测试环境专用（dev-login.enabled=true 时生效）
+ */
+export function devLogin(data: DevLoginInput): Promise<LoginOutput> {
+  return request.post<LoginOutput>('/auth/dev/login', data)
 }
