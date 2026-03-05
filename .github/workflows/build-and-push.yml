@@ -11,8 +11,8 @@ on:
 env:
   # GitHub Container Registry
   GHCR_REGISTRY: ghcr.io
-  # 腾讯云 CNB 镜像仓库
-  CNB_REGISTRY: cnb.cool
+  # 腾讯云 CNB 镜像仓库（Registry 地址是 docker.cnb.cool，不是 cnb.cool）
+  CNB_REGISTRY: docker.cnb.cool
   CNB_NAMESPACE: miduoyanfa/middleground/docker_images
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.CNB_REGISTRY }}
-          username: ${{ secrets.CNB_USERNAME }}
-          password: ${{ secrets.CNB_PASSWORD }}
+          username: cnb
+          password: ${{ secrets.CNB_TOKEN }}
 
       # ── 同时生成两个仓库的 Tag ──────────────────────────────────────────────
       - name: Extract Docker metadata (backend)
