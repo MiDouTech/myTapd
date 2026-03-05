@@ -1,6 +1,6 @@
-name: Build & Push to GHCR
+name: Build & Push to GHCR + CNB
 
-# Triggers: push to main (or tags), and pull requests against main
+# 触发条件：推送 main 分支或版本标签，PR 只构建不发布
 on:
   push:
     branches: [ "main" ]
@@ -9,10 +9,14 @@ on:
     branches: [ "main" ]
 
 env:
-  REGISTRY: ghcr.io
+  # GitHub Container Registry
+  GHCR_REGISTRY: ghcr.io
+  # 腾讯云 CNB 镜像仓库
+  CNB_REGISTRY: cnb.cool
+  CNB_NAMESPACE: miduoyanfa/middleground/docker_images
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Job 1 – Build the Spring Boot JAR and push backend image
+# Job 1 – 构建 Spring Boot JAR，同时推送到 GHCR 和 CNB
 # ──────────────────────────────────────────────────────────────────────────────
 jobs:
   build-backend:
@@ -20,17 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write  # required to push to GHCR
-
-    outputs:
-      image: ${{ steps.meta.outputs.tags }}
+      packages: write
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Set up JDK 8 (matches Dockerfile base image and pom.xml) ─────────
       - name: Set up JDK 8 (Temurin)
         uses: actions/setup-java@v4
         with:
@@ -38,26 +37,33 @@ jobs:
           distribution: "temurin"
           cache: "maven"
 
-      # ── 3. Build with Maven (skip tests for CI speed; run them separately) ──
       - name: Build backend JAR
         working-directory: ticket-platform
         run: mvn clean package -DskipTests -pl ticket-bootstrap -am -B
 
-      # ── 4. Log in to GitHub Container Registry ───────────────────────────────
+      # ── 同时登录两个镜像仓库 ────────────────────────────────────────────────
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 5. Generate image tags & labels ──────────────────────────────────────
-      # Tags:  latest (main branch) | sha-<short> | semver when tagged
+      - name: Log in to CNB
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CNB_REGISTRY }}
+          username: ${{ secrets.CNB_USERNAME }}
+          password: ${{ secrets.CNB_PASSWORD }}
+
+      # ── 同时生成两个仓库的 Tag ──────────────────────────────────────────────
       - name: Extract Docker metadata (backend)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ticket-platform-backend
+          images: |
+            ${{ env.GHCR_REGISTRY }}/${{ github.repository_owner }}/ticket-platform-backend
+            ${{ env.CNB_REGISTRY }}/${{ env.CNB_NAMESPACE }}/ticket-platform-backend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
@@ -65,13 +71,11 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=ref,event=pr
 
-      # ── 6. Set up Buildx for caching ─────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 7. Build & push backend image ────────────────────────────────────────
-      # Context is ticket-platform/ so the Dockerfile's COPY path resolves.
-      - name: Build and push backend Docker image
+      # ── 构建一次，同时推送到 GHCR 和 CNB ────────────────────────────────────
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ticket-platform
@@ -83,69 +87,59 @@ jobs:
           cache-to:   type=gha,mode=max
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 2 – Build the Vue 3 frontend and push nginx image
+  # Job 2 – 构建 Vue3 前端静态文件，打包成 ZIP
   # ──────────────────────────────────────────────────────────────────────────
   build-frontend:
-    name: Frontend – Build & Push Image
+    name: Frontend – Build & Upload ZIP
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
-
-    outputs:
-      image: ${{ steps.meta.outputs.tags }}
+      contents: write
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Log in to GHCR ────────────────────────────────────────────────────
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: miduo-frontend/package-lock.json
 
-      # ── 3. Generate image tags & labels ──────────────────────────────────────
-      - name: Extract Docker metadata (frontend)
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Install dependencies
+        working-directory: miduo-frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: miduo-frontend
+        env:
+          VITE_APP_TITLE: 米多工单系统
+          VITE_API_BASE_URL: /api
+          VITE_USE_PROXY: "false"
+          VITE_WECOM_OAUTH_URL: ${{ secrets.VITE_WECOM_OAUTH_URL }}
+        run: npm run build
+
+      - name: Zip dist folder
+        run: |
+          cd miduo-frontend/dist
+          zip -r ../../ticket-platform-frontend.zip .
+          echo "ZIP size: $(du -sh ../../ticket-platform-frontend.zip | cut -f1)"
+
+      - name: Upload dist ZIP as artifact
+        uses: actions/upload-artifact@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ticket-platform-frontend
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-,format=short
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=pr
+          name: ticket-platform-frontend-${{ github.sha }}
+          path: ticket-platform-frontend.zip
+          retention-days: 7
 
-      # ── 4. Set up Buildx ─────────────────────────────────────────────────────
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ── 5. Build & push frontend image ───────────────────────────────────────
-      # VITE_WECOM_OAUTH_URL is sensitive; pass via a repository secret.
-      # The other VITE_* args have safe defaults for production.
-      - name: Build and push frontend Docker image
-        uses: docker/build-push-action@v6
+      - name: Attach ZIP to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
-          context: miduo-frontend
-          file:    miduo-frontend/Dockerfile
-          push:    ${{ github.event_name != 'pull_request' }}
-          tags:    ${{ steps.meta.outputs.tags }}
-          labels:  ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VITE_APP_TITLE=米多工单系统
-            VITE_API_BASE_URL=/api
-            VITE_USE_PROXY=false
-            VITE_WECOM_OAUTH_URL=${{ secrets.VITE_WECOM_OAUTH_URL }}
-          cache-from: type=gha
-          cache-to:   type=gha,mode=max
+          files: ticket-platform-frontend.zip
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 3 – Summary (runs after both builds on the default branch)
+  # Job 3 – 汇总
   # ──────────────────────────────────────────────────────────────────────────
   summary:
     name: Build Summary
@@ -153,11 +147,12 @@ jobs:
     needs: [ build-backend, build-frontend ]
     if: ${{ github.event_name != 'pull_request' }}
     steps:
-      - name: Print image references
+      - name: Print summary
         run: |
-          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "## 本次构建产物" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Service  | Image |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend  | \`ghcr.io/${{ github.repository_owner }}/ticket-platform-backend:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend | \`ghcr.io/${{ github.repository_owner }}/ticket-platform-frontend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 类型 | 仓库 | 镜像地址 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 后端镜像 | GHCR | \`ghcr.io/${{ github.repository_owner }}/ticket-platform-backend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 后端镜像 | CNB  | \`cnb.cool/miduoyanfa/middleground/docker_images/ticket-platform-backend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 前端静态包 | Artifacts | \`ticket-platform-frontend-${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
