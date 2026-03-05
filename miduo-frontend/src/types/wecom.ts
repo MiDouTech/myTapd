@@ -26,3 +26,39 @@ export interface WecomGroupBindingUpdateInput {
   webhookUrl?: string
   isActive?: number
 }
+
+export interface WecomConfigOutput {
+  id?: number
+  corpId?: string
+  agentId?: string
+  corpSecretMasked?: string
+  apiBaseUrl?: string
+  connectTimeoutMs?: number
+  readTimeoutMs?: number
+  scheduleEnabled?: boolean
+  scheduleCron?: string
+  retryCount?: number
+  batchSize?: number
+  enabled?: boolean
+  updateTime?: string
+}
+
+export interface WecomConfigUpdateInput {
+  corpId: string
+  agentId: string
+  corpSecret: string
+  apiBaseUrl: string
+  connectTimeoutMs: number
+  readTimeoutMs: number
+  scheduleEnabled: boolean
+  scheduleCron?: string
+  retryCount: number
+  batchSize: number
+  enabled: boolean
+}
+
+export interface WecomConnectionTestOutput {
+  success: boolean
+  message: string
+  departmentCount: number
+}

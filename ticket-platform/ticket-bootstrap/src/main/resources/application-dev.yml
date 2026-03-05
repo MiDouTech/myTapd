@@ -41,13 +41,13 @@ spring:
         min-idle: 0
 
 wecom:
-  corp-id: YOUR_CORP_ID
-  agent-id: YOUR_AGENT_ID
-  secret: YOUR_APP_SECRET
-  contact-secret: YOUR_CONTACT_SECRET
-  callback-token: YOUR_CALLBACK_TOKEN
-  callback-aes-key: YOUR_CALLBACK_AES_KEY
-  trusted-domain: ticket.company.com
+  corp-id: ${WECOM_CORP_ID:}
+  agent-id: ${WECOM_AGENT_ID:}
+  secret: ${WECOM_SECRET:}
+  contact-secret: ${WECOM_CONTACT_SECRET:}
+  callback-token: ${WECOM_CALLBACK_TOKEN:}
+  callback-aes-key: ${WECOM_CALLBACK_AES_KEY:}
+  trusted-domain: ${WECOM_TRUSTED_DOMAIN:ticket.company.com}
   mq:
     enabled: false
 

@@ -9,6 +9,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import type { NotificationPreferenceOutput } from '@/types/notification'
 import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue'
 import WebhookDispatchLogPanel from '@/views/manage/components/WebhookDispatchLogPanel.vue'
+import WecomConfigPanel from '@/views/manage/components/WecomConfigPanel.vue'
 import WecomGroupBindingPanel from '@/views/manage/components/WecomGroupBindingPanel.vue'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 
@@ -16,13 +17,13 @@ const route = useRoute()
 const router = useRouter()
 
 const tabValues = ['basic', 'notification', 'integration'] as const
-const sectionValues = ['webhook', 'webhookLog', 'wecom'] as const
+const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom'] as const
 
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
 
 const activeTab = ref<SettingsTab>('basic')
-const activeSection = ref<IntegrationSection>('webhook')
+const activeSection = ref<IntegrationSection>('wecomConfig')
 
 const basicForm = reactive({
   systemName: '米多工单系统',
@@ -58,7 +59,7 @@ function normalizeSection(section: unknown): IntegrationSection {
   if (typeof section === 'string' && (sectionValues as readonly string[]).includes(section)) {
     return section as IntegrationSection
   }
-  return 'webhook'
+  return 'wecomConfig'
 }
 
 function normalizePreferencePage(): void {
@@ -106,7 +107,7 @@ watch(
 
 watch(activeTab, () => {
   if (activeTab.value !== 'integration') {
-    activeSection.value = 'webhook'
+    activeSection.value = 'wecomConfig'
   }
   syncRouteState()
 })
@@ -249,6 +250,10 @@ onMounted(async () => {
 
       <el-tab-pane label="集成设置" name="integration">
         <el-tabs v-model="activeSection" class="integration-tabs">
+          <el-tab-pane label="企微连接配置" name="wecomConfig">
+            <WecomConfigPanel />
+          </el-tab-pane>
+
           <el-tab-pane label="Webhook配置" name="webhook">
             <WebhookConfigPanel />
           </el-tab-pane>

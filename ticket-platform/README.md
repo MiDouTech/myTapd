@@ -87,3 +87,32 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 - Swagger: http://localhost:8080/swagger-ui.html
 - Actuator: http://localhost:8080/actuator/health
 - MinIO Console: http://localhost:9001
+
+## 企业微信配置填写位置（重要）
+
+企微参数加载优先级：**数据库配置 > application配置（环境变量）**。
+
+### 方式一（推荐）：管理端页面填写
+
+登录后进入：**系统设置 → 集成设置 → 企微连接配置**，填写并保存以下字段：
+
+- CorpID（企业ID，通常以 `ww` 开头）
+- AgentID（自建应用ID）
+- 应用Secret（corpSecret）
+- API基础地址、超时、同步参数等
+
+保存后可直接点击“连接测试”，后台会调用企微接口验证可用性。
+
+### 方式二：启动参数 / 环境变量填写
+
+`ticket-bootstrap/src/main/resources/application-dev.yml` 已支持以下环境变量：
+
+- `WECOM_CORP_ID`
+- `WECOM_AGENT_ID`
+- `WECOM_SECRET`
+- `WECOM_CONTACT_SECRET`
+- `WECOM_CALLBACK_TOKEN`
+- `WECOM_CALLBACK_AES_KEY`
+- `WECOM_TRUSTED_DOMAIN`
+
+如果你使用 `scripts/release-test-backend.sh`，可在 `scripts/.env.test.local` 中填写对应 `WECOM_*` 参数。
