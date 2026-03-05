@@ -2,14 +2,20 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ticket_platform}?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=Asia/Shanghai
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: jdbc:mysql://192.168.1.100:3306/ticket_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: your_mysql_password
     druid:
       initial-size: 10
       min-idle: 10
       max-active: 50
       max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
 
   flyway:
     enabled: true
@@ -23,14 +29,35 @@ spring:
     clean-disabled: true
 
   redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
+    host: 192.168.1.101
+    port: 6379
+    password: your_redis_password
     database: 0
+    timeout: 10000
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1
+        max-idle: 8
+        min-idle: 0
 
 wecom:
+  corp-id: 
+  agent-id: 
+  secret: 
+  contact-secret: 
+  callback-token: 
+  callback-aes-key: 
+  trusted-domain: ticket.your-company.com
   mq:
     enabled: false
+
+jwt:
+  secret: your_jwt_secret_key_must_be_at_least_64_characters_long_replace_this
+  access-token-expire: 1800
+  refresh-token-expire: 604800
+  token-prefix: "Bearer "
+  header-name: Authorization
 
 mybatis-plus:
   configuration:
