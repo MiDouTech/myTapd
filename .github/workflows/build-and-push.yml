@@ -1,0 +1,163 @@
+name: Build & Push to GHCR
+
+# Triggers: push to main (or tags), and pull requests against main
+on:
+  push:
+    branches: [ "main" ]
+    tags:     [ "v*.*.*" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Job 1 – Build the Spring Boot JAR and push backend image
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+  build-backend:
+    name: Backend – Build JAR & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # required to push to GHCR
+
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up JDK 8 (matches Dockerfile base image and pom.xml) ─────────
+      - name: Set up JDK 8 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "8"
+          distribution: "temurin"
+          cache: "maven"
+
+      # ── 3. Build with Maven (skip tests for CI speed; run them separately) ──
+      - name: Build backend JAR
+        working-directory: ticket-platform
+        run: mvn clean package -DskipTests -pl ticket-bootstrap -am -B
+
+      # ── 4. Log in to GitHub Container Registry ───────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 5. Generate image tags & labels ──────────────────────────────────────
+      # Tags:  latest (main branch) | sha-<short> | semver when tagged
+      - name: Extract Docker metadata (backend)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ticket-platform-backend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
+
+      # ── 6. Set up Buildx for caching ─────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 7. Build & push backend image ────────────────────────────────────────
+      # Context is ticket-platform/ so the Dockerfile's COPY path resolves.
+      - name: Build and push backend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ticket-platform
+          file:    ticket-platform/deployment/docker/Dockerfile
+          push:    ${{ github.event_name != 'pull_request' }}
+          tags:    ${{ steps.meta.outputs.tags }}
+          labels:  ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2 – Build the Vue 3 frontend and push nginx image
+  # ──────────────────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Frontend – Build & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Log in to GHCR ────────────────────────────────────────────────────
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 3. Generate image tags & labels ──────────────────────────────────────
+      - name: Extract Docker metadata (frontend)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ticket-platform-frontend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
+
+      # ── 4. Set up Buildx ─────────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 5. Build & push frontend image ───────────────────────────────────────
+      # VITE_WECOM_OAUTH_URL is sensitive; pass via a repository secret.
+      # The other VITE_* args have safe defaults for production.
+      - name: Build and push frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: miduo-frontend
+          file:    miduo-frontend/Dockerfile
+          push:    ${{ github.event_name != 'pull_request' }}
+          tags:    ${{ steps.meta.outputs.tags }}
+          labels:  ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_APP_TITLE=米多工单系统
+            VITE_API_BASE_URL=/api
+            VITE_USE_PROXY=false
+            VITE_WECOM_OAUTH_URL=${{ secrets.VITE_WECOM_OAUTH_URL }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 3 – Summary (runs after both builds on the default branch)
+  # ──────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [ build-backend, build-frontend ]
+    if: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - name: Print image references
+        run: |
+          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service  | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend  | \`ghcr.io/${{ github.repository_owner }}/ticket-platform-backend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | \`ghcr.io/${{ github.repository_owner }}/ticket-platform-frontend:latest\` |" >> $GITHUB_STEP_SUMMARY

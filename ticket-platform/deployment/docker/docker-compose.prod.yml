@@ -1,0 +1,77 @@
+# 生产环境 docker-compose
+# ─────────────────────────────────────────────────────────────────────────────
+# MySQL / Redis 使用内网已有服务，连接配置写在 application-prod.yml 中。
+# 本文件只负责拉取镜像、启动容器，不传任何业务配置。
+#
+# 首次部署：
+#   docker login ghcr.io -u <你的GitHub用户名>
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 手动更新镜像：
+#   docker compose -f docker-compose.prod.yml pull backend frontend
+#   docker compose -f docker-compose.prod.yml up -d --no-deps backend frontend
+#
+# Watchtower 每隔 5 分钟自动检测 GHCR 是否有新镜像并自动重部署。
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: '3.8'
+
+# 修改这里的 GHCR_OWNER 为你的 GitHub 用户名（小写）
+x-ghcr-owner: &ghcr-owner your-github-username
+
+services:
+  backend:
+    image: ghcr.io/your-github-username/ticket-platform-backend:latest
+    container_name: ticket-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC"
+    ports:
+      - "8080:8080"
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  frontend:
+    image: ghcr.io/your-github-username/ticket-platform-frontend:latest
+    container_name: ticket-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    networks:
+      - ticket-network
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Watchtower 自动监测 GHCR 镜像更新并重新部署（每 5 分钟检查一次）
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: ticket-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.docker/config.json:/config.json:ro
+    environment:
+      WATCHTOWER_POLL_INTERVAL: 300
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      TZ: Asia/Shanghai
+    networks:
+      - ticket-network
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+networks:
+  ticket-network:
+    driver: bridge

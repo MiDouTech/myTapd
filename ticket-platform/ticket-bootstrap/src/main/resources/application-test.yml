@@ -2,9 +2,14 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ticket_platform_test?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://10.0.4.4:3306/ticket_platform_test?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: root123456
+    password: Testchjskn@2025SQL
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
 
   flyway:
     enabled: true
@@ -18,14 +23,41 @@ spring:
     clean-disabled: true
 
   redis:
-    host: localhost
+    host: 10.0.3.135
     port: 6379
+    password: MDrds_bl!2025
     database: 1
+    timeout: 10000
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1
+        max-idle: 8
+        min-idle: 0
 
 wecom:
+  corp-id: 
+  agent-id: 
+  secret: 
+  contact-secret: 
+  callback-token: 
+  callback-aes-key: 
+  trusted-domain: 
   mq:
     enabled: false
+
+jwt:
+  secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
+  access-token-expire: 1800
+  refresh-token-expire: 604800
+  token-prefix: "Bearer "
+  header-name: Authorization
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 logging:
   level:
     com.miduo.cloud.ticket: debug
+    org.springframework: warn
