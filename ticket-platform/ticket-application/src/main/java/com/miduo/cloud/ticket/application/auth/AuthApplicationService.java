@@ -126,6 +126,13 @@ public class AuthApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 
+        // 防御：企微同步可能误将系统测试账号标记为失活(status=4)，此处强制恢复为激活状态
+        if (!Integer.valueOf(1).equals(user.getAccountStatus())) {
+            log.warn("测试管理员账号状态异常(status={})，自动恢复为激活状态", user.getAccountStatus());
+            user.setAccountStatus(1);
+            user = userRepository.save(user);
+        }
+
         List<String> roleCodes = userRepository.findRoleCodes(user.getId());
         user.setRoleCodes(roleCodes);
         return buildLoginOutput(user);

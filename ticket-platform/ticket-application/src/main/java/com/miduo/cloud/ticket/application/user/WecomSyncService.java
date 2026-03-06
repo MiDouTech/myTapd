@@ -31,6 +31,9 @@ public class WecomSyncService extends BaseApplicationService {
     private static final Long ROOT_DEPARTMENT_ID = 1L;
     private static final Long DEFAULT_SUBMITTER_ROLE_ID = 4L;
 
+    /** 系统内置账号前缀，这类账号不参与企微同步失活收敛 */
+    private static final String SYSTEM_ACCOUNT_PREFIX = "DEV_";
+
     private final WecomClient wecomClient;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
@@ -215,6 +218,41 @@ public class WecomSyncService extends BaseApplicationService {
         return result;
     }
 
+    /**
+     * 当通讯录列表接口未返回手机号或职位时，尝试通过成员详情接口补全字段。
+     * 企微 /cgi-bin/user/list 与 /cgi-bin/user/get 使用同一通讯录 Secret，
+     * 在权限已开通的情况下，详情接口往往能返回列表接口未携带的字段。
+     */
+    private WecomClient.WecomUserDetail enrichUserDetail(WecomClient.WecomUserDetail listDetail, String wecomUserId) {
+        boolean phoneMissing = listDetail.getMobile() == null || listDetail.getMobile().trim().isEmpty();
+        boolean positionMissing = listDetail.getPosition() == null || listDetail.getPosition().trim().isEmpty();
+        if (!phoneMissing && !positionMissing) {
+            return listDetail;
+        }
+        try {
+            WecomClient.WecomUserDetail detailFromApi = wecomClient.getUserDetail(wecomUserId);
+            if (detailFromApi == null) {
+                return listDetail;
+            }
+            if (phoneMissing && detailFromApi.getMobile() != null && !detailFromApi.getMobile().trim().isEmpty()) {
+                listDetail.setMobile(detailFromApi.getMobile());
+                log.debug("通过成员详情接口补全手机号: userId={}", wecomUserId);
+            }
+            if (positionMissing && detailFromApi.getPosition() != null && !detailFromApi.getPosition().trim().isEmpty()) {
+                listDetail.setPosition(detailFromApi.getPosition());
+                log.debug("通过成员详情接口补全职位: userId={}", wecomUserId);
+            }
+            if ((listDetail.getGender() == null || listDetail.getGender() == 0)
+                    && detailFromApi.getGender() != null && detailFromApi.getGender() != 0) {
+                listDetail.setGender(detailFromApi.getGender());
+                log.debug("通过成员详情接口补全性别: userId={}", wecomUserId);
+            }
+        } catch (Exception ex) {
+            log.warn("通过成员详情接口补全字段失败, userId={}, reason={}", wecomUserId, ex.getMessage());
+        }
+        return listDetail;
+    }
+
     private Long resolveParentId(Long wecomParentId, Map<Long, Department> existingMap) {
         if (wecomParentId == null || wecomParentId <= 0) {
             return null;
@@ -249,8 +287,16 @@ public class WecomSyncService extends BaseApplicationService {
             wecomUsers = Collections.emptyList();
         }
 
+        long missingPhone = wecomUsers.stream().filter(u -> u != null && (u.getMobile() == null || u.getMobile().trim().isEmpty())).count();
+        long missingPosition = wecomUsers.stream().filter(u -> u != null && (u.getPosition() == null || u.getPosition().trim().isEmpty())).count();
+        log.info("企微通讯录列表接口返回成员{}人，其中手机号缺失{}人，职位缺失{}人", wecomUsers.size(), missingPhone, missingPosition);
+        if (missingPhone > 0) {
+            log.warn("手机号缺失可能是企业微信应用未开通「获取成员手机号」权限，请在企微管理后台->应用管理->通讯录同步中确认权限配置");
+        }
+
         Map<String, User> existingUserMap = userRepository.findAll().stream()
                 .filter(u -> u.getWecomUserid() != null && !u.getWecomUserid().trim().isEmpty())
+                .filter(u -> !u.getWecomUserid().trim().startsWith(SYSTEM_ACCOUNT_PREFIX))
                 .collect(Collectors.toMap(u -> u.getWecomUserid().trim(), Function.identity(), (a, b) -> a, HashMap::new));
         Set<String> incomingUserIds = new HashSet<>();
         Date syncTime = new Date();
@@ -264,18 +310,19 @@ public class WecomSyncService extends BaseApplicationService {
             try {
                 User existing = existingUserMap.get(wecomUserId);
                 if (existing == null) {
+                    WecomClient.WecomUserDetail enriched = enrichUserDetail(wecomUser, wecomUserId);
                     User newUser = new User();
-                    newUser.setName(trimToNull(wecomUser.getName()));
-                    newUser.setPhone(trimToNull(wecomUser.getMobile()));
-                    newUser.setEmail(trimToNull(wecomUser.getEmail()));
-                    newUser.setPosition(trimToNull(wecomUser.getPosition()));
-                    newUser.setGender(normalizeGender(wecomUser.getGender()));
-                    newUser.setAvatarUrl(trimToNull(wecomUser.getAvatar()));
+                    newUser.setName(trimToNull(enriched.getName()));
+                    newUser.setPhone(trimToNull(enriched.getMobile()));
+                    newUser.setEmail(trimToNull(enriched.getEmail()));
+                    newUser.setPosition(trimToNull(enriched.getPosition()));
+                    newUser.setGender(normalizeGender(enriched.getGender()));
+                    newUser.setAvatarUrl(trimToNull(enriched.getAvatar()));
                     newUser.setWecomUserid(wecomUserId);
-                    newUser.setAccountStatus(mapWecomStatus(wecomUser.getStatus()));
+                    newUser.setAccountStatus(mapWecomStatus(enriched.getStatus()));
                     newUser.setSyncStatus(1);
                     newUser.setSyncTime(syncTime);
-                    newUser.setDepartmentId(resolveMainDepartment(wecomUser, wecomDeptMap));
+                    newUser.setDepartmentId(resolveMainDepartment(enriched, wecomDeptMap));
                     User saved = userRepository.save(newUser);
                     userRepository.assignRole(saved.getId(), DEFAULT_SUBMITTER_ROLE_ID);
                     existingUserMap.put(wecomUserId, saved);
@@ -283,43 +330,49 @@ public class WecomSyncService extends BaseApplicationService {
                     continue;
                 }
 
+                boolean needDetailEnrich = (trimToNull(wecomUser.getMobile()) == null && existing.getPhone() == null)
+                        || (trimToNull(wecomUser.getPosition()) == null && existing.getPosition() == null);
+                WecomClient.WecomUserDetail source = needDetailEnrich
+                        ? enrichUserDetail(wecomUser, wecomUserId)
+                        : wecomUser;
+
                 boolean changed = false;
-                String latestName = trimToNull(wecomUser.getName());
+                String latestName = trimToNull(source.getName());
                 if (!Objects.equals(latestName, existing.getName())) {
                     existing.setName(latestName);
                     changed = true;
                 }
-                String latestPhone = trimToNull(wecomUser.getMobile());
-                if (!Objects.equals(latestPhone, existing.getPhone())) {
+                String latestPhone = trimToNull(source.getMobile());
+                if (latestPhone != null && !Objects.equals(latestPhone, existing.getPhone())) {
                     existing.setPhone(latestPhone);
                     changed = true;
                 }
-                String latestEmail = trimToNull(wecomUser.getEmail());
+                String latestEmail = trimToNull(source.getEmail());
                 if (!Objects.equals(latestEmail, existing.getEmail())) {
                     existing.setEmail(latestEmail);
                     changed = true;
                 }
-                String latestPosition = trimToNull(wecomUser.getPosition());
-                if (!Objects.equals(latestPosition, existing.getPosition())) {
+                String latestPosition = trimToNull(source.getPosition());
+                if (latestPosition != null && !Objects.equals(latestPosition, existing.getPosition())) {
                     existing.setPosition(latestPosition);
                     changed = true;
                 }
-                Integer latestGender = normalizeGender(wecomUser.getGender());
-                if (!Objects.equals(latestGender, existing.getGender())) {
+                Integer latestGender = normalizeGender(source.getGender());
+                if (latestGender != null && latestGender != 0 && !Objects.equals(latestGender, existing.getGender())) {
                     existing.setGender(latestGender);
                     changed = true;
                 }
-                String latestAvatar = trimToNull(wecomUser.getAvatar());
+                String latestAvatar = trimToNull(source.getAvatar());
                 if (!Objects.equals(latestAvatar, existing.getAvatarUrl())) {
                     existing.setAvatarUrl(latestAvatar);
                     changed = true;
                 }
-                Long latestMainDeptId = resolveMainDepartment(wecomUser, wecomDeptMap);
+                Long latestMainDeptId = resolveMainDepartment(source, wecomDeptMap);
                 if (!Objects.equals(latestMainDeptId, existing.getDepartmentId())) {
                     existing.setDepartmentId(latestMainDeptId);
                     changed = true;
                 }
-                Integer latestAccountStatus = mapWecomStatus(wecomUser.getStatus());
+                Integer latestAccountStatus = mapWecomStatus(source.getStatus());
                 if (!Objects.equals(latestAccountStatus, existing.getAccountStatus())) {
                     existing.setAccountStatus(latestAccountStatus);
                     changed = true;
