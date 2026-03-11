@@ -210,6 +210,117 @@ public class TicketApplicationService {
         return buildDetailOutput(ticket, currentUserId);
     }
 
+    /**
+     * 按工单编号查询公开详情（无需登录，外网可访问）
+     */
+    public TicketPublicDetailOutput getPublicTicketDetail(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "工单编号不能为空");
+        }
+        TicketPO ticket = ticketMapper.selectOne(
+                new LambdaQueryWrapper<TicketPO>()
+                        .eq(TicketPO::getTicketNo, ticketNo.trim())
+                        .last("LIMIT 1")
+        );
+        if (ticket == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+        return buildPublicDetailOutput(ticket);
+    }
+
+    private TicketPublicDetailOutput buildPublicDetailOutput(TicketPO ticket) {
+        TicketPublicDetailOutput output = new TicketPublicDetailOutput();
+        output.setId(ticket.getId());
+        output.setTicketNo(ticket.getTicketNo());
+        output.setTitle(ticket.getTitle());
+        output.setDescription(ticket.getDescription());
+        output.setPriority(ticket.getPriority());
+        output.setStatus(ticket.getStatus());
+        output.setSource(ticket.getSource());
+        output.setExpectedTime(ticket.getExpectedTime());
+        output.setResolvedAt(ticket.getResolvedAt());
+        output.setClosedAt(ticket.getClosedAt());
+        output.setCreateTime(ticket.getCreateTime());
+        output.setUpdateTime(ticket.getUpdateTime());
+
+        Priority priority = Priority.fromCode(ticket.getPriority());
+        if (priority != null) {
+            output.setPriorityLabel(priority.getLabel());
+        }
+
+        TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
+        if (status != null) {
+            output.setStatusLabel(status.getLabel());
+        }
+
+        TicketSource source = TicketSource.fromCode(ticket.getSource());
+        if (source != null) {
+            output.setSourceLabel(source.getLabel());
+        }
+
+        if (ticket.getCategoryId() != null) {
+            TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
+            if (category != null) {
+                output.setCategoryName(category.getName());
+                output.setCategoryFullPath(category.getPath());
+            }
+        }
+
+        Set<Long> userIds = new HashSet<>();
+        if (ticket.getCreatorId() != null) {
+            userIds.add(ticket.getCreatorId());
+        }
+        if (ticket.getAssigneeId() != null) {
+            userIds.add(ticket.getAssigneeId());
+        }
+
+        List<TicketCommentPO> comments = commentMapper.selectList(
+                new LambdaQueryWrapper<TicketCommentPO>()
+                        .eq(TicketCommentPO::getTicketId, ticket.getId())
+                        .orderByAsc(TicketCommentPO::getCreateTime)
+        );
+        if (comments != null) {
+            for (TicketCommentPO c : comments) {
+                if (c.getUserId() != null) {
+                    userIds.add(c.getUserId());
+                }
+            }
+        }
+
+        Map<Long, SysUserPO> userMap = Collections.emptyMap();
+        if (!userIds.isEmpty()) {
+            List<SysUserPO> users = userMapper.selectBatchIds(userIds);
+            userMap = users.stream().collect(Collectors.toMap(SysUserPO::getId, u -> u));
+        }
+
+        SysUserPO creator = userMap.get(ticket.getCreatorId());
+        if (creator != null) {
+            output.setCreatorName(creator.getName());
+        }
+        SysUserPO assignee = userMap.get(ticket.getAssigneeId());
+        if (assignee != null) {
+            output.setAssigneeName(assignee.getName());
+        }
+
+        if (comments != null) {
+            Map<Long, SysUserPO> finalUserMap = userMap;
+            output.setComments(comments.stream().map(c -> {
+                TicketPublicDetailOutput.CommentOutput co = new TicketPublicDetailOutput.CommentOutput();
+                co.setId(c.getId());
+                co.setContent(c.getContent());
+                co.setType(c.getType());
+                co.setCreateTime(c.getCreateTime());
+                SysUserPO commentUser = finalUserMap.get(c.getUserId());
+                if (commentUser != null) {
+                    co.setUserName(commentUser.getName());
+                }
+                return co;
+            }).collect(Collectors.toList()));
+        }
+
+        return output;
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void assignTicket(Long ticketId, TicketAssignInput input, Long currentUserId) {
         TicketPO ticket = ticketMapper.selectById(ticketId);

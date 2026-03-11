@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.wecom;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.notification.sender.WecomAppMessageSender;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.application.wecom.model.WecomBotParseResult;
 import com.miduo.cloud.ticket.application.wecom.model.WecomDraftSession;
@@ -12,6 +13,8 @@ import com.miduo.cloud.ticket.entity.dto.wecom.NlpAnalyzeResult;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomCallbackMessageDTO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomBotMessageLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomGroupBindingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomBotMessageLogPO;
@@ -35,29 +38,35 @@ public class WecomMessageProcessor extends BaseApplicationService {
     private final WecomGroupBindingMapper groupBindingMapper;
     private final WecomBotMessageLogMapper botMessageLogMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
+    private final WecomAppMessageSender appMessageSender;
     private final TicketCategoryMapper ticketCategoryMapper;
     private final WecomDraftSessionService draftSessionService;
     private final WecomNaturalLangParser naturalLangParser;
     private final WecomInteractiveConfirmService interactiveConfirmService;
+    private final SysUserMapper sysUserMapper;
 
     public WecomMessageProcessor(WecomBotMessageParser parser,
                                  WecomBotCommandService commandService,
                                  WecomGroupBindingMapper groupBindingMapper,
                                  WecomBotMessageLogMapper botMessageLogMapper,
                                  WecomGroupWebhookSender groupWebhookSender,
+                                 WecomAppMessageSender appMessageSender,
                                  TicketCategoryMapper ticketCategoryMapper,
                                  WecomDraftSessionService draftSessionService,
                                  WecomNaturalLangParser naturalLangParser,
-                                 WecomInteractiveConfirmService interactiveConfirmService) {
+                                 WecomInteractiveConfirmService interactiveConfirmService,
+                                 SysUserMapper sysUserMapper) {
         this.parser = parser;
         this.commandService = commandService;
         this.groupBindingMapper = groupBindingMapper;
         this.botMessageLogMapper = botMessageLogMapper;
         this.groupWebhookSender = groupWebhookSender;
+        this.appMessageSender = appMessageSender;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.draftSessionService = draftSessionService;
         this.naturalLangParser = naturalLangParser;
         this.interactiveConfirmService = interactiveConfirmService;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -87,7 +96,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
             WecomDraftSession existingDraft = draftSessionService.getDraft(chatId, fromWecomUserId);
             if (existingDraft != null) {
                 String reply = interactiveConfirmService.handleReply(content, existingDraft, chatId, fromWecomUserId);
-                sendReply(binding, reply);
+                sendReply(binding, reply, fromWecomUserId);
                 saveLog(message, null, null, WecomBotMessageStatus.SUCCESS, null,
                         PARSE_TYPE_NATURAL_LANGUAGE, null);
                 log.info("企微消息进入草稿确认流程: msgId={}, chatId={}", message.getMsgId(), chatId);
@@ -108,7 +117,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
                     binding != null ? binding.getDefaultCategoryId() : null
             );
 
-            sendReply(binding, commandResult.getReplyContent());
+            sendReply(binding, commandResult.getReplyContent(), fromWecomUserId);
 
             WecomBotMessageStatus status = parseResult.isSuccess()
                     ? WecomBotMessageStatus.SUCCESS
@@ -150,7 +159,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
         draftSessionService.saveDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId, draft, isGroup);
 
         String previewMessage = interactiveConfirmService.buildDraftPreviewMessage(draft);
-        sendReply(binding, previewMessage);
+        sendReply(binding, previewMessage, fromWecomUserId);
 
         saveLog(message, parseResult, null, WecomBotMessageStatus.SUCCESS, null,
                 PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
@@ -159,9 +168,47 @@ public class WecomMessageProcessor extends BaseApplicationService {
     }
 
     private void sendReply(WecomGroupBindingPO binding, String reply) {
-        if (binding != null && binding.getWebhookUrl() != null && !binding.getWebhookUrl().trim().isEmpty()
-                && reply != null && !reply.trim().isEmpty()) {
+        if (reply == null || reply.trim().isEmpty()) {
+            return;
+        }
+        if (binding != null && binding.getWebhookUrl() != null && !binding.getWebhookUrl().trim().isEmpty()) {
             groupWebhookSender.sendToWebhook(binding.getWebhookUrl(), "工单助手", reply);
+        }
+    }
+
+    /**
+     * 发送回复（支持单聊：无群绑定时通过企微应用消息发送给个人）
+     */
+    private void sendReply(WecomGroupBindingPO binding, String reply, String fromWecomUserId) {
+        if (reply == null || reply.trim().isEmpty()) {
+            return;
+        }
+        if (binding != null && binding.getWebhookUrl() != null && !binding.getWebhookUrl().trim().isEmpty()) {
+            groupWebhookSender.sendToWebhook(binding.getWebhookUrl(), "工单助手", reply);
+            return;
+        }
+        if (fromWecomUserId != null && !fromWecomUserId.trim().isEmpty()) {
+            sendAppMessageToWecomUser(fromWecomUserId, reply);
+        }
+    }
+
+    private void sendAppMessageToWecomUser(String wecomUserId, String reply) {
+        if (wecomUserId == null || wecomUserId.trim().isEmpty()) {
+            return;
+        }
+        SysUserPO user = sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUserPO>()
+                        .eq(SysUserPO::getWecomUserid, wecomUserId.trim())
+                        .last("LIMIT 1")
+        );
+        if (user == null) {
+            log.warn("单聊回复失败：未找到系统用户，wecomUserId={}", wecomUserId);
+            return;
+        }
+        try {
+            appMessageSender.send(user.getId(), "工单助手", reply);
+        } catch (Exception e) {
+            log.warn("单聊回复发送失败: wecomUserId={}, error={}", wecomUserId, e.getMessage());
         }
     }
 

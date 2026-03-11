@@ -173,4 +173,13 @@ export const routes: RouteRecordRaw[] = [
       requiresAuth: false,
     },
   },
+  {
+    path: '/open/ticket/:ticketNo',
+    name: 'ticketPublicDetail',
+    component: () => import('@/views/ticket/TicketPublicView.vue'),
+    meta: {
+      title: '工单详情',
+      requiresAuth: false,
+    },
+  },
 ]

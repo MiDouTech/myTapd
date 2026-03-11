@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.application.wecom.model.WecomBotParseResult;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WecomBotCommandType;
+import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -40,17 +41,20 @@ public class WecomBotCommandService {
     private final TicketCategoryMapper ticketCategoryMapper;
     private final TicketApplicationService ticketApplicationService;
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
+    private final WecomProperties wecomProperties;
 
     public WecomBotCommandService(SysUserMapper sysUserMapper,
                                   TicketMapper ticketMapper,
                                   TicketCategoryMapper ticketCategoryMapper,
                                   TicketApplicationService ticketApplicationService,
-                                  TicketUrgeApplicationService ticketUrgeApplicationService) {
+                                  TicketUrgeApplicationService ticketUrgeApplicationService,
+                                  WecomProperties wecomProperties) {
         this.sysUserMapper = sysUserMapper;
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketApplicationService = ticketApplicationService;
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
+        this.wecomProperties = wecomProperties;
     }
 
     /**
@@ -131,13 +135,15 @@ public class WecomBotCommandService {
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
         String categoryName = buildCategoryPathName(categoryId);
+        String ticketNo = ticket != null ? ticket.getTicketNo() : "";
+        String publicLink = buildPublicTicketLink(ticketNo);
         result.setTicketId(ticketId);
         result.setReplyContent("✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticket != null ? ticket.getTicketNo() : "") + "\n" +
+                "工单编号：" + safeValue(ticketNo) + "\n" +
                 "标题：" + safeValue(parseResult.getTitle()) + "\n" +
                 "分类：" + safeValue(categoryName) + "\n" +
                 "优先级：" + safeValue(parseResult.getPriority()) + "\n" +
-                "请到系统内查看详情。");
+                "查看详情：" + publicLink);
         return result;
     }
 
@@ -309,6 +315,21 @@ public class WecomBotCommandService {
 
     private String safeValue(String value) {
         return value == null ? "-" : value;
+    }
+
+    private String buildPublicTicketLink(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            return "-";
+        }
+        String domain = wecomProperties.getTrustedDomain();
+        if (domain == null || domain.trim().isEmpty()) {
+            return "-";
+        }
+        String normalizedDomain = domain.trim();
+        if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
+            normalizedDomain = "https://" + normalizedDomain;
+        }
+        return normalizedDomain + "/open/ticket/" + ticketNo.trim();
     }
 
     /**
