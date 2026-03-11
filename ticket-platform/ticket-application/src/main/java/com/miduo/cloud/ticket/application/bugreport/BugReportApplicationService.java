@@ -769,12 +769,22 @@ public class BugReportApplicationService extends BaseApplicationService {
 
     private void syncReportTickets(Long reportId, List<Long> ticketIds, Integer isAutoCreated) {
         bugReportTicketMapper.hardDeleteByReportId(reportId);
-        for (Long ticketId : ticketIds) {
-            BugReportTicketPO relation = new BugReportTicketPO();
-            relation.setReportId(reportId);
-            relation.setTicketId(ticketId);
-            relation.setIsAutoCreated(isAutoCreated == null ? 0 : isAutoCreated);
-            bugReportTicketMapper.insert(relation);
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            return;
+        }
+        int autoCreatedVal = isAutoCreated == null ? 0 : isAutoCreated;
+        List<BugReportTicketPO> batchList = ticketIds.stream()
+                .filter(Objects::nonNull)
+                .map(ticketId -> {
+                    BugReportTicketPO relation = new BugReportTicketPO();
+                    relation.setReportId(reportId);
+                    relation.setTicketId(ticketId);
+                    relation.setIsAutoCreated(autoCreatedVal);
+                    return relation;
+                })
+                .collect(Collectors.toList());
+        if (!batchList.isEmpty()) {
+            bugReportTicketMapper.batchInsert(batchList);
         }
     }
 
@@ -783,14 +793,17 @@ public class BugReportApplicationService extends BaseApplicationService {
         if (CollectionUtils.isEmpty(responsibleUserIds)) {
             return;
         }
-        for (Long userId : responsibleUserIds) {
-            if (userId == null) {
-                continue;
-            }
-            BugReportResponsiblePO relation = new BugReportResponsiblePO();
-            relation.setReportId(reportId);
-            relation.setUserId(userId);
-            bugReportResponsibleMapper.insert(relation);
+        List<BugReportResponsiblePO> batchList = responsibleUserIds.stream()
+                .filter(Objects::nonNull)
+                .map(userId -> {
+                    BugReportResponsiblePO relation = new BugReportResponsiblePO();
+                    relation.setReportId(reportId);
+                    relation.setUserId(userId);
+                    return relation;
+                })
+                .collect(Collectors.toList());
+        if (!batchList.isEmpty()) {
+            bugReportResponsibleMapper.batchInsert(batchList);
         }
     }
 

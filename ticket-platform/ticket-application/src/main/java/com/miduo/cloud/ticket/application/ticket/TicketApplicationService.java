@@ -16,10 +16,11 @@ import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportResponsibleMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
@@ -73,6 +74,9 @@ public class TicketApplicationService {
 
     @Resource
     private BugReportTicketMapper bugReportTicketMapper;
+
+    @Resource
+    private BugReportResponsibleMapper bugReportResponsibleMapper;
 
     @Resource
     private TicketTimeTrackApplicationService ticketTimeTrackService;
@@ -564,6 +568,8 @@ public class TicketApplicationService {
             output.setIsFollowed(followCount != null && followCount > 0);
         }
 
+        output.setBugSummaryInfo(buildBugSummaryInfo(ticket));
+
         return output;
     }
 
@@ -660,5 +666,72 @@ public class TicketApplicationService {
             // 时间追踪为衍生链路，失败时降级，避免影响主创建流程
             log.error("记录工单创建时间追踪失败，已降级跳过: ticketId={}", ticket.getId(), ex);
         }
+    }
+
+    /**
+     * 组装缺陷维度摘要信息（从 bug_report 关联获取）
+     * 取与该工单关联的最新一条简报作为数据源
+     * 若工单未关联简报则返回 null
+     */
+    private BugSummaryInfoOutput buildBugSummaryInfo(TicketPO ticket) {
+        BugReportTicketPO latestReportTicket = bugReportTicketMapper.selectOne(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getTicketId, ticket.getId())
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+                        .last("LIMIT 1")
+        );
+        if (latestReportTicket == null) {
+            return null;
+        }
+
+        BugReportPO report = bugReportMapper.selectById(latestReportTicket.getReportId());
+        if (report == null) {
+            return null;
+        }
+
+        BugSummaryInfoOutput output = new BugSummaryInfoOutput();
+        output.setBugReportId(report.getId());
+        output.setBugReportNo(report.getReportNo());
+        output.setDefectCategory(report.getDefectCategory());
+
+        List<BugReportResponsiblePO> responsibles = bugReportResponsibleMapper.selectList(
+                new LambdaQueryWrapper<BugReportResponsiblePO>()
+                        .eq(BugReportResponsiblePO::getReportId, report.getId())
+        );
+        if (responsibles != null && !responsibles.isEmpty()) {
+            Set<Long> userIds = responsibles.stream()
+                    .map(BugReportResponsiblePO::getUserId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!userIds.isEmpty()) {
+                List<SysUserPO> users = userMapper.selectBatchIds(userIds);
+                if (users != null && !users.isEmpty()) {
+                    String names = users.stream()
+                            .map(SysUserPO::getName)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.joining("、"));
+                    output.setResponsibleUserName(names);
+                }
+            }
+        }
+
+        boolean isValid = BugReportStatus.ARCHIVED.getCode().equals(report.getStatus());
+        output.setIsValidReport(isValid ? "YES" : "NO");
+        output.setIsValidReportLabel(isValid ? "是" : "否");
+
+        if (ticket.getExpectedTime() != null && !isTerminalStatus(ticket.getStatus())) {
+            output.setIsOverdue(new Date().after(ticket.getExpectedTime()));
+        } else {
+            output.setIsOverdue(false);
+        }
+
+        return output;
+    }
+
+    private boolean isTerminalStatus(String status) {
+        return "COMPLETED".equalsIgnoreCase(status)
+                || "CLOSED".equalsIgnoreCase(status)
+                || "completed".equals(status)
+                || "closed".equals(status);
     }
 }

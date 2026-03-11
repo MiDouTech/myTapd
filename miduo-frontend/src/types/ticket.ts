@@ -214,4 +214,47 @@ export interface TicketDetailOutput {
   bugTestInfo?: TicketBugTestInfoInput
   bugDevInfo?: TicketBugDevInfoInput
   isFollowed?: boolean
+  /** 缺陷维度摘要信息（从 Bug 简报关联获取，工单未关联简报时为 null） */
+  bugSummaryInfo?: BugSummaryInfoOutput
+}
+
+/** 单个字段变更明细 */
+export interface BugFieldChangeItem {
+  fieldName: string
+  fieldLabel: string
+  oldValue: string | null
+  oldLabel: string | null
+  newValue: string | null
+  newLabel: string | null
+}
+
+/** 变更历史条目（API000501） */
+export interface BugChangeHistoryOutput {
+  id: number
+  seq: number
+  changeTime: string
+  changeByUserId: number
+  changeByUserName: string
+  changeByAvatar: string | null
+  changeType: string
+  changeTypeLabel: string
+  fields: BugFieldChangeItem[]
+}
+
+/** 缺陷维度摘要信息（从 Bug 简报关联获取） */
+export interface BugSummaryInfoOutput {
+  bugReportId: number | null
+  bugReportNo: string | null
+  defectCategory: string | null
+  defectCategoryLabel: string | null
+  isValidReport: string | null
+  isValidReportLabel: string | null
+  responsibleUserName: string | null
+  isOverdue: boolean | null
+}
+
+/** 变更历史查询参数 */
+export interface BugChangeHistoryQuery {
+  changeType?: string
+  fieldName?: string
 }

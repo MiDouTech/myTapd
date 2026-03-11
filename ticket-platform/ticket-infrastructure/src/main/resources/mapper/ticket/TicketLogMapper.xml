@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper">
+
+    <!--
+        查询指定工单的变更历史
+        - 按 create_time 倒序，最新变更排在最前
+        - changeType 通过 JSON_EXTRACT 匹配 remark 字段中的变更类型
+        - fieldName 过滤在 Service 层内存完成（避免 JSON 函数导致全表扫描）
+    -->
+    <select id="selectChangeHistoryByTicketId"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO">
+        SELECT
+            id,
+            ticket_id,
+            user_id,
+            action,
+            old_value,
+            new_value,
+            remark,
+            create_time,
+            update_time,
+            create_by,
+            update_by,
+            deleted
+        FROM ticket_log
+        WHERE ticket_id = #{ticketId}
+          AND deleted = 0
+          AND remark IS NOT NULL
+          AND remark != ''
+        <if test="changeType != null and changeType != ''">
+            AND JSON_UNQUOTE(JSON_EXTRACT(remark, '$.changeType')) = #{changeType}
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

@@ -1,5 +1,7 @@
 import type { PageOutput } from '@/types/common'
 import type {
+  BugChangeHistoryOutput,
+  BugChangeHistoryQuery,
   TicketAssignInput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
@@ -139,4 +141,19 @@ export function getTicketTimeTrack(id: number): Promise<TicketTimeTrackOutput> {
  */
 export function getTicketNodeDuration(id: number): Promise<TicketNodeDurationOutput> {
   return request.get<TicketNodeDurationOutput>(`/ticket/${id}/node-duration`)
+}
+
+/**
+ * 查询缺陷变更历史列表
+ * 接口编号：API000501
+ * 产品文档功能：缺陷详情-变更历史Tab（PRD §3.4）
+ *
+ * @param ticketId  工单 ID
+ * @param params    可选筛选参数（changeType: 变更类型，fieldName: 变更字段）
+ */
+export function getTicketChangeHistory(
+  ticketId: number,
+  params?: BugChangeHistoryQuery,
+): Promise<BugChangeHistoryOutput[]> {
+  return request.get<BugChangeHistoryOutput[]>(`/ticket/${ticketId}/change-history`, { params })
 }

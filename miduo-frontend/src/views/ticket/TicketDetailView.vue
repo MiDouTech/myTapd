@@ -31,6 +31,10 @@ import type { UserListOutput } from '@/types/user'
 import { notifySuccess } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
 
+import BugChangeHistory from './components/bug/BugChangeHistory.vue'
+import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
+import BugStatusBadge from './components/bug/BugStatusBadge.vue'
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -43,6 +47,9 @@ const activeBugTab = ref('customer')
 const timeTrackItems = ref<TicketTimeTrackItem[]>([])
 const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
 const bugSubmitLoading = ref(false)
+
+const activeMainTab = ref('detail')
+const changeHistoryCount = ref(0)
 
 const assignDialogVisible = ref(false)
 const processDialogVisible = ref(false)
@@ -353,10 +360,11 @@ watch(
     <el-card shadow="never" v-loading="loading">
       <template #header>
         <div class="detail-header">
-          <div>
-            <div class="ticket-title">{{ detail?.title || '工单详情' }}</div>
-            <div class="ticket-no">工单编号：{{ detail?.ticketNo || '-' }}</div>
+          <div class="header-left">
+            <BugStatusBadge v-if="detail?.status" :status="detail.status" :status-label="detail?.statusLabel" />
+            <span class="ticket-no-text">ID: {{ detail?.ticketNo || '-' }}</span>
           </div>
+          <div class="ticket-title">{{ detail?.title || '工单详情' }}</div>
           <el-space>
             <el-button type="primary" @click="processDialogVisible = true">处理</el-button>
             <el-button type="warning" @click="assignDialogVisible = true">转派</el-button>
@@ -368,40 +376,15 @@ watch(
         </div>
       </template>
 
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="分类">{{ detail?.categoryName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{
-          detail?.statusLabel || detail?.status || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="优先级">
-          {{ detail?.priorityLabel || detail?.priority || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="处理人">{{
-          detail?.assigneeName || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="创建人">{{ detail?.creatorName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="来源">{{
-          detail?.sourceLabel || detail?.source || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{
-          formatDateTime(detail?.createTime)
-        }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{
-          formatDateTime(detail?.updateTime)
-        }}</el-descriptions-item>
-        <el-descriptions-item label="期望完成时间">
-          {{ formatDateTime(detail?.expectedTime) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="模板">{{ detail?.templateName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{
-          detail?.description || '-'
-        }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <el-card shadow="never">
-      <el-tabs v-model="activeBugTab">
-        <el-tab-pane label="客服信息" name="customer">
+      <!-- TAPD 三区域布局：左侧主区（65%）+ 右侧信息面板（35%） -->
+      <div class="detail-layout">
+        <!-- 左侧主区 -->
+        <div class="detail-main">
+          <!-- 主 Tab：详细信息 / 变更历史 / 更多 -->
+          <el-tabs v-model="activeMainTab">
+            <el-tab-pane label="详细信息" name="detail">
+              <el-tabs v-model="activeBugTab">
+                <el-tab-pane label="客服信息" name="customer">
           <el-form label-width="120px">
             <el-form-item label="商户编号">
               <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
@@ -647,8 +630,34 @@ watch(
               </el-table-column>
             </el-table>
           </div>
+          </el-tab-pane>
+        </el-tabs>
         </el-tab-pane>
-      </el-tabs>
+
+        <!-- 变更历史 Tab -->
+        <el-tab-pane :label="`变更历史(${changeHistoryCount})`" name="history">
+          <BugChangeHistory
+            v-if="detail?.id"
+            :ticket-id="detail.id"
+            @count-update="changeHistoryCount = $event"
+          />
+        </el-tab-pane>
+
+        <!-- 更多（预留） -->
+        <el-tab-pane label="更多" name="more" disabled />
+          </el-tabs>
+        </div>
+
+        <!-- 右侧信息面板（sticky） -->
+        <div class="detail-sidebar">
+          <BugDetailInfoPanel
+            v-if="detail"
+            :detail="detail"
+            :ticket-id="ticketId"
+            @refresh="loadAll"
+          />
+        </div>
+      </div>
     </el-card>
 
     <el-card shadow="never">
@@ -812,14 +821,48 @@ watch(
 <style scoped lang="scss">
 .detail-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticket-no-text {
+  font-size: 13px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.detail-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.detail-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 60px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  border-left: 1px solid #f0f0f0;
+}
+
 .ticket-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  flex: 1;
 }
 
 .ticket-no {

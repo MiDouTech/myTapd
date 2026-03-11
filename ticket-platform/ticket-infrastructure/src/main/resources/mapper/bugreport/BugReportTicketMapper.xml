@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper">
+
+    <insert id="batchInsert" parameterType="list">
+        INSERT INTO bug_report_ticket (report_id, ticket_id, is_auto_created, create_time, update_time, create_by, update_by, deleted)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.reportId}, #{item.ticketId}, #{item.isAutoCreated},
+             NOW(), NOW(), #{item.createBy}, #{item.updateBy}, 0)
+        </foreach>
+    </insert>
+
+</mapper>

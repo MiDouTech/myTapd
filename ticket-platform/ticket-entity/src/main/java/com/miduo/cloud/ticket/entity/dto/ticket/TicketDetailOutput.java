@@ -84,6 +84,12 @@ public class TicketDetailOutput implements Serializable {
      */
     private TicketBugDevInfoOutput bugDevInfo;
 
+    /**
+     * 缺陷维度摘要信息（从 Bug 简报关联获取，工单未关联简报时为 null）
+     * 包含：缺陷划分、有效报告、责任人、是否逾期
+     */
+    private BugSummaryInfoOutput bugSummaryInfo;
+
     private Boolean isFollowed;
 
     @Data
