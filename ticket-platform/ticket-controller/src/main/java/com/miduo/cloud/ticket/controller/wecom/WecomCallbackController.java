@@ -35,10 +35,14 @@ public class WecomCallbackController {
                             @RequestParam("timestamp") String timestamp,
                             @RequestParam("nonce") String nonce,
                             @RequestParam("echostr") String echostr) {
+        log.info("企微URL验证请求到达: timestamp={}, nonce={}, msg_signature={}, echostr长度={}",
+                timestamp, nonce, msgSignature, echostr == null ? 0 : echostr.length());
         try {
-            return callbackApplicationService.verifyUrl(msgSignature, timestamp, nonce, echostr);
+            String result = callbackApplicationService.verifyUrl(msgSignature, timestamp, nonce, echostr);
+            log.info("企微URL验证成功，返回result长度={}", result == null ? 0 : result.length());
+            return result;
         } catch (Exception ex) {
-            log.error("企微URL验证失败", ex);
+            log.error("企微URL验证失败: timestamp={}, nonce={}, msg_signature={}", timestamp, nonce, msgSignature, ex);
             return "failed";
         }
     }
