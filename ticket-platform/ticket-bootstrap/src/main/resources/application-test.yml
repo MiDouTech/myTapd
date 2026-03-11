@@ -36,13 +36,13 @@ spring:
         min-idle: 0
 
 wecom:
-  corp-id:ww5ef196c1964ff50b
-  agent-id:1000028
-  secret:pVAW2a4D8I4ydP1CdZQ1xiVEg2R1ogjetTonmBybo1I
+  corp-id: ww5ef196c1964ff50b
+  agent-id: 1000028
+  secret: pVAW2a4D8I4ydP1CdZQ1xiVEg2R1ogjetTonmBybo1I
   contact-secret:
-  callback-token:nBd196BNex8UmAlB42iqVf
-  callback-aes-key:pTKsrXjxTasLv2TeGpRpkVTQlK1grMiVPmREhBb5WEO
-  trusted-domain:http://ticket.t.miduonet.com/api/wecom/callback
+  callback-token: nBd196BNex8UmAlB42iqVf
+  callback-aes-key: pTKsrXjxTasLv2TeGpRpkVTQlK1grMiVPmREhBb5WEO
+  trusted-domain: http://ticket.t.miduonet.com/api/wecom/callback
   mq:
     enabled: false
 
