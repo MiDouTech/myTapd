@@ -61,9 +61,15 @@ public class WecomCallbackCryptoService {
         log.debug("企微签名校验: token配置={}, msgSignature={}, timestamp={}, nonce={}, encrypted长度={}",
                 isBlank(token) ? "未配置" : "已配置",
                 msgSignature, timestamp, nonce, encrypted == null ? 0 : encrypted.length());
-        if (isBlank(token) || isBlank(msgSignature) || isBlank(timestamp) || isBlank(nonce) || isBlank(encrypted)) {
-            log.error("企微回调签名参数不完整: token为空={}, msgSignature为空={}, timestamp为空={}, nonce为空={}, encrypted为空={}",
-                    isBlank(token), isBlank(msgSignature), isBlank(timestamp), isBlank(nonce), isBlank(encrypted));
+
+        if (isBlank(token)) {
+            log.error("企微回调Token未配置，请检查环境变量 WECOM_CALLBACK_TOKEN 是否已设置");
+            throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED, "企微回调Token未配置，请联系管理员配置WECOM_CALLBACK_TOKEN");
+        }
+
+        if (isBlank(msgSignature) || isBlank(timestamp) || isBlank(nonce) || isBlank(encrypted)) {
+            log.error("企微回调请求参数不完整: msgSignature为空={}, timestamp为空={}, nonce为空={}, encrypted为空={}",
+                    isBlank(msgSignature), isBlank(timestamp), isBlank(nonce), isBlank(encrypted));
             throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED, "企微回调签名参数不完整");
         }
 
