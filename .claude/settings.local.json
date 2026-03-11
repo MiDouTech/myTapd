@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn:*)",
+      "Bash(npm run:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run format:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(ps:*)",
+      "Bash(docker:*)",
+      "Bash(sudo docker:*)"
+    ]
+  }
+}
