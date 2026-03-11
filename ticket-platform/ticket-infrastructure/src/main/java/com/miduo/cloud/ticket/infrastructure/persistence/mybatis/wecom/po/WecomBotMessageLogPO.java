@@ -61,4 +61,16 @@ public class WecomBotMessageLogPO extends BaseEntity {
      */
     @TableField("error_msg")
     private String errorMsg;
+
+    /**
+     * 解析类型：template=格式模板 natural_language=自然语言
+     */
+    @TableField("parse_type")
+    private String parseType;
+
+    /**
+     * NLU解析置信度(0-100)，自然语言解析时记录
+     */
+    @TableField("nlp_confidence")
+    private Integer nlpConfidence;
 }

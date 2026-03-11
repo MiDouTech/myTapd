@@ -51,7 +51,12 @@ public class WecomBotMessageParser {
         if (content.startsWith("#缺陷")) {
             return parseBugTemplate(content);
         }
-        return parseGeneralTemplate(content, defaultCategoryPath);
+
+        if (content.startsWith("#")) {
+            return parseGeneralTemplate(content, defaultCategoryPath);
+        }
+
+        return WecomBotParseResult.naturalLanguage(content);
     }
 
     private WecomBotParseResult parseQueryCommand(String content) {

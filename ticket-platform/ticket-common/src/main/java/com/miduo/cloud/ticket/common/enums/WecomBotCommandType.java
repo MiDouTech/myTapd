@@ -16,6 +16,7 @@ public enum WecomBotCommandType {
     MY_TICKETS("MY_TICKETS", "我的工单"),
     URGE("URGE", "催办工单"),
     CREATE("CREATE", "创建工单"),
+    NATURAL_LANGUAGE("NATURAL_LANGUAGE", "自然语言建单"),
     UNKNOWN("UNKNOWN", "未知指令");
 
     private final String code;
