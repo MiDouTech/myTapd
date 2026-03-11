@@ -11,23 +11,23 @@
 | Task | 标题 | 模块 | 状态 |
 |------|------|------|------|
 | task001 | 产品方案设计 & 技术分析 | 文档 | ✅已完成 |
-| task002 | 新增 BugChangeTypeEnum 枚举 | ticket-common | ⏳待开发 |
-| task003 | 新增 DTO 类（变更历史响应/字段明细/简报摘要） | ticket-entity | ⏳待开发 |
-| task004 | 扩展 TicketDetailOutput，增加 bugSummaryInfo 字段 | ticket-entity | ⏳待开发 |
-| task005 | 新增 BugChangeHistoryPageInput | ticket-entity | ⏳待开发 |
-| task006 | TicketLogMapper 扩展 + Mapper XML | ticket-infrastructure | ⏳待开发 |
-| task007 | 新增 TicketChangeHistoryRecorder（变更检测 + 写入） | ticket-application | ⏳待开发 |
-| task008 | 增强 TicketBugApplicationService（显式记录变更） | ticket-application | ⏳待开发 |
-| task009 | 新增 TicketChangeHistoryApplicationService（历史查询） | ticket-application | ⏳待开发 |
-| task010 | 扩展 TicketApplicationService.getTicketDetail()（组装 bugSummaryInfo） | ticket-application | ⏳待开发 |
-| task011 | **修复 BugReportApplicationService DB 红线**（批量 insert） | ticket-application | ⏳待开发（紧急） |
-| task012 | 新增 TicketChangeHistoryController | ticket-controller | ⏳待开发 |
-| task013 | 前端：新增 TypeScript 类型定义 | miduo-frontend | ⏳待开发 |
-| task014 | 前端：新增 API 封装 | miduo-frontend | ⏳待开发 |
-| task015 | 前端：开发 BugStatusBadge、BugDetailInfoPanel 组件 | miduo-frontend | ⏳待开发 |
-| task016 | 前端：开发 BugChangeHistory、BugChangeHistoryItem 组件 | miduo-frontend | ⏳待开发 |
-| task017 | 前端：改造 TicketDetailView（变更历史Tab + 右侧面板独立） | miduo-frontend | ⏳待开发 |
-| task018 | 联调测试 | 全栈 | ⏳待开发 |
+| task002 | 新增 BugChangeTypeEnum 枚举 | ticket-common | ✅已完成 |
+| task003 | 新增 DTO 类（变更历史响应/字段明细/简报摘要） | ticket-entity | ✅已完成 |
+| task004 | 扩展 TicketDetailOutput，增加 bugSummaryInfo 字段 | ticket-entity | ✅已完成 |
+| task005 | 新增 BugChangeHistoryPageInput | ticket-entity | ✅已完成 |
+| task006 | TicketLogMapper 扩展 + Mapper XML | ticket-infrastructure | ✅已完成 |
+| task007 | 新增 TicketChangeHistoryRecorder（变更检测 + 写入） | ticket-application | ✅已完成 |
+| task008 | 增强 TicketBugApplicationService（显式记录变更） | ticket-application | ✅已完成 |
+| task009 | 新增 TicketChangeHistoryApplicationService（历史查询） | ticket-application | ✅已完成 |
+| task010 | 扩展 TicketApplicationService.getTicketDetail()（组装 bugSummaryInfo） | ticket-application | ✅已完成 |
+| task011 | **修复 BugReportApplicationService DB 红线**（批量 insert） | ticket-application | ✅已完成 |
+| task012 | 新增 TicketChangeHistoryController | ticket-controller | ✅已完成 |
+| task013 | 前端：新增 TypeScript 类型定义 | miduo-frontend | ✅已完成 |
+| task014 | 前端：新增 API 封装 | miduo-frontend | ✅已完成 |
+| task015 | 前端：开发 BugStatusBadge、BugDetailInfoPanel 组件 | miduo-frontend | ✅已完成 |
+| task016 | 前端：开发 BugChangeHistory、BugChangeHistoryItem 组件 | miduo-frontend | ✅已完成 |
+| task017 | 前端：改造 TicketDetailView（变更历史Tab + 右侧面板独立） | miduo-frontend | ✅已完成 |
+| task018 | 联调测试 | 全栈 | ⏳待测试 |
 
 ---
 
