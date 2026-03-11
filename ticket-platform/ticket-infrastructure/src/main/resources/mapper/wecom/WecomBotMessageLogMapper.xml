@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomBotMessageLogMapper">
+
+    <select id="pageNlpLogs"
+            resultType="com.miduo.cloud.ticket.entity.dto.wecom.NlpLogPageOutput">
+        SELECT
+            id,
+            chat_id AS chatId,
+            msg_id AS msgId,
+            from_wecom_userid AS fromWecomUserid,
+            raw_message AS rawMessage,
+            status,
+            parse_type AS parseType,
+            nlp_confidence AS nlpConfidence,
+            ticket_id AS ticketId,
+            error_msg AS errorMsg,
+            create_time AS createTime
+        FROM wecom_bot_message_log
+        WHERE deleted = 0
+        <if test="input.parseType != null and input.parseType != ''">
+            AND parse_type = #{input.parseType}
+        </if>
+        <if test="input.chatId != null and input.chatId != ''">
+            AND chat_id = #{input.chatId}
+        </if>
+        <if test="input.fromWecomUserid != null and input.fromWecomUserid != ''">
+            AND from_wecom_userid = #{input.fromWecomUserid}
+        </if>
+        <if test="input.minConfidence != null">
+            AND nlp_confidence >= #{input.minConfidence}
+        </if>
+        <if test="input.startTime != null and input.startTime != ''">
+            AND create_time >= #{input.startTime}
+        </if>
+        <if test="input.endTime != null and input.endTime != ''">
+            AND create_time &lt;= #{input.endTime}
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

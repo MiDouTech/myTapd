@@ -7,6 +7,11 @@ import type { WecomConfigUpdateInput } from '@/types/wecom'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
 
+const emit = defineEmits<{
+  (e: 'open-nlp-keyword'): void
+  (e: 'open-nlp-log'): void
+}>()
+
 const loading = ref(false)
 const submitLoading = ref(false)
 const testLoading = ref(false)
@@ -14,6 +19,8 @@ const hasPersistedConfig = ref(false)
 const corpSecretMasked = ref('')
 const latestUpdateTime = ref('')
 const formRef = ref<FormInstance>()
+
+const nlpEnabled = ref(false)
 
 const defaultForm: WecomConfigUpdateInput = {
   corpId: '',
@@ -250,6 +257,41 @@ onMounted(async () => {
         </el-form-item>
       </el-form>
     </el-card>
+
+    <!-- 自然语言建单配置区 -->
+    <el-card shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span class="card-title">自然语言建单配置</span>
+        </div>
+      </template>
+
+      <el-form label-width="150px" class="config-form">
+        <el-form-item label="功能开关">
+          <el-switch v-model="nlpEnabled" active-text="启用自然语言建单" inactive-text="停用" />
+        </el-form-item>
+        <el-form-item label="关键词规则配置">
+          <el-button type="primary" plain @click="emit('open-nlp-keyword')">
+            管理关键词规则
+          </el-button>
+          <span class="field-hint">配置意图识别、分类推断和优先级识别关键词</span>
+        </el-form-item>
+        <el-form-item label="解析日志">
+          <el-button plain @click="emit('open-nlp-log')">
+            查看解析日志
+          </el-button>
+          <span class="field-hint">查看自然语言建单的识别效果和处理记录</span>
+        </el-form-item>
+      </el-form>
+
+      <el-alert
+        title="自然语言建单：用户在企微群 @工单助手 后，直接发送任意自由文本，系统自动解析意图，回复工单预览卡片，用户回复「1」确认创建。群聊超时60秒，私聊超时300秒。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-top: 8px;"
+      />
+    </el-card>
   </el-space>
 </template>
 
@@ -273,5 +315,11 @@ onMounted(async () => {
 
 .config-form {
   max-width: 760px;
+}
+
+.field-hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
 }
 </style>
