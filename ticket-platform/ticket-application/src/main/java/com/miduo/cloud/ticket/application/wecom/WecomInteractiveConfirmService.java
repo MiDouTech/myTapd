@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.application.wecom.model.WecomDraftSession;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
+import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -36,17 +37,20 @@ public class WecomInteractiveConfirmService {
     private final TicketCategoryMapper ticketCategoryMapper;
     private final TicketMapper ticketMapper;
     private final SysUserMapper sysUserMapper;
+    private final WecomProperties wecomProperties;
 
     public WecomInteractiveConfirmService(WecomDraftSessionService draftSessionService,
                                           TicketApplicationService ticketApplicationService,
                                           TicketCategoryMapper ticketCategoryMapper,
                                           TicketMapper ticketMapper,
-                                          SysUserMapper sysUserMapper) {
+                                          SysUserMapper sysUserMapper,
+                                          WecomProperties wecomProperties) {
         this.draftSessionService = draftSessionService;
         this.ticketApplicationService = ticketApplicationService;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
+        this.wecomProperties = wecomProperties;
     }
 
     /**
@@ -120,12 +124,14 @@ public class WecomInteractiveConfirmService {
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
         draftSessionService.removeDraft(chatId, wecomUserId);
+        String ticketNo = ticket != null ? ticket.getTicketNo() : "";
+        String publicLink = buildPublicTicketLink(ticketNo);
         return "✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticket != null ? ticket.getTicketNo() : "") + "\n" +
+                "工单编号：" + safeValue(ticketNo) + "\n" +
                 "标题：" + safeValue(draft.getTitle()) + "\n" +
                 "分类：" + safeValue(draft.getCategoryPath()) + "\n" +
                 "优先级：" + safeValue(draft.getPriority()) + "\n" +
-                "请到系统内查看详情。";
+                "查看详情：" + publicLink;
     }
 
     private String handleStartModifyCategory(WecomDraftSession draft, String chatId, String wecomUserId) {
@@ -297,5 +303,20 @@ public class WecomInteractiveConfirmService {
 
     private String safeValue(String value) {
         return value == null ? "-" : value;
+    }
+
+    private String buildPublicTicketLink(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            return "-";
+        }
+        String domain = wecomProperties.getTrustedDomain();
+        if (domain == null || domain.trim().isEmpty()) {
+            return "-";
+        }
+        String normalizedDomain = domain.trim();
+        if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
+            normalizedDomain = "https://" + normalizedDomain;
+        }
+        return normalizedDomain + "/open/ticket/" + ticketNo.trim();
     }
 }

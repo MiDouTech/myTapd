@@ -13,6 +13,7 @@ import type {
   TicketNodeDurationOutput,
   TicketPageInput,
   TicketProcessInput,
+  TicketPublicDetailOutput,
   TicketTimeTrackOutput,
 } from '@/types/ticket'
 import request from '@/utils/request'
@@ -156,4 +157,13 @@ export function getTicketChangeHistory(
   params?: BugChangeHistoryQuery,
 ): Promise<BugChangeHistoryOutput[]> {
   return request.get<BugChangeHistoryOutput[]>(`/ticket/${ticketId}/change-history`, { params })
+}
+
+/**
+ * 工单公开详情（无需登录，外网可直接访问）
+ * 接口编号：API000417
+ * 产品文档功能：4.12 工单公开链接 - 外网无需登录查看工单详情
+ */
+export function getPublicTicketDetail(ticketNo: string): Promise<TicketPublicDetailOutput> {
+  return request.get<TicketPublicDetailOutput>(`/open/ticket/${ticketNo}`)
 }

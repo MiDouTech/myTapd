@@ -258,3 +258,35 @@ export interface BugChangeHistoryQuery {
   changeType?: string
   fieldName?: string
 }
+
+/** 工单公开详情（无需登录，外网访问） */
+export interface TicketPublicCommentOutput {
+  id: number
+  userName?: string
+  content?: string
+  type?: string
+  createTime?: string
+}
+
+export interface TicketPublicDetailOutput {
+  id: number
+  ticketNo: string
+  title?: string
+  description?: string
+  categoryName?: string
+  categoryFullPath?: string
+  priority?: string
+  priorityLabel?: string
+  status?: string
+  statusLabel?: string
+  creatorName?: string
+  assigneeName?: string
+  source?: string
+  sourceLabel?: string
+  expectedTime?: string
+  resolvedAt?: string
+  closedAt?: string
+  createTime?: string
+  updateTime?: string
+  comments?: TicketPublicCommentOutput[]
+}
