@@ -58,4 +58,8 @@ public class WecomConfigUpdateInput implements Serializable {
     private Integer batchSize;
 
     private Boolean enabled;
+
+    private String callbackToken;
+
+    private String callbackAesKey;
 }

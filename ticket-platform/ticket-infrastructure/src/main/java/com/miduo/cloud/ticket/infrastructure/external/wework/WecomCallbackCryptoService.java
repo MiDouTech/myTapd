@@ -26,10 +26,10 @@ public class WecomCallbackCryptoService {
     private static final int NETWORK_ORDER_LENGTH = 4;
     private static final int PKCS7_BLOCK_SIZE = 32;
 
-    private final WecomProperties wecomProperties;
+    private final WeworkRuntimeConfigProvider runtimeConfigProvider;
 
-    public WecomCallbackCryptoService(WecomProperties wecomProperties) {
-        this.wecomProperties = wecomProperties;
+    public WecomCallbackCryptoService(WeworkRuntimeConfigProvider runtimeConfigProvider) {
+        this.runtimeConfigProvider = runtimeConfigProvider;
     }
 
     /**
@@ -57,14 +57,16 @@ public class WecomCallbackCryptoService {
     }
 
     private void validateSignature(String msgSignature, String timestamp, String nonce, String encrypted) {
-        String token = wecomProperties.getCallbackToken();
+        WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+        String token = config.getCallbackToken();
         log.debug("企微签名校验: token配置={}, msgSignature={}, timestamp={}, nonce={}, encrypted长度={}",
                 isBlank(token) ? "未配置" : "已配置",
                 msgSignature, timestamp, nonce, encrypted == null ? 0 : encrypted.length());
 
         if (isBlank(token)) {
-            log.error("企微回调Token未配置，请检查环境变量 WECOM_CALLBACK_TOKEN 是否已设置");
-            throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED, "企微回调Token未配置，请联系管理员配置WECOM_CALLBACK_TOKEN");
+            log.error("企微回调Token未配置，请在系统设置-企微配置中填写回调Token");
+            throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED,
+                    "企微回调Token未配置，请在系统设置中配置callbackToken");
         }
 
         if (isBlank(msgSignature) || isBlank(timestamp) || isBlank(nonce) || isBlank(encrypted)) {
@@ -118,7 +120,7 @@ public class WecomCallbackCryptoService {
 
             // 企微智能机器人回调时，receiveId 是机器人 key（如 bot_xxx），而非企业 corpId。
             // 因此此处只记录 warn 日志，不强制抛出异常，避免机器人注册/消息推送被拦截。
-            String corpId = wecomProperties.getCorpId();
+            String corpId = runtimeConfigProvider.getRuntimeConfig().getCorpId();
             if (!isBlank(corpId) && !corpId.equals(receiveId)) {
                 log.warn("企微回调 receiveId 与 corpId 不匹配（机器人场景正常）: corpId={}, receiveId={}",
                         corpId, receiveId);
@@ -133,9 +135,10 @@ public class WecomCallbackCryptoService {
     }
 
     private byte[] decodeAesKey() {
-        String callbackAesKey = wecomProperties.getCallbackAesKey();
+        String callbackAesKey = runtimeConfigProvider.getRuntimeConfig().getCallbackAesKey();
         if (isBlank(callbackAesKey)) {
-            throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED, "未配置企微回调AESKey");
+            throw BusinessException.of(ErrorCode.WECOM_CALLBACK_VERIFY_FAILED,
+                    "未配置企微回调AESKey，请在系统设置中配置callbackAesKey");
         }
         byte[] key = Base64.getDecoder().decode(callbackAesKey + "=");
         if (key.length != 32) {
