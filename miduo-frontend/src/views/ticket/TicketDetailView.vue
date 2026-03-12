@@ -9,13 +9,17 @@ import {
   getTicketDetail,
   getTicketNodeDuration,
   getTicketTimeTrack,
-  processTicket,
   trackTicketRead,
   unfollowTicket,
   updateBugCustomerInfo,
   updateBugDevInfo,
   updateBugTestInfo,
 } from '@/api/ticket'
+import {
+  getAvailableActions,
+  transitTicket,
+  getFlowHistory,
+} from '@/api/workflow'
 import { getUserList } from '@/api/user'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -27,8 +31,13 @@ import type {
   TicketNodeDurationItem,
   TicketTimeTrackItem,
 } from '@/types/ticket'
+import type {
+  AvailableActionOutput,
+  TicketActionItem,
+  TicketFlowRecordOutput,
+} from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
-import { notifySuccess } from '@/utils/feedback'
+import { notifySuccess, notifyError } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
 
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
@@ -56,14 +65,21 @@ const processDialogVisible = ref(false)
 const closeDialogVisible = ref(false)
 const submitLoading = ref(false)
 
-const assignForm = reactive({
-  assigneeId: undefined as number | undefined,
+// ---- 动态工作流操作 ----
+const availableActions = ref<AvailableActionOutput | null>(null)
+const selectedAction = ref<TicketActionItem | null>(null)
+const flowHistory = ref<TicketFlowRecordOutput[]>([])
+const flowHistoryLoading = ref(false)
+
+const transitForm = reactive({
+  transitionId: '',
+  targetStatus: '',
   remark: '',
+  newAssigneeId: undefined as number | undefined,
 })
 
-const processForm = reactive({
-  targetStatus: 'processing',
-  targetUserId: undefined as number | undefined,
+const assignForm = reactive({
+  assigneeId: undefined as number | undefined,
   remark: '',
 })
 
@@ -211,10 +227,35 @@ async function loadAll(): Promise<void> {
     timeTrackItems.value = trackOutput.tracks || []
     nodeDurationItems.value = nodeOutput.nodes || []
     fillBugForms(ticketDetail)
+
+    // 加载动态可用操作
+    try {
+      availableActions.value = await getAvailableActions(ticketId.value)
+    } catch {
+      availableActions.value = null
+    }
   } finally {
     loading.value = false
   }
 }
+
+async function loadFlowHistory(): Promise<void> {
+  if (!ticketId.value) return
+  flowHistoryLoading.value = true
+  try {
+    flowHistory.value = await getFlowHistory(ticketId.value)
+  } catch {
+    flowHistory.value = []
+  } finally {
+    flowHistoryLoading.value = false
+  }
+}
+
+watch(activeMainTab, (tab) => {
+  if (tab === 'flow-history' && flowHistory.value.length === 0) {
+    loadFlowHistory()
+  }
+})
 
 async function trackReadSilently(): Promise<void> {
   if (!ticketId.value) {
@@ -245,12 +286,36 @@ async function handleAssign(): Promise<void> {
   }
 }
 
+/** 打开流转对话框（从可用操作按钮点击触发） */
+function openTransitDialog(action: TicketActionItem): void {
+  selectedAction.value = action
+  transitForm.transitionId = action.transitionId
+  transitForm.targetStatus = action.targetStatus
+  transitForm.remark = ''
+  transitForm.newAssigneeId = undefined
+  processDialogVisible.value = true
+}
+
 async function handleProcess(): Promise<void> {
   submitLoading.value = true
   try {
-    await processTicket(ticketId.value, processForm)
-    notifySuccess('工单处理成功')
+    if (!selectedAction.value) {
+      notifyError('请选择操作')
+      return
+    }
+    if (selectedAction.value.requireRemark && !transitForm.remark?.trim()) {
+      notifyError('该操作需要填写备注')
+      return
+    }
+    await transitTicket(ticketId.value, {
+      transitionId: transitForm.transitionId,
+      targetStatus: transitForm.targetStatus,
+      remark: transitForm.remark,
+      newAssigneeId: transitForm.newAssigneeId,
+    })
+    notifySuccess('操作成功')
     processDialogVisible.value = false
+    selectedAction.value = null
     await loadAll()
   } finally {
     submitLoading.value = false
@@ -365,10 +430,20 @@ watch(
             <span class="ticket-no-text">ID: {{ detail?.ticketNo || '-' }}</span>
           </div>
           <div class="ticket-title">{{ detail?.title || '工单详情' }}</div>
-          <el-space>
-            <el-button type="primary" @click="processDialogVisible = true">处理</el-button>
-            <el-button type="warning" @click="assignDialogVisible = true">转派</el-button>
-            <el-button type="danger" @click="closeDialogVisible = true">关闭</el-button>
+          <el-space wrap>
+            <!-- 动态操作按钮（基于工作流可用操作，不硬编码） -->
+            <template v-if="availableActions && availableActions.actions.length > 0">
+              <el-button
+                v-for="action in availableActions.actions"
+                :key="action.transitionId"
+                :type="action.isReturn ? 'warning' : action.targetStatus === 'closed' ? 'danger' : 'primary'"
+                size="small"
+                @click="openTransitDialog(action)"
+              >
+                {{ action.actionName }}
+              </el-button>
+            </template>
+            <el-button size="small" type="warning" @click="assignDialogVisible = true">转派</el-button>
             <el-button @click="toggleFollow">{{
               detail?.isFollowed ? '取消关注' : '关注工单'
             }}</el-button>
@@ -643,6 +718,50 @@ watch(
           />
         </el-tab-pane>
 
+        <!-- 工单流转历史 Tab（工作流引擎驱动的精确流水） -->
+        <el-tab-pane label="流转历史" name="flow-history">
+          <div v-loading="flowHistoryLoading">
+            <el-empty v-if="!flowHistory.length && !flowHistoryLoading" description="暂无流转记录" />
+            <el-timeline v-else>
+              <el-timeline-item
+                v-for="record in flowHistory"
+                :key="record.id"
+                :timestamp="record.createTime"
+                placement="top"
+              >
+                <el-card shadow="hover" style="padding: 8px 12px;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <el-tag size="small" :type="record.flowType === 'RETURN' ? 'warning' : 'primary'">
+                      {{ record.flowTypeLabel || record.flowType }}
+                    </el-tag>
+                    <span v-if="record.fromStatusName">
+                      {{ record.fromStatusName }}
+                    </span>
+                    <el-icon v-if="record.toStatus !== record.fromStatus">
+                      <Right />
+                    </el-icon>
+                    <span v-if="record.toStatus !== record.fromStatus">{{ record.toStatusName }}</span>
+                    <el-divider direction="vertical" />
+                    <span style="color:#909399; font-size:12px;">
+                      操作人：{{ record.operatorName || record.operatorId }}
+                      （{{ record.operatorRole }}）
+                    </span>
+                    <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
+                      <el-divider direction="vertical" />
+                      <span style="color:#909399; font-size:12px;">
+                        处理人：{{ record.fromAssigneeName || '-' }} → {{ record.toAssigneeName }}
+                      </span>
+                    </template>
+                  </div>
+                  <div v-if="record.remark" style="margin-top:4px; color:#606266; font-size:13px;">
+                    备注：{{ record.remark }}
+                  </div>
+                </el-card>
+              </el-timeline-item>
+            </el-timeline>
+          </div>
+        </el-tab-pane>
+
         <!-- 更多（预留） -->
         <el-tab-pane label="更多" name="more" disabled />
           </el-tabs>
@@ -778,28 +897,38 @@ watch(
     </template>
   </el-dialog>
 
-  <el-dialog v-model="processDialogVisible" title="处理工单" width="520px">
-    <el-form label-width="90px">
-      <el-form-item label="目标状态" required>
-        <el-select v-model="processForm.targetStatus">
-          <el-option label="处理中" value="processing" />
-          <el-option label="待验收" value="pending_accept" />
-          <el-option label="已完成" value="resolved" />
-          <el-option label="挂起" value="suspended" />
-        </el-select>
+  <el-dialog
+    v-model="processDialogVisible"
+    :title="selectedAction ? selectedAction.actionName : '工单操作'"
+    width="520px"
+  >
+    <el-form label-width="100px">
+      <el-form-item label="目标状态">
+        <el-tag type="primary">
+          {{ selectedAction?.targetStatusName || transitForm.targetStatus }}
+        </el-tag>
+        <el-tag v-if="selectedAction?.isReturn" type="warning" style="margin-left:8px;">退回</el-tag>
       </el-form-item>
-      <el-form-item label="目标处理人">
-        <el-select v-model="processForm.targetUserId" clearable placeholder="可选">
+      <!-- allowTransfer=true 时显示处理人选择 -->
+      <el-form-item v-if="selectedAction?.allowTransfer" label="指定处理人">
+        <el-select v-model="transitForm.newAssigneeId" clearable placeholder="可选，不选则保持当前">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="备注">
-        <el-input v-model="processForm.remark" type="textarea" />
+      <el-form-item label="备注" :required="selectedAction?.requireRemark">
+        <el-input
+          v-model="transitForm.remark"
+          type="textarea"
+          :rows="3"
+          :placeholder="selectedAction?.requireRemark ? '必填：请说明操作原因' : '可选'"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="processDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleProcess">确认处理</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handleProcess">
+        确认{{ selectedAction?.actionName || '操作' }}
+      </el-button>
     </template>
   </el-dialog>
 

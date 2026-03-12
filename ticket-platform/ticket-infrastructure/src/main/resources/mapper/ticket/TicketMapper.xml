@@ -11,7 +11,7 @@
         </if>
         <if test="view == 'my_todo'">
             AND t.assignee_id = #{currentUserId}
-            AND t.status NOT IN ('COMPLETED', 'CLOSED')
+            AND t.status NOT IN ('completed', 'closed', 'rejected')
         </if>
         <if test="view == 'my_participated'">
             AND t.id IN (
@@ -81,6 +81,28 @@
         SELECT DISTINCT tl.ticket_id
         FROM ticket_log tl
         WHERE tl.user_id = #{userId} AND tl.deleted = 0
+    </select>
+
+    <!--
+        批量统计多个用户的活跃（未完成）工单数
+        用于负载均衡分派，避免 N+1 查询
+    -->
+    <select id="selectActiveCountByUserIds"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.UserTicketLoadStat">
+        SELECT
+            t.assignee_id AS userId,
+            COUNT(*) AS activeCount
+        FROM ticket t
+        WHERE t.deleted = 0
+          AND t.assignee_id IN
+          <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+              #{uid}
+          </foreach>
+          AND t.status NOT IN
+          <foreach collection="excludeStatuses" item="s" open="(" separator="," close=")">
+              #{s}
+          </foreach>
+        GROUP BY t.assignee_id
     </select>
 
 </mapper>

@@ -147,14 +147,22 @@ function openDetail(row: TicketListOutput): void {
 }
 
 function getStatusType(status?: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
-  if (status === 'resolved' || status === 'closed') {
+  if (!status) return 'info'
+  // 终态：完成/关闭/驳回
+  if (['completed', 'closed', 'rejected'].includes(status)) {
     return 'success'
   }
-  if (status === 'pending_accept' || status === 'pending') {
+  // 待处理类（需要人工介入）
+  if (['pending_assign', 'pending_accept', 'pending_test_accept', 'pending_dev_accept', 'pending_verify', 'pending_cs_confirm'].includes(status)) {
     return 'warning'
   }
-  if (status === 'processing') {
+  // 进行中类
+  if (['processing', 'testing', 'developing', 'executing'].includes(status)) {
     return 'primary'
+  }
+  // 挂起类
+  if (status === 'suspended') {
+    return 'danger'
   }
   return 'info'
 }
@@ -217,11 +225,20 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="query.status" placeholder="请选择状态" clearable>
-            <el-option label="待受理" value="pending" />
+            <!-- 通用工单状态 -->
+            <el-option label="待分派" value="pending_assign" />
+            <el-option label="待受理" value="pending_accept" />
             <el-option label="处理中" value="processing" />
-            <el-option label="待验收" value="pending_accept" />
-            <el-option label="已完成" value="resolved" />
+            <el-option label="已挂起" value="suspended" />
+            <el-option label="待验收" value="pending_verify" />
+            <el-option label="已完成" value="completed" />
             <el-option label="已关闭" value="closed" />
+            <!-- 缺陷工单专属状态 -->
+            <el-option label="待测试受理" value="pending_test_accept" />
+            <el-option label="测试中" value="testing" />
+            <el-option label="待开发受理" value="pending_dev_accept" />
+            <el-option label="开发中" value="developing" />
+            <el-option label="待客服确认" value="pending_cs_confirm" />
           </el-select>
         </el-form-item>
         <el-form-item label="优先级">
