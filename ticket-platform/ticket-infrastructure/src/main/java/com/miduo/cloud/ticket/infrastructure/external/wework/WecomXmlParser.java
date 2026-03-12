@@ -142,6 +142,7 @@ public final class WecomXmlParser {
             result.put("MsgType", nullToEmpty(obj.getStr("msgtype")));
             result.put("CreateTime", nullToEmpty(obj.getStr("createtime")));
             result.put("ChatId", nullToEmpty(obj.getStr("chatid")));
+            result.put("ResponseUrl", nullToEmpty(obj.getStr("response_url")));
 
             // 发送人：from.userid
             JSONObject from = obj.getJSONObject("from");

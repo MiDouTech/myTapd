@@ -44,4 +44,9 @@ public class WecomCallbackMessageDTO implements Serializable {
      * 消息时间戳
      */
     private String createTime;
+
+    /**
+     * 企微AI bot回调消息的response_url，用于直接回复消息（无需access_token）
+     */
+    private String responseUrl;
 }
