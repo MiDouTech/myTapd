@@ -64,3 +64,6 @@ jwt:
 logging:
   level:
     com.miduo.cloud.ticket: debug
+
+dev-login:
+  enabled: true

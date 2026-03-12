@@ -27,6 +27,7 @@ public class AuthApplicationService extends BaseApplicationService {
 
     private static final String DEV_USERNAME = "admin";
     private static final String DEV_PASSWORD = "admin2026";
+    private static final String PHONE_LOGIN_PASSWORD = "admin123";
 
     @Value("${dev-login.enabled:false}")
     private boolean devLoginEnabled;
@@ -99,7 +100,8 @@ public class AuthApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 测试环境硬编码账号登录（仅 dev-login.enabled=true 时可用）
+     * 临时登录（仅 dev-login.enabled=true 时可用）
+     * 支持：admin/admin2026 或 手机号/admin123
      * 接口编号：API000402
      */
     @Transactional
@@ -107,10 +109,27 @@ public class AuthApplicationService extends BaseApplicationService {
         if (!devLoginEnabled) {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "当前环境不允许使用测试登录");
         }
-        if (!DEV_USERNAME.equals(input.getUsername()) || !DEV_PASSWORD.equals(input.getPassword())) {
-            throw BusinessException.of(ErrorCode.UNAUTHORIZED, "测试账号或密码错误");
+
+        // 管理员账号登录
+        if (DEV_USERNAME.equals(input.getUsername())) {
+            if (!DEV_PASSWORD.equals(input.getPassword())) {
+                throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
+            }
+            return loginAsDevAdmin();
         }
 
+        // 手机号登录
+        if (PHONE_LOGIN_PASSWORD.equals(input.getPassword())) {
+            return loginByPhone(input.getUsername());
+        }
+
+        throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
+    }
+
+    /**
+     * admin测试账号登录
+     */
+    private LoginOutput loginAsDevAdmin() {
         User user = userRepository.findByWecomUserid("DEV_ADMIN");
         if (user == null) {
             user = new User();
@@ -126,7 +145,6 @@ public class AuthApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 
-        // 防御：企微同步可能误将系统测试账号标记为失活(status=4)，此处强制恢复为激活状态
         if (!Integer.valueOf(1).equals(user.getAccountStatus())) {
             log.warn("测试管理员账号状态异常(status={})，自动恢复为激活状态", user.getAccountStatus());
             user.setAccountStatus(1);
@@ -135,6 +153,25 @@ public class AuthApplicationService extends BaseApplicationService {
 
         List<String> roleCodes = userRepository.findRoleCodes(user.getId());
         user.setRoleCodes(roleCodes);
+        return buildLoginOutput(user);
+    }
+
+    /**
+     * 手机号临时登录
+     */
+    private LoginOutput loginByPhone(String phone) {
+        User user = userRepository.findByPhone(phone);
+        if (user == null) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "手机号未注册，请先在系统中创建账号");
+        }
+
+        if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
+        }
+
+        List<String> roleCodes = userRepository.findRoleCodes(user.getId());
+        user.setRoleCodes(roleCodes);
+        log.info("手机号临时登录成功: userId={}, name={}, phone={}", user.getId(), user.getName(), phone);
         return buildLoginOutput(user);
     }
 

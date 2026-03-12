@@ -6,7 +6,10 @@ import lombok.Data;
 import java.io.Serializable;
 
 /**
- * 测试环境硬编码登录请求（仅 dev-login.enabled=true 时可用）
+ * 临时登录请求（仅 dev-login.enabled=true 时可用）
+ * 支持两种方式：
+ * 1. 管理员账号：username=admin, password=admin2026
+ * 2. 手机号登录：username=手机号, password=admin123
  */
 @Data
 public class DevLoginInput implements Serializable {
