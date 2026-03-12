@@ -62,11 +62,13 @@ public class WecomCallbackController {
                                  @RequestParam("timestamp") String timestamp,
                                  @RequestParam("nonce") String nonce,
                                  @RequestBody String body) {
+        log.info("企微回调消息到达: timestamp={}, nonce={}, bodyLength={}", timestamp, nonce, body == null ? 0 : body.length());
+        log.debug("企微回调消息原始Body: {}", body);
         try {
             callbackApplicationService.receiveCallback(msgSignature, timestamp, nonce, body);
             return "success";
         } catch (Exception ex) {
-            log.error("企微回调消息处理失败", ex);
+            log.error("企微回调消息处理失败, body前200字符: {}", body != null && body.length() > 200 ? body.substring(0, 200) : body, ex);
             return "failed";
         }
     }
