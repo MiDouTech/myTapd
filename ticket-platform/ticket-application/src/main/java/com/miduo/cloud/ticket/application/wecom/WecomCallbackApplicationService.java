@@ -56,11 +56,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "回调消息体为空");
         }
 
-        Map<String, String> encryptedMap = WecomXmlParser.parseFirstLevel(requestBody);
-        String encrypted = encryptedMap.get("Encrypt");
-        if (encrypted == null || encrypted.trim().isEmpty()) {
-            throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "回调消息缺少Encrypt字段");
-        }
+        String encrypted = WecomXmlParser.extractEncryptField(requestBody);
 
         String plainXml = callbackCryptoService.decryptMessage(msgSignature, timestamp, nonce, encrypted);
         Map<String, String> messageMap = WecomXmlParser.parseFirstLevel(plainXml);
