@@ -91,7 +91,9 @@ public class WecomMessageProcessor extends BaseApplicationService {
         String fromWecomUserId = message.getFromWecomUserid();
 
         try {
-            String content = message.getContent() == null ? "" : message.getContent();
+            String rawContent = message.getContent() == null ? "" : message.getContent();
+            // 群聊中@机器人时内容格式为 "<@botid_xxx> 用户输入"，需统一提前去除@提及前缀
+            String content = stripBotMention(rawContent);
 
             WecomDraftSession existingDraft = draftSessionService.getDraft(chatId, fromWecomUserId);
             if (existingDraft != null) {
@@ -326,6 +328,32 @@ public class WecomMessageProcessor extends BaseApplicationService {
             current = current.getParentId() == null ? null : categoryMap.get(current.getParentId());
         }
         return String.join("/", names);
+    }
+
+    /**
+     * 去除消息中的@机器人提及前缀，兼容多种格式：
+     * - "@工单助手 内容"（普通@）
+     * - "<@botid_xxx> 内容"（AI Bot群聊@格式）
+     * - 多个连续的@提及前缀
+     */
+    private String stripBotMention(String content) {
+        if (content == null) {
+            return "";
+        }
+        String result = content.trim();
+        // 循环去除，兼容多个@提及叠加的场景
+        boolean stripped;
+        do {
+            stripped = false;
+            String before = result;
+            result = result.replaceFirst("^@工单助手[\\s\u00a0]*", "");
+            result = result.replaceFirst("^<@[^>]+>[\\s\u00a0]*", "");
+            if (!result.equals(before)) {
+                stripped = true;
+                result = result.trim();
+            }
+        } while (stripped && !result.isEmpty());
+        return result;
     }
 
     private void saveLog(WecomCallbackMessageDTO message,
