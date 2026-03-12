@@ -221,8 +221,9 @@ public class WecomClient {
     }
 
     /**
-     * 通过企微AI bot response_url直接回复文本消息
-     * 适用于AI bot单聊场景，无需access_token，无url字段要求
+     * 通过企微AI bot response_url直接回复消息
+     * 适用于AI bot单聊场景，无需access_token
+     * AI bot response_url 仅支持 markdown 类型消息
      */
     public void sendAibotReply(String responseUrl, String content) {
         if (responseUrl == null || responseUrl.trim().isEmpty()) {
@@ -234,12 +235,12 @@ public class WecomClient {
             return;
         }
 
-        JSONObject text = new JSONObject();
-        text.put("content", content);
+        JSONObject markdown = new JSONObject();
+        markdown.put("content", content);
 
         JSONObject payload = new JSONObject();
-        payload.put("msgtype", "text");
-        payload.put("text", text);
+        payload.put("msgtype", "markdown");
+        payload.put("markdown", markdown);
 
         String response = HttpUtil.post(responseUrl.trim(), payload.toJSONString());
         JSONObject result = JSON.parseObject(response);
