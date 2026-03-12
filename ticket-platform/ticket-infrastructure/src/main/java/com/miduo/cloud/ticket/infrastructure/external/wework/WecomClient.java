@@ -221,6 +221,77 @@ public class WecomClient {
     }
 
     /**
+     * 通过企微AI bot response_url直接回复文本消息
+     * 适用于AI bot单聊场景，无需access_token，无url字段要求
+     */
+    public void sendAibotReply(String responseUrl, String content) {
+        if (responseUrl == null || responseUrl.trim().isEmpty()) {
+            log.warn("企微AI bot response_url为空，跳过回复");
+            return;
+        }
+        if (content == null || content.trim().isEmpty()) {
+            log.warn("企微AI bot回复内容为空，跳过发送");
+            return;
+        }
+
+        JSONObject text = new JSONObject();
+        text.put("content", content);
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "text");
+        payload.put("text", text);
+
+        String response = HttpUtil.post(responseUrl.trim(), payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微AI bot回复失败: errMsg={}", errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微AI bot回复失败: " + errMsg);
+        }
+        log.info("企微AI bot回复发送成功");
+    }
+
+    /**
+     * 发送企微应用文本消息（text类型，无url字段要求）
+     * 适用于bot单聊通知场景
+     */
+    public void sendTextMessage(String toUser, String content) {
+        if (toUser == null || toUser.trim().isEmpty()) {
+            log.warn("企微应用文本消息接收人为空，跳过发送");
+            return;
+        }
+
+        int agentId;
+        try {
+            String configAgentId = runtimeConfigProvider.getRuntimeConfig().getAgentId();
+            agentId = Integer.parseInt(configAgentId);
+        } catch (Exception ex) {
+            log.error("企微AgentId配置非法");
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企微AgentId配置非法");
+        }
+
+        String accessToken = tokenManager.getAccessToken();
+        String requestUrl = buildApiUrl(SEND_APP_MESSAGE_PATH) + "?access_token=" + accessToken;
+
+        JSONObject text = new JSONObject();
+        text.put("content", content == null ? "" : content);
+
+        JSONObject payload = new JSONObject();
+        payload.put("touser", toUser);
+        payload.put("msgtype", "text");
+        payload.put("agentid", agentId);
+        payload.put("text", text);
+
+        String response = HttpUtil.post(requestUrl, payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微应用文本消息失败: toUser={}, errMsg={}", toUser, errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用文本消息失败: " + errMsg);
+        }
+    }
+
+    /**
      * 发送企微群机器人Markdown消息
      */
     public void sendGroupWebhookMarkdown(String webhookUrl, String markdownContent) {

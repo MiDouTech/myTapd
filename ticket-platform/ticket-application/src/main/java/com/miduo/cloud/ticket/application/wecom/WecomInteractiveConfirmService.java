@@ -108,8 +108,19 @@ public class WecomInteractiveConfirmService {
 
         Long categoryId = resolveCategoryId(draft.getCategoryPath());
         if (categoryId == null) {
-            draftSessionService.removeDraft(chatId, wecomUserId);
-            return "❌ 分类不存在，请发送 @工单助手 分类 查看完整分类列表后重新建单";
+            TicketCategoryPO fallback = ticketCategoryMapper.selectOne(
+                    new LambdaQueryWrapper<TicketCategoryPO>()
+                            .eq(TicketCategoryPO::getIsActive, 1)
+                            .orderByAsc(TicketCategoryPO::getLevel)
+                            .orderByAsc(TicketCategoryPO::getSortOrder)
+                            .last("LIMIT 1")
+            );
+            if (fallback == null) {
+                draftSessionService.removeDraft(chatId, wecomUserId);
+                return "❌ 系统暂无可用工单分类，请联系管理员配置后再试";
+            }
+            categoryId = fallback.getId();
+            draft.setCategoryPath(fallback.getName());
         }
 
         TicketCreateInput input = new TicketCreateInput();
@@ -206,9 +217,12 @@ public class WecomInteractiveConfirmService {
      * 构建草稿预览消息
      */
     public String buildDraftPreviewMessage(WecomDraftSession draft) {
+        String categoryDisplay = (draft.getCategoryPath() == null || draft.getCategoryPath().trim().isEmpty())
+                ? "（未识别，将使用默认分类）"
+                : draft.getCategoryPath();
         return "📋 工单预览（请确认）\n" +
                 "标题：" + safeValue(draft.getTitle()) + "\n" +
-                "分类：" + safeValue(draft.getCategoryPath()) + "\n" +
+                "分类：" + categoryDisplay + "\n" +
                 "优先级：" + formatPriority(draft.getPriority()) + "\n" +
                 "描述：" + safeValue(draft.getDescription()) + "\n" +
                 "---\n" +
