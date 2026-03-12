@@ -104,4 +104,80 @@ public final class WecomXmlParser {
             throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "企微XML解析失败");
         }
     }
+
+    /**
+     * 解析企微解密后的消息体（自动识别 XML 或 JSON 格式）。
+     * <p>
+     * 企微普通应用/客服回调解密后为 XML；
+     * 企微 AI 机器人（aibot）回调解密后为 JSON，字段名采用小写蛇形，
+     * 且文本内容嵌套在 {@code text.content} 中、发送人位于 {@code from.userid} 中。
+     * 此方法统一输出与 XML 解析结果字段名相同的 Map，供后续 buildMessage 使用：
+     * <ul>
+     *   <li>MsgType</li>
+     *   <li>MsgId</li>
+     *   <li>FromUserName</li>
+     *   <li>ToUserName（aibot 场景映射为 aibotid）</li>
+     *   <li>Content</li>
+     *   <li>CreateTime</li>
+     *   <li>ChatId</li>
+     * </ul>
+     */
+    public static Map<String, String> parseDecryptedMessage(String plainText) {
+        if (plainText == null || plainText.trim().isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String trimmed = plainText.trim();
+        if (trimmed.startsWith("{")) {
+            return parseAibotJson(trimmed);
+        }
+        return parseFirstLevel(trimmed);
+    }
+
+    private static Map<String, String> parseAibotJson(String json) {
+        try {
+            JSONObject obj = JSONUtil.parseObj(json);
+            Map<String, String> result = new HashMap<>();
+
+            result.put("MsgId", nullToEmpty(obj.getStr("msgid")));
+            result.put("MsgType", nullToEmpty(obj.getStr("msgtype")));
+            result.put("CreateTime", nullToEmpty(obj.getStr("createtime")));
+            result.put("ChatId", nullToEmpty(obj.getStr("chatid")));
+
+            // 发送人：from.userid
+            JSONObject from = obj.getJSONObject("from");
+            if (from != null) {
+                result.put("FromUserName", nullToEmpty(from.getStr("userid")));
+            } else {
+                result.put("FromUserName", "");
+            }
+
+            // 接收人/机器人 id：aibotid 映射到 ToUserName
+            result.put("ToUserName", nullToEmpty(obj.getStr("aibotid")));
+
+            // 文本内容：text.content
+            String msgType = result.get("MsgType");
+            if ("text".equalsIgnoreCase(msgType)) {
+                JSONObject text = obj.getJSONObject("text");
+                if (text != null) {
+                    result.put("Content", nullToEmpty(text.getStr("content")));
+                } else {
+                    result.put("Content", "");
+                }
+            } else {
+                result.put("Content", "");
+            }
+
+            log.debug("企微 aibot JSON 消息解析完成: msgId={}, msgType={}, from={}",
+                    result.get("MsgId"), result.get("MsgType"), result.get("FromUserName"));
+            return result;
+        } catch (Exception ex) {
+            log.error("企微 aibot JSON 消息解析失败，内容（前500字符）: {}",
+                    json.length() > 500 ? json.substring(0, 500) : json, ex);
+            throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "企微aibot JSON消息解析失败");
+        }
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
 }
