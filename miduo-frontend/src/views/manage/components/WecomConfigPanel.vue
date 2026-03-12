@@ -17,6 +17,7 @@ const submitLoading = ref(false)
 const testLoading = ref(false)
 const hasPersistedConfig = ref(false)
 const corpSecretMasked = ref('')
+const callbackAesKeyMasked = ref('')
 const latestUpdateTime = ref('')
 const formRef = ref<FormInstance>()
 
@@ -34,6 +35,8 @@ const defaultForm: WecomConfigUpdateInput = {
   retryCount: 0,
   batchSize: 100,
   enabled: true,
+  callbackToken: '',
+  callbackAesKey: '',
 }
 
 const form = reactive<WecomConfigUpdateInput>({
@@ -104,6 +107,7 @@ const rules: FormRules<WecomConfigUpdateInput> = {
 function resetForm(): void {
   Object.assign(form, defaultForm)
   corpSecretMasked.value = ''
+  callbackAesKeyMasked.value = ''
   latestUpdateTime.value = '-'
   hasPersistedConfig.value = false
 }
@@ -128,8 +132,11 @@ async function loadConfig(): Promise<void> {
     form.retryCount = detail.retryCount ?? defaultForm.retryCount
     form.batchSize = detail.batchSize ?? defaultForm.batchSize
     form.enabled = detail.enabled ?? defaultForm.enabled
+    form.callbackToken = detail.callbackToken || ''
+    form.callbackAesKey = ''
 
     corpSecretMasked.value = detail.corpSecretMasked || ''
+    callbackAesKeyMasked.value = detail.callbackAesKeyMasked || ''
     latestUpdateTime.value = formatDateTime(detail.updateTime)
     hasPersistedConfig.value = true
   } catch {
@@ -254,6 +261,31 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="配置状态" prop="enabled">
           <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+        </el-form-item>
+
+        <el-divider content-position="left">回调配置（企微消息推送验证）</el-divider>
+
+        <el-alert
+          v-if="hasPersistedConfig && callbackAesKeyMasked"
+          :title="`已保存AESKey：${callbackAesKeyMasked}（安全策略：每次保存都需要重新输入完整AESKey）`"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+        />
+
+        <el-form-item label="回调Token" prop="callbackToken">
+          <el-input
+            v-model="form.callbackToken"
+            placeholder="请输入企微回调Token（企微回调配置页面中设置的Token）"
+          />
+        </el-form-item>
+        <el-form-item label="回调AESKey" prop="callbackAesKey">
+          <el-input
+            v-model="form.callbackAesKey"
+            show-password
+            placeholder="请输入企微回调EncodingAESKey（43位，每次保存需完整输入）"
+          />
         </el-form-item>
       </el-form>
     </el-card>

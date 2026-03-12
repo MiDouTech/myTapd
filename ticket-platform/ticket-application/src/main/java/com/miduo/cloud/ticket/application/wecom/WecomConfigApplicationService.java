@@ -62,6 +62,8 @@ public class WecomConfigApplicationService extends BaseApplicationService {
         po.setRetryCount(input.getRetryCount());
         po.setBatchSize(input.getBatchSize());
         po.setStatus(Boolean.FALSE.equals(input.getEnabled()) ? 0 : 1);
+        po.setCallbackToken(input.getCallbackToken() != null ? input.getCallbackToken().trim() : "");
+        po.setCallbackAesKey(input.getCallbackAesKey() != null ? input.getCallbackAesKey().trim() : "");
 
         if (existing == null) {
             sysWeworkConfigMapper.insert(po);
@@ -116,6 +118,8 @@ public class WecomConfigApplicationService extends BaseApplicationService {
         output.setBatchSize(po.getBatchSize());
         output.setEnabled(po.getStatus() == null || po.getStatus() == 1);
         output.setUpdateTime(po.getUpdateTime());
+        output.setCallbackToken(po.getCallbackToken());
+        output.setCallbackAesKeyMasked(maskSecret(po.getCallbackAesKey()));
         return output;
     }
 

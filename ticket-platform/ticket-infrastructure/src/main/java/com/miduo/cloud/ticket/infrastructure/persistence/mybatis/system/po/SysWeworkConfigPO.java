@@ -51,6 +51,12 @@ public class SysWeworkConfigPO implements Serializable {
     @TableField("batch_size")
     private Integer batchSize;
 
+    @TableField("callback_token")
+    private String callbackToken;
+
+    @TableField("callback_aes_key")
+    private String callbackAesKey;
+
     @TableField("status")
     private Integer status;
 

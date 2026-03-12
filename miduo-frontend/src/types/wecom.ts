@@ -41,6 +41,8 @@ export interface WecomConfigOutput {
   batchSize?: number
   enabled?: boolean
   updateTime?: string
+  callbackToken?: string
+  callbackAesKeyMasked?: string
 }
 
 export interface WecomConfigUpdateInput {
@@ -55,6 +57,8 @@ export interface WecomConfigUpdateInput {
   retryCount: number
   batchSize: number
   enabled: boolean
+  callbackToken?: string
+  callbackAesKey?: string
 }
 
 export interface WecomConnectionTestOutput {
