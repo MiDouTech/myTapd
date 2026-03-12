@@ -100,10 +100,10 @@ public class WecomInteractiveConfirmService {
     }
 
     private String handleConfirm(WecomDraftSession draft, String chatId, String wecomUserId) {
-        SysUserPO sender = findUserByWecomId(wecomUserId);
+        SysUserPO sender = resolveCreator(wecomUserId);
         if (sender == null) {
             draftSessionService.removeDraft(chatId, wecomUserId);
-            return "❌ 您尚未关联工单系统账号，请先访问系统完成企微授权登录";
+            return "❌ 系统暂无可用账号，无法创建工单，请联系管理员";
         }
 
         Long categoryId = resolveCategoryId(draft.getCategoryPath());
@@ -133,10 +133,10 @@ public class WecomInteractiveConfirmService {
 
     /**
      * 当无法进行交互式确认时（如回复通道不可用），直接根据草稿创建工单
-     * 返回创建的工单ID，若找不到系统用户则返回null
+     * 返回创建的工单ID，若系统无任何账号则返回null
      */
     public Long createTicketDirectly(WecomDraftSession draft, String chatId, String wecomUserId) {
-        SysUserPO sender = findUserByWecomId(wecomUserId);
+        SysUserPO sender = resolveCreator(wecomUserId);
         if (sender == null) {
             return null;
         }
@@ -341,6 +341,29 @@ public class WecomInteractiveConfirmService {
         return sysUserMapper.selectOne(
                 new LambdaQueryWrapper<SysUserPO>()
                         .eq(SysUserPO::getWecomUserid, wecomUserId.trim())
+                        .last("LIMIT 1")
+        );
+    }
+
+    /**
+     * 解析工单创建人：优先匹配企微UserId对应的系统用户，匹配不到时降级使用系统第一个账号
+     */
+    private SysUserPO resolveCreator(String wecomUserId) {
+        SysUserPO user = findUserByWecomId(wecomUserId);
+        if (user != null) {
+            return user;
+        }
+        return getDefaultCreator();
+    }
+
+    /**
+     * 获取系统默认创建账号（id最小的账号），未匹配到企微用户时使用
+     */
+    private SysUserPO getDefaultCreator() {
+        return sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUserPO>()
+                        .eq(SysUserPO::getAccountStatus, 1)
+                        .orderByAsc(SysUserPO::getId)
                         .last("LIMIT 1")
         );
     }
