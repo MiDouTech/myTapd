@@ -163,8 +163,7 @@ export function getTicketChangeHistory(
  * 工单公开详情（无需登录，外网可直接访问）
  * 接口编号：API000417
  * 产品文档功能：4.12 工单公开链接 - 外网无需登录查看工单详情
- * 注意：使用 publicGet，不带认证头，也不触发登录跳转，路径直接指向 /open/ 而非 /api/open/
  */
 export function getPublicTicketDetail(ticketNo: string): Promise<TicketPublicDetailOutput> {
-  return request.publicGet<TicketPublicDetailOutput>(`/open/ticket/${ticketNo}`)
+  return request.get<TicketPublicDetailOutput>(`/open/ticket/${ticketNo}`)
 }

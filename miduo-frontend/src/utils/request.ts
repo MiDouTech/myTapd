@@ -12,11 +12,6 @@ const service = axios.create({
   timeout: 15000,
 })
 
-/** Axios instance for public endpoints that require no authentication and should never trigger login redirect */
-const publicService = axios.create({
-  timeout: 15000,
-})
-
 let isRedirecting = false
 
 function redirectToLogin(): void {
@@ -70,23 +65,6 @@ service.interceptors.response.use(
   },
 )
 
-publicService.interceptors.response.use(
-  (response) => {
-    const payload = response.data as ApiResult<unknown>
-    if (typeof payload?.code === 'number') {
-      if (payload.code === 200) {
-        return payload.data
-      }
-      return Promise.reject(new Error(payload.message || 'Request failed'))
-    }
-    return response.data
-  },
-  (error) => {
-    const message = error.response?.data?.message || error.message || '网络异常'
-    return Promise.reject(new Error(message))
-  },
-)
-
 function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   return service.get(url, config)
 }
@@ -103,16 +81,11 @@ function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   return service.delete(url, config)
 }
 
-function publicGet<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-  return publicService.get(url, config)
-}
-
 const request = {
   get,
   post,
   put,
   del,
-  publicGet,
 }
 
 export default request
