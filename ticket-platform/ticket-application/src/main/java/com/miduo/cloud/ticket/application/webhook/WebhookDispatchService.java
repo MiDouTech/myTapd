@@ -4,6 +4,8 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
+import com.miduo.cloud.ticket.common.enums.Priority;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
@@ -13,6 +15,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookDispatchLogPO;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
@@ -40,6 +43,9 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int MAX_REQUEST_BODY_LENGTH = 8000;
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
+
+    @Value("${ticket.detail-url:http://ticket.t.miduonet.com/ticket/detail}")
+    private String ticketDetailUrl;
 
     private final WebhookConfigMapper webhookConfigMapper;
     private final WebhookDispatchLogMapper webhookDispatchLogMapper;
@@ -336,18 +342,23 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (eventTime != null && !eventTime.isEmpty()) {
             content.append("时间：").append(eventTime).append("\n");
         }
-        content.append("工单ID：").append(ticketId == null ? "-" : ticketId).append("\n");
         if (ticket != null) {
             content.append("工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
             content.append("标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
-            content.append("状态：").append(safeJsonString(ticket, "status", "-")).append("\n");
-            content.append("优先级：").append(safeJsonString(ticket, "priority", "-")).append("\n");
+            String statusCode = safeJsonString(ticket, "status", "-");
+            content.append("状态：").append(resolveStatusLabel(statusCode)).append("\n");
+            String priorityCode = safeJsonString(ticket, "priority", "-");
+            content.append("优先级：").append(resolvePriorityLabel(priorityCode)).append("\n");
         }
         if (data != null) {
-            String dataJson = JSON.toJSONString(data);
-            if (dataJson != null && !dataJson.trim().isEmpty()) {
-                content.append("变更：").append(dataJson);
+            String changeSummary = buildChangeSummary(data);
+            if (changeSummary != null && !changeSummary.trim().isEmpty()) {
+                content.append("变更：").append(changeSummary).append("\n");
             }
+        }
+        if (ticketId != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+            String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
+            content.append("详情：").append(baseUrl).append("/").append(ticketId);
         }
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
@@ -358,6 +369,72 @@ public class WebhookDispatchService extends BaseApplicationService {
         payload.put("msgtype", "text");
         payload.put("text", text);
         return JSON.toJSONString(payload);
+    }
+
+    private String resolveStatusLabel(String code) {
+        if (code == null || "-".equals(code)) {
+            return "-";
+        }
+        TicketStatus status = TicketStatus.fromCode(code);
+        return status != null ? status.getLabel() : code;
+    }
+
+    private String resolvePriorityLabel(String code) {
+        if (code == null || "-".equals(code)) {
+            return "-";
+        }
+        Priority priority = Priority.fromCode(code);
+        return priority != null ? priority.getLabel() : code;
+    }
+
+    private String buildChangeSummary(Object data) {
+        if (data == null) {
+            return null;
+        }
+        try {
+            JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+            if (json == null || json.isEmpty()) {
+                return null;
+            }
+            StringBuilder sb = new StringBuilder();
+            if (json.containsKey("categoryId")) {
+                sb.append("分类ID: ").append(json.get("categoryId"));
+            }
+            if (json.containsKey("priority")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("优先级: ").append(resolvePriorityLabel(json.getString("priority")));
+            }
+            if (json.containsKey("oldStatus")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("原状态: ").append(resolveStatusLabel(json.getString("oldStatus")));
+            }
+            if (json.containsKey("newStatus")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("新状态: ").append(resolveStatusLabel(json.getString("newStatus")));
+            }
+            if (json.containsKey("assigneeId")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("指派给: ").append(json.get("assigneeId"));
+            }
+            if (json.containsKey("assignType")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("分派类型: ").append(json.getString("assignType"));
+            }
+            return sb.length() > 0 ? sb.toString() : null;
+        } catch (Exception ex) {
+            log.warn("解析变更数据失败: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private String safeJsonString(JSONObject jsonObject, String key) {

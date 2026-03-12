@@ -51,6 +51,9 @@ wecom:
   mq:
     enabled: false
 
+ticket:
+  detail-url: ${TICKET_DETAIL_URL:http://ticket.t.miduonet.com/ticket/detail}
+
 jwt:
   secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
   access-token-expire: 1800
