@@ -11,8 +11,11 @@ import com.miduo.cloud.ticket.common.enums.WecomBotMessageStatus;
 import com.miduo.cloud.ticket.entity.dto.wecom.NlpAnalyzeResult;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomCallbackMessageDTO;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
+import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomBotMessageLogMapper;
@@ -40,10 +43,11 @@ public class WecomMessageProcessor extends BaseApplicationService {
     private final WecomGroupWebhookSender groupWebhookSender;
     private final WecomClient wecomClient;
     private final TicketCategoryMapper ticketCategoryMapper;
-    private final WecomDraftSessionService draftSessionService;
+    private final TicketMapper ticketMapper;
     private final WecomNaturalLangParser naturalLangParser;
     private final WecomInteractiveConfirmService interactiveConfirmService;
     private final SysUserMapper sysUserMapper;
+    private final WecomProperties wecomProperties;
 
     public WecomMessageProcessor(WecomBotMessageParser parser,
                                  WecomBotCommandService commandService,
@@ -52,10 +56,11 @@ public class WecomMessageProcessor extends BaseApplicationService {
                                  WecomGroupWebhookSender groupWebhookSender,
                                  WecomClient wecomClient,
                                  TicketCategoryMapper ticketCategoryMapper,
-                                 WecomDraftSessionService draftSessionService,
+                                 TicketMapper ticketMapper,
                                  WecomNaturalLangParser naturalLangParser,
                                  WecomInteractiveConfirmService interactiveConfirmService,
-                                 SysUserMapper sysUserMapper) {
+                                 SysUserMapper sysUserMapper,
+                                 WecomProperties wecomProperties) {
         this.parser = parser;
         this.commandService = commandService;
         this.groupBindingMapper = groupBindingMapper;
@@ -63,10 +68,11 @@ public class WecomMessageProcessor extends BaseApplicationService {
         this.groupWebhookSender = groupWebhookSender;
         this.wecomClient = wecomClient;
         this.ticketCategoryMapper = ticketCategoryMapper;
-        this.draftSessionService = draftSessionService;
+        this.ticketMapper = ticketMapper;
         this.naturalLangParser = naturalLangParser;
         this.interactiveConfirmService = interactiveConfirmService;
         this.sysUserMapper = sysUserMapper;
+        this.wecomProperties = wecomProperties;
     }
 
     /**
@@ -94,16 +100,6 @@ public class WecomMessageProcessor extends BaseApplicationService {
             String rawContent = message.getContent() == null ? "" : message.getContent();
             // 群聊中@机器人时内容格式为 "<@botid_xxx> 用户输入"，需统一提前去除@提及前缀
             String content = stripBotMention(rawContent);
-
-            WecomDraftSession existingDraft = draftSessionService.getDraft(chatId, fromWecomUserId);
-            if (existingDraft != null) {
-                String reply = interactiveConfirmService.handleReply(content, existingDraft, chatId, fromWecomUserId);
-                sendReply(binding, reply, fromWecomUserId, message.getResponseUrl());
-                saveLog(message, null, null, WecomBotMessageStatus.SUCCESS, null,
-                        PARSE_TYPE_NATURAL_LANGUAGE, null);
-                log.info("企微消息进入草稿确认流程: msgId={}, chatId={}", message.getMsgId(), chatId);
-                return;
-            }
 
             WecomBotParseResult parseResult = parser.parse(content, defaultCategoryPath);
 
@@ -148,46 +144,73 @@ public class WecomMessageProcessor extends BaseApplicationService {
         WecomDraftSession draft = new WecomDraftSession();
         draft.setSessionKey(chatId != null ? chatId : fromWecomUserId);
         draft.setWecomUserId(fromWecomUserId);
-        draft.setStep(WecomDraftSession.Step.PENDING_CONFIRM);
         draft.setTitle(nlpResult.getTitle());
         draft.setCategoryPath(nlpResult.getCategoryPath());
         draft.setPriority(nlpResult.getPriority());
         draft.setDescription(rawText);
         draft.setNlpConfidence(nlpResult.getConfidence());
         draft.setChatId(chatId);
-        boolean isGroup = "group".equalsIgnoreCase(message.getChatType())
-                || (chatId != null && !chatId.trim().isEmpty()
-                    && !"single".equalsIgnoreCase(message.getChatType())
-                    && !chatId.equals(message.getFromWecomUserid()));
-        draft.setGroupChat(isGroup);
 
-        draftSessionService.saveDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId, draft, isGroup);
-
-        String previewMessage = interactiveConfirmService.buildDraftPreviewMessage(draft);
-        boolean replySent = trySendReply(binding, previewMessage, fromWecomUserId, message.getResponseUrl());
-
-        if (!replySent) {
-            draftSessionService.removeDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId);
-            Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
-            if (ticketId != null) {
-                saveLog(message, parseResult, ticketId, WecomBotMessageStatus.SUCCESS, null,
-                        PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
-                log.info("企微自然语言消息无法交互确认，已直接创建工单: msgId={}, chatId={}, ticketId={}, confidence={}",
-                        message.getMsgId(), chatId, ticketId, nlpResult.getConfidence());
-            } else {
-                saveLog(message, parseResult, null, WecomBotMessageStatus.FAIL,
-                        "回复通道不可用且未关联系统账号，无法创建工单",
-                        PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
-                log.warn("企微自然语言消息处理失败：回复通道不可用且发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
-                        message.getMsgId(), chatId, fromWecomUserId);
-            }
-            return;
+        Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
+        if (ticketId != null) {
+            TicketPO ticket = ticketMapper.selectById(ticketId);
+            String ticketNo = ticket != null ? ticket.getTicketNo() : "";
+            String replyMsg = buildTicketCreatedReply(ticketNo, draft.getTitle(), draft.getCategoryPath(),
+                    draft.getPriority());
+            sendReply(binding, replyMsg, fromWecomUserId, message.getResponseUrl());
+            saveLog(message, parseResult, ticketId, WecomBotMessageStatus.SUCCESS, null,
+                    PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
+            log.info("企微自然语言消息已直接创建工单: msgId={}, chatId={}, ticketId={}, confidence={}",
+                    message.getMsgId(), chatId, ticketId, nlpResult.getConfidence());
+        } else {
+            saveLog(message, parseResult, null, WecomBotMessageStatus.FAIL,
+                    "未关联系统账号，无法创建工单",
+                    PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
+            log.warn("企微自然语言消息处理失败：发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
+                    message.getMsgId(), chatId, fromWecomUserId);
         }
+    }
 
-        saveLog(message, parseResult, null, WecomBotMessageStatus.SUCCESS, null,
-                PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
-        log.info("企微自然语言消息已解析并生成草稿: msgId={}, chatId={}, confidence={}",
-                message.getMsgId(), chatId, nlpResult.getConfidence());
+    private String buildTicketCreatedReply(String ticketNo, String title, String categoryPath, String priority) {
+        String publicLink = buildPublicTicketLink(ticketNo);
+        String priorityLabel = formatPriority(priority);
+        return "✅ 工单创建成功\n" +
+                "工单编号：" + safeValue(ticketNo) + "\n" +
+                "标题：" + safeValue(title) + "\n" +
+                "分类：" + safeValue(categoryPath) + "\n" +
+                "优先级：" + priorityLabel + "\n" +
+                "查看详情：" + publicLink;
+    }
+
+    private String formatPriority(String priority) {
+        if (priority == null) {
+            return "中";
+        }
+        switch (priority) {
+            case "urgent": return "紧急";
+            case "high": return "高";
+            case "low": return "低";
+            default: return "中";
+        }
+    }
+
+    private String safeValue(String value) {
+        return value == null ? "-" : value;
+    }
+
+    private String buildPublicTicketLink(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            return "-";
+        }
+        String domain = wecomProperties.getTrustedDomain();
+        if (domain == null || domain.trim().isEmpty()) {
+            return "-";
+        }
+        String normalizedDomain = domain.trim();
+        if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
+            normalizedDomain = "https://" + normalizedDomain;
+        }
+        return normalizedDomain + "/open/ticket/" + ticketNo.trim();
     }
 
     private void sendReply(WecomGroupBindingPO binding, String reply) {
@@ -217,40 +240,6 @@ public class WecomMessageProcessor extends BaseApplicationService {
         if (fromWecomUserId != null && !fromWecomUserId.trim().isEmpty()) {
             sendAppMessageToWecomUser(fromWecomUserId, reply);
         }
-    }
-
-    /**
-     * 尝试发送回复，返回是否成功发送
-     */
-    private boolean trySendReply(WecomGroupBindingPO binding, String reply, String fromWecomUserId, String responseUrl) {
-        if (reply == null || reply.trim().isEmpty()) {
-            return false;
-        }
-        if (binding != null && binding.getWebhookUrl() != null && !binding.getWebhookUrl().trim().isEmpty()) {
-            try {
-                groupWebhookSender.sendToWebhook(binding.getWebhookUrl(), "工单助手", reply);
-                return true;
-            } catch (Exception e) {
-                log.warn("群Webhook回复发送失败，错误: {}", e.getMessage());
-            }
-        }
-        if (responseUrl != null && !responseUrl.trim().isEmpty()) {
-            try {
-                wecomClient.sendAibotReply(responseUrl, reply);
-                return true;
-            } catch (Exception e) {
-                log.warn("AI bot response_url回复发送失败，错误: {}", e.getMessage());
-            }
-        }
-        if (fromWecomUserId != null && !fromWecomUserId.trim().isEmpty()) {
-            try {
-                sendAppMessageToWecomUser(fromWecomUserId, reply);
-                return true;
-            } catch (Exception e) {
-                log.warn("企微应用消息回复发送失败，错误: {}", e.getMessage());
-            }
-        }
-        return false;
     }
 
     private void sendAibotReplyViaResponseUrl(String responseUrl, String reply) {
