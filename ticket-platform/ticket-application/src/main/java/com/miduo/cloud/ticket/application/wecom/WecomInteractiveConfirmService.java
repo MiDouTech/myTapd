@@ -100,21 +100,15 @@ public class WecomInteractiveConfirmService {
     }
 
     private String handleConfirm(WecomDraftSession draft, String chatId, String wecomUserId) {
-        SysUserPO sender = findUserByWecomId(wecomUserId);
+        SysUserPO sender = resolveCreator(wecomUserId);
         if (sender == null) {
             draftSessionService.removeDraft(chatId, wecomUserId);
-            return "❌ 您尚未关联工单系统账号，请先访问系统完成企微授权登录";
+            return "❌ 系统暂无可用账号，无法创建工单，请联系管理员";
         }
 
         Long categoryId = resolveCategoryId(draft.getCategoryPath());
         if (categoryId == null) {
-            TicketCategoryPO fallback = ticketCategoryMapper.selectOne(
-                    new LambdaQueryWrapper<TicketCategoryPO>()
-                            .eq(TicketCategoryPO::getIsActive, 1)
-                            .orderByAsc(TicketCategoryPO::getLevel)
-                            .orderByAsc(TicketCategoryPO::getSortOrder)
-                            .last("LIMIT 1")
-            );
+            TicketCategoryPO fallback = getFirstAvailableCategory();
             if (fallback == null) {
                 draftSessionService.removeDraft(chatId, wecomUserId);
                 return "❌ 系统暂无可用工单分类，请联系管理员配置后再试";
@@ -123,15 +117,7 @@ public class WecomInteractiveConfirmService {
             draft.setCategoryPath(fallback.getName());
         }
 
-        TicketCreateInput input = new TicketCreateInput();
-        input.setTitle(draft.getTitle());
-        input.setDescription(draft.getDescription() != null ? draft.getDescription() : draft.getTitle());
-        input.setCategoryId(categoryId);
-        input.setPriority(draft.getPriority() != null ? draft.getPriority() : "medium");
-        input.setSource(TicketSource.WECOM_BOT.getCode());
-        input.setSourceChatId(chatId);
-
-        Long ticketId = ticketApplicationService.createTicket(input, sender.getId());
+        Long ticketId = doCreateTicket(draft, categoryId, chatId, sender.getId());
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
         draftSessionService.removeDraft(chatId, wecomUserId);
@@ -143,6 +129,50 @@ public class WecomInteractiveConfirmService {
                 "分类：" + safeValue(draft.getCategoryPath()) + "\n" +
                 "优先级：" + safeValue(draft.getPriority()) + "\n" +
                 "查看详情：" + publicLink;
+    }
+
+    /**
+     * 当无法进行交互式确认时（如回复通道不可用），直接根据草稿创建工单
+     * 返回创建的工单ID，若系统无任何账号则返回null
+     */
+    public Long createTicketDirectly(WecomDraftSession draft, String chatId, String wecomUserId) {
+        SysUserPO sender = resolveCreator(wecomUserId);
+        if (sender == null) {
+            return null;
+        }
+
+        Long categoryId = resolveCategoryId(draft.getCategoryPath());
+        if (categoryId == null) {
+            TicketCategoryPO fallback = getFirstAvailableCategory();
+            if (fallback == null) {
+                return null;
+            }
+            categoryId = fallback.getId();
+            draft.setCategoryPath(fallback.getName());
+        }
+
+        return doCreateTicket(draft, categoryId, chatId, sender.getId());
+    }
+
+    private Long doCreateTicket(WecomDraftSession draft, Long categoryId, String chatId, Long creatorId) {
+        TicketCreateInput input = new TicketCreateInput();
+        input.setTitle(draft.getTitle());
+        input.setDescription(draft.getDescription() != null ? draft.getDescription() : draft.getTitle());
+        input.setCategoryId(categoryId);
+        input.setPriority(draft.getPriority() != null ? draft.getPriority() : "medium");
+        input.setSource(TicketSource.WECOM_BOT.getCode());
+        input.setSourceChatId(chatId);
+        return ticketApplicationService.createTicket(input, creatorId);
+    }
+
+    private TicketCategoryPO getFirstAvailableCategory() {
+        return ticketCategoryMapper.selectOne(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .eq(TicketCategoryPO::getIsActive, 1)
+                        .orderByAsc(TicketCategoryPO::getLevel)
+                        .orderByAsc(TicketCategoryPO::getSortOrder)
+                        .last("LIMIT 1")
+        );
     }
 
     private String handleStartModifyCategory(WecomDraftSession draft, String chatId, String wecomUserId) {
@@ -311,6 +341,29 @@ public class WecomInteractiveConfirmService {
         return sysUserMapper.selectOne(
                 new LambdaQueryWrapper<SysUserPO>()
                         .eq(SysUserPO::getWecomUserid, wecomUserId.trim())
+                        .last("LIMIT 1")
+        );
+    }
+
+    /**
+     * 解析工单创建人：优先匹配企微UserId对应的系统用户，匹配不到时降级使用系统第一个账号
+     */
+    private SysUserPO resolveCreator(String wecomUserId) {
+        SysUserPO user = findUserByWecomId(wecomUserId);
+        if (user != null) {
+            return user;
+        }
+        return getDefaultCreator();
+    }
+
+    /**
+     * 获取系统默认创建账号（id最小的账号），未匹配到企微用户时使用
+     */
+    private SysUserPO getDefaultCreator() {
+        return sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUserPO>()
+                        .eq(SysUserPO::getAccountStatus, 1)
+                        .orderByAsc(SysUserPO::getId)
                         .last("LIMIT 1")
         );
     }

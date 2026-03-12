@@ -162,7 +162,25 @@ public class WecomMessageProcessor extends BaseApplicationService {
         draftSessionService.saveDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId, draft, isGroup);
 
         String previewMessage = interactiveConfirmService.buildDraftPreviewMessage(draft);
-        sendReply(binding, previewMessage, fromWecomUserId, message.getResponseUrl());
+        boolean replySent = trySendReply(binding, previewMessage, fromWecomUserId, message.getResponseUrl());
+
+        if (!replySent) {
+            draftSessionService.removeDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId);
+            Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
+            if (ticketId != null) {
+                saveLog(message, parseResult, ticketId, WecomBotMessageStatus.SUCCESS, null,
+                        PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
+                log.info("企微自然语言消息无法交互确认，已直接创建工单: msgId={}, chatId={}, ticketId={}, confidence={}",
+                        message.getMsgId(), chatId, ticketId, nlpResult.getConfidence());
+            } else {
+                saveLog(message, parseResult, null, WecomBotMessageStatus.FAIL,
+                        "回复通道不可用且未关联系统账号，无法创建工单",
+                        PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
+                log.warn("企微自然语言消息处理失败：回复通道不可用且发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
+                        message.getMsgId(), chatId, fromWecomUserId);
+            }
+            return;
+        }
 
         saveLog(message, parseResult, null, WecomBotMessageStatus.SUCCESS, null,
                 PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
@@ -197,6 +215,40 @@ public class WecomMessageProcessor extends BaseApplicationService {
         if (fromWecomUserId != null && !fromWecomUserId.trim().isEmpty()) {
             sendAppMessageToWecomUser(fromWecomUserId, reply);
         }
+    }
+
+    /**
+     * 尝试发送回复，返回是否成功发送
+     */
+    private boolean trySendReply(WecomGroupBindingPO binding, String reply, String fromWecomUserId, String responseUrl) {
+        if (reply == null || reply.trim().isEmpty()) {
+            return false;
+        }
+        if (binding != null && binding.getWebhookUrl() != null && !binding.getWebhookUrl().trim().isEmpty()) {
+            try {
+                groupWebhookSender.sendToWebhook(binding.getWebhookUrl(), "工单助手", reply);
+                return true;
+            } catch (Exception e) {
+                log.warn("群Webhook回复发送失败，错误: {}", e.getMessage());
+            }
+        }
+        if (responseUrl != null && !responseUrl.trim().isEmpty()) {
+            try {
+                wecomClient.sendAibotReply(responseUrl, reply);
+                return true;
+            } catch (Exception e) {
+                log.warn("AI bot response_url回复发送失败，错误: {}", e.getMessage());
+            }
+        }
+        if (fromWecomUserId != null && !fromWecomUserId.trim().isEmpty()) {
+            try {
+                sendAppMessageToWecomUser(fromWecomUserId, reply);
+                return true;
+            } catch (Exception e) {
+                log.warn("企微应用消息回复发送失败，错误: {}", e.getMessage());
+            }
+        }
+        return false;
     }
 
     private void sendAibotReplyViaResponseUrl(String responseUrl, String reply) {
