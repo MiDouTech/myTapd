@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "工单公开接口", description = "无需登录，支持外网直接查看工单详情")
 @RestController
-@RequestMapping("/open/ticket")
+@RequestMapping("/api/open/ticket")
 public class OpenTicketPublicController {
 
     private final TicketApplicationService ticketApplicationService;

@@ -165,20 +165,20 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    path: '/:pathMatch(.*)*',
-    name: 'notFound',
-    component: () => import('@/views/error/NotFoundView.vue'),
-    meta: {
-      title: '页面不存在',
-      requiresAuth: false,
-    },
-  },
-  {
     path: '/open/ticket/:ticketNo',
     name: 'ticketPublicDetail',
     component: () => import('@/views/ticket/TicketPublicView.vue'),
     meta: {
       title: '工单详情',
+      requiresAuth: false,
+    },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'notFound',
+    component: () => import('@/views/error/NotFoundView.vue'),
+    meta: {
+      title: '页面不存在',
       requiresAuth: false,
     },
   },
