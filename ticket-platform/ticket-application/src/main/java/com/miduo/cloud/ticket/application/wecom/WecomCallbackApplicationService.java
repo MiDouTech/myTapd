@@ -59,7 +59,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         String encrypted = WecomXmlParser.extractEncryptField(requestBody);
 
         String plainXml = callbackCryptoService.decryptMessage(msgSignature, timestamp, nonce, encrypted);
-        Map<String, String> messageMap = WecomXmlParser.parseFirstLevel(plainXml);
+        Map<String, String> messageMap = WecomXmlParser.parseDecryptedMessage(plainXml);
         WecomCallbackMessageDTO message = buildMessage(messageMap, plainXml);
         log.info("收到企微回调消息: msgId={}, msgType={}, chatId={}, fromWecomUserid={}",
                 message.getMsgId(), message.getMsgType(), message.getChatId(), message.getFromWecomUserid());
