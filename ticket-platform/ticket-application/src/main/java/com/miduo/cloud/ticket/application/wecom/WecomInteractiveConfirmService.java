@@ -106,19 +106,21 @@ public class WecomInteractiveConfirmService {
             return "❌ 您尚未关联工单系统账号，请先访问系统完成企微授权登录";
         }
 
-        if (draft.getCategoryPath() == null || draft.getCategoryPath().trim().isEmpty()) {
-            draft.setStep(WecomDraftSession.Step.MODIFY_CATEGORY);
-            draftSessionService.saveDraft(chatId, wecomUserId, draft, draft.isGroupChat());
-            return "⚠️ 工单分类未能自动识别，请手动选择分类：\n" + buildCategoryListText() +
-                    "\n---\n回复分类全路径（如：研发需求/缺陷修复）完成建单，回复 0 取消";
-        }
-
         Long categoryId = resolveCategoryId(draft.getCategoryPath());
         if (categoryId == null) {
-            draft.setStep(WecomDraftSession.Step.MODIFY_CATEGORY);
-            draftSessionService.saveDraft(chatId, wecomUserId, draft, draft.isGroupChat());
-            return "⚠️ 分类「" + draft.getCategoryPath() + "」不存在，请重新选择：\n" + buildCategoryListText() +
-                    "\n---\n回复分类全路径完成建单，回复 0 取消";
+            TicketCategoryPO fallback = ticketCategoryMapper.selectOne(
+                    new LambdaQueryWrapper<TicketCategoryPO>()
+                            .eq(TicketCategoryPO::getIsActive, 1)
+                            .orderByAsc(TicketCategoryPO::getLevel)
+                            .orderByAsc(TicketCategoryPO::getSortOrder)
+                            .last("LIMIT 1")
+            );
+            if (fallback == null) {
+                draftSessionService.removeDraft(chatId, wecomUserId);
+                return "❌ 系统暂无可用工单分类，请联系管理员配置后再试";
+            }
+            categoryId = fallback.getId();
+            draft.setCategoryPath(fallback.getName());
         }
 
         TicketCreateInput input = new TicketCreateInput();
@@ -216,7 +218,7 @@ public class WecomInteractiveConfirmService {
      */
     public String buildDraftPreviewMessage(WecomDraftSession draft) {
         String categoryDisplay = (draft.getCategoryPath() == null || draft.getCategoryPath().trim().isEmpty())
-                ? "⚠️ 未识别（回复1后将引导您选择）"
+                ? "（未识别，将使用默认分类）"
                 : draft.getCategoryPath();
         return "📋 工单预览（请确认）\n" +
                 "标题：" + safeValue(draft.getTitle()) + "\n" +
