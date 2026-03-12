@@ -49,4 +49,9 @@ public class WecomCallbackMessageDTO implements Serializable {
      * 企微AI bot回调消息的response_url，用于直接回复消息（无需access_token）
      */
     private String responseUrl;
+
+    /**
+     * 聊天类型（single=单聊，group=群聊），企微AI bot消息携带
+     */
+    private String chatType;
 }

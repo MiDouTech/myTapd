@@ -153,7 +153,10 @@ public class WecomMessageProcessor extends BaseApplicationService {
         draft.setDescription(rawText);
         draft.setNlpConfidence(nlpResult.getConfidence());
         draft.setChatId(chatId);
-        boolean isGroup = chatId != null && !chatId.trim().isEmpty();
+        boolean isGroup = "group".equalsIgnoreCase(message.getChatType())
+                || (chatId != null && !chatId.trim().isEmpty()
+                    && !"single".equalsIgnoreCase(message.getChatType())
+                    && !chatId.equals(message.getFromWecomUserid()));
         draft.setGroupChat(isGroup);
 
         draftSessionService.saveDraft(chatId != null ? chatId : fromWecomUserId, fromWecomUserId, draft, isGroup);

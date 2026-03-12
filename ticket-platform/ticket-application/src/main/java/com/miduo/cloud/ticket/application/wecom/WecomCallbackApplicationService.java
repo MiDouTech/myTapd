@@ -89,6 +89,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setRawXml(plainXml);
         message.setCreateTime(safeValue(messageMap.get("CreateTime")));
         message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));
+        message.setChatType(safeValue(messageMap.get("ChatType")));
 
         String msgId = safeValue(messageMap.get("MsgId"));
         if (msgId.isEmpty()) {

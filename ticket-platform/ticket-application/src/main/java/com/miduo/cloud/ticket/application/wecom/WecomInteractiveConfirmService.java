@@ -106,10 +106,19 @@ public class WecomInteractiveConfirmService {
             return "❌ 您尚未关联工单系统账号，请先访问系统完成企微授权登录";
         }
 
+        if (draft.getCategoryPath() == null || draft.getCategoryPath().trim().isEmpty()) {
+            draft.setStep(WecomDraftSession.Step.MODIFY_CATEGORY);
+            draftSessionService.saveDraft(chatId, wecomUserId, draft, draft.isGroupChat());
+            return "⚠️ 工单分类未能自动识别，请手动选择分类：\n" + buildCategoryListText() +
+                    "\n---\n回复分类全路径（如：研发需求/缺陷修复）完成建单，回复 0 取消";
+        }
+
         Long categoryId = resolveCategoryId(draft.getCategoryPath());
         if (categoryId == null) {
-            draftSessionService.removeDraft(chatId, wecomUserId);
-            return "❌ 分类不存在，请发送 @工单助手 分类 查看完整分类列表后重新建单";
+            draft.setStep(WecomDraftSession.Step.MODIFY_CATEGORY);
+            draftSessionService.saveDraft(chatId, wecomUserId, draft, draft.isGroupChat());
+            return "⚠️ 分类「" + draft.getCategoryPath() + "」不存在，请重新选择：\n" + buildCategoryListText() +
+                    "\n---\n回复分类全路径完成建单，回复 0 取消";
         }
 
         TicketCreateInput input = new TicketCreateInput();
@@ -206,9 +215,12 @@ public class WecomInteractiveConfirmService {
      * 构建草稿预览消息
      */
     public String buildDraftPreviewMessage(WecomDraftSession draft) {
+        String categoryDisplay = (draft.getCategoryPath() == null || draft.getCategoryPath().trim().isEmpty())
+                ? "⚠️ 未识别（回复1后将引导您选择）"
+                : draft.getCategoryPath();
         return "📋 工单预览（请确认）\n" +
                 "标题：" + safeValue(draft.getTitle()) + "\n" +
-                "分类：" + safeValue(draft.getCategoryPath()) + "\n" +
+                "分类：" + categoryDisplay + "\n" +
                 "优先级：" + formatPriority(draft.getPriority()) + "\n" +
                 "描述：" + safeValue(draft.getDescription()) + "\n" +
                 "---\n" +
