@@ -21,6 +21,11 @@ public interface UserRepository {
     User findByWecomUserid(String wecomUserid);
 
     /**
+     * 根据手机号查询用户
+     */
+    User findByPhone(String phone);
+
+    /**
      * 查询所有用户
      */
     List<User> findAll();
