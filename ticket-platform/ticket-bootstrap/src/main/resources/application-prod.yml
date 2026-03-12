@@ -53,7 +53,7 @@ wecom:
     enabled: false
 
 ticket:
-  detail-url: ${TICKET_DETAIL_URL:https://ticket.your-company.com/ticket/detail}
+  detail-url: ${TICKET_DETAIL_URL:https://ticket.your-company.com/open/ticket}
 
 jwt:
   secret: your_jwt_secret_key_must_be_at_least_64_characters_long_replace_this

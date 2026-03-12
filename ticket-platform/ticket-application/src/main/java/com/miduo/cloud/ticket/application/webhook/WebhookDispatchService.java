@@ -44,7 +44,7 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
 
-    @Value("${ticket.detail-url:http://ticket.t.miduonet.com/ticket/detail}")
+    @Value("${ticket.detail-url:http://ticket.t.miduonet.com/open/ticket}")
     private String ticketDetailUrl;
 
     private final WebhookConfigMapper webhookConfigMapper;
@@ -356,9 +356,10 @@ public class WebhookDispatchService extends BaseApplicationService {
                 content.append("变更：").append(changeSummary).append("\n");
             }
         }
-        if (ticketId != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
+        if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
-            content.append("详情：").append(baseUrl).append("/").append(ticketId);
+            content.append("详情：").append(baseUrl).append("/").append(ticketNo);
         }
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);

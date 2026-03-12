@@ -52,7 +52,7 @@ wecom:
     enabled: false
 
 ticket:
-  detail-url: ${TICKET_DETAIL_URL:http://ticket.t.miduonet.com/ticket/detail}
+  detail-url: ${TICKET_DETAIL_URL:http://ticket.t.miduonet.com/open/ticket}
 
 jwt:
   secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
