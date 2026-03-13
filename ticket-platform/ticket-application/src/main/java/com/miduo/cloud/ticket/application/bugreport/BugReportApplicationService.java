@@ -163,7 +163,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         output.setIntroducedProject(report.getIntroducedProject());
         output.setStartDate(report.getStartDate());
         output.setResolveDate(report.getResolveDate());
+        output.setTempResolveDate(report.getTempResolveDate());
         output.setSolution(report.getSolution());
+        output.setTempSolution(report.getTempSolution());
         output.setImpactScope(report.getImpactScope());
         output.setSeverityLevel(report.getSeverityLevel());
         output.setReporterId(report.getReporterId());
@@ -579,7 +581,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         report.setIntroducedProject(input.getIntroducedProject());
         report.setStartDate(input.getStartDate());
         report.setResolveDate(input.getResolveDate());
+        report.setTempResolveDate(input.getTempResolveDate());
         report.setSolution(input.getSolution());
+        report.setTempSolution(input.getTempSolution());
         report.setImpactScope(input.getImpactScope());
         report.setSeverityLevel(input.getSeverityLevel());
         report.setReporterId(input.getReporterId());
@@ -612,8 +616,14 @@ public class BugReportApplicationService extends BaseApplicationService {
         if (input.getResolveDate() != null) {
             report.setResolveDate(input.getResolveDate());
         }
+        if (input.getTempResolveDate() != null) {
+            report.setTempResolveDate(input.getTempResolveDate());
+        }
         if (input.getSolution() != null) {
             report.setSolution(input.getSolution());
+        }
+        if (input.getTempSolution() != null) {
+            report.setTempSolution(input.getTempSolution());
         }
         if (input.getImpactScope() != null) {
             report.setImpactScope(input.getImpactScope());

@@ -46,8 +46,14 @@ public class BugReportPO extends BaseEntity {
     @TableField("resolve_date")
     private Date resolveDate;
 
+    @TableField("temp_resolve_date")
+    private Date tempResolveDate;
+
     @TableField("solution")
     private String solution;
+
+    @TableField("temp_solution")
+    private String tempSolution;
 
     @TableField("impact_scope")
     private String impactScope;
