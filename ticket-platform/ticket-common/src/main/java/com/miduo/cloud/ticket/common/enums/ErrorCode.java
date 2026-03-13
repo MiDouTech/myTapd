@@ -47,6 +47,9 @@ public enum ErrorCode {
     BUG_REPORT_NOT_FOUND(6001, "Bug简报不存在"),
     BUG_REPORT_STATUS_INVALID(6002, "Bug简报状态不允许此操作"),
 
+    UPLOAD_FAILED(7001, "文件上传失败"),
+    PARAM_INVALID(7002, "参数不合法"),
+
     INTERNAL_ERROR(9999, "系统内部错误");
 
     private final int code;

@@ -2,9 +2,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { Document as DocumentOutlined } from '@element-plus/icons-vue'
 import {
   assignTicket,
   closeTicket,
+  deleteTicketAttachment,
   followTicket,
   getTicketDetail,
   getTicketNodeDuration,
@@ -14,6 +16,7 @@ import {
   updateBugCustomerInfo,
   updateBugDevInfo,
   updateBugTestInfo,
+  uploadTicketImage,
 } from '@/api/ticket'
 import {
   getAvailableActions,
@@ -74,13 +77,13 @@ const flowHistoryLoading = ref(false)
 const transitForm = reactive({
   transitionId: '',
   targetStatus: '',
-  remark: '',
-  newAssigneeId: undefined as number | undefined,
-})
+const imageUploadLoading = ref(false)
+const imageUploadRef = ref()
 
 const assignForm = reactive({
   assigneeId: undefined as number | undefined,
   remark: '',
+  newAssigneeId: undefined as number | undefined,
 })
 
 const closeForm = reactive({
@@ -403,6 +406,38 @@ function formatDuration(seconds?: number): string {
     return `${minute}m ${second}s`
   }
   return `${second}s`
+}
+
+async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
+  if (!uploadFile?.raw) {
+    return
+  }
+  imageUploadLoading.value = true
+  try {
+    await uploadTicketImage(ticketId.value, uploadFile.raw)
+    notifySuccess('图片上传成功')
+    await loadAll()
+  } finally {
+    imageUploadLoading.value = false
+    if (imageUploadRef.value) {
+      ;(imageUploadRef.value as { clearFiles: () => void }).clearFiles()
+    }
+  }
+}
+
+async function handleDeleteAttachment(attachmentId: number): Promise<void> {
+  try {
+    await deleteTicketAttachment(attachmentId)
+    notifySuccess('附件删除成功')
+    await loadAll()
+  } catch {
+    // 删除失败由全局异常处理
+  }
+}
+
+function isImageFile(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.startsWith('image/')
 }
 
 onMounted(async () => {
@@ -798,30 +833,69 @@ watch(
 
     <el-card shadow="never">
       <template #header>
-        <div class="section-title">附件</div>
+        <div class="section-title-with-action">
+          <span class="section-title">附件</span>
+          <el-upload
+            ref="imageUploadRef"
+            :show-file-list="false"
+            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+            :on-change="handleImageUpload"
+            :auto-upload="false"
+          >
+            <el-button type="primary" size="small" :loading="imageUploadLoading">
+              上传图片
+            </el-button>
+          </el-upload>
+        </div>
       </template>
-      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件" />
-      <el-table
-        v-else
-        :data="detail.attachments"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      >
-        <el-table-column prop="fileName" label="文件名" align="center" min-width="220" />
-        <el-table-column prop="fileType" label="类型" align="center" width="120" />
-        <el-table-column label="大小" align="center" width="120">
-          <template #default="{ row }">
-            {{ formatFileSize(row.fileSize) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="uploadedByName" label="上传人" align="center" width="120" />
-        <el-table-column label="上传时间" align="center" width="180">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </el-table-column>
-      </el-table>
+      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件，可上传图片附件" />
+      <div v-else class="attachment-list">
+        <div
+          v-for="attachment in detail.attachments"
+          :key="attachment.id"
+          class="attachment-item"
+        >
+          <div class="attachment-preview">
+            <el-image
+              v-if="isImageFile(attachment.fileType)"
+              :src="attachment.filePath"
+              :preview-src-list="detail.attachments?.filter(a => isImageFile(a.fileType)).map(a => a.filePath || '')"
+              fit="cover"
+              class="attachment-thumbnail"
+              lazy
+            />
+            <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
+          </div>
+          <div class="attachment-info">
+            <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+            <div class="attachment-meta">
+              <span>{{ formatFileSize(attachment.fileSize) }}</span>
+              <span class="meta-divider">·</span>
+              <span>{{ attachment.uploadedByName || '-' }}</span>
+              <span class="meta-divider">·</span>
+              <span>{{ formatDateTime(attachment.createTime) }}</span>
+            </div>
+          </div>
+          <div class="attachment-actions">
+            <el-button
+              v-if="isImageFile(attachment.fileType) && attachment.filePath"
+              type="primary"
+              link
+              size="small"
+              :href="attachment.filePath"
+              target="_blank"
+            >查看</el-button>
+            <el-popconfirm
+              title="确认删除此附件？"
+              @confirm="handleDeleteAttachment(attachment.id)"
+            >
+              <template #reference>
+                <el-button type="danger" link size="small">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </div>
+        </div>
+      </div>
     </el-card>
 
     <el-card shadow="never">
@@ -1046,5 +1120,90 @@ watch(
 .comment-content {
   margin-top: 4px;
   color: #606266;
+}
+
+.section-title-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafafa;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f0f9ff;
+  }
+}
+
+.attachment-preview {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+}
+
+.attachment-thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+}
+
+.attachment-icon {
+  font-size: 28px;
+  color: #909399;
+}
+
+.attachment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meta-divider {
+  color: #d4d4d4;
+}
+
+.attachment-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
 }
 </style>

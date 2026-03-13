@@ -64,6 +64,12 @@
             <artifactId>minio</artifactId>
         </dependency>
 
+        <!-- 七牛云存储 -->
+        <dependency>
+            <groupId>com.qiniu</groupId>
+            <artifactId>qiniu-java-sdk</artifactId>
+        </dependency>
+
         <!-- Spring Context -->
         <dependency>
             <groupId>org.springframework</groupId>
