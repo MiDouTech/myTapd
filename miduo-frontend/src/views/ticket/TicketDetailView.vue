@@ -77,6 +77,10 @@ const flowHistoryLoading = ref(false)
 const transitForm = reactive({
   transitionId: '',
   targetStatus: '',
+  remark: '',
+  newAssigneeId: undefined as number | undefined,
+})
+
 const imageUploadLoading = ref(false)
 const imageUploadRef = ref()
 
