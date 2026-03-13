@@ -36,33 +36,71 @@ public class WecomGroupWebhookSender implements NotificationSender {
      * 按Webhook地址发送群通知
      */
     public void sendToWebhook(String webhookUrl, String title, String content) {
-        sendToWebhook(webhookUrl, title, content, null);
+        sendToWebhookWithMention(webhookUrl, title, content, null);
     }
 
     /**
-     * 按Webhook地址发送群通知，并@提交人
+     * 按Webhook地址发送群通知，并@指定成员（企微wecomUserid列表）
      *
-     * @param mentionWecomUserid 需要@的企微用户ID（工单提交人），为null时不@任何人
+     * @param webhookUrl            企微群机器人Webhook地址
+     * @param title                 消息标题
+     * @param content               消息正文
+     * @param mentionedWecomUserIds 需要@的企微userId列表，传null或空则不@任何人
      */
-    public void sendToWebhook(String webhookUrl, String title, String content, String mentionWecomUserid) {
+    public void sendToWebhookWithMention(String webhookUrl, String title, String content,
+                                         java.util.List<String> mentionedWecomUserIds) {
         if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
             log.warn("企微群Webhook地址为空，跳过发送: title={}", title);
             return;
         }
-
-        String markdown = buildMarkdown(title, content, mentionWecomUserid);
+        String markdown = buildMarkdownWithMention(title, content, mentionedWecomUserIds);
         wecomClient.sendGroupWebhookMarkdown(webhookUrl, markdown);
-        log.info("企微群Webhook推送成功: title={}", title);
+        log.info("企微群Webhook推送成功: title={}, mentionCount={}",
+                title, mentionedWecomUserIds == null ? 0 : mentionedWecomUserIds.size());
     }
 
-    private String buildMarkdown(String title, String content, String mentionWecomUserid) {
+    /**
+     * 按Webhook地址发送预格式化内容（Bug简报归档通知专用）
+     * 直接发送已组装好的Markdown正文，末尾追加@mention，不再添加额外标题或引用块前缀
+     *
+     * @param webhookUrl            企微群机器人Webhook地址
+     * @param markdownBody          已组装的Markdown正文（含标题行）
+     * @param mentionedWecomUserIds 需要@的企微userId列表
+     */
+    public void sendReportNoticeToWebhook(String webhookUrl, String markdownBody,
+                                          java.util.List<String> mentionedWecomUserIds) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            log.warn("企微群Webhook地址为空，跳过发送Bug简报通知");
+            return;
+        }
+        StringBuilder markdown = new StringBuilder(markdownBody == null ? "" : markdownBody);
+        if (mentionedWecomUserIds != null && !mentionedWecomUserIds.isEmpty()) {
+            markdown.append("\n");
+            for (String wecomUserId : mentionedWecomUserIds) {
+                if (wecomUserId != null && !wecomUserId.trim().isEmpty()) {
+                    markdown.append("<@").append(wecomUserId.trim()).append("> ");
+                }
+            }
+        }
+        wecomClient.sendGroupWebhookMarkdown(webhookUrl, markdown.toString());
+        log.info("企微群Bug简报归档通知推送成功: mentionCount={}",
+                mentionedWecomUserIds == null ? 0 : mentionedWecomUserIds.size());
+    }
+
+    private String buildMarkdownWithMention(String title, String content,
+                                            java.util.List<String> mentionedWecomUserIds) {
         String safeTitle = title == null ? "工单通知" : title;
         String safeContent = content == null ? "" : content;
         StringBuilder markdown = new StringBuilder();
         markdown.append("**").append(safeTitle).append("**\n>");
         markdown.append(safeContent.replace("\n", "\n>"));
-        if (mentionWecomUserid != null && !mentionWecomUserid.trim().isEmpty()) {
-            markdown.append("\n>提交人：<@").append(mentionWecomUserid.trim()).append(">");
+        if (mentionedWecomUserIds != null && !mentionedWecomUserIds.isEmpty()) {
+            markdown.append("\n>");
+            for (String wecomUserId : mentionedWecomUserIds) {
+                if (wecomUserId != null && !wecomUserId.trim().isEmpty()) {
+                    markdown.append("<@").append(wecomUserId.trim()).append("> ");
+                }
+            }
         }
         return markdown.toString();
     }

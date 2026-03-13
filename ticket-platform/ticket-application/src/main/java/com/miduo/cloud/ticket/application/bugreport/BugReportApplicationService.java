@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.NotificationOrchestrator;
+import com.miduo.cloud.ticket.application.notification.WecomGroupPushService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.BugReportStatus;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -49,6 +50,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     private final TicketBugDevInfoMapper ticketBugDevInfoMapper;
     private final SysUserMapper sysUserMapper;
     private final NotificationOrchestrator notificationOrchestrator;
+    private final WecomGroupPushService wecomGroupPushService;
     private final SystemConfigMapper systemConfigMapper;
 
     public BugReportApplicationService(BugReportMapper bugReportMapper,
@@ -62,6 +64,7 @@ public class BugReportApplicationService extends BaseApplicationService {
                                        TicketBugDevInfoMapper ticketBugDevInfoMapper,
                                        SysUserMapper sysUserMapper,
                                        NotificationOrchestrator notificationOrchestrator,
+                                       WecomGroupPushService wecomGroupPushService,
                                        SystemConfigMapper systemConfigMapper) {
         this.bugReportMapper = bugReportMapper;
         this.bugReportResponsibleMapper = bugReportResponsibleMapper;
@@ -74,6 +77,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         this.ticketBugDevInfoMapper = ticketBugDevInfoMapper;
         this.sysUserMapper = sysUserMapper;
         this.notificationOrchestrator = notificationOrchestrator;
+        this.wecomGroupPushService = wecomGroupPushService;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -163,7 +167,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         output.setIntroducedProject(report.getIntroducedProject());
         output.setStartDate(report.getStartDate());
         output.setResolveDate(report.getResolveDate());
+        output.setTempResolveDate(report.getTempResolveDate());
         output.setSolution(report.getSolution());
+        output.setTempSolution(report.getTempSolution());
         output.setImpactScope(report.getImpactScope());
         output.setSeverityLevel(report.getSeverityLevel());
         output.setReporterId(report.getReporterId());
@@ -369,13 +375,146 @@ public class BugReportApplicationService extends BaseApplicationService {
         bugReportMapper.updateById(report);
         recordLog(id, currentUserId, "APPROVE", oldStatus, report.getStatus(), input.getReviewComment());
 
+        String notifyTitle = String.format("Bug简报已归档 - %s", report.getReportNo());
+        String severity = StringUtils.hasText(report.getSeverityLevel()) ? report.getSeverityLevel() : "-";
+        String category = StringUtils.hasText(report.getDefectCategory()) ? report.getDefectCategory() : "-";
+        String reviewComment = StringUtils.hasText(input.getReviewComment()) ? input.getReviewComment() : "";
+
+        // 通知简报责任人（站内信 + 企微应用消息）
         List<Long> responsibleUserIds = findResponsibleUserIds(id);
         if (!responsibleUserIds.isEmpty()) {
-            String title = String.format("Bug简报审核通过 - %s", report.getReportNo());
-            String content = String.format("Bug简报 %s 已审核通过并归档", report.getReportNo());
+            String content = String.format("Bug简报 %s 已审核通过并归档，缺陷分类：%s，严重级别：%s",
+                    report.getReportNo(), category, severity);
             notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
-                    NotificationType.REPORT_APPROVED, title, content);
+                    NotificationType.REPORT_APPROVED, notifyTitle, content);
         }
+
+        // 查找关联工单及其创建人、处理人
+        List<BugReportTicketPO> reportTicketLinks = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getReportId, id));
+        if (!CollectionUtils.isEmpty(reportTicketLinks)) {
+            List<Long> relatedTicketIds = reportTicketLinks.stream()
+                    .map(BugReportTicketPO::getTicketId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            List<TicketPO> relatedTickets = ticketMapper.selectBatchIds(relatedTicketIds);
+            Set<Long> ticketStakeholderIds = new LinkedHashSet<>();
+            for (TicketPO ticket : relatedTickets) {
+                if (ticket.getCreatorId() != null) {
+                    ticketStakeholderIds.add(ticket.getCreatorId());
+                }
+                if (ticket.getAssigneeId() != null) {
+                    ticketStakeholderIds.add(ticket.getAssigneeId());
+                }
+            }
+
+            // 去掉已在简报责任人中通知过的用户，避免重复
+            ticketStakeholderIds.removeAll(responsibleUserIds);
+
+            // 通知工单创建人和处理人（站内信 + 企微应用消息）
+            if (!ticketStakeholderIds.isEmpty()) {
+                String content = String.format("你参与的工单关联的Bug简报 %s 已审核通过并归档，缺陷分类：%s，严重级别：%s",
+                        report.getReportNo(), category, severity);
+                notificationOrchestrator.dispatchToUsers(new ArrayList<>(ticketStakeholderIds), null, report.getId(),
+                        NotificationType.REPORT_APPROVED, notifyTitle, content);
+            }
+
+            // 企微群 Webhook @mention 通知（所有工单相关人员）
+            Set<Long> allMentionUserIds = new LinkedHashSet<>(ticketStakeholderIds);
+            allMentionUserIds.addAll(responsibleUserIds);
+            if (!relatedTicketIds.isEmpty()) {
+                // 批量查用户名：reporter + reviewer + 责任人 + 待@人
+                Set<Long> allUserIds = new LinkedHashSet<>(allMentionUserIds);
+                if (report.getReporterId() != null) {
+                    allUserIds.add(report.getReporterId());
+                }
+                if (report.getReviewerId() != null) {
+                    allUserIds.add(report.getReviewerId());
+                }
+                allUserIds.addAll(responsibleUserIds);
+                Map<Long, String> userNameMap = getUserNameMap(allUserIds);
+
+                List<String> mentionWecomUserIds = Collections.emptyList();
+                if (!allMentionUserIds.isEmpty()) {
+                    List<SysUserPO> mentionUsers = sysUserMapper.selectBatchIds(new ArrayList<>(allMentionUserIds));
+                    mentionWecomUserIds = mentionUsers.stream()
+                            .map(SysUserPO::getWecomUserid)
+                            .filter(StringUtils::hasText)
+                            .collect(Collectors.toList());
+                }
+
+                String markdownBody = buildApproveGroupNoticeMarkdown(report, userNameMap, responsibleUserIds);
+                wecomGroupPushService.pushReportNoticeByTickets(relatedTicketIds, markdownBody, mentionWecomUserIds);
+            }
+        }
+    }
+
+    /**
+     * 按照团队既有格式组装 Bug 简报归档群通知 Markdown 正文
+     * 格式参考：问题描述：xxx\n逻辑归因：xxx\n缺陷分类：xxx\n...
+     */
+    private String buildApproveGroupNoticeMarkdown(BugReportPO report,
+                                                    Map<Long, String> userNameMap,
+                                                    List<Long> responsibleUserIds) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("**[Bug简报归档] ").append(report.getReportNo()).append("**\n");
+
+        appendNoticeField(sb, "问题描述", report.getProblemDesc());
+        appendNoticeField(sb, "逻辑归因", buildLogicCauseText(report));
+        appendNoticeField(sb, "缺陷分类", report.getDefectCategory());
+        appendNoticeField(sb, "引入项目", report.getIntroducedProject());
+        appendNoticeField(sb, "开始时间", formatDateOnly(report.getStartDate()));
+        appendNoticeField(sb, "解决时间", formatDateOnly(report.getResolveDate()));
+        appendNoticeField(sb, "解决方案", report.getSolution());
+        appendNoticeField(sb, "影响范围", report.getImpactScope());
+        appendNoticeField(sb, "缺陷等级", report.getSeverityLevel());
+        appendNoticeField(sb, "反馈人", userNameMap.get(report.getReporterId()));
+        appendNoticeField(sb, "审核人", userNameMap.get(report.getReviewerId()));
+
+        if (!CollectionUtils.isEmpty(responsibleUserIds)) {
+            String responsibleNames = responsibleUserIds.stream()
+                    .map(userNameMap::get)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.joining("、"));
+            appendNoticeField(sb, "责任人", responsibleNames);
+        }
+
+        return sb.toString().trim();
+    }
+
+    private void appendNoticeField(StringBuilder sb, String label, String value) {
+        if (StringUtils.hasText(value)) {
+            sb.append(label).append("：").append(value.trim()).append("\n");
+        }
+    }
+
+    private String buildLogicCauseText(BugReportPO report) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(report.getLogicCauseLevel1())) {
+            sb.append(report.getLogicCauseLevel1().trim());
+            if (StringUtils.hasText(report.getLogicCauseLevel2())) {
+                sb.append("-").append(report.getLogicCauseLevel2().trim());
+            }
+        } else if (StringUtils.hasText(report.getLogicCauseLevel2())) {
+            sb.append(report.getLogicCauseLevel2().trim());
+        }
+        if (StringUtils.hasText(report.getLogicCauseDetail())) {
+            if (sb.length() > 0) {
+                sb.append("；");
+            }
+            sb.append(report.getLogicCauseDetail().trim());
+        }
+        return sb.toString();
+    }
+
+    private String formatDateOnly(Date date) {
+        if (date == null) {
+            return null;
+        }
+        return new SimpleDateFormat(DATE_PATTERN).format(date);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -579,7 +718,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         report.setIntroducedProject(input.getIntroducedProject());
         report.setStartDate(input.getStartDate());
         report.setResolveDate(input.getResolveDate());
+        report.setTempResolveDate(input.getTempResolveDate());
         report.setSolution(input.getSolution());
+        report.setTempSolution(input.getTempSolution());
         report.setImpactScope(input.getImpactScope());
         report.setSeverityLevel(input.getSeverityLevel());
         report.setReporterId(input.getReporterId());
@@ -612,8 +753,14 @@ public class BugReportApplicationService extends BaseApplicationService {
         if (input.getResolveDate() != null) {
             report.setResolveDate(input.getResolveDate());
         }
+        if (input.getTempResolveDate() != null) {
+            report.setTempResolveDate(input.getTempResolveDate());
+        }
         if (input.getSolution() != null) {
             report.setSolution(input.getSolution());
+        }
+        if (input.getTempSolution() != null) {
+            report.setTempSolution(input.getTempSolution());
         }
         if (input.getImpactScope() != null) {
             report.setImpactScope(input.getImpactScope());

@@ -34,7 +34,9 @@ export interface BugReportCreateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
@@ -54,7 +56,9 @@ export interface BugReportUpdateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
@@ -121,7 +125,9 @@ export interface BugReportDetailOutput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
