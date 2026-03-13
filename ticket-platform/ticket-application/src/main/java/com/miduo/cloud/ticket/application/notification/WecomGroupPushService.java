@@ -8,6 +8,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.Ticke
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomGroupBindingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomGroupBindingPO;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 
@@ -72,6 +73,55 @@ public class WecomGroupPushService extends BaseApplicationService {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
             }
+        }
+    }
+
+    /**
+     * 根据多个关联工单的群绑定关系，推送 @mention 群消息
+     * 适用于 Bug 简报归档后通知工单创建人和处理人
+     *
+     * @param ticketIds             关联的工单ID列表
+     * @param title                 消息标题
+     * @param content               消息正文
+     * @param mentionedWecomUserIds 需要@的企微userId列表
+     */
+    public void pushByTicketsWithMention(List<Long> ticketIds, String title, String content,
+                                         List<String> mentionedWecomUserIds) {
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            log.debug("企微群@mention推送跳过：ticketIds为空");
+            return;
+        }
+
+        List<TicketPO> tickets = ticketMapper.selectBatchIds(ticketIds);
+        if (CollectionUtils.isEmpty(tickets)) {
+            log.warn("企微群@mention推送跳过：未查到工单数据, ticketIds={}", ticketIds);
+            return;
+        }
+
+        Set<String> pushedWebhookUrls = new HashSet<>();
+        for (TicketPO ticket : tickets) {
+            List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
+            for (WecomGroupBindingPO binding : bindings) {
+                String webhookUrl = binding.getWebhookUrl();
+                if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+                    continue;
+                }
+                if (!pushedWebhookUrls.add(webhookUrl)) {
+                    continue;
+                }
+                try {
+                    log.info("企微群@mention推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
+                            ticket.getId(), binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
+                    groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content, mentionedWecomUserIds);
+                } catch (Exception ex) {
+                    log.error("企微群@mention推送失败: ticketId={}, bindingId={}, webhook={}, reason={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
+                }
+            }
+        }
+
+        if (pushedWebhookUrls.isEmpty()) {
+            log.debug("企微群@mention推送跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
         }
     }
 

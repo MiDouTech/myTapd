@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.NotificationOrchestrator;
+import com.miduo.cloud.ticket.application.notification.WecomGroupPushService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.BugReportStatus;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -49,6 +50,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     private final TicketBugDevInfoMapper ticketBugDevInfoMapper;
     private final SysUserMapper sysUserMapper;
     private final NotificationOrchestrator notificationOrchestrator;
+    private final WecomGroupPushService wecomGroupPushService;
     private final SystemConfigMapper systemConfigMapper;
 
     public BugReportApplicationService(BugReportMapper bugReportMapper,
@@ -62,6 +64,7 @@ public class BugReportApplicationService extends BaseApplicationService {
                                        TicketBugDevInfoMapper ticketBugDevInfoMapper,
                                        SysUserMapper sysUserMapper,
                                        NotificationOrchestrator notificationOrchestrator,
+                                       WecomGroupPushService wecomGroupPushService,
                                        SystemConfigMapper systemConfigMapper) {
         this.bugReportMapper = bugReportMapper;
         this.bugReportResponsibleMapper = bugReportResponsibleMapper;
@@ -74,6 +77,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         this.ticketBugDevInfoMapper = ticketBugDevInfoMapper;
         this.sysUserMapper = sysUserMapper;
         this.notificationOrchestrator = notificationOrchestrator;
+        this.wecomGroupPushService = wecomGroupPushService;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -371,12 +375,74 @@ public class BugReportApplicationService extends BaseApplicationService {
         bugReportMapper.updateById(report);
         recordLog(id, currentUserId, "APPROVE", oldStatus, report.getStatus(), input.getReviewComment());
 
+        String notifyTitle = String.format("Bug简报已归档 - %s", report.getReportNo());
+        String severity = StringUtils.hasText(report.getSeverityLevel()) ? report.getSeverityLevel() : "-";
+        String category = StringUtils.hasText(report.getDefectCategory()) ? report.getDefectCategory() : "-";
+        String reviewComment = StringUtils.hasText(input.getReviewComment()) ? input.getReviewComment() : "";
+
+        // 通知简报责任人（站内信 + 企微应用消息）
         List<Long> responsibleUserIds = findResponsibleUserIds(id);
         if (!responsibleUserIds.isEmpty()) {
-            String title = String.format("Bug简报审核通过 - %s", report.getReportNo());
-            String content = String.format("Bug简报 %s 已审核通过并归档", report.getReportNo());
+            String content = String.format("Bug简报 %s 已审核通过并归档，缺陷分类：%s，严重级别：%s",
+                    report.getReportNo(), category, severity);
             notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
-                    NotificationType.REPORT_APPROVED, title, content);
+                    NotificationType.REPORT_APPROVED, notifyTitle, content);
+        }
+
+        // 查找关联工单及其创建人、处理人
+        List<BugReportTicketPO> reportTicketLinks = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getReportId, id));
+        if (!CollectionUtils.isEmpty(reportTicketLinks)) {
+            List<Long> relatedTicketIds = reportTicketLinks.stream()
+                    .map(BugReportTicketPO::getTicketId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            List<TicketPO> relatedTickets = ticketMapper.selectBatchIds(relatedTicketIds);
+            Set<Long> ticketStakeholderIds = new LinkedHashSet<>();
+            for (TicketPO ticket : relatedTickets) {
+                if (ticket.getCreatorId() != null) {
+                    ticketStakeholderIds.add(ticket.getCreatorId());
+                }
+                if (ticket.getAssigneeId() != null) {
+                    ticketStakeholderIds.add(ticket.getAssigneeId());
+                }
+            }
+
+            // 去掉已在简报责任人中通知过的用户，避免重复
+            ticketStakeholderIds.removeAll(responsibleUserIds);
+
+            // 通知工单创建人和处理人（站内信 + 企微应用消息）
+            if (!ticketStakeholderIds.isEmpty()) {
+                String content = String.format("你参与的工单关联的Bug简报 %s 已审核通过并归档，缺陷分类：%s，严重级别：%s",
+                        report.getReportNo(), category, severity);
+                notificationOrchestrator.dispatchToUsers(new ArrayList<>(ticketStakeholderIds), null, report.getId(),
+                        NotificationType.REPORT_APPROVED, notifyTitle, content);
+            }
+
+            // 企微群 Webhook @mention 通知（所有工单相关人员）
+            Set<Long> allMentionUserIds = new LinkedHashSet<>(ticketStakeholderIds);
+            allMentionUserIds.addAll(responsibleUserIds);
+            if (!allMentionUserIds.isEmpty() && !relatedTicketIds.isEmpty()) {
+                List<SysUserPO> mentionUsers = sysUserMapper.selectBatchIds(new ArrayList<>(allMentionUserIds));
+                List<String> mentionWecomUserIds = mentionUsers.stream()
+                        .map(SysUserPO::getWecomUserid)
+                        .filter(StringUtils::hasText)
+                        .collect(Collectors.toList());
+
+                StringBuilder groupContent = new StringBuilder();
+                groupContent.append(String.format("Bug简报 %s 已审核通过并归档", report.getReportNo()));
+                groupContent.append(String.format("\n缺陷分类：%s　严重级别：%s", category, severity));
+                if (StringUtils.hasText(reviewComment)) {
+                    groupContent.append(String.format("\n审核意见：%s", reviewComment));
+                }
+                groupContent.append("\n请知悉，后续请关注相关优化整改跟进。");
+
+                wecomGroupPushService.pushByTicketsWithMention(
+                        relatedTicketIds, notifyTitle, groupContent.toString(), mentionWecomUserIds);
+            }
         }
     }
 
