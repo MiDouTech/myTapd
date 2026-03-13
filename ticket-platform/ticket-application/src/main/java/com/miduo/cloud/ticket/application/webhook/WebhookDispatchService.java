@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.webhook;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
@@ -10,6 +11,8 @@ import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookDispatchLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
@@ -50,13 +53,16 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final WebhookConfigMapper webhookConfigMapper;
     private final WebhookDispatchLogMapper webhookDispatchLogMapper;
     private final TicketMapper ticketMapper;
+    private final SysUserMapper sysUserMapper;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
-                                  TicketMapper ticketMapper) {
+                                  TicketMapper ticketMapper,
+                                  SysUserMapper sysUserMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -176,6 +182,13 @@ public class WebhookDispatchService extends BaseApplicationService {
         snapshot.setPriority(ticket.getPriority());
         snapshot.setCreatorId(ticket.getCreatorId());
         snapshot.setAssigneeId(ticket.getAssigneeId());
+        if (ticket.getCreatorId() != null) {
+            SysUserPO creator = sysUserMapper.selectById(ticket.getCreatorId());
+            if (creator != null) {
+                snapshot.setCreatorWecomUserid(creator.getWecomUserid());
+                snapshot.setCreatorName(creator.getName());
+            }
+        }
         return snapshot;
     }
 
@@ -362,9 +375,16 @@ public class WebhookDispatchService extends BaseApplicationService {
             content.append("详情：").append(baseUrl).append("/").append(ticketNo);
         }
 
+        String creatorWecomUserid = ticket != null ? safeJsonString(ticket, "creatorWecomUserid", null) : null;
+
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
         text.put("content", normalizedContent);
+        if (creatorWecomUserid != null && !creatorWecomUserid.isEmpty()) {
+            JSONArray mentionedList = new JSONArray();
+            mentionedList.add(creatorWecomUserid);
+            text.put("mentioned_list", mentionedList);
+        }
 
         JSONObject payload = new JSONObject();
         payload.put("msgtype", "text");
@@ -593,6 +613,8 @@ public class WebhookDispatchService extends BaseApplicationService {
         private String status;
         private String priority;
         private Long creatorId;
+        private String creatorName;
+        private String creatorWecomUserid;
         private Long assigneeId;
     }
 

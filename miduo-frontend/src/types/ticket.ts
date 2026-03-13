@@ -82,8 +82,17 @@ export interface TicketBugTestInfoInput {
   impactScope?: string
   severityLevel?: string
   moduleName?: string
-  reproduceScreenshot?: string
   testRemark?: string
+}
+
+export interface TicketModuleOutput {
+  id: number
+  name: string
+  sort: number
+}
+
+export interface TicketModuleInput {
+  name: string
 }
 
 export interface TicketBugDevInfoInput {
@@ -264,6 +273,32 @@ export interface BugSummaryInfoOutput {
 export interface BugChangeHistoryQuery {
   changeType?: string
   fieldName?: string
+}
+
+/**
+ * 企微消息解析输入参数
+ * 接口编号：API000504
+ */
+export interface WecomMessageParseInput {
+  message: string
+}
+
+/**
+ * 企微消息解析输出结果
+ * 接口编号：API000504
+ */
+export interface WecomMessageParseOutput {
+  merchantNo?: string
+  companyName?: string
+  merchantAccount?: string
+  sceneCode?: string
+  problemDesc?: string
+  expectedResult?: string
+  problemScreenshot?: string
+  /** 成功匹配的字段名列表，用于前端高亮提示 */
+  matchedFields?: string[]
+  /** 解析置信度 0-100 */
+  confidence?: number
 }
 
 /** 工单公开详情（无需登录，外网访问） */

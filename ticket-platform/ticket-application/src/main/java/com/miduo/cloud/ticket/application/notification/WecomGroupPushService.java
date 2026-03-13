@@ -5,6 +5,8 @@ import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomGroupBindingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomGroupBindingPO;
 import org.springframework.stereotype.Service;
@@ -21,13 +23,16 @@ public class WecomGroupPushService extends BaseApplicationService {
     private final TicketMapper ticketMapper;
     private final WecomGroupBindingMapper groupBindingMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
+    private final SysUserMapper sysUserMapper;
 
     public WecomGroupPushService(TicketMapper ticketMapper,
                                  WecomGroupBindingMapper groupBindingMapper,
-                                 WecomGroupWebhookSender groupWebhookSender) {
+                                 WecomGroupWebhookSender groupWebhookSender,
+                                 SysUserMapper sysUserMapper) {
         this.ticketMapper = ticketMapper;
         this.groupBindingMapper = groupBindingMapper;
         this.groupWebhookSender = groupWebhookSender;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -52,6 +57,8 @@ public class WecomGroupPushService extends BaseApplicationService {
             return;
         }
 
+        String creatorWecomUserid = resolveCreatorWecomUserid(ticket.getCreatorId());
+
         Set<String> pushedWebhookUrls = new HashSet<>();
         for (WecomGroupBindingPO binding : bindings) {
             String webhookUrl = binding.getWebhookUrl();
@@ -68,7 +75,7 @@ public class WecomGroupPushService extends BaseApplicationService {
             try {
                 log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
-                groupWebhookSender.sendToWebhook(webhookUrl, title, content);
+                groupWebhookSender.sendToWebhook(webhookUrl, title, content, creatorWecomUserid);
             } catch (Exception ex) {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
@@ -168,6 +175,16 @@ public class WecomGroupPushService extends BaseApplicationService {
         if (pushedWebhookUrls.isEmpty()) {
             log.debug("企微群@mention推送跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
         }
+    private String resolveCreatorWecomUserid(Long creatorId) {
+        if (creatorId == null) {
+            return null;
+        }
+        SysUserPO creator = sysUserMapper.selectById(creatorId);
+        if (creator == null) {
+            return null;
+        }
+        String wecomUserid = creator.getWecomUserid();
+        return (wecomUserid != null && !wecomUserid.trim().isEmpty()) ? wecomUserid.trim() : null;
     }
 
     private List<WecomGroupBindingPO> findRelatedBindings(String sourceChatId, Long categoryId) {

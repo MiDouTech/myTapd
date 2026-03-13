@@ -2,15 +2,18 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { Document as DocumentOutlined } from '@element-plus/icons-vue'
+import { ChatDotSquare, Document as DocumentOutlined } from '@element-plus/icons-vue'
 import {
   assignTicket,
   closeTicket,
+  createTicketModule,
   deleteTicketAttachment,
   followTicket,
   getTicketDetail,
+  getTicketModuleList,
   getTicketNodeDuration,
   getTicketTimeTrack,
+  parseWecomCustomerInfo,
   trackTicketRead,
   unfollowTicket,
   updateBugCustomerInfo,
@@ -25,14 +28,17 @@ import {
 } from '@/api/workflow'
 import { getUserList } from '@/api/user'
 import EmptyState from '@/components/common/EmptyState.vue'
+import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
   TicketDetailOutput,
+  TicketModuleOutput,
   TicketNodeDurationItem,
   TicketTimeTrackItem,
+  WecomMessageParseOutput,
 } from '@/types/ticket'
 import type {
   AvailableActionOutput,
@@ -84,6 +90,8 @@ const transitForm = reactive({
 const imageUploadLoading = ref(false)
 const imageUploadRef = ref()
 
+const ticketModules = ref<TicketModuleOutput[]>([])
+
 const assignForm = reactive({
   assigneeId: undefined as number | undefined,
   remark: '',
@@ -93,6 +101,70 @@ const assignForm = reactive({
 const closeForm = reactive({
   remark: '',
 })
+
+// ---- 企微消息解析 ----
+const wecomParseDialogVisible = ref(false)
+const wecomParseMessage = ref('')
+const wecomParseLoading = ref(false)
+const wecomParseResult = ref<WecomMessageParseOutput | null>(null)
+
+async function handleWecomParse() {
+  if (!wecomParseMessage.value.trim()) {
+    notifyError('请粘贴企微消息内容')
+    return
+  }
+  wecomParseLoading.value = true
+  wecomParseResult.value = null
+  try {
+    const result = await parseWecomCustomerInfo({ message: wecomParseMessage.value })
+    wecomParseResult.value = result
+    if (!result.matchedFields || result.matchedFields.length === 0) {
+      notifyError('未能从消息中识别出有效字段，请检查消息格式')
+    }
+  } catch {
+    notifyError('解析失败，请稍后重试')
+  } finally {
+    wecomParseLoading.value = false
+  }
+}
+
+function applyWecomParseResult() {
+  const result = wecomParseResult.value
+  if (!result) {
+    return
+  }
+  if (result.merchantNo) {
+    customerInfoForm.merchantNo = result.merchantNo
+  }
+  if (result.companyName) {
+    customerInfoForm.companyName = result.companyName
+  }
+  if (result.merchantAccount) {
+    customerInfoForm.merchantAccount = result.merchantAccount
+  }
+  if (result.sceneCode) {
+    customerInfoForm.sceneCode = result.sceneCode
+  }
+  if (result.problemDesc) {
+    customerInfoForm.problemDesc = result.problemDesc
+  }
+  if (result.expectedResult) {
+    customerInfoForm.expectedResult = result.expectedResult
+  }
+  if (result.problemScreenshot) {
+    customerInfoForm.problemScreenshot = result.problemScreenshot
+  }
+  wecomParseDialogVisible.value = false
+  wecomParseMessage.value = ''
+  wecomParseResult.value = null
+  notifySuccess('已将解析结果填入表单，请确认后保存')
+}
+
+function openWecomParseDialog() {
+  wecomParseMessage.value = ''
+  wecomParseResult.value = null
+  wecomParseDialogVisible.value = true
+}
 
 const customerInfoForm = reactive<TicketBugCustomerInfoInput>({
   merchantNo: '',
@@ -111,7 +183,6 @@ const testInfoForm = reactive<TicketBugTestInfoInput>({
   impactScope: '',
   severityLevel: '',
   moduleName: '',
-  reproduceScreenshot: '',
   testRemark: '',
 })
 
@@ -204,7 +275,6 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactScope: ticketDetail.bugTestInfo?.impactScope || '',
     severityLevel: ticketDetail.bugTestInfo?.severityLevel || '',
     moduleName: ticketDetail.bugTestInfo?.moduleName || '',
-    reproduceScreenshot: ticketDetail.bugTestInfo?.reproduceScreenshot || '',
     testRemark: ticketDetail.bugTestInfo?.testRemark || '',
   })
 
@@ -215,6 +285,14 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactAssessment: ticketDetail.bugDevInfo?.impactAssessment || '',
     devRemark: ticketDetail.bugDevInfo?.devRemark || '',
   })
+}
+
+async function loadModules(): Promise<void> {
+  try {
+    ticketModules.value = await getTicketModuleList()
+  } catch {
+    ticketModules.value = []
+  }
 }
 
 async function loadAll(): Promise<void> {
@@ -376,6 +454,11 @@ async function saveCustomerInfo(): Promise<void> {
 async function saveTestInfo(): Promise<void> {
   bugSubmitLoading.value = true
   try {
+    const moduleName = testInfoForm.moduleName?.trim()
+    if (moduleName && !ticketModules.value.some((m) => m.name === moduleName)) {
+      await createTicketModule({ name: moduleName })
+      await loadModules()
+    }
     await updateBugTestInfo(ticketId.value, { ...testInfoForm })
     notifySuccess('测试信息保存成功')
     await loadAll()
@@ -445,7 +528,7 @@ function isImageFile(fileType?: string): boolean {
 }
 
 onMounted(async () => {
-  await Promise.all([loadAll(), trackReadSilently()])
+  await Promise.all([loadAll(), trackReadSilently(), loadModules()])
 })
 
 watch(
@@ -499,6 +582,20 @@ watch(
             <el-tab-pane label="详细信息" name="detail">
               <el-tabs v-model="activeBugTab">
                 <el-tab-pane label="客服信息" name="customer">
+          <!-- 企微消息一键解析入口 -->
+          <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              class="wecom-parse-btn"
+              @click="openWecomParseDialog"
+            >
+              <el-icon style="margin-right: 4px"><ChatDotSquare /></el-icon>
+              企微消息一键解析
+            </el-button>
+            <span class="wecom-parse-hint">粘贴企微收到的客服消息，自动识别并填入下方字段</span>
+          </div>
           <el-form label-width="120px">
             <el-form-item label="商户编号">
               <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
@@ -547,6 +644,120 @@ watch(
           </div>
         </el-tab-pane>
 
+        <!-- 企微消息解析弹窗 -->
+        <el-dialog
+          v-model="wecomParseDialogVisible"
+          title="企微消息一键解析"
+          width="640px"
+          :close-on-click-modal="false"
+          destroy-on-close
+        >
+          <div class="wecom-dialog-body">
+            <p class="wecom-dialog-tip">
+              将企微中收到的客服消息粘贴到下方，系统将通过自然语言匹配自动识别商户编号、公司名称、问题描述等字段，并填入客服信息表单。
+            </p>
+            <el-input
+              v-model="wecomParseMessage"
+              type="textarea"
+              :rows="8"
+              placeholder="请粘贴企微消息内容，例如：
+商户编号：10004557
+公司名称：山东英贝健生物技术有限公司
+商户账号：ybj0101
+问题描述：用户反馈支付页面无法跳转，点击支付按钮后页面白屏...
+预期结果：点击支付后应正常跳转到支付页面"
+              class="wecom-parse-textarea"
+            />
+            <div v-if="wecomParseResult" class="wecom-parse-preview">
+              <div class="preview-header">
+                <span class="preview-title">解析结果预览</span>
+                <el-tag
+                  :type="(wecomParseResult.confidence ?? 0) >= 60 ? 'success' : 'warning'"
+                  size="small"
+                >
+                  置信度 {{ wecomParseResult.confidence ?? 0 }}%
+                </el-tag>
+              </div>
+              <el-descriptions :column="1" border size="small" class="preview-desc">
+                <el-descriptions-item
+                  v-if="wecomParseResult.merchantNo"
+                  label="商户编号"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.merchantNo }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.companyName"
+                  label="公司名称"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.companyName }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.merchantAccount"
+                  label="商户账号"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.merchantAccount }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.sceneCode"
+                  label="场景码"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.sceneCode }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.problemDesc"
+                  label="问题描述"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.problemDesc }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.expectedResult"
+                  label="预期结果"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.expectedResult }}
+                </el-descriptions-item>
+                <el-descriptions-item
+                  v-if="wecomParseResult.problemScreenshot"
+                  label="问题截图"
+                >
+                  <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+                  {{ wecomParseResult.problemScreenshot }}
+                </el-descriptions-item>
+              </el-descriptions>
+              <p
+                v-if="!wecomParseResult.matchedFields || wecomParseResult.matchedFields.length === 0"
+                class="no-match-tip"
+              >
+                未能识别到任何字段，请尝试使用"字段名：字段值"的格式发送消息
+              </p>
+            </div>
+          </div>
+          <template #footer>
+            <el-button @click="wecomParseDialogVisible = false">取消</el-button>
+            <el-button
+              type="primary"
+              plain
+              :loading="wecomParseLoading"
+              :disabled="!wecomParseMessage.trim()"
+              @click="handleWecomParse"
+            >
+              {{ wecomParseResult ? '重新解析' : '开始解析' }}
+            </el-button>
+            <el-button
+              v-if="wecomParseResult && wecomParseResult.matchedFields && wecomParseResult.matchedFields.length > 0"
+              type="primary"
+              @click="applyWecomParseResult"
+            >
+              填入表单
+            </el-button>
+          </template>
+        </el-dialog>
+
         <el-tab-pane label="测试信息" name="test">
           <el-form label-width="120px">
             <el-form-item label="复现环境">
@@ -557,19 +768,21 @@ watch(
               </el-select>
             </el-form-item>
             <el-form-item label="复现步骤">
-              <el-input
+              <RichTextEditor
                 v-model="testInfoForm.reproduceSteps"
-                type="textarea"
-                :rows="3"
                 :disabled="!canEditTestInfo"
+                :ticket-id="ticketId"
+                placeholder="请填写复现步骤，支持粘贴截图、插入图片和表格..."
+                :height="220"
               />
             </el-form-item>
             <el-form-item label="实际结果">
-              <el-input
+              <RichTextEditor
                 v-model="testInfoForm.actualResult"
-                type="textarea"
-                :rows="3"
                 :disabled="!canEditTestInfo"
+                :ticket-id="ticketId"
+                placeholder="请填写实际结果，支持粘贴截图、插入图片和表格..."
+                :height="180"
               />
             </el-form-item>
             <el-form-item label="影响范围">
@@ -588,14 +801,22 @@ watch(
               </el-select>
             </el-form-item>
             <el-form-item label="所属模块">
-              <el-input v-model="testInfoForm.moduleName" :disabled="!canEditTestInfo" />
-            </el-form-item>
-            <el-form-item label="复现截图">
-              <el-input
-                v-model="testInfoForm.reproduceScreenshot"
-                placeholder="填写截图URL，多个可用逗号分隔"
+              <el-select
+                v-model="testInfoForm.moduleName"
                 :disabled="!canEditTestInfo"
-              />
+                filterable
+                allow-create
+                clearable
+                placeholder="请选择或输入模块名称"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="mod in ticketModules"
+                  :key="mod.id"
+                  :label="mod.name"
+                  :value="mod.name"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item label="测试备注">
               <el-input
@@ -1209,5 +1430,79 @@ watch(
   flex-shrink: 0;
   display: flex;
   gap: 4px;
+}
+
+.wecom-parse-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #f0f7ff;
+  border: 1px solid #c8e0ff;
+  border-radius: 6px;
+}
+
+.wecom-parse-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.wecom-parse-hint {
+  font-size: 12px;
+  color: #606266;
+}
+
+.wecom-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wecom-dialog-tip {
+  margin: 0;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.wecom-parse-textarea {
+  width: 100%;
+}
+
+.wecom-parse-preview {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.preview-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.preview-desc {
+  width: 100%;
+}
+
+.matched-tag {
+  margin-right: 8px;
+}
+
+.no-match-tip {
+  margin: 12px;
+  font-size: 13px;
+  color: #e6a23c;
 }
 </style>
