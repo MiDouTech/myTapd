@@ -271,32 +271,97 @@ function handleTicketRemoteSearch(keyword: string): void {
   }, 260)
 }
 
-function buildProblemDescSummary(tickets: { ticketNo?: string; title?: string; description?: string; bugCustomerInfo?: { problemDesc?: string; expectedResult?: string } | null; bugTestInfo?: { actualResult?: string; reproduceSteps?: string } | null }[]): string {
-  const parts: string[] = []
-  tickets.forEach((ticket) => {
-    const ticketParts: string[] = []
-    const header = [ticket.ticketNo, ticket.title].filter(Boolean).join(' ')
-    if (header) {
-      ticketParts.push(`【${header}】`)
+/**
+ * 将步骤文本规范化为箭头连接的一行（去除编号、换行）
+ */
+function normalizeStepsToOneLine(raw: string): string {
+  const lines = raw
+    .split(/\n/)
+    .map((line) => line.replace(/^\s*\d+\s*[.、)）]\s*/, '').trim())
+    .filter(Boolean)
+  const joined = lines.join(' → ')
+  return joined.length > 120 ? joined.slice(0, 117) + '…' : joined
+}
+
+/**
+ * 去除字符串末尾的中英文标点，便于后续统一拼接
+ */
+function trimTrailingPunct(text: string): string {
+  return text.replace(/[，。！？,.!?\s]+$/, '').trim()
+}
+
+/**
+ * 将工单信息提炼为自然语言段落，而非逐字段拼贴
+ */
+type TicketSummarySource = {
+  ticketNo?: string
+  title?: string
+  description?: string
+  bugCustomerInfo?: { problemDesc?: string; expectedResult?: string } | null
+  bugTestInfo?: { actualResult?: string; reproduceSteps?: string } | null
+}
+
+function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
+  const valid = tickets.filter(
+    (t) => t.title || t.description || t.bugCustomerInfo?.problemDesc || t.bugTestInfo?.actualResult,
+  )
+  if (valid.length === 0) return ''
+
+  const sections: string[] = []
+
+  if (valid.length > 1) {
+    const nos = valid
+      .map((t) => t.ticketNo)
+      .filter(Boolean)
+      .join('、')
+    sections.push(`本次简报共关联 ${valid.length} 个工单${nos ? `（${nos}）` : ''}，问题概述如下：`)
+  }
+
+  valid.forEach((ticket, idx) => {
+    const ref = [ticket.ticketNo, ticket.title].filter(Boolean).join(' ')
+    const sentences: string[] = []
+
+    // 核心问题描述
+    const problem = trimTrailingPunct(ticket.bugCustomerInfo?.problemDesc || ticket.description || '')
+    if (problem) {
+      sentences.push(problem)
     }
-    const problemText = ticket.bugCustomerInfo?.problemDesc || ticket.description || ''
-    if (problemText) {
-      ticketParts.push(`问题描述：${problemText}`)
+
+    // 实际现象 vs 预期结果 → 自然语言对比句
+    const actual = trimTrailingPunct(ticket.bugTestInfo?.actualResult || '')
+    const expected = trimTrailingPunct(ticket.bugCustomerInfo?.expectedResult || '')
+    if (actual && expected) {
+      sentences.push(`实际${actual}，与预期（${expected}）不符`)
+    } else if (actual && !problem.includes(actual.slice(0, 12))) {
+      sentences.push(`实际现象为${actual}`)
     }
-    if (ticket.bugCustomerInfo?.expectedResult) {
-      ticketParts.push(`预期结果：${ticket.bugCustomerInfo.expectedResult}`)
+
+    // 复现步骤（整理为一行箭头格式，过长则截断）
+    const rawSteps = (ticket.bugTestInfo?.reproduceSteps || '').trim()
+    if (rawSteps) {
+      const stepsLine = normalizeStepsToOneLine(rawSteps)
+      if (stepsLine) {
+        sentences.push(`复现路径：${stepsLine}`)
+      }
     }
-    if (ticket.bugTestInfo?.reproduceSteps) {
-      ticketParts.push(`复现步骤：${ticket.bugTestInfo.reproduceSteps}`)
+
+    if (sentences.length === 0) {
+      if (ref) sentences.push(`相关工单：${ref}`)
+      else return
     }
-    if (ticket.bugTestInfo?.actualResult) {
-      ticketParts.push(`实际结果：${ticket.bugTestInfo.actualResult}`)
-    }
-    if (ticketParts.length) {
-      parts.push(ticketParts.join('\n'))
+
+    let para = sentences.join('，') + '。'
+    // 清理双重标点
+    para = para.replace(/[，。！？]+([，。！？])/g, '$1')
+
+    if (valid.length > 1) {
+      sections.push(`${idx + 1}. 【${ref}】${para}`)
+    } else {
+      sections.push(para)
     }
   })
-  return parts.join('\n\n').slice(0, 1000)
+
+  return sections.join('\n').slice(0, 1000)
 }
 
 const SEVERITY_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 }
