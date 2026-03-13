@@ -2,6 +2,7 @@ import type { PageOutput } from '@/types/common'
 import type {
   BugChangeHistoryOutput,
   BugChangeHistoryQuery,
+  ImageUploadOutput,
   TicketAssignInput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
@@ -157,6 +158,33 @@ export function getTicketChangeHistory(
   params?: BugChangeHistoryQuery,
 ): Promise<BugChangeHistoryOutput[]> {
   return request.get<BugChangeHistoryOutput[]>(`/ticket/${ticketId}/change-history`, { params })
+}
+
+/**
+ * 上传工单图片到七牛云
+ * 接口编号：API000502
+ * 产品文档功能：工单处理 - 上传图片到七牛云并保存附件记录
+ *
+ * @param ticketId 工单ID
+ * @param file     图片文件
+ */
+export function uploadTicketImage(ticketId: number, file: File): Promise<ImageUploadOutput> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ImageUploadOutput>(`/ticket/${ticketId}/image/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+/**
+ * 删除工单附件
+ * 接口编号：API000503
+ * 产品文档功能：工单处理 - 删除已上传的附件
+ *
+ * @param attachmentId 附件ID
+ */
+export function deleteTicketAttachment(attachmentId: number): Promise<void> {
+  return request.del<void>(`/ticket/attachment/delete/${attachmentId}`)
 }
 
 /**

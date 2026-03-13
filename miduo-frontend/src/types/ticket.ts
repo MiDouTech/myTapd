@@ -148,6 +148,13 @@ export interface TicketAttachmentOutput {
   createTime?: string
 }
 
+export interface ImageUploadOutput {
+  url: string
+  fileName?: string
+  fileSize?: number
+  fileType?: string
+}
+
 export interface TicketCommentOutput {
   id: number
   userId?: number
