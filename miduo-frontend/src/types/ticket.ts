@@ -82,8 +82,17 @@ export interface TicketBugTestInfoInput {
   impactScope?: string
   severityLevel?: string
   moduleName?: string
-  reproduceScreenshot?: string
   testRemark?: string
+}
+
+export interface TicketModuleOutput {
+  id: number
+  name: string
+  sort: number
+}
+
+export interface TicketModuleInput {
+  name: string
 }
 
 export interface TicketBugDevInfoInput {
