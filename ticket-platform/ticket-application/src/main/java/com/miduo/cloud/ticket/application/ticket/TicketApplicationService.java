@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -15,6 +16,7 @@ import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import com.miduo.cloud.ticket.entity.dto.workflow.TransitInput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportResponsibleMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
@@ -83,6 +85,9 @@ public class TicketApplicationService {
 
     @Resource
     private TicketBugApplicationService ticketBugApplicationService;
+
+    @Resource
+    private TicketWorkflowAppService ticketWorkflowAppService;
 
     @Resource
     private ApplicationEventPublisher eventPublisher;
@@ -352,54 +357,20 @@ public class TicketApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public void processTicket(Long ticketId, TicketProcessInput input, Long currentUserId) {
-        TicketPO ticket = ticketMapper.selectById(ticketId);
-        if (ticket == null) {
-            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
-        }
+        // 委托给工作流应用服务执行，确保经过工作流引擎校验（含角色检查）
+        TransitInput transitInput = new TransitInput();
+        transitInput.setTargetStatus(input.getTargetStatus() != null
+                ? input.getTargetStatus().toLowerCase() : null);
+        transitInput.setNewAssigneeId(input.getTargetUserId());
+        transitInput.setRemark(input.getRemark());
 
-        String fromStatus = ticket.getStatus();
-        String toStatus = input.getTargetStatus();
-        Long oldAssigneeId = ticket.getAssigneeId();
-
-        workflowService.validateTransition(ticket.getWorkflowId(), fromStatus, toStatus);
-
-        ticket.setStatus(toStatus);
-
-        if (input.getTargetUserId() != null) {
-            ticket.setAssigneeId(input.getTargetUserId());
-        }
-        Long newAssigneeId = ticket.getAssigneeId();
-
-        if (workflowService.isTerminalStatus(ticket.getWorkflowId(), toStatus)) {
-            if ("COMPLETED".equals(toStatus)) {
-                ticket.setResolvedAt(new Date());
-            }
-            ticket.setClosedAt(new Date());
-        }
-
-        ticketMapper.updateById(ticket);
-
-        if ("COMPLETED".equalsIgnoreCase(toStatus) || "CLOSED".equalsIgnoreCase(toStatus)) {
-            safePublishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
-        }
-
-        recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
-                fromStatus, toStatus, input.getRemark());
-        String transitionAction = ticketTimeTrackService.resolveTransitionAction(fromStatus, toStatus);
-        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, transitionAction,
-                fromStatus, toStatus, oldAssigneeId, newAssigneeId, input.getRemark());
+        ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
 
         if (input.getRemark() != null && !input.getRemark().isEmpty()) {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
         }
 
-        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
-        if (input.getTargetUserId() != null && !input.getTargetUserId().equals(oldAssigneeId)) {
-            safePublishEvent(new TicketAssignedEvent(
-                    ticketId, input.getTargetUserId(), oldAssigneeId, currentUserId, "PROCESS_ASSIGN"));
-        }
-
-        log.info("工单处理: ticketId={}, {} -> {}", ticketId, fromStatus, toStatus);
+        log.info("工单处理（委托工作流）: ticketId={}, targetStatus={}", ticketId, input.getTargetStatus());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -410,20 +381,20 @@ public class TicketApplicationService {
         }
 
         String fromStatus = ticket.getStatus();
-        Long assigneeId = ticket.getAssigneeId();
-        ticket.setStatus("CLOSED");
-        ticket.setClosedAt(new Date());
-        ticketMapper.updateById(ticket);
 
-        safePublishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
+        // 通过工作流引擎执行关闭流转（确保经过校验，不绕过）
+        TransitInput transitInput = new TransitInput();
+        transitInput.setTargetStatus(TicketStatus.CLOSED.getCode());
+        transitInput.setRemark(input != null ? input.getRemark() : null);
 
-        recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
-                fromStatus, "CLOSED",
-                input != null ? input.getRemark() : null);
-        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
-                fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
-
-        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
+        try {
+            ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
+        } catch (BusinessException e) {
+            // 如果工作流校验失败（例如管理员强制关闭），记录日志后抛出
+            log.warn("工单[{}]关闭时工作流校验失败（fromStatus={}）: {}",
+                    ticketId, fromStatus, e.getMessage());
+            throw e;
+        }
 
         log.info("工单关闭: ticketId={}", ticketId);
     }

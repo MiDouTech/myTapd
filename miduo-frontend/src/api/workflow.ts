@@ -3,6 +3,11 @@ import type {
   HandlerGroupListOutput,
   WorkflowDetailOutput,
   WorkflowListOutput,
+  AvailableActionOutput,
+  TransitInput,
+  TransferInput,
+  ReturnInput,
+  TicketFlowRecordOutput,
 } from '@/types/workflow'
 import request from '@/utils/request'
 
@@ -133,4 +138,53 @@ export async function getHandlerGroupList(): Promise<HandlerGroupListOutput[]> {
  */
 export function createHandlerGroup(data: HandlerGroupCreateInput): Promise<number> {
   return request.post<number>('/handler-group/create', data)
+}
+
+// ============================================================
+// 工单流转相关接口
+// ============================================================
+
+/**
+ * 获取工单可用操作列表（动态渲染操作按钮，不硬编码）
+ * 接口编号：API000014
+ * 产品文档功能：4.4 工作流引擎 - 可用操作
+ */
+export function getAvailableActions(ticketId: number): Promise<AvailableActionOutput> {
+  return request.get<AvailableActionOutput>(`/ticket/${ticketId}/available-actions`)
+}
+
+/**
+ * 执行状态流转
+ * 接口编号：API000015
+ * 产品文档功能：4.4 工作流引擎 - 状态流转
+ */
+export function transitTicket(ticketId: number, data: TransitInput): Promise<void> {
+  return request.put<void>(`/ticket/transit/${ticketId}`, data)
+}
+
+/**
+ * 转派工单
+ * 接口编号：API000016
+ * 产品文档功能：4.5 分派与路由 - 转派
+ */
+export function transferTicket(ticketId: number, data: TransferInput): Promise<void> {
+  return request.put<void>(`/ticket/transfer/${ticketId}`, data)
+}
+
+/**
+ * 退回上一节点
+ * 接口编号：API000017
+ * 产品文档功能：4.5 分派与路由 - 退回
+ */
+export function returnTicket(ticketId: number, data: ReturnInput): Promise<void> {
+  return request.put<void>(`/ticket/return/${ticketId}`, data)
+}
+
+/**
+ * 查询工单流转历史
+ * 接口编号：API000018
+ * 产品文档功能：4.4 工作流引擎 - 流转历史
+ */
+export function getFlowHistory(ticketId: number): Promise<TicketFlowRecordOutput[]> {
+  return request.get<TicketFlowRecordOutput[]>(`/ticket/${ticketId}/flow-history`)
 }

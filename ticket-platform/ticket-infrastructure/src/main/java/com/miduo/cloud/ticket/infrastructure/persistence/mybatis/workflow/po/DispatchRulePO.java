@@ -34,6 +34,10 @@ public class DispatchRulePO implements Serializable {
     @TableField("rule_config")
     private String ruleConfig;
 
+    /** 技能匹配配置（矩阵分派使用，JSON格式） */
+    @TableField("skill_match_config")
+    private String skillMatchConfig;
+
     @TableField("priority_order")
     private Integer priorityOrder;
 
