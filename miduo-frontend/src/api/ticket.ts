@@ -11,6 +11,8 @@ import type {
   TicketCreateInput,
   TicketDetailOutput,
   TicketListOutput,
+  TicketModuleInput,
+  TicketModuleOutput,
   TicketNodeDurationOutput,
   TicketPageInput,
   TicketProcessInput,
@@ -199,6 +201,30 @@ export function getPublicTicketDetail(ticketNo: string): Promise<TicketPublicDet
 }
 
 /**
+ * 获取工单模块列表（所属模块下拉选项）
+ * 接口编号：API000505
+ * 产品文档功能：测试信息 - 所属模块下拉选项列表
+ */
+export function getTicketModuleList(): Promise<TicketModuleOutput[]> {
+  return request.get<TicketModuleOutput[]>('/ticket-module/list')
+}
+
+/**
+ * 创建工单模块（添加自定义所属模块选项）
+ * 接口编号：API000506
+ * 产品文档功能：测试信息 - 新增所属模块选项
+ */
+export function createTicketModule(data: TicketModuleInput): Promise<number> {
+  return request.post<number>('/ticket-module/create', data)
+}
+
+/**
+ * 删除工单模块
+ * 接口编号：API000507
+ * 产品文档功能：测试信息 - 删除所属模块选项
+ */
+export function deleteTicketModule(id: number): Promise<void> {
+  return request.del<void>(`/ticket-module/delete/${id}`)
  * 企微消息自然语言解析 - 客服信息字段提取
  * 接口编号：API000504
  * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值

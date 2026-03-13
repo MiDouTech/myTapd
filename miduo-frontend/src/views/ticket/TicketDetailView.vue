@@ -6,9 +6,11 @@ import { ChatDotSquare, Document as DocumentOutlined } from '@element-plus/icons
 import {
   assignTicket,
   closeTicket,
+  createTicketModule,
   deleteTicketAttachment,
   followTicket,
   getTicketDetail,
+  getTicketModuleList,
   getTicketNodeDuration,
   getTicketTimeTrack,
   parseWecomCustomerInfo,
@@ -26,12 +28,14 @@ import {
 } from '@/api/workflow'
 import { getUserList } from '@/api/user'
 import EmptyState from '@/components/common/EmptyState.vue'
+import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
   TicketDetailOutput,
+  TicketModuleOutput,
   TicketNodeDurationItem,
   TicketTimeTrackItem,
   WecomMessageParseOutput,
@@ -85,6 +89,8 @@ const transitForm = reactive({
 
 const imageUploadLoading = ref(false)
 const imageUploadRef = ref()
+
+const ticketModules = ref<TicketModuleOutput[]>([])
 
 const assignForm = reactive({
   assigneeId: undefined as number | undefined,
@@ -177,7 +183,6 @@ const testInfoForm = reactive<TicketBugTestInfoInput>({
   impactScope: '',
   severityLevel: '',
   moduleName: '',
-  reproduceScreenshot: '',
   testRemark: '',
 })
 
@@ -270,7 +275,6 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactScope: ticketDetail.bugTestInfo?.impactScope || '',
     severityLevel: ticketDetail.bugTestInfo?.severityLevel || '',
     moduleName: ticketDetail.bugTestInfo?.moduleName || '',
-    reproduceScreenshot: ticketDetail.bugTestInfo?.reproduceScreenshot || '',
     testRemark: ticketDetail.bugTestInfo?.testRemark || '',
   })
 
@@ -281,6 +285,14 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactAssessment: ticketDetail.bugDevInfo?.impactAssessment || '',
     devRemark: ticketDetail.bugDevInfo?.devRemark || '',
   })
+}
+
+async function loadModules(): Promise<void> {
+  try {
+    ticketModules.value = await getTicketModuleList()
+  } catch {
+    ticketModules.value = []
+  }
 }
 
 async function loadAll(): Promise<void> {
@@ -442,6 +454,11 @@ async function saveCustomerInfo(): Promise<void> {
 async function saveTestInfo(): Promise<void> {
   bugSubmitLoading.value = true
   try {
+    const moduleName = testInfoForm.moduleName?.trim()
+    if (moduleName && !ticketModules.value.some((m) => m.name === moduleName)) {
+      await createTicketModule({ name: moduleName })
+      await loadModules()
+    }
     await updateBugTestInfo(ticketId.value, { ...testInfoForm })
     notifySuccess('测试信息保存成功')
     await loadAll()
@@ -511,7 +528,7 @@ function isImageFile(fileType?: string): boolean {
 }
 
 onMounted(async () => {
-  await Promise.all([loadAll(), trackReadSilently()])
+  await Promise.all([loadAll(), trackReadSilently(), loadModules()])
 })
 
 watch(
@@ -751,19 +768,21 @@ watch(
               </el-select>
             </el-form-item>
             <el-form-item label="复现步骤">
-              <el-input
+              <RichTextEditor
                 v-model="testInfoForm.reproduceSteps"
-                type="textarea"
-                :rows="3"
                 :disabled="!canEditTestInfo"
+                :ticket-id="ticketId"
+                placeholder="请填写复现步骤，支持粘贴截图、插入图片和表格..."
+                :height="220"
               />
             </el-form-item>
             <el-form-item label="实际结果">
-              <el-input
+              <RichTextEditor
                 v-model="testInfoForm.actualResult"
-                type="textarea"
-                :rows="3"
                 :disabled="!canEditTestInfo"
+                :ticket-id="ticketId"
+                placeholder="请填写实际结果，支持粘贴截图、插入图片和表格..."
+                :height="180"
               />
             </el-form-item>
             <el-form-item label="影响范围">
@@ -782,14 +801,22 @@ watch(
               </el-select>
             </el-form-item>
             <el-form-item label="所属模块">
-              <el-input v-model="testInfoForm.moduleName" :disabled="!canEditTestInfo" />
-            </el-form-item>
-            <el-form-item label="复现截图">
-              <el-input
-                v-model="testInfoForm.reproduceScreenshot"
-                placeholder="填写截图URL，多个可用逗号分隔"
+              <el-select
+                v-model="testInfoForm.moduleName"
                 :disabled="!canEditTestInfo"
-              />
+                filterable
+                allow-create
+                clearable
+                placeholder="请选择或输入模块名称"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="mod in ticketModules"
+                  :key="mod.id"
+                  :label="mod.name"
+                  :value="mod.name"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item label="测试备注">
               <el-input
