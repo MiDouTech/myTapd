@@ -18,6 +18,8 @@ import type {
   TicketProcessInput,
   TicketPublicDetailOutput,
   TicketTimeTrackOutput,
+  WecomMessageParseInput,
+  WecomMessageParseOutput,
 } from '@/types/ticket'
 import request from '@/utils/request'
 
@@ -223,4 +225,10 @@ export function createTicketModule(data: TicketModuleInput): Promise<number> {
  */
 export function deleteTicketModule(id: number): Promise<void> {
   return request.del<void>(`/ticket-module/delete/${id}`)
+ * 企微消息自然语言解析 - 客服信息字段提取
+ * 接口编号：API000504
+ * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值
+ */
+export function parseWecomCustomerInfo(data: WecomMessageParseInput): Promise<WecomMessageParseOutput> {
+  return request.post<WecomMessageParseOutput>('/ticket/wecom/parse-customer-info', data)
 }
