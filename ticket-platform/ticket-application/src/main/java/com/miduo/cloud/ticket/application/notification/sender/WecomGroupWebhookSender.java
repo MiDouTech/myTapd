@@ -36,19 +36,34 @@ public class WecomGroupWebhookSender implements NotificationSender {
      * 按Webhook地址发送群通知
      */
     public void sendToWebhook(String webhookUrl, String title, String content) {
+        sendToWebhook(webhookUrl, title, content, null);
+    }
+
+    /**
+     * 按Webhook地址发送群通知，并@提交人
+     *
+     * @param mentionWecomUserid 需要@的企微用户ID（工单提交人），为null时不@任何人
+     */
+    public void sendToWebhook(String webhookUrl, String title, String content, String mentionWecomUserid) {
         if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
             log.warn("企微群Webhook地址为空，跳过发送: title={}", title);
             return;
         }
 
-        String markdown = buildMarkdown(title, content);
+        String markdown = buildMarkdown(title, content, mentionWecomUserid);
         wecomClient.sendGroupWebhookMarkdown(webhookUrl, markdown);
         log.info("企微群Webhook推送成功: title={}", title);
     }
 
-    private String buildMarkdown(String title, String content) {
+    private String buildMarkdown(String title, String content, String mentionWecomUserid) {
         String safeTitle = title == null ? "工单通知" : title;
         String safeContent = content == null ? "" : content;
-        return "**" + safeTitle + "**\n>" + safeContent.replace("\n", "\n>");
+        StringBuilder markdown = new StringBuilder();
+        markdown.append("**").append(safeTitle).append("**\n>");
+        markdown.append(safeContent.replace("\n", "\n>"));
+        if (mentionWecomUserid != null && !mentionWecomUserid.trim().isEmpty()) {
+            markdown.append("\n>提交人：<@").append(mentionWecomUserid.trim()).append(">");
+        }
+        return markdown.toString();
     }
 }
