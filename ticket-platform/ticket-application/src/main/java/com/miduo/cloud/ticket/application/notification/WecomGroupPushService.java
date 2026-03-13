@@ -75,7 +75,8 @@ public class WecomGroupPushService extends BaseApplicationService {
             try {
                 log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
-                groupWebhookSender.sendToWebhook(webhookUrl, title, content, creatorWecomUserid);
+                groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content,
+                        creatorWecomUserid != null ? Collections.singletonList(creatorWecomUserid) : null);
             } catch (Exception ex) {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
@@ -175,6 +176,8 @@ public class WecomGroupPushService extends BaseApplicationService {
         if (pushedWebhookUrls.isEmpty()) {
             log.debug("企微群@mention推送跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
         }
+    }
+
     private String resolveCreatorWecomUserid(Long creatorId) {
         if (creatorId == null) {
             return null;
