@@ -77,6 +77,51 @@ public class WecomGroupPushService extends BaseApplicationService {
     }
 
     /**
+     * 根据多个关联工单的群绑定关系，发送预格式化的 Bug 简报归档通知（含@mention）
+     * 正文直接使用已组装的 markdownBody，不额外包装
+     *
+     * @param ticketIds             关联的工单ID列表
+     * @param markdownBody          已组装的Markdown正文（含标题行）
+     * @param mentionedWecomUserIds 需要@的企微userId列表
+     */
+    public void pushReportNoticeByTickets(List<Long> ticketIds, String markdownBody,
+                                          List<String> mentionedWecomUserIds) {
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            log.debug("Bug简报归档群通知跳过：ticketIds为空");
+            return;
+        }
+        List<TicketPO> tickets = ticketMapper.selectBatchIds(ticketIds);
+        if (CollectionUtils.isEmpty(tickets)) {
+            log.warn("Bug简报归档群通知跳过：未查到工单数据, ticketIds={}", ticketIds);
+            return;
+        }
+        Set<String> pushedWebhookUrls = new HashSet<>();
+        for (TicketPO ticket : tickets) {
+            List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
+            for (WecomGroupBindingPO binding : bindings) {
+                String webhookUrl = binding.getWebhookUrl();
+                if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+                    continue;
+                }
+                if (!pushedWebhookUrls.add(webhookUrl)) {
+                    continue;
+                }
+                try {
+                    log.info("Bug简报归档群通知发送中: ticketId={}, bindingId={}, webhook={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl));
+                    groupWebhookSender.sendReportNoticeToWebhook(webhookUrl, markdownBody, mentionedWecomUserIds);
+                } catch (Exception ex) {
+                    log.error("Bug简报归档群通知失败: ticketId={}, bindingId={}, webhook={}, reason={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
+                }
+            }
+        }
+        if (pushedWebhookUrls.isEmpty()) {
+            log.debug("Bug简报归档群通知跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
+        }
+    }
+
+    /**
      * 根据多个关联工单的群绑定关系，推送 @mention 群消息
      * 适用于 Bug 简报归档后通知工单创建人和处理人
      *
