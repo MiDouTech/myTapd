@@ -4,12 +4,15 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
+import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.wecom.model.WecomBotParseResult;
 import com.miduo.cloud.ticket.application.wecom.model.WecomDraftSession;
 import com.miduo.cloud.ticket.common.enums.WecomBotCommandType;
 import com.miduo.cloud.ticket.common.enums.WecomBotMessageStatus;
+import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
 import com.miduo.cloud.ticket.entity.dto.wecom.NlpAnalyzeResult;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomCallbackMessageDTO;
+import com.miduo.cloud.ticket.entity.dto.wecom.WecomMessageParseOutput;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
@@ -49,6 +52,8 @@ public class WecomMessageProcessor extends BaseApplicationService {
     private final SysUserMapper sysUserMapper;
     private final WecomProperties wecomProperties;
     private final WecomImageHandlerService imageHandlerService;
+    private final WecomMessageFieldParser wecomMessageFieldParser;
+    private final TicketBugApplicationService ticketBugApplicationService;
 
     public WecomMessageProcessor(WecomBotMessageParser parser,
                                  WecomBotCommandService commandService,
@@ -62,7 +67,9 @@ public class WecomMessageProcessor extends BaseApplicationService {
                                  WecomInteractiveConfirmService interactiveConfirmService,
                                  SysUserMapper sysUserMapper,
                                  WecomProperties wecomProperties,
-                                 WecomImageHandlerService imageHandlerService) {
+                                 WecomImageHandlerService imageHandlerService,
+                                 WecomMessageFieldParser wecomMessageFieldParser,
+                                 TicketBugApplicationService ticketBugApplicationService) {
         this.parser = parser;
         this.commandService = commandService;
         this.groupBindingMapper = groupBindingMapper;
@@ -76,6 +83,8 @@ public class WecomMessageProcessor extends BaseApplicationService {
         this.sysUserMapper = sysUserMapper;
         this.wecomProperties = wecomProperties;
         this.imageHandlerService = imageHandlerService;
+        this.wecomMessageFieldParser = wecomMessageFieldParser;
+        this.ticketBugApplicationService = ticketBugApplicationService;
     }
 
     /**
@@ -156,6 +165,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
 
         Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
         if (ticketId != null) {
+            autoFillCustomerInfoFromMessage(ticketId, rawText);
             int linkedImages = imageHandlerService.linkPendingImagesToTicket(ticketId, chatId, fromWecomUserId);
             TicketPO ticket = ticketMapper.selectById(ticketId);
             String ticketNo = ticket != null ? ticket.getTicketNo() : "";
@@ -172,6 +182,36 @@ public class WecomMessageProcessor extends BaseApplicationService {
                     PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
             log.warn("企微自然语言消息处理失败：发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
                     message.getMsgId(), chatId, fromWecomUserId);
+        }
+    }
+
+    /**
+     * 从企微消息原文中自动提取客服信息字段，并持久化到缺陷工单的客服信息记录中
+     * 仅在工单刚创建、客服信息记录不存在时执行（幂等保护）
+     */
+    private void autoFillCustomerInfoFromMessage(Long ticketId, String rawText) {
+        if (ticketId == null || rawText == null || rawText.trim().isEmpty()) {
+            return;
+        }
+        try {
+            WecomMessageParseOutput parseOutput = wecomMessageFieldParser.parse(rawText);
+            if (parseOutput == null || parseOutput.getMatchedFields() == null || parseOutput.getMatchedFields().isEmpty()) {
+                log.info("企微消息未提取到客服信息字段，跳过自动填充: ticketId={}", ticketId);
+                return;
+            }
+            TicketBugCustomerInfoInput input = new TicketBugCustomerInfoInput();
+            input.setMerchantNo(parseOutput.getMerchantNo() != null ? parseOutput.getMerchantNo() : "");
+            input.setCompanyName(parseOutput.getCompanyName() != null ? parseOutput.getCompanyName() : "");
+            input.setMerchantAccount(parseOutput.getMerchantAccount() != null ? parseOutput.getMerchantAccount() : "");
+            input.setSceneCode(parseOutput.getSceneCode() != null ? parseOutput.getSceneCode() : "");
+            input.setProblemDesc(parseOutput.getProblemDesc() != null ? parseOutput.getProblemDesc() : "");
+            input.setExpectedResult(parseOutput.getExpectedResult() != null ? parseOutput.getExpectedResult() : "");
+            input.setProblemScreenshot(parseOutput.getProblemScreenshot() != null ? parseOutput.getProblemScreenshot() : "");
+            ticketBugApplicationService.initCustomerInfoFromBot(ticketId, input);
+            log.info("企微消息客服信息自动填充完成: ticketId={}, matchedFields={}, confidence={}",
+                    ticketId, parseOutput.getMatchedFields(), parseOutput.getConfidence());
+        } catch (Exception e) {
+            log.warn("企微消息客服信息自动填充失败，已降级跳过: ticketId={}, error={}", ticketId, e.getMessage());
         }
     }
 
