@@ -35,4 +35,11 @@ public interface DashboardUserLayoutMapper extends BaseMapper<DashboardUserLayou
      * @param updateBy 操作人
      */
     void softDeleteByUserId(@Param("userId") Long userId, @Param("updateBy") String updateBy);
+
+    /**
+     * 物理删除指定用户的所有布局记录（用于保存时清理旧记录，避免唯一约束冲突）
+     *
+     * @param userId 用户ID
+     */
+    void physicalDeleteByUserId(@Param("userId") Long userId);
 }

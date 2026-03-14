@@ -31,4 +31,9 @@
           AND deleted = 0
     </update>
 
+    <delete id="physicalDeleteByUserId">
+        DELETE FROM dashboard_user_layout
+        WHERE user_id = #{userId}
+    </delete>
+
 </mapper>

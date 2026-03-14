@@ -101,7 +101,7 @@ public class DashboardLayoutApplicationService extends BaseApplicationService {
 
         String currentUser = SecurityUtil.getCurrentUsername();
 
-        layoutMapper.softDeleteByUserId(userId, currentUser);
+        layoutMapper.physicalDeleteByUserId(userId);
 
         List<DashboardUserLayoutPO> newRecords = new ArrayList<>();
         for (DashboardLayoutSaveInput.LayoutItem item : input.getLayouts()) {
