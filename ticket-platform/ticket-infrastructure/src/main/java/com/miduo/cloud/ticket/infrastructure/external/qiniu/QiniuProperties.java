@@ -33,10 +33,10 @@ public class QiniuProperties {
     private String domain;
 
     /**
-     * 存储区域（默认 z0 华东）
+     * 存储区域（默认 z2 华南）
      * z0=华东、z1=华北、z2=华南、na0=北美、as0=东南亚
      */
-    private String zone = "z0";
+    private String zone = "z2";
 
     /**
      * 上传 Token 有效期（秒，默认 3600）
