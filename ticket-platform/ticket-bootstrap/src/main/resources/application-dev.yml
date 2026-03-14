@@ -62,7 +62,7 @@ ticket:
 
 qiniu:
   access-key: ${QINIU_ACCESS_KEY:GZuoSAtSoVpjNU4Ajsu70uxMwGCg_k8b77iGXZaR}
-  secret-key: ${QINIU_SECRET_KEY:GZuoSAtSoVpjNU4Ajsu70uxMwGCg_k8b77iGXZaR}
+  secret-key: ${QINIU_SECRET_KEY:phrzhjtLyXDovmzcUSZvy6gBzffOjxKtRlqUHABg}
   bucket: ${QINIU_BUCKET:imgweixin12315comcn}
   domain: ${QINIU_DOMAIN:https://image.qn.weixin12315.com.cn/}
   zone: ${QINIU_ZONE:z0}
