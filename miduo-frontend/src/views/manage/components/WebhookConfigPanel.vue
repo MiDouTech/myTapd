@@ -567,4 +567,12 @@ onMounted(async () => {
 :deep(.recently-changed-row > td.el-table__cell) {
   background-color: #f0f9ff !important;
 }
+
+:deep(.el-card__body) {
+  overflow: visible;
+}
+
+:deep(.el-card) {
+  overflow: visible;
+}
 </style>
