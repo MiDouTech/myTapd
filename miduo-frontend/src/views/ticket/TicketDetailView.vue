@@ -654,18 +654,31 @@ watch(
         >
           <div class="wecom-dialog-body">
             <p class="wecom-dialog-tip">
-              将企微中收到的客服消息粘贴到下方，系统将通过自然语言匹配自动识别商户编号、公司名称、问题描述等字段，并填入客服信息表单。
+              将企微机器人收到的客服消息粘贴到下方，系统将通过自然语言智能匹配，自动识别商户编号、公司名称、问题描述等字段并填入表单。支持结构化格式与自由文本两种输入方式。
             </p>
+            <el-collapse class="parse-example-collapse">
+              <el-collapse-item title="查看支持的消息格式示例" name="example">
+                <div class="parse-example-content">
+                  <div class="parse-example-section">
+                    <div class="parse-example-label">✅ 结构化格式（识别率最高）</div>
+                    <pre class="parse-example-code">商户编号：10004557
+公司名称：山东英贝健生物技术有限公司
+商户账号：ybj0101
+问题描述：用户反馈支付页面无法跳转，点击支付按钮后页面白屏
+预期结果：点击支付后应正常跳转到支付页面</pre>
+                  </div>
+                  <div class="parse-example-section">
+                    <div class="parse-example-label">✅ 自然语言格式（也可识别）</div>
+                    <pre class="parse-example-code">商户10004557，山东英贝健生物技术有限公司反馈，用户无法完成支付，点击支付按钮后页面出现白屏，账号ybj0101，预期点击后正常跳转到支付页面</pre>
+                  </div>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
             <el-input
               v-model="wecomParseMessage"
               type="textarea"
               :rows="8"
-              placeholder="请粘贴企微消息内容，例如：
-商户编号：10004557
-公司名称：山东英贝健生物技术有限公司
-商户账号：ybj0101
-问题描述：用户反馈支付页面无法跳转，点击支付按钮后页面白屏...
-预期结果：点击支付后应正常跳转到支付页面"
+              placeholder="请粘贴企微消息内容（支持自由文本格式，系统将自动识别字段）..."
               class="wecom-parse-textarea"
             />
             <div v-if="wecomParseResult" class="wecom-parse-preview">
@@ -1465,6 +1478,60 @@ watch(
   font-size: 13px;
   color: #606266;
   line-height: 1.6;
+}
+
+.parse-example-collapse {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+
+  :deep(.el-collapse-item__header) {
+    font-size: 12px;
+    color: #909399;
+    padding: 0 12px;
+    height: 36px;
+    background: #fafafa;
+    border-radius: 6px;
+  }
+
+  :deep(.el-collapse-item__wrap) {
+    border-bottom: none;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding: 10px 12px;
+  }
+}
+
+.parse-example-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.parse-example-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.parse-example-label {
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.parse-example-code {
+  margin: 0;
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .wecom-parse-textarea {
