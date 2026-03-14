@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.mapper.DashboardUserLayoutMapper">
+
+    <select id="selectByUserId"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.po.DashboardUserLayoutPO">
+        SELECT id, user_id, row_group_key, sort_order, is_fixed, create_time, update_time, create_by, update_by, deleted
+        FROM dashboard_user_layout
+        WHERE user_id = #{userId}
+          AND deleted = 0
+        ORDER BY sort_order ASC
+    </select>
+
+    <insert id="batchInsert">
+        INSERT INTO dashboard_user_layout
+            (user_id, row_group_key, sort_order, is_fixed, create_time, update_time, create_by, update_by, deleted)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.rowGroupKey}, #{item.sortOrder}, #{item.isFixed},
+             NOW(), NOW(), #{item.createBy}, #{item.updateBy}, 0)
+        </foreach>
+    </insert>
+
+    <update id="softDeleteByUserId">
+        UPDATE dashboard_user_layout
+        SET deleted = 1,
+            update_time = NOW(),
+            update_by = #{updateBy}
+        WHERE user_id = #{userId}
+          AND deleted = 0
+    </update>
+
+    <delete id="physicalDeleteByUserId">
+        DELETE FROM dashboard_user_layout
+        WHERE user_id = #{userId}
+    </delete>
+
+</mapper>
