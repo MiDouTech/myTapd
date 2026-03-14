@@ -562,6 +562,10 @@ public class TicketApplicationService {
                 if (uploader != null) {
                     ao.setUploadedByName(uploader.getName());
                 }
+                ao.setSource(a.getSource());
+                ao.setWecomMsgId(a.getWecomMsgId());
+                AttachmentSource attachmentSource = AttachmentSource.fromCode(a.getSource());
+                ao.setSourceLabel(attachmentSource.getLabel());
                 ao.setCreateTime(a.getCreateTime());
                 return ao;
             }).collect(Collectors.toList()));

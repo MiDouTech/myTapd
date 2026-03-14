@@ -154,6 +154,9 @@ export interface TicketAttachmentOutput {
   fileType?: string
   uploadedBy?: number
   uploadedByName?: string
+  source?: string
+  sourceLabel?: string
+  wecomMsgId?: string
   createTime?: string
 }
 

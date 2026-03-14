@@ -50,6 +50,12 @@ wecom:
   trusted-domain: ${WECOM_TRUSTED_DOMAIN:ticket.company.com}
   mq:
     enabled: false
+  image:
+    enabled: true
+    association-window-minutes: 5
+    timeout-strategy: CREATE_TICKET
+    notify-on-pending: false
+    max-images-per-ticket: 10
 
 ticket:
   detail-url: ${TICKET_DETAIL_URL:http://ticket.t.miduonet.com/open/ticket}

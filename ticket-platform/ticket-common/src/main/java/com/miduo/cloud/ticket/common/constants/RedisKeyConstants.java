@@ -36,4 +36,9 @@ public final class RedisKeyConstants {
      * 企微工单草稿会话（群聊），格式：wecom:draft:{chatId}:{wecomUserId}
      */
     public static final String WECOM_DRAFT_SESSION_PREFIX = "wecom:draft:";
+
+    /**
+     * 企微图片待处理提示去重，格式：wecom:image:notify:{chatId}:{fromUserId}
+     */
+    public static final String WECOM_IMAGE_NOTIFY_DEDUP_PREFIX = "wecom:image:notify:";
 }

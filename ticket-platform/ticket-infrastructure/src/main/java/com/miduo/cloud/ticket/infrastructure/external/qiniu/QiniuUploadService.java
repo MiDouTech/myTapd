@@ -63,6 +63,46 @@ public class QiniuUploadService {
     }
 
     /**
+     * 上传图片字节数组到七牛云（用于企微 MediaId 下载后直接上传）
+     *
+     * @param imageBytes    图片字节数组
+     * @param originalName  文件名（用于生成 key）
+     * @return 可访问的图片 URL，上传失败时返回 null
+     */
+    public String uploadImageBytes(byte[] imageBytes, String originalName) {
+        if (auth == null || uploadManager == null) {
+            log.warn("七牛云存储服务未配置，图片上传跳过");
+            return null;
+        }
+        if (imageBytes == null || imageBytes.length == 0) {
+            log.warn("图片字节数组为空，跳过上传");
+            return null;
+        }
+        long maxBytes = qiniuProperties.getMaxFileSizeMb() * 1024 * 1024;
+        if (imageBytes.length > maxBytes) {
+            log.warn("图片字节超过大小限制 {}MB，跳过上传", qiniuProperties.getMaxFileSizeMb());
+            return null;
+        }
+        String key = buildObjectKey(originalName, qiniuProperties.getImagePathPrefix());
+        String token = auth.uploadToken(qiniuProperties.getBucket(), null,
+                qiniuProperties.getTokenExpireSeconds(), new StringMap());
+        try {
+            Response response = uploadManager.put(imageBytes, key, token);
+            DefaultPutRet putRet = com.alibaba.fastjson2.JSON.parseObject(response.bodyString(), DefaultPutRet.class);
+            if (putRet == null || !StringUtils.hasText(putRet.key)) {
+                log.error("七牛云返回结果异常，key 为空");
+                return null;
+            }
+            String imageUrl = buildAccessUrl(putRet.key);
+            log.info("企微图片上传七牛云成功: key={}, url={}", putRet.key, imageUrl);
+            return imageUrl;
+        } catch (Exception e) {
+            log.error("企微图片上传七牛云失败: originalName={}", originalName, e);
+            return null;
+        }
+    }
+
+    /**
      * 上传图片文件到七牛云
      *
      * @param file       图片文件

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomPendingImageMapper">
+
+    <select id="selectPendingByUserAndChat"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomPendingImagePO">
+        SELECT
+            id,
+            chat_id AS chatId,
+            from_user_id AS fromUserId,
+            msg_id AS msgId,
+            media_id AS mediaId,
+            pic_url AS picUrl,
+            qiniu_url AS qiniuUrl,
+            ticket_id AS ticketId,
+            status,
+            expire_time AS expireTime,
+            create_time AS createTime,
+            update_time AS updateTime,
+            create_by AS createBy,
+            update_by AS updateBy,
+            deleted
+        FROM wecom_pending_image
+        WHERE deleted = 0
+          AND chat_id = #{chatId}
+          AND from_user_id = #{fromUserId}
+          AND status = 'PENDING'
+          AND create_time &gt;= #{windowStart}
+        ORDER BY create_time ASC
+    </select>
+
+    <select id="selectExpiredPending"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomPendingImagePO">
+        SELECT
+            id,
+            chat_id AS chatId,
+            from_user_id AS fromUserId,
+            msg_id AS msgId,
+            media_id AS mediaId,
+            pic_url AS picUrl,
+            qiniu_url AS qiniuUrl,
+            ticket_id AS ticketId,
+            status,
+            expire_time AS expireTime,
+            create_time AS createTime,
+            update_time AS updateTime,
+            create_by AS createBy,
+            update_by AS updateBy,
+            deleted
+        FROM wecom_pending_image
+        WHERE deleted = 0
+          AND status = 'PENDING'
+          AND expire_time &lt; #{now}
+        ORDER BY expire_time ASC
+        LIMIT 200
+    </select>
+
+</mapper>

@@ -46,4 +46,37 @@ public class WecomProperties {
      * 可信域名
      */
     private String trustedDomain;
+
+    /**
+     * 企微图片消息处理配置
+     */
+    private ImageConfig image = new ImageConfig();
+
+    @lombok.Data
+    public static class ImageConfig {
+        /**
+         * 是否启用图片消息处理（默认 true）
+         */
+        private boolean enabled = true;
+
+        /**
+         * 关联时间窗口（分钟，默认 5 分钟，范围 1-60）
+         */
+        private int associationWindowMinutes = 5;
+
+        /**
+         * 超时策略（CREATE_TICKET / EXPIRE / NOTIFY_USER，默认 CREATE_TICKET）
+         */
+        private String timeoutStrategy = "CREATE_TICKET";
+
+        /**
+         * 收到图片时是否立即回复提示（默认 false）
+         */
+        private boolean notifyOnPending = false;
+
+        /**
+         * 单工单最大图片数（默认 10）
+         */
+        private int maxImagesPerTicket = 10;
+    }
 }

@@ -30,15 +30,18 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
     private final WecomMessagePublisher messagePublisher;
     private final StringRedisTemplate redisTemplate;
     private final WecomBotMessageLogMapper botMessageLogMapper;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomCallbackApplicationService(WecomCallbackCryptoService callbackCryptoService,
                                            WecomMessagePublisher messagePublisher,
                                            StringRedisTemplate redisTemplate,
-                                           WecomBotMessageLogMapper botMessageLogMapper) {
+                                           WecomBotMessageLogMapper botMessageLogMapper,
+                                           WecomImageHandlerService imageHandlerService) {
         this.callbackCryptoService = callbackCryptoService;
         this.messagePublisher = messagePublisher;
         this.redisTemplate = redisTemplate;
         this.botMessageLogMapper = botMessageLogMapper;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -70,9 +73,15 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             return;
         }
 
+        if ("image".equalsIgnoreCase(message.getMsgType())) {
+            imageHandlerService.handleImageMessageAsync(message);
+            log.info("企微图片消息已投递异步处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            return;
+        }
+
         if (!"text".equalsIgnoreCase(message.getMsgType())) {
-            saveIgnoredLog(message, "非文本消息已忽略");
-            log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本消息", message.getMsgId(), message.getMsgType());
+            saveIgnoredLog(message, "非文本非图片消息已忽略");
+            log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本非图片消息", message.getMsgId(), message.getMsgType());
             return;
         }
 
@@ -86,6 +95,8 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setChatId(resolveChatId(messageMap));
         message.setFromWecomUserid(safeValue(messageMap.get("FromUserName")));
         message.setContent(safeValue(messageMap.get("Content")));
+        message.setMediaId(safeValue(messageMap.get("MediaId")));
+        message.setPicUrl(safeValue(messageMap.get("PicUrl")));
         message.setRawXml(plainXml);
         message.setCreateTime(safeValue(messageMap.get("CreateTime")));
         message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));
