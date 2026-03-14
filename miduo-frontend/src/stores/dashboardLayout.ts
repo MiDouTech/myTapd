@@ -44,14 +44,18 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
     }
   }
 
+  function cloneLayoutItems(items: DashboardLayoutItem[]): DashboardLayoutItem[] {
+    return items.map((item) => ({ ...item }))
+  }
+
   function enterEditMode(): void {
-    enterEditSnapshot = structuredClone(layout.value)
-    editingLayout.value = structuredClone(layout.value)
+    enterEditSnapshot = cloneLayoutItems(layout.value)
+    editingLayout.value = cloneLayoutItems(layout.value)
     isEditMode.value = true
   }
 
   function cancelEditMode(): void {
-    editingLayout.value = structuredClone(enterEditSnapshot)
+    editingLayout.value = cloneLayoutItems(enterEditSnapshot)
     isEditMode.value = false
   }
 
@@ -63,7 +67,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
         sortOrder: item.sortOrder,
       }))
       await saveDashboardLayout({ layouts: payload })
-      layout.value = structuredClone(editingLayout.value)
+      layout.value = cloneLayoutItems(editingLayout.value)
       isEditMode.value = false
     } finally {
       saving.value = false
