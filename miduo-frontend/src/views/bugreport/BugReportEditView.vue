@@ -718,7 +718,7 @@ watch(
 
       <el-form-item label="严重级别">
         <div class="severity-wrap">
-          <el-select v-model="form.severityLevel" class="w-220">
+          <el-select v-model="form.severityLevel" class="w-220" placeholder="请选择">
             <el-option
               v-for="level in SEVERITY_LEVELS"
               :key="level.value"
