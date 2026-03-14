@@ -156,14 +156,26 @@ public final class WecomXmlParser {
             // 接收人/机器人 id：aibotid 映射到 ToUserName
             result.put("ToUserName", nullToEmpty(obj.getStr("aibotid")));
 
-            // 文本内容：text.content
+            // 根据消息类型解析具体内容字段
             String msgType = result.get("MsgType");
             if ("text".equalsIgnoreCase(msgType)) {
+                // 文本内容：text.content
                 JSONObject text = obj.getJSONObject("text");
                 if (text != null) {
                     result.put("Content", nullToEmpty(text.getStr("content")));
                 } else {
                     result.put("Content", "");
+                }
+            } else if ("image".equalsIgnoreCase(msgType)) {
+                // 图片消息：image.media_id / image.pic_url
+                result.put("Content", "");
+                JSONObject image = obj.getJSONObject("image");
+                if (image != null) {
+                    result.put("MediaId", nullToEmpty(image.getStr("media_id")));
+                    result.put("PicUrl", nullToEmpty(image.getStr("pic_url")));
+                } else {
+                    result.put("MediaId", "");
+                    result.put("PicUrl", "");
                 }
             } else {
                 result.put("Content", "");
