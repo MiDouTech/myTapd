@@ -55,6 +55,25 @@ public class TicketBugApplicationService extends BaseApplicationService {
     }
 
     /**
+     * 系统自动初始化缺陷工单客服信息（企微机器人建单时自动填充，跳过状态和权限校验）
+     * 仅在工单刚创建、客服信息记录不存在时执行，不覆盖已有数据
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void initCustomerInfoFromBot(Long ticketId, TicketBugCustomerInfoInput input) {
+        if (ticketId == null || input == null) {
+            return;
+        }
+        TicketBugInfoPO existing = getBugInfoByTicketId(ticketId);
+        if (existing != null) {
+            return;
+        }
+        TicketBugInfoPO infoPO = new TicketBugInfoPO();
+        infoPO.setTicketId(ticketId);
+        applyCustomerInfoChanges(infoPO, input);
+        bugInfoMapper.insert(infoPO);
+    }
+
+    /**
      * 更新缺陷工单客服信息
      * 变更检测必须在 apply 赋值之前，保证对比的是数据库中的旧值
      */
