@@ -774,7 +774,7 @@ watch(
         <el-tab-pane label="测试信息" name="test">
           <el-form label-width="120px">
             <el-form-item label="复现环境">
-              <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo">
+              <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo" placeholder="请选择">
                 <el-option label="生产环境" value="PRODUCTION" />
                 <el-option label="测试环境" value="TEST" />
                 <el-option label="均可复现" value="BOTH" />
@@ -799,14 +799,14 @@ watch(
               />
             </el-form-item>
             <el-form-item label="影响范围">
-              <el-select v-model="testInfoForm.impactScope" :disabled="!canEditTestInfo">
+              <el-select v-model="testInfoForm.impactScope" :disabled="!canEditTestInfo" placeholder="请选择">
                 <el-option label="单一商户" value="SINGLE" />
                 <el-option label="部分商户" value="PARTIAL" />
                 <el-option label="全部商户" value="ALL" />
               </el-select>
             </el-form-item>
             <el-form-item label="缺陷等级">
-              <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo">
+              <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo" placeholder="请选择">
                 <el-option label="致命" value="FATAL" />
                 <el-option label="严重" value="CRITICAL" />
                 <el-option label="一般" value="NORMAL" />
