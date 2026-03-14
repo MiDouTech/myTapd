@@ -42,19 +42,22 @@ public class WecomBotCommandService {
     private final TicketApplicationService ticketApplicationService;
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
     private final WecomProperties wecomProperties;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomBotCommandService(SysUserMapper sysUserMapper,
                                   TicketMapper ticketMapper,
                                   TicketCategoryMapper ticketCategoryMapper,
                                   TicketApplicationService ticketApplicationService,
                                   TicketUrgeApplicationService ticketUrgeApplicationService,
-                                  WecomProperties wecomProperties) {
+                                  WecomProperties wecomProperties,
+                                  WecomImageHandlerService imageHandlerService) {
         this.sysUserMapper = sysUserMapper;
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketApplicationService = ticketApplicationService;
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
         this.wecomProperties = wecomProperties;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -103,7 +106,7 @@ public class WecomBotCommandService {
             return result;
         }
         if (commandType == WecomBotCommandType.CREATE) {
-            return handleCreateCommand(parseResult, chatId, sender.getId(), defaultCategoryId);
+            return handleCreateCommand(parseResult, chatId, fromWecomId, sender.getId(), defaultCategoryId);
         }
 
         result.setReplyContent("❌ 暂不支持该指令，请发送“@工单助手 帮助”查看可用命令");
@@ -112,6 +115,7 @@ public class WecomBotCommandService {
 
     private CommandHandleResult handleCreateCommand(WecomBotParseResult parseResult,
                                                     String chatId,
+                                                    String fromWecomId,
                                                     Long senderId,
                                                     Long defaultCategoryId) {
         CommandHandleResult result = new CommandHandleResult();
@@ -134,16 +138,21 @@ public class WecomBotCommandService {
         Long ticketId = ticketApplicationService.createTicket(input, senderId);
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
+        int linkedImages = imageHandlerService.linkPendingImagesToTicket(ticketId, chatId, fromWecomId);
         String categoryName = buildCategoryPathName(categoryId);
         String ticketNo = ticket != null ? ticket.getTicketNo() : "";
         String publicLink = buildPublicTicketLink(ticketNo);
         result.setTicketId(ticketId);
-        result.setReplyContent("✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticketNo) + "\n" +
-                "标题：" + safeValue(parseResult.getTitle()) + "\n" +
-                "分类：" + safeValue(categoryName) + "\n" +
-                "优先级：" + safeValue(parseResult.getPriority()) + "\n" +
-                "查看详情：" + publicLink);
+        StringBuilder replyBuilder = new StringBuilder("✅ 工单创建成功\n")
+                .append("工单编号：").append(safeValue(ticketNo)).append("\n")
+                .append("标题：").append(safeValue(parseResult.getTitle())).append("\n")
+                .append("分类：").append(safeValue(categoryName)).append("\n")
+                .append("优先级：").append(safeValue(parseResult.getPriority())).append("\n");
+        if (linkedImages > 0) {
+            replyBuilder.append("🖼️ 图片附件：").append(linkedImages).append("张（已上传）\n");
+        }
+        replyBuilder.append("查看详情：").append(publicLink);
+        result.setReplyContent(replyBuilder.toString());
         return result;
     }
 

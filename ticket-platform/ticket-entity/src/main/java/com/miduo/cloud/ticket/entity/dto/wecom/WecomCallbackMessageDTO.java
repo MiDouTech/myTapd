@@ -36,6 +36,16 @@ public class WecomCallbackMessageDTO implements Serializable {
     private String content;
 
     /**
+     * 企微图片MediaId（MsgType=image时有值）
+     */
+    private String mediaId;
+
+    /**
+     * 企微图片临时预览URL（MsgType=image时有值）
+     */
+    private String picUrl;
+
+    /**
      * 解密后的原始XML
      */
     private String rawXml;

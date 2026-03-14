@@ -38,19 +38,22 @@ public class WecomInteractiveConfirmService {
     private final TicketMapper ticketMapper;
     private final SysUserMapper sysUserMapper;
     private final WecomProperties wecomProperties;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomInteractiveConfirmService(WecomDraftSessionService draftSessionService,
                                           TicketApplicationService ticketApplicationService,
                                           TicketCategoryMapper ticketCategoryMapper,
                                           TicketMapper ticketMapper,
                                           SysUserMapper sysUserMapper,
-                                          WecomProperties wecomProperties) {
+                                          WecomProperties wecomProperties,
+                                          WecomImageHandlerService imageHandlerService) {
         this.draftSessionService = draftSessionService;
         this.ticketApplicationService = ticketApplicationService;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
         this.wecomProperties = wecomProperties;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -120,15 +123,20 @@ public class WecomInteractiveConfirmService {
         Long ticketId = doCreateTicket(draft, categoryId, chatId, sender.getId());
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
+        int linkedImages = imageHandlerService.linkPendingImagesToTicket(ticketId, chatId, wecomUserId);
         draftSessionService.removeDraft(chatId, wecomUserId);
         String ticketNo = ticket != null ? ticket.getTicketNo() : "";
         String publicLink = buildPublicTicketLink(ticketNo);
-        return "✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticketNo) + "\n" +
-                "标题：" + safeValue(draft.getTitle()) + "\n" +
-                "分类：" + safeValue(draft.getCategoryPath()) + "\n" +
-                "优先级：" + safeValue(draft.getPriority()) + "\n" +
-                "查看详情：" + publicLink;
+        StringBuilder sb = new StringBuilder("✅ 工单创建成功\n")
+                .append("工单编号：").append(safeValue(ticketNo)).append("\n")
+                .append("标题：").append(safeValue(draft.getTitle())).append("\n")
+                .append("分类：").append(safeValue(draft.getCategoryPath())).append("\n")
+                .append("优先级：").append(safeValue(draft.getPriority())).append("\n");
+        if (linkedImages > 0) {
+            sb.append("🖼️ 图片附件：").append(linkedImages).append("张（已上传）\n");
+        }
+        sb.append("查看详情：").append(publicLink);
+        return sb.toString();
     }
 
     /**

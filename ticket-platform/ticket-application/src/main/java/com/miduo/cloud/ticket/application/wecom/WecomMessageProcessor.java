@@ -48,6 +48,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
     private final WecomInteractiveConfirmService interactiveConfirmService;
     private final SysUserMapper sysUserMapper;
     private final WecomProperties wecomProperties;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomMessageProcessor(WecomBotMessageParser parser,
                                  WecomBotCommandService commandService,
@@ -60,7 +61,8 @@ public class WecomMessageProcessor extends BaseApplicationService {
                                  WecomNaturalLangParser naturalLangParser,
                                  WecomInteractiveConfirmService interactiveConfirmService,
                                  SysUserMapper sysUserMapper,
-                                 WecomProperties wecomProperties) {
+                                 WecomProperties wecomProperties,
+                                 WecomImageHandlerService imageHandlerService) {
         this.parser = parser;
         this.commandService = commandService;
         this.groupBindingMapper = groupBindingMapper;
@@ -73,6 +75,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
         this.interactiveConfirmService = interactiveConfirmService;
         this.sysUserMapper = sysUserMapper;
         this.wecomProperties = wecomProperties;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -153,15 +156,16 @@ public class WecomMessageProcessor extends BaseApplicationService {
 
         Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
         if (ticketId != null) {
+            int linkedImages = imageHandlerService.linkPendingImagesToTicket(ticketId, chatId, fromWecomUserId);
             TicketPO ticket = ticketMapper.selectById(ticketId);
             String ticketNo = ticket != null ? ticket.getTicketNo() : "";
             String replyMsg = buildTicketCreatedReply(ticketNo, draft.getTitle(), draft.getCategoryPath(),
-                    draft.getPriority());
+                    draft.getPriority(), linkedImages);
             sendReply(binding, replyMsg, fromWecomUserId, message.getResponseUrl());
             saveLog(message, parseResult, ticketId, WecomBotMessageStatus.SUCCESS, null,
                     PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
-            log.info("企微自然语言消息已直接创建工单: msgId={}, chatId={}, ticketId={}, confidence={}",
-                    message.getMsgId(), chatId, ticketId, nlpResult.getConfidence());
+            log.info("企微自然语言消息已直接创建工单: msgId={}, chatId={}, ticketId={}, confidence={}, linkedImages={}",
+                    message.getMsgId(), chatId, ticketId, nlpResult.getConfidence(), linkedImages);
         } else {
             saveLog(message, parseResult, null, WecomBotMessageStatus.FAIL,
                     "未关联系统账号，无法创建工单",
@@ -171,15 +175,19 @@ public class WecomMessageProcessor extends BaseApplicationService {
         }
     }
 
-    private String buildTicketCreatedReply(String ticketNo, String title, String categoryPath, String priority) {
+    private String buildTicketCreatedReply(String ticketNo, String title, String categoryPath, String priority, int linkedImages) {
         String publicLink = buildPublicTicketLink(ticketNo);
         String priorityLabel = formatPriority(priority);
-        return "✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticketNo) + "\n" +
-                "标题：" + safeValue(title) + "\n" +
-                "分类：" + safeValue(categoryPath) + "\n" +
-                "优先级：" + priorityLabel + "\n" +
-                "查看详情：" + publicLink;
+        StringBuilder sb = new StringBuilder("✅ 工单创建成功\n")
+                .append("工单编号：").append(safeValue(ticketNo)).append("\n")
+                .append("标题：").append(safeValue(title)).append("\n")
+                .append("分类：").append(safeValue(categoryPath)).append("\n")
+                .append("优先级：").append(priorityLabel).append("\n");
+        if (linkedImages > 0) {
+            sb.append("🖼️ 图片附件：").append(linkedImages).append("张（已上传）\n");
+        }
+        sb.append("查看详情：").append(publicLink);
+        return sb.toString();
     }
 
     private String formatPriority(String priority) {

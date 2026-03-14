@@ -101,6 +101,9 @@ public class TicketDetailOutput implements Serializable {
         private String fileType;
         private Long uploadedBy;
         private String uploadedByName;
+        private String source;
+        private String sourceLabel;
+        private String wecomMsgId;
         private Date createTime;
     }
 

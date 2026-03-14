@@ -27,6 +27,7 @@ public class WecomClient {
     private static final String GET_DEPARTMENT_LIST_PATH = "/cgi-bin/department/list";
     private static final String GET_DEPARTMENT_USER_PATH = "/cgi-bin/user/list";
     private static final String SEND_APP_MESSAGE_PATH = "/cgi-bin/message/send";
+    private static final String GET_MEDIA_PATH = "/cgi-bin/media/get";
     private static final Long ROOT_DEPARTMENT_ID = 1L;
 
     private final WecomTokenManager tokenManager;
@@ -217,6 +218,55 @@ public class WecomClient {
             String errMsg = result != null ? result.getString("errmsg") : "response is null";
             log.error("发送企微应用消息失败: toUser={}, errMsg={}", toUser, errMsg);
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用消息失败: " + errMsg);
+        }
+    }
+
+    /**
+     * 通过 MediaId 下载企微媒体文件（图片），返回字节数组
+     * 企微接口：GET /cgi-bin/media/get?access_token=xxx&media_id=xxx
+     *
+     * @param mediaId 企微 MediaId
+     * @return 图片字节数组，失败时返回 null
+     */
+    public byte[] downloadMediaById(String mediaId) {
+        if (mediaId == null || mediaId.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String accessToken = tokenManager.getAccessToken();
+            String url = buildApiUrl(GET_MEDIA_PATH) + "?access_token=" + accessToken + "&media_id=" + mediaId.trim();
+            byte[] bytes = cn.hutool.http.HttpUtil.downloadBytes(url);
+            if (bytes == null || bytes.length == 0) {
+                log.warn("企微MediaId下载返回空数据: mediaId={}", mediaId);
+                return null;
+            }
+            return bytes;
+        } catch (Exception e) {
+            log.warn("企微MediaId下载失败: mediaId={}, error={}", mediaId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过 HTTP 下载图片临时预览 URL
+     *
+     * @param picUrl 企微图片临时URL
+     * @return 图片字节数组，失败时返回 null
+     */
+    public byte[] downloadImageByUrl(String picUrl) {
+        if (picUrl == null || picUrl.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            byte[] bytes = cn.hutool.http.HttpUtil.downloadBytes(picUrl.trim());
+            if (bytes == null || bytes.length == 0) {
+                log.warn("企微图片PicUrl下载返回空数据: picUrl={}", picUrl);
+                return null;
+            }
+            return bytes;
+        } catch (Exception e) {
+            log.warn("企微图片PicUrl下载失败: picUrl={}, error={}", picUrl, e.getMessage());
+            return null;
         }
     }
 

@@ -1107,6 +1107,20 @@ watch(
           <div class="attachment-info">
             <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
             <div class="attachment-meta">
+              <el-tag
+                v-if="attachment.source === 'WECOM_BOT'"
+                type="success"
+                size="small"
+                effect="plain"
+                style="margin-right: 6px;"
+              >企微</el-tag>
+              <el-tag
+                v-else
+                type="info"
+                size="small"
+                effect="plain"
+                style="margin-right: 6px;"
+              >Web</el-tag>
               <span>{{ formatFileSize(attachment.fileSize) }}</span>
               <span class="meta-divider">·</span>
               <span>{{ attachment.uploadedByName || '-' }}</span>
