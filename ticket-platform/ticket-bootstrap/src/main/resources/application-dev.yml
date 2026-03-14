@@ -61,10 +61,10 @@ ticket:
   detail-url: ${TICKET_DETAIL_URL:http://ticket.t.miduonet.com/open/ticket}
 
 qiniu:
-  access-key: ${QINIU_ACCESS_KEY:}
-  secret-key: ${QINIU_SECRET_KEY:}
-  bucket: ${QINIU_BUCKET:ticket-platform}
-  domain: ${QINIU_DOMAIN:}
+  access-key: ${QINIU_ACCESS_KEY:GZuoSAtSoVpjNU4Ajsu70uxMwGCg_k8b77iGXZaR}
+  secret-key: ${QINIU_SECRET_KEY:phrzhjtLyXDovmzcUSZvy6gBzffOjxKtRlqUHABg}
+  bucket: ${QINIU_BUCKET:imgweixin12315comcn}
+  domain: ${QINIU_DOMAIN:https://image.qn.weixin12315.com.cn/}
   zone: ${QINIU_ZONE:z0}
   token-expire-seconds: 3600
   image-path-prefix: ticket/images/
