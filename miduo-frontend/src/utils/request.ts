@@ -2,10 +2,11 @@ import type { AxiosRequestConfig } from 'axios'
 import axios from 'axios'
 
 import router from '@/router'
+import { useAuthStore } from '@/stores/auth'
 import type { ApiResult } from '@/types/common'
 
 import { notifyError } from './feedback'
-import { clearAuthStorage, getAccessToken } from './storage'
+import { getAccessToken } from './storage'
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -20,7 +21,9 @@ function redirectToLogin(): void {
   }
   isRedirecting = true
   const redirect = router.currentRoute.value.fullPath
-  clearAuthStorage()
+  // Clear both in-memory store state and localStorage so the router guard
+  // correctly treats the user as unauthenticated after the redirect.
+  useAuthStore().clearLoginState()
   router
     .push({
       path: '/login',
