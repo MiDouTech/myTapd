@@ -29,6 +29,8 @@ public class BugReportStatisticsOutput implements Serializable {
     public static class DistributionItem implements Serializable {
         private String name;
         private Long count;
+        /** 占比百分比（保留1位小数，如 35.5 表示 35.5%） */
+        private Double rate;
     }
 
     @Data

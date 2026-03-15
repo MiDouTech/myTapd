@@ -1039,12 +1039,15 @@ public class BugReportApplicationService extends BaseApplicationService {
         Map<String, Long> grouped = names.stream()
                 .filter(StringUtils::hasText)
                 .collect(Collectors.groupingBy(String::trim, Collectors.counting()));
+        long total = grouped.values().stream().mapToLong(Long::longValue).sum();
         List<BugReportStatisticsOutput.DistributionItem> result = grouped.entrySet().stream()
                 .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
                 .map(entry -> {
                     BugReportStatisticsOutput.DistributionItem item = new BugReportStatisticsOutput.DistributionItem();
                     item.setName(entry.getKey());
                     item.setCount(entry.getValue());
+                    double rate = total > 0 ? Math.round(entry.getValue() * 1000.0 / total) / 10.0 : 0.0;
+                    item.setRate(rate);
                     return item;
                 }).collect(Collectors.toList());
         if (limit > 0 && result.size() > limit) {

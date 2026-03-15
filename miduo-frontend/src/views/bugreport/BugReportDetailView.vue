@@ -227,6 +227,17 @@ function getSeverityLabel(level?: string): string {
   return level ? (map[level] || level) : '-'
 }
 
+function getSeverityTagType(level?: string): '' | 'success' | 'warning' | 'danger' | 'info' {
+  const map: Record<string, '' | 'success' | 'warning' | 'danger' | 'info'> = {
+    P0: 'danger',
+    P1: 'warning',
+    P2: '',
+    P3: 'success',
+    P4: 'info',
+  }
+  return level ? (map[level] ?? 'info') : 'info'
+}
+
 function buildCopyText(): string {
   const d = detail.value
   if (!d) return ''
@@ -316,7 +327,14 @@ watch(
           {{ detail?.defectCategory || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="严重级别">
-          {{ getSeverityLabel(detail?.severityLevel) }}
+          <el-tag
+            v-if="detail?.severityLevel"
+            :type="getSeverityTagType(detail.severityLevel)"
+            size="small"
+          >
+            {{ getSeverityLabel(detail.severityLevel) }}
+          </el-tag>
+          <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="引入项目">
           {{ detail?.introducedProject || '-' }}
