@@ -89,10 +89,10 @@ function downloadCsv(fileName: string, rows: Array<Array<string | number>>): voi
 }
 
 function handleExport(): void {
-  const date = new Date().toISOString().slice(0, 10)
+  const startDate = timeRange.value[0] ? timeRange.value[0].slice(0, 10) : '全部'
+  const endDate = timeRange.value[1] ? timeRange.value[1].slice(0, 10) : '全部'
   const rows: Array<Array<string | number>> = [
-    ['Bug简报统计看板', date],
-    ['统计周期', timeRange.value[0] || '-', timeRange.value[1] || '-'],
+    ['Bug简报统计看板', `${startDate} ~ ${endDate}`],
     [],
     ['核心指标', '值'],
     ['简报总数', statistics.value.totalCount],
@@ -100,22 +100,22 @@ function handleExport(): void {
     ['及时率(%)', statistics.value.timelyRate],
     [],
     ['逻辑归因分布'],
-    ['归因', '数量'],
-    ...statistics.value.logicCauseDistribution.map((item) => [item.name, item.count]),
+    ['归因', '数量', '占比(%)'],
+    ...statistics.value.logicCauseDistribution.map((item) => [item.name, item.count, item.rate ?? '']),
     [],
     ['缺陷分类分布'],
-    ['分类', '数量'],
-    ...statistics.value.defectCategoryDistribution.map((item) => [item.name, item.count]),
+    ['分类', '数量', '占比(%)'],
+    ...statistics.value.defectCategoryDistribution.map((item) => [item.name, item.count, item.rate ?? '']),
     [],
     ['引入项目Top'],
-    ['项目', '数量'],
-    ...statistics.value.introducedProjectTop.map((item) => [item.name, item.count]),
+    ['项目', '数量', '占比(%)'],
+    ...statistics.value.introducedProjectTop.map((item) => [item.name, item.count, item.rate ?? '']),
     [],
     ['责任人统计'],
     ['责任人', '数量'],
     ...statistics.value.responsibleStatistics.map((item) => [item.userName || item.userId, item.count]),
   ]
-  downloadCsv(`Bug简报统计-${date}.csv`, rows)
+  downloadCsv(`Bug简报统计_${startDate}_${endDate}.csv`, rows)
   notifySuccess('统计数据导出成功')
 }
 
@@ -149,8 +149,8 @@ onMounted(() => {
         <el-form-item>
           <el-space>
             <el-button @click="applyQuickRange(7)">近7天</el-button>
-            <el-button @click="applyQuickRange(14)">近14天</el-button>
             <el-button @click="applyQuickRange(30)">近30天</el-button>
+            <el-button @click="applyQuickRange(90)">近90天</el-button>
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
@@ -187,7 +187,12 @@ onMounted(() => {
           />
           <BaseTable v-else :data="statistics.logicCauseDistribution">
             <el-table-column prop="name" label="归因" min-width="220" />
-            <el-table-column prop="count" label="数量" width="120" />
+            <el-table-column prop="count" label="数量" width="100" align="center" />
+            <el-table-column label="占比" width="100" align="center">
+              <template #default="{ row }">
+                {{ row.rate != null ? row.rate + '%' : '-' }}
+              </template>
+            </el-table-column>
           </BaseTable>
         </el-card>
       </el-col>
@@ -203,7 +208,12 @@ onMounted(() => {
           />
           <BaseTable v-else :data="statistics.defectCategoryDistribution">
             <el-table-column prop="name" label="分类" min-width="220" />
-            <el-table-column prop="count" label="数量" width="120" />
+            <el-table-column prop="count" label="数量" width="100" align="center" />
+            <el-table-column label="占比" width="100" align="center">
+              <template #default="{ row }">
+                {{ row.rate != null ? row.rate + '%' : '-' }}
+              </template>
+            </el-table-column>
           </BaseTable>
         </el-card>
       </el-col>
@@ -221,7 +231,12 @@ onMounted(() => {
           />
           <BaseTable v-else :data="statistics.introducedProjectTop">
             <el-table-column prop="name" label="项目" min-width="220" />
-            <el-table-column prop="count" label="数量" width="120" />
+            <el-table-column prop="count" label="数量" width="100" align="center" />
+            <el-table-column label="占比" width="100" align="center">
+              <template #default="{ row }">
+                {{ row.rate != null ? row.rate + '%' : '-' }}
+              </template>
+            </el-table-column>
           </BaseTable>
         </el-card>
       </el-col>
