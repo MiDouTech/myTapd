@@ -29,6 +29,29 @@ import DashboardTrendCategoryRow from './components/DashboardTrendCategoryRow.vu
 
 const layoutStore = useDashboardLayoutStore()
 const loading = ref(false)
+const WIDGET_LAYOUT_STORAGE_KEY = 'miduo_dashboard_widget_layout_v1'
+
+type OverviewCardKey =
+  | 'pending_accept'
+  | 'processing'
+  | 'suspended'
+  | 'completed'
+  | 'sla_breached'
+  | 'total'
+type TrendCategoryWidgetKey = 'trend' | 'category'
+type EfficiencyWorkloadWidgetKey = 'efficiency' | 'workload'
+
+interface DashboardWidgetLayout {
+  overview: OverviewCardKey[]
+  trendCategory: TrendCategoryWidgetKey[]
+  efficiencyWorkload: EfficiencyWorkloadWidgetKey[]
+}
+
+const DEFAULT_WIDGET_LAYOUT: DashboardWidgetLayout = {
+  overview: ['pending_accept', 'processing', 'suspended', 'completed', 'sla_breached', 'total'],
+  trendCategory: ['trend', 'category'],
+  efficiencyWorkload: ['efficiency', 'workload'],
+}
 
 const overview = ref<DashboardOverviewOutput>({
   pendingAcceptCount: 0,
@@ -55,6 +78,77 @@ const slaAchievement = ref<DashboardSlaAchievementOutput>({
   achievementRate: 0,
 })
 const workload = ref<DashboardWorkloadOutput[]>([])
+const widgetLayout = ref<DashboardWidgetLayout>(loadWidgetLayout())
+const editingWidgetLayout = ref<DashboardWidgetLayout>(cloneWidgetLayout(widgetLayout.value))
+let widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+
+function cloneWidgetLayout(source: DashboardWidgetLayout): DashboardWidgetLayout {
+  return {
+    overview: [...source.overview],
+    trendCategory: [...source.trendCategory],
+    efficiencyWorkload: [...source.efficiencyWorkload],
+  }
+}
+
+function normalizeOrder<T extends string>(input: unknown, defaults: readonly T[]): T[] {
+  if (!Array.isArray(input)) {
+    return [...defaults]
+  }
+  const valueSet = new Set(defaults)
+  const valid = input.filter((item): item is T => typeof item === 'string' && valueSet.has(item as T))
+  const merged = [...valid]
+  defaults.forEach((item) => {
+    if (!merged.includes(item)) {
+      merged.push(item)
+    }
+  })
+  return merged
+}
+
+function loadWidgetLayout(): DashboardWidgetLayout {
+  const defaults = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+  const raw = window.localStorage.getItem(WIDGET_LAYOUT_STORAGE_KEY)
+  if (!raw) {
+    return defaults
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<DashboardWidgetLayout>
+    return {
+      overview: normalizeOrder(parsed.overview, defaults.overview),
+      trendCategory: normalizeOrder(parsed.trendCategory, defaults.trendCategory),
+      efficiencyWorkload: normalizeOrder(parsed.efficiencyWorkload, defaults.efficiencyWorkload),
+    }
+  } catch {
+    return defaults
+  }
+}
+
+function persistWidgetLayout(layout: DashboardWidgetLayout): void {
+  window.localStorage.setItem(WIDGET_LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+}
+
+function handleEnterEditMode(): void {
+  layoutStore.enterEditMode()
+  widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+  editingWidgetLayout.value = cloneWidgetLayout(widgetLayout.value)
+}
+
+function handleCancelEditMode(): void {
+  layoutStore.cancelEditMode()
+  editingWidgetLayout.value = cloneWidgetLayout(widgetLayoutSnapshot)
+}
+
+function handleOverviewOrderChange(order: OverviewCardKey[]): void {
+  editingWidgetLayout.value.overview = [...order]
+}
+
+function handleTrendCategoryOrderChange(order: TrendCategoryWidgetKey[]): void {
+  editingWidgetLayout.value.trendCategory = [...order]
+}
+
+function handleEfficiencyWorkloadOrderChange(order: EfficiencyWorkloadWidgetKey[]): void {
+  editingWidgetLayout.value.efficiencyWorkload = [...order]
+}
 
 /**
  * draggableRows: 双向绑定给 VueDraggable 的可拖拽行组列表
@@ -74,6 +168,9 @@ function onDragEnd(): void {
 async function handleSaveLayout(): Promise<void> {
   try {
     await layoutStore.saveLayout()
+    widgetLayout.value = cloneWidgetLayout(editingWidgetLayout.value)
+    widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+    persistWidgetLayout(widgetLayout.value)
     ElMessage.success('布局已保存')
   } catch (error) {
     ElMessage.error((error as Error).message || '保存布局失败')
@@ -92,6 +189,10 @@ async function handleResetLayout(): Promise<void> {
       },
     )
     await layoutStore.resetLayout()
+    widgetLayout.value = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+    editingWidgetLayout.value = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+    widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+    persistWidgetLayout(widgetLayout.value)
     ElMessage.success('已恢复默认布局')
   } catch {
     // user cancelled
@@ -161,14 +262,14 @@ onMounted(() => {
           plain
           size="small"
           :icon="Edit"
-          @click="layoutStore.enterEditMode()"
+          @click="handleEnterEditMode"
         >
           编辑布局
         </el-button>
         <!-- 编辑模式：恢复默认 / 取消 / 保存布局 -->
         <div v-else class="edit-mode-actions">
           <el-button type="default" link @click="handleResetLayout">恢复默认</el-button>
-          <el-button size="small" @click="layoutStore.cancelEditMode()">取消</el-button>
+          <el-button size="small" @click="handleCancelEditMode">取消</el-button>
           <el-button
             type="primary"
             size="small"
@@ -188,11 +289,16 @@ onMounted(() => {
       type="info"
       :closable="false"
       show-icon
-      title="拖拽模块可调整顺序，仅对您自己生效"
+      title="可拖拽行组与卡片小块调整布局，仅对您自己生效"
     />
 
     <!-- 固定置顶：overview 行组（不参与拖拽） -->
-    <DashboardOverviewRow :data="overview" />
+    <DashboardOverviewRow
+      :data="overview"
+      :editable="layoutStore.isEditMode"
+      :card-order="layoutStore.isEditMode ? editingWidgetLayout.overview : widgetLayout.overview"
+      @update:card-order="handleOverviewOrderChange"
+    />
 
     <!-- 编辑模式：vuedraggable 包裹可拖拽行组 -->
     <VueDraggable
@@ -213,12 +319,18 @@ onMounted(() => {
             v-if="element.rowGroupKey === 'trend_category'"
             :trend="trend"
             :categories="categories"
+            :editable="layoutStore.isEditMode"
+            :card-order="editingWidgetLayout.trendCategory"
+            @update:card-order="handleTrendCategoryOrderChange"
           />
           <DashboardEfficiencyWorkloadRow
             v-else-if="element.rowGroupKey === 'efficiency_workload'"
             :efficiency="efficiency"
             :sla-achievement="slaAchievement"
             :workload="workload"
+            :editable="layoutStore.isEditMode"
+            :card-order="editingWidgetLayout.efficiencyWorkload"
+            @update:card-order="handleEfficiencyWorkloadOrderChange"
           />
         </div>
       </template>
@@ -230,12 +342,14 @@ onMounted(() => {
         v-if="rowGroup.rowGroupKey === 'trend_category'"
         :trend="trend"
         :categories="categories"
+        :card-order="widgetLayout.trendCategory"
       />
       <DashboardEfficiencyWorkloadRow
         v-else-if="rowGroup.rowGroupKey === 'efficiency_workload'"
         :efficiency="efficiency"
         :sla-achievement="slaAchievement"
         :workload="workload"
+        :card-order="widgetLayout.efficiencyWorkload"
       />
     </template>
   </div>
