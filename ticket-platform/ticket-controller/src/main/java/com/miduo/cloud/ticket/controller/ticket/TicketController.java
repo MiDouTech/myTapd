@@ -235,6 +235,20 @@ public class TicketController {
         return ApiResult.success(output);
     }
 
+    /**
+     * 新增工单评论
+     * 接口编号：API000508
+     * 产品文档功能：工单详情 - 评论区发表评论
+     */
+    @PostMapping("/{id}/comment")
+    @Operation(summary = "新增工单评论", description = "接口编号：API000508")
+    public ApiResult<Long> addComment(@PathVariable Long id,
+                                      @Valid @RequestBody TicketCommentInput input) {
+        Long currentUserId = getCurrentUserId();
+        Long commentId = ticketService.addComment(id, input.getContent(), currentUserId);
+        return ApiResult.success(commentId);
+    }
+
     private Long getCurrentUserId() {
         Long userId = SecurityUtil.getCurrentUserId();
         if (userId == null) {
