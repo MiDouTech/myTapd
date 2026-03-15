@@ -97,6 +97,8 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setContent(safeValue(messageMap.get("Content")));
         message.setMediaId(safeValue(messageMap.get("MediaId")));
         message.setPicUrl(safeValue(messageMap.get("PicUrl")));
+        message.setDownloadUrl(safeValue(messageMap.get("DownloadUrl")));
+        message.setAesKey(safeValue(messageMap.get("AesKey")));
         message.setRawXml(plainXml);
         message.setCreateTime(safeValue(messageMap.get("CreateTime")));
         message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));

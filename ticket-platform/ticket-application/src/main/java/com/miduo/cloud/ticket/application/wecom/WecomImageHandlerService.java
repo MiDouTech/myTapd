@@ -81,7 +81,9 @@ public class WecomImageHandlerService {
                 message.getMsgId(), message.getChatId(), message.getFromWecomUserid());
 
         String qiniuUrl = imageDownloadService.downloadAndUpload(
-                message.getMediaId(), message.getPicUrl(), message.getMsgId());
+                message.getMediaId(), message.getPicUrl(),
+                message.getDownloadUrl(), message.getAesKey(),
+                message.getMsgId());
 
         if (qiniuUrl == null) {
             savePendingImageRecord(message, null, WecomPendingImageStatus.FAILED);
