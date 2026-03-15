@@ -48,6 +48,12 @@ const ticketLoading = ref(false)
 const prefillLoading = ref(false)
 const currentStatus = ref('DRAFT')
 
+// Tab: 'resolved' = 已彻底解决, 'temp' = 临时解决
+const activeTab = ref<'resolved' | 'temp'>('resolved')
+
+// Mobile preview modal
+const showMobilePreview = ref(false)
+
 let ticketSearchTimer: ReturnType<typeof setTimeout> | null = null
 let ticketSearchToken = 0
 let skipAutoFill = false
@@ -87,13 +93,97 @@ const SEVERITY_LEVELS = [
   },
 ]
 
+// Logic cause categories for instructions panel
+const LOGIC_CAUSE_ITEMS = [
+  {
+    title: '1. 逻辑错误',
+    desc: '处理流程、决策路径或算法实现与期望不符的错误。',
+    tags: ['条件判断错误', '算法实现错误', '状态处理问题', '业务规则实现不完整', '流程设计缺陷', '依赖关系处理错误'],
+  },
+  {
+    title: '2. 数据处理错误',
+    desc: '数据的转换、计算、存储或传输过程中的错误。',
+    tags: ['数据类型错误', '数据计算错误', '数据格式错误', '数据边界处理错误', '数据一致性问题', '默认值处理不当'],
+  },
+  {
+    title: '3. 异常处理不当',
+    desc: '对程序可能的异常情况缺乏处理或处理方式不当。',
+    tags: ['异常捕获不全', '异常恢复机制不完善', '错误提示不准确', '异常传播不当', '重试机制缺失'],
+  },
+  {
+    title: '4. 接口使用错误',
+    desc: '对内部或外部接口的调用、处理方式有误。',
+    tags: ['API调用参数错误', '接口契约理解错误', '接口响应处理不当', '接口版本兼容性问题', '接口依赖管理不当', '接口认证授权错误'],
+  },
+  {
+    title: '5. 资源管理问题',
+    desc: '系统资源的申请、使用和释放过程中的错误。',
+    tags: ['资源泄露', '资源竞争', '资源使用效率低', '资源限制未处理', '资源监控缺失', '资源配置不当'],
+  },
+  {
+    title: '6. 并发问题',
+    desc: '多线程、多进程环境下的同步、互斥和协作错误。',
+    tags: ['同步错误', '死锁问题', '竞态条件', '线程安全性问题', '并发扩展性问题', '活锁问题'],
+  },
+  {
+    title: '7. 配置错误',
+    desc: '系统配置、环境设置或参数有误。',
+    tags: ['环境配置不当', '参数配置错误', '依赖配置问题', '安全配置缺陷', '资源限制配置不当', '监控告警配置缺失'],
+  },
+  {
+    title: '8. 注释与代码不一致',
+    desc: '代码与其注释、文档间的不一致性问题。',
+    tags: ['误导性注释', '过时注释', '文档缺失', '代码与规范不符', '注释歧义', '注释冗余或不足'],
+  },
+  {
+    title: '9. 兼容性问题',
+    desc: '在不同环境、平台或版本下的兼容性错误。',
+    tags: ['平台兼容性', '浏览器兼容性', '版本兼容性', '数据兼容性', '国际化兼容性', '设备兼容性'],
+  },
+  {
+    title: '10. 安全漏洞',
+    desc: '可能被利用的安全弱点或防护不足的问题。',
+    tags: ['输入验证不足', '权限控制缺失', '敏感信息泄露', '认证机制薄弱', '加密实现问题', '安全更新滞后'],
+  },
+  {
+    title: '11. 性能问题',
+    desc: '功能正确但效率低下的问题。',
+    tags: ['算法效率低', '资源使用不当', '缓存策略不当', '数据库操作低效', '网络通信低效', '前端性能问题'],
+  },
+  {
+    title: '12. 重构风险',
+    desc: '代码重构或优化过程中引入的问题。',
+    tags: ['功能回归', '接口变更', '性能倒退', '代码复杂度增加', '测试覆盖不足', '文档同步不足'],
+  },
+]
+
+const DEFECT_CATEGORY_ITEMS = [
+  { no: '1', name: '页面异常', desc: '由于页面排版不合理、样式、文案错误，页面显示重叠等导致的页面性错误。' },
+  { no: '2', name: '交互异常', desc: '由于前端用户交互体验、接口调用导致的错误。' },
+  { no: '3', name: '设计问题', desc: '逻辑删除无"确认窗"、用户体验感低、注释描述有歧义或存在错别字等。' },
+  { no: '4', name: '错误逻辑', desc: '由于业务逻辑、代码逻辑异常导致的错误。' },
+  { no: '5', name: '错误代码', desc: '逻辑正确的情况下由于编码问题导致的错误。' },
+  { no: '6', name: '错误数据', desc: '由于数据与业务不兼容导致的错误。' },
+  { no: '7', name: '错误配置', desc: '由于配置文件异常导致（参数配置错误等）的错误。' },
+  { no: '8', name: '错误发布', desc: '由于灰度或线上发布流程异常导致的错误。' },
+  { no: '9', name: '基础服务', desc: '由于基础组件、服务网关、任务调度、ES搜索引擎等服务故障导致的错误。' },
+  { no: '10', name: '基础设施', desc: '数据库相关、缓存Redis相关、Nginx反向代理、web负载均衡等。' },
+  { no: '11', name: '兼容问题', desc: '由于浏览器、移动设备或数据库版本不兼容导致的错误。' },
+  { no: '12', name: '架构问题', desc: '由于架构不适用导致的错误，如无法支持大数据量存储、系统扩展性差等。' },
+  { no: '13', name: '性能问题', desc: '并发产生的问题、页面响应时间长、服务器资源耗用过高等。' },
+  { no: '14', name: '安全问题', desc: '账号越权、sql注入漏洞、频率未做限制等。' },
+  { no: '15', name: '安装部署', desc: '服务器初始化、软件安装、编译后代码部署等产生的问题。' },
+  { no: '16', name: '第三方原因', desc: '由于第三方服务异常导致的错误。如：腾讯云服务器网络、七牛云存储等。' },
+]
+
 const form = reactive({
   problemDesc: '',
   logicCausePath: [] as string[],
   logicCauseDetail: '',
   defectCategory: '',
   introducedProject: '',
-  dateRange: [] as string[],
+  startDate: '' as string,
+  resolveDate: '' as string,
   tempResolveDate: '' as string,
   solution: '',
   tempSolution: '',
@@ -125,6 +215,45 @@ const logicCauseOptions = computed<LogicCauseOption[]>(() => {
       children: item.children?.length ? convert(item.children) : undefined,
     }))
   return convert(logicCauseTree.value || [])
+})
+
+// Copy content
+const copyContent = computed(() => {
+  const lines: string[] = []
+  lines.push(`问题描述：${form.problemDesc || '-'}`)
+  if (form.logicCausePath.length > 0) {
+    lines.push(`逻辑归因：${form.logicCausePath.join(' / ')}`)
+  }
+  if (form.logicCauseDetail) {
+    lines.push(`归因明细：${form.logicCauseDetail}`)
+  }
+  lines.push(`缺陷分类：${form.defectCategory || '-'}`)
+  if (form.introducedProject) {
+    lines.push(`引入项目：${form.introducedProject}`)
+  }
+  if (form.startDate) {
+    lines.push(`开始时间：${form.startDate}`)
+  }
+  lines.push(`严重级别：${form.severityLevel || '-'}`)
+  if (form.impactScope) {
+    lines.push(`影响范围：${form.impactScope}`)
+  }
+  if (form.tempResolveDate) {
+    lines.push(`临时解决时间：${form.tempResolveDate}`)
+  }
+  if (form.tempSolution) {
+    lines.push(`临时解决方案：${form.tempSolution}`)
+  }
+  if (form.resolveDate) {
+    lines.push(`彻底解决时间：${form.resolveDate}`)
+  }
+  if (form.solution) {
+    lines.push(`彻底解决方案：${form.solution}`)
+  }
+  if (form.remark) {
+    lines.push(`备注：${form.remark}`)
+  }
+  return lines.join('\n')
 })
 
 function buildTicketLabel(ticketNo?: string, title?: string): string {
@@ -187,9 +316,8 @@ function fillFormByDetail(detail: BugReportDetailOutput): void {
   form.logicCauseDetail = detail.logicCauseDetail || ''
   form.defectCategory = detail.defectCategory || ''
   form.introducedProject = detail.introducedProject || ''
-  const startDate = toDateOnlyText(detail.startDate)
-  const resolveDate = toDateOnlyText(detail.resolveDate)
-  form.dateRange = startDate && resolveDate ? [startDate, resolveDate] : []
+  form.startDate = toDateOnlyText(detail.startDate)
+  form.resolveDate = toDateOnlyText(detail.resolveDate)
   form.tempResolveDate = toDateOnlyText(detail.tempResolveDate)
   form.solution = detail.solution || ''
   form.tempSolution = detail.tempSolution || ''
@@ -207,6 +335,12 @@ function fillFormByDetail(detail: BugReportDetailOutput): void {
   lastAutoGenerated.impactScope = form.impactScope
   lastAutoGenerated.solution = form.solution
   lastAutoGenerated.severityLevel = form.severityLevel
+  // Determine tab based on whether tempSolution is filled
+  if (form.tempSolution && !form.solution) {
+    activeTab.value = 'temp'
+  } else {
+    activeTab.value = 'resolved'
+  }
   setTimeout(() => {
     skipAutoFill = false
   }, 0)
@@ -271,9 +405,6 @@ function handleTicketRemoteSearch(keyword: string): void {
   }, 260)
 }
 
-/**
- * 将步骤文本规范化为箭头连接的一行（去除编号、换行）
- */
 function normalizeStepsToOneLine(raw: string): string {
   const lines = raw
     .split(/\n/)
@@ -283,16 +414,10 @@ function normalizeStepsToOneLine(raw: string): string {
   return joined.length > 120 ? joined.slice(0, 117) + '…' : joined
 }
 
-/**
- * 去除字符串末尾的中英文标点，便于后续统一拼接
- */
 function trimTrailingPunct(text: string): string {
   return text.replace(/[，。！？,.!?\s]+$/, '').trim()
 }
 
-/**
- * 将工单信息提炼为自然语言段落，而非逐字段拼贴
- */
 type TicketSummarySource = {
   ticketNo?: string
   title?: string
@@ -321,13 +446,11 @@ function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
     const ref = [ticket.ticketNo, ticket.title].filter(Boolean).join(' ')
     const sentences: string[] = []
 
-    // 核心问题描述
     const problem = trimTrailingPunct(ticket.bugCustomerInfo?.problemDesc || ticket.description || '')
     if (problem) {
       sentences.push(problem)
     }
 
-    // 实际现象 vs 预期结果 → 自然语言对比句
     const actual = trimTrailingPunct(ticket.bugTestInfo?.actualResult || '')
     const expected = trimTrailingPunct(ticket.bugCustomerInfo?.expectedResult || '')
     if (actual && expected) {
@@ -336,7 +459,6 @@ function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
       sentences.push(`实际现象为${actual}`)
     }
 
-    // 复现步骤（整理为一行箭头格式，过长则截断）
     const rawSteps = (ticket.bugTestInfo?.reproduceSteps || '').trim()
     if (rawSteps) {
       const stepsLine = normalizeStepsToOneLine(rawSteps)
@@ -351,7 +473,6 @@ function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
     }
 
     let para = sentences.join('，') + '。'
-    // 清理双重标点
     para = para.replace(/[，。！？]+([，。！？])/g, '$1')
 
     if (valid.length > 1) {
@@ -445,8 +566,7 @@ function validateBeforeSave(): boolean {
     notifyWarning('请至少关联一个工单')
     return false
   }
-  const [startDate, resolveDate] = form.dateRange
-  if (startDate && resolveDate && startDate > resolveDate) {
+  if (form.startDate && form.resolveDate && form.startDate > form.resolveDate) {
     notifyWarning('开始日期不能晚于解决日期')
     return false
   }
@@ -463,8 +583,8 @@ function buildPayload():
     logicCauseDetail: form.logicCauseDetail.trim() || undefined,
     defectCategory: form.defectCategory || undefined,
     introducedProject: form.introducedProject.trim() || undefined,
-    startDate: form.dateRange[0] || undefined,
-    resolveDate: form.dateRange[1] || undefined,
+    startDate: form.startDate || undefined,
+    resolveDate: form.resolveDate || undefined,
     tempResolveDate: form.tempResolveDate || undefined,
     solution: form.solution.trim() || undefined,
     tempSolution: form.tempSolution.trim() || undefined,
@@ -544,6 +664,15 @@ function handleCancel(): void {
   router.push('/bug-report')
 }
 
+async function handleCopyContent(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(copyContent.value)
+    notifySuccess('已复制到剪贴板')
+  } catch {
+    notifyWarning('复制失败，请手动复制')
+  }
+}
+
 onMounted(async () => {
   await loadBaseData()
   await searchTickets('')
@@ -564,281 +693,638 @@ watch(
 </script>
 
 <template>
-  <el-card shadow="never" v-loading="loading">
-    <template #header>
-      <div class="header">
-        <div class="title-group">
-          <div class="title">{{ pageTitle }}</div>
-          <div v-if="isEditMode" class="status-line">
-            <span>当前状态：</span>
-            <el-tag :type="getBugReportStatusTagType(currentStatus)">
-              {{ getBugReportStatusLabel(currentStatus) }}
-            </el-tag>
+  <div class="edit-page-layout">
+    <!-- Main form area -->
+    <div class="edit-main">
+      <el-card shadow="never" v-loading="loading">
+        <template #header>
+          <div class="header">
+            <div class="title-group">
+              <div class="title">{{ pageTitle }}</div>
+              <div v-if="isEditMode" class="status-line">
+                <span>当前状态：</span>
+                <el-tag :type="getBugReportStatusTagType(currentStatus)">
+                  {{ getBugReportStatusLabel(currentStatus) }}
+                </el-tag>
+              </div>
+            </div>
+            <el-space>
+              <el-button @click="handleCancel">取消</el-button>
+              <el-button type="info" plain @click="showMobilePreview = true">
+                <el-icon class="btn-icon"><Monitor /></el-icon>
+                手机预览
+              </el-button>
+              <el-button type="success" plain @click="handleCopyContent">
+                <el-icon class="btn-icon"><DocumentCopy /></el-icon>
+                一键复制
+              </el-button>
+              <el-button
+                v-if="canEdit"
+                type="primary"
+                plain
+                :loading="submitLoading"
+                @click="handleSaveDraft"
+              >
+                保存草稿
+              </el-button>
+              <el-button
+                v-if="canEdit"
+                type="primary"
+                :loading="submitLoading"
+                @click="handleSaveAndSubmit"
+              >
+                保存并提交
+              </el-button>
+            </el-space>
           </div>
-        </div>
-        <el-space>
-          <el-button @click="handleCancel">取消</el-button>
-          <el-button
-            v-if="canEdit"
-            type="primary"
-            plain
-            :loading="submitLoading"
-            @click="handleSaveDraft"
-          >
-            保存草稿
-          </el-button>
-          <el-button
-            v-if="canEdit"
-            type="primary"
-            :loading="submitLoading"
-            @click="handleSaveAndSubmit"
-          >
-            保存并提交
-          </el-button>
-        </el-space>
-      </div>
-    </template>
+        </template>
 
-    <el-alert
-      v-if="!canEdit"
-      title="当前简报状态不可编辑，请返回详情页处理流程操作。"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="status-alert"
-    />
+        <el-alert
+          v-if="!canEdit"
+          title="当前简报状态不可编辑，请返回详情页处理流程操作。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="status-alert"
+        />
 
-    <el-form label-width="120px" :disabled="!canEdit" class="edit-form">
-      <el-form-item label="关联工单" required>
-        <div class="ticket-select-wrap">
-          <el-select
-            v-model="form.ticketIds"
-            multiple
-            filterable
-            remote
-            reserve-keyword
-            collapse-tags
-            collapse-tags-tooltip
-            class="w-640"
-            :loading="ticketLoading"
-            placeholder="输入工单编号或标题搜索"
-            :remote-method="handleTicketRemoteSearch"
-          >
-            <el-option
-              v-for="option in ticketOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
+        <el-form label-width="120px" :disabled="!canEdit" class="edit-form">
+          <!-- Common fields -->
+          <el-form-item label="关联工单" required>
+            <div class="ticket-select-wrap">
+              <el-select
+                v-model="form.ticketIds"
+                multiple
+                filterable
+                remote
+                reserve-keyword
+                collapse-tags
+                collapse-tags-tooltip
+                class="w-640"
+                :loading="ticketLoading"
+                placeholder="输入工单编号或标题搜索"
+                :remote-method="handleTicketRemoteSearch"
+              >
+                <el-option
+                  v-for="option in ticketOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <div class="prefill-hint">
+                <span v-if="prefillLoading" class="prefill-hint--loading">正在自动填充相关字段…</span>
+                <span v-else-if="form.ticketIds.length > 0">已根据关联工单自动预填部分字段，可手动修改</span>
+                <span v-else>选择工单后将自动预填问题描述及相关字段</span>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="问题描述" required>
+            <el-input
+              v-model="form.problemDesc"
+              type="textarea"
+              :rows="4"
+              maxlength="1000"
+              show-word-limit
+              placeholder="请输入问题描述"
             />
-          </el-select>
-          <div class="prefill-hint">
-            <span v-if="prefillLoading" class="prefill-hint--loading">正在自动填充相关字段…</span>
-            <span v-else-if="form.ticketIds.length > 0">已根据关联工单自动预填部分字段，可手动修改</span>
-            <span v-else>选择工单后将自动预填问题描述及相关字段</span>
-          </div>
-        </div>
-      </el-form-item>
+          </el-form-item>
 
-      <el-form-item label="问题描述" required>
-        <el-input
-          v-model="form.problemDesc"
-          type="textarea"
-          :rows="4"
-          maxlength="1000"
-          show-word-limit
-          placeholder="请输入问题描述"
-        />
-      </el-form-item>
-
-      <el-form-item label="逻辑归因">
-        <el-cascader
-          v-model="form.logicCausePath"
-          :options="logicCauseOptions"
-          :props="{
-            checkStrictly: true,
-            emitPath: true,
-            value: 'value',
-            label: 'label',
-            children: 'children',
-          }"
-          clearable
-          filterable
-          class="w-520"
-          placeholder="请选择逻辑归因（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="归因明细">
-        <el-input
-          v-model="form.logicCauseDetail"
-          type="textarea"
-          :rows="2"
-          maxlength="500"
-          show-word-limit
-          placeholder="请输入归因补充说明（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="缺陷分类" required>
-        <el-select
-          v-model="form.defectCategory"
-          clearable
-          filterable
-          class="w-420"
-          placeholder="请选择缺陷分类"
-        >
-          <el-option
-            v-for="item in defectCategories"
-            :key="item.id"
-            :label="item.name"
-            :value="item.name"
-          />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="问题周期">
-        <el-date-picker
-          v-model="form.dateRange"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          start-placeholder="开始日期"
-          end-placeholder="解决日期"
-        />
-      </el-form-item>
-
-      <el-form-item label="引入项目">
-        <el-input
-          v-model="form.introducedProject"
-          maxlength="100"
-          show-word-limit
-          placeholder="请输入引入项目（可选）"
-          class="w-420"
-        />
-      </el-form-item>
-
-      <el-form-item label="严重级别">
-        <div class="severity-wrap">
-          <el-select v-model="form.severityLevel" class="w-220" placeholder="请选择">
-            <el-option
-              v-for="level in SEVERITY_LEVELS"
-              :key="level.value"
-              :label="level.label"
-              :value="level.value"
+          <el-form-item label="逻辑归因">
+            <el-cascader
+              v-model="form.logicCausePath"
+              :options="logicCauseOptions"
+              :props="{
+                checkStrictly: true,
+                emitPath: true,
+                value: 'value',
+                label: 'label',
+                children: 'children',
+              }"
+              clearable
+              filterable
+              class="w-520"
+              placeholder="请选择逻辑归因（可选）"
             />
-          </el-select>
-          <div class="severity-desc-list">
-            <div
-              v-for="level in SEVERITY_LEVELS"
-              :key="level.value"
-              class="severity-desc-item"
-              :class="`severity-desc-item--${level.value.toLowerCase()}`"
+          </el-form-item>
+
+          <el-form-item label="归因明细">
+            <el-input
+              v-model="form.logicCauseDetail"
+              type="textarea"
+              :rows="2"
+              maxlength="500"
+              show-word-limit
+              placeholder="请输入归因补充说明（可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="缺陷分类" required>
+            <el-select
+              v-model="form.defectCategory"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择缺陷分类"
             >
-              <span class="severity-tag">{{ level.label }}</span>
-              <span class="severity-desc-text">{{ level.desc }}</span>
+              <el-option
+                v-for="item in defectCategories"
+                :key="item.id"
+                :label="item.name"
+                :value="item.name"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="引入项目">
+            <el-input
+              v-model="form.introducedProject"
+              maxlength="100"
+              show-word-limit
+              placeholder="请输入引入项目（可选）"
+              class="w-420"
+            />
+          </el-form-item>
+
+          <el-form-item label="开始时间">
+            <el-date-picker
+              v-model="form.startDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="请选择开始日期（可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="严重级别">
+            <div class="severity-wrap">
+              <el-select v-model="form.severityLevel" class="w-220" placeholder="请选择">
+                <el-option
+                  v-for="level in SEVERITY_LEVELS"
+                  :key="level.value"
+                  :label="level.label"
+                  :value="level.value"
+                />
+              </el-select>
+              <div class="severity-desc-list">
+                <div
+                  v-for="level in SEVERITY_LEVELS"
+                  :key="level.value"
+                  class="severity-desc-item"
+                  :class="[`severity-desc-item--${level.value.toLowerCase()}`, { 'is-active': form.severityLevel === level.value }]"
+                >
+                  <span class="severity-tag">{{ level.label }}</span>
+                  <span class="severity-desc-text">{{ level.desc }}</span>
+                </div>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="影响范围">
+            <el-input
+              v-model="form.impactScope"
+              type="textarea"
+              :rows="2"
+              maxlength="500"
+              show-word-limit
+              placeholder="请输入影响范围（可选）"
+            />
+          </el-form-item>
+
+          <!-- Solution tabs -->
+          <el-form-item label="解决方案">
+            <div class="solution-tabs-wrap">
+              <el-tabs v-model="activeTab" type="border-card" class="solution-tabs">
+                <el-tab-pane label="已彻底解决" name="resolved">
+                  <div class="tab-pane-inner">
+                    <el-form-item label="彻底解决日期" label-width="108px">
+                      <el-date-picker
+                        v-model="form.resolveDate"
+                        type="date"
+                        value-format="YYYY-MM-DD"
+                        placeholder="请选择彻底解决日期（可选）"
+                      />
+                    </el-form-item>
+                    <el-form-item label="彻底解决方案" label-width="108px">
+                      <el-input
+                        v-model="form.solution"
+                        type="textarea"
+                        :rows="4"
+                        maxlength="1000"
+                        show-word-limit
+                        placeholder="请输入彻底解决方案，即根本性修复方案（可选）"
+                      />
+                    </el-form-item>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="临时解决" name="temp">
+                  <div class="tab-pane-inner">
+                    <el-form-item label="临时解决时间" label-width="108px">
+                      <el-date-picker
+                        v-model="form.tempResolveDate"
+                        type="date"
+                        value-format="YYYY-MM-DD"
+                        placeholder="请选择临时解决日期（可选）"
+                      />
+                    </el-form-item>
+                    <el-form-item label="临时解决方案" label-width="108px">
+                      <el-input
+                        v-model="form.tempSolution"
+                        type="textarea"
+                        :rows="4"
+                        maxlength="1000"
+                        show-word-limit
+                        placeholder="请输入临时解决方案，即权宜之计（可选）"
+                      />
+                    </el-form-item>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="反馈人">
+            <el-select
+              v-model="form.reporterId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择反馈人（可选）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="审核人">
+            <el-select
+              v-model="form.reviewerId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择审核人"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="责任人">
+            <el-select
+              v-model="form.responsibleUserIds"
+              multiple
+              clearable
+              filterable
+              class="w-520"
+              placeholder="请选择责任人（可多选）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="备注">
+            <el-input
+              v-model="form.remark"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              placeholder="请输入备注（可选）"
+            />
+          </el-form-item>
+        </el-form>
+      </el-card>
+    </div>
+
+    <!-- Right instructions panel -->
+    <div class="edit-sidebar">
+      <el-card shadow="never" class="instruction-card">
+        <template #header>
+          <div class="instruction-header">
+            <el-icon class="instruction-icon"><InfoFilled /></el-icon>
+            <span>填写说明</span>
+          </div>
+        </template>
+
+        <div class="instruction-body">
+          <!-- Logic cause section -->
+          <div class="inst-section">
+            <div class="inst-section-title">
+              <el-icon><Aim /></el-icon>
+              逻辑归因
+            </div>
+            <div class="inst-section-desc">
+              优先从备选列表挑选，若备选项不符合则与上级沟通后再确定。然后补充具体原因描述
+            </div>
+
+            <div class="logic-cause-list">
+              <el-tooltip
+                v-for="item in LOGIC_CAUSE_ITEMS"
+                :key="item.title"
+                placement="left"
+                effect="light"
+                :show-after="200"
+              >
+                <template #content>
+                  <div class="tooltip-content">
+                    <div class="tooltip-title">{{ item.title }}</div>
+                    <div class="tooltip-desc">{{ item.desc }}</div>
+                    <div class="tooltip-tags">
+                      <el-tag
+                        v-for="tag in item.tags"
+                        :key="tag"
+                        size="small"
+                        type="info"
+                        class="tooltip-tag"
+                      >{{ tag }}</el-tag>
+                    </div>
+                  </div>
+                </template>
+                <div class="logic-cause-item">
+                  <span class="logic-cause-name">{{ item.title }}</span>
+                  <div class="logic-cause-tags">
+                    <span
+                      v-for="tag in item.tags.slice(0, 3)"
+                      :key="tag"
+                      class="logic-cause-tag"
+                    >{{ tag }}</span>
+                    <span v-if="item.tags.length > 3" class="logic-cause-more">+{{ item.tags.length - 3 }}</span>
+                  </div>
+                </div>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <el-divider />
+
+          <!-- Defect category section -->
+          <div class="inst-section">
+            <div class="inst-section-title">
+              <el-icon><CollectionTag /></el-icon>
+              缺陷分类
+            </div>
+
+            <div class="defect-category-list">
+              <el-tooltip
+                v-for="item in DEFECT_CATEGORY_ITEMS"
+                :key="item.no"
+                placement="left"
+                effect="light"
+                :show-after="200"
+              >
+                <template #content>
+                  <div class="tooltip-content">
+                    <div class="tooltip-title">{{ item.no }}. {{ item.name }}</div>
+                    <div class="tooltip-desc">{{ item.desc }}</div>
+                  </div>
+                </template>
+                <div class="defect-category-item">
+                  <span class="defect-no">{{ item.no }}.</span>
+                  <span class="defect-name">{{ item.name }}</span>
+                </div>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <el-divider />
+
+          <!-- Other field instructions -->
+          <div class="inst-section">
+            <div class="inst-section-title">
+              <el-icon><Document /></el-icon>
+              其他字段说明
+            </div>
+            <div class="field-instructions">
+              <div class="field-inst-item">
+                <div class="field-inst-label">引入项目</div>
+                <div class="field-inst-content">问题引起的关联需求、方案名称，若无则写应用，如"金牌导购员小程序"</div>
+              </div>
+              <div class="field-inst-item">
+                <div class="field-inst-label">开始时间</div>
+                <div class="field-inst-content">
+                  <div>1. 优先根据项目发布、上线公告发布的时间，因为在项目开发期间提交的代码并没有发布，不能作为准确的开始时间。</div>
+                  <div class="mt4">2. 其次根据代码提交记录查找出现问题的代码提交时间，实在找不到记录，但又发生在2021年1月以前，默认时间写2021-01-01</div>
+                </div>
+              </div>
+              <div class="field-inst-item">
+                <div class="field-inst-label">解决方案</div>
+                <div class="field-inst-content">需升级小程序特别标明，如：拍照打卡上传图片张数限制1张（需升级云店小程序版本1.5.10.1）</div>
+              </div>
+            </div>
+          </div>
+
+          <el-divider />
+
+          <!-- Severity level instructions -->
+          <div class="inst-section">
+            <div class="inst-section-title">
+              <el-icon><Warning /></el-icon>
+              缺陷等级说明
+            </div>
+            <div class="severity-inst-list">
+              <div class="severity-inst-item severity-inst-item--p0">
+                <div class="severity-inst-label">P0（致命）</div>
+                <div class="severity-inst-content">
+                  <div>1. 核心功能或重点业务完全不能使用，影响超过20家商户，阻碍1000+用户正常操作</div>
+                  <div>2. 财务等涉及金钱的数据丢失无法追回，损失超过500元</div>
+                  <div>3. 造成数据损坏丢失（无法追回）、异常泄露</div>
+                </div>
+              </div>
+              <div class="severity-inst-item severity-inst-item--p1">
+                <div class="severity-inst-label">P1（重大）</div>
+                <div class="severity-inst-content">
+                  <div>1. 重要功能用户操作失败率 &gt;20%，无法完成关键操作</div>
+                  <div>2. 影响10-20家商户，阻碍10-1000用户正常操作</div>
+                  <div>3. 导致用户资产损失价值小于500元</div>
+                </div>
+              </div>
+              <div class="severity-inst-item severity-inst-item--p2">
+                <div class="severity-inst-label">P2（严重）</div>
+                <div class="severity-inst-content">
+                  <div>1. 重要功能用户操作失败率 &lt;20%且每分钟失败量≤10</div>
+                  <div>2. 非核心业务或功能不能使用，用户体验变差</div>
+                  <div>3. 出现设计未预料的异常，不阻断正常主流程</div>
+                </div>
+              </div>
+              <div class="severity-inst-item severity-inst-item--p3">
+                <div class="severity-inst-label">P3（一般）</div>
+                <div class="severity-inst-content">
+                  <div>1. 非核心业务部分不能使用</div>
+                  <div>2. 一定条件下才分支链路异常，且异常没有透出终端</div>
+                  <div>3. 无直接经济损失，产生的偶然错误</div>
+                </div>
+              </div>
+              <div class="severity-inst-item severity-inst-item--p4">
+                <div class="severity-inst-label">P4（轻微）</div>
+                <div class="severity-inst-content">
+                  <div>1. 轻微影响非核心业务或功能</div>
+                  <div>2. 概率性影响用户体验，如文案排版、错别字等</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <el-divider />
+
+          <!-- Key business instructions -->
+          <div class="inst-section">
+            <div class="inst-section-title">
+              <el-icon><StarFilled /></el-icon>
+              关键业务
+            </div>
+            <div class="key-business-list">
+              <div class="key-biz-group">
+                <div class="key-biz-group-title">1. 活动</div>
+                <div class="key-biz-item">扫码活动：无法扫码，或无法领奖，包含所有场景码</div>
+                <div class="key-biz-item">互动活动：无法参与互动活动，包含互动营销、云店和微商城中所有未下架的营销应用</div>
+              </div>
+              <div class="key-biz-group">
+                <div class="key-biz-group-title">2. 核销</div>
+                <div class="key-biz-item">扫码核销：无法核销，包含扫码活动中的奖品核销和云店中的订单/购物券/赠品核销</div>
+              </div>
+              <div class="key-biz-group">
+                <div class="key-biz-group-title">3. 资产</div>
+                <div class="key-biz-item">零钱提现：无法提现零钱，包含H5个人中心和门店助手小程序中的提现</div>
+                <div class="key-biz-item">积分兑换：无法进行积分兑换，包含会员小程序和积分商城中的兑换</div>
+              </div>
+              <div class="key-biz-group">
+                <div class="key-biz-group-title">4. 出货</div>
+                <div class="key-biz-item">扫码出货：无法扫码出货，包含Web、H5、PDA端的防窜扫码出货</div>
+              </div>
+              <div class="key-biz-group">
+                <div class="key-biz-group-title">5. 支付</div>
+                <div class="key-biz-item">商城下单：无法在线下单，包含云店、会员小程序和微商城等在线下单业务</div>
+              </div>
             </div>
           </div>
         </div>
-      </el-form-item>
+      </el-card>
+    </div>
+  </div>
 
-      <el-form-item label="影响范围">
-        <el-input
-          v-model="form.impactScope"
-          type="textarea"
-          :rows="2"
-          maxlength="500"
-          show-word-limit
-          placeholder="请输入影响范围（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="临时解决时间">
-        <el-date-picker
-          v-model="form.tempResolveDate"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="请选择临时解决日期（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="临时解决方案">
-        <el-input
-          v-model="form.tempSolution"
-          type="textarea"
-          :rows="3"
-          maxlength="1000"
-          show-word-limit
-          placeholder="请输入临时解决方案，即权宜之计（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="彻底解决方案">
-        <el-input
-          v-model="form.solution"
-          type="textarea"
-          :rows="3"
-          maxlength="1000"
-          show-word-limit
-          placeholder="请输入彻底解决方案，即根本性修复方案（可选）"
-        />
-      </el-form-item>
-
-      <el-form-item label="反馈人">
-        <el-select
-          v-model="form.reporterId"
-          clearable
-          filterable
-          class="w-420"
-          placeholder="请选择反馈人（可选）"
-        >
-          <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="审核人">
-        <el-select
-          v-model="form.reviewerId"
-          clearable
-          filterable
-          class="w-420"
-          placeholder="请选择审核人"
-        >
-          <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="责任人">
-        <el-select
-          v-model="form.responsibleUserIds"
-          multiple
-          clearable
-          filterable
-          class="w-520"
-          placeholder="请选择责任人（可多选）"
-        >
-          <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="备注">
-        <el-input
-          v-model="form.remark"
-          type="textarea"
-          :rows="3"
-          maxlength="500"
-          show-word-limit
-          placeholder="请输入备注（可选）"
-        />
-      </el-form-item>
-    </el-form>
-  </el-card>
+  <!-- Mobile preview modal -->
+  <el-dialog
+    v-model="showMobilePreview"
+    title="手机预览"
+    width="400px"
+    :close-on-click-modal="true"
+    class="mobile-preview-dialog"
+  >
+    <div class="mobile-phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="phone-screen-header">
+          <span class="phone-screen-title">Bug简报</span>
+        </div>
+        <div class="phone-screen-body">
+          <div class="phone-content">
+            <div v-if="form.problemDesc" class="phone-field">
+              <div class="phone-field-label">问题描述</div>
+              <div class="phone-field-value">{{ form.problemDesc }}</div>
+            </div>
+            <div v-if="form.logicCausePath.length > 0" class="phone-field">
+              <div class="phone-field-label">逻辑归因</div>
+              <div class="phone-field-value">{{ form.logicCausePath.join(' / ') }}</div>
+            </div>
+            <div v-if="form.logicCauseDetail" class="phone-field">
+              <div class="phone-field-label">归因明细</div>
+              <div class="phone-field-value">{{ form.logicCauseDetail }}</div>
+            </div>
+            <div v-if="form.defectCategory" class="phone-field">
+              <div class="phone-field-label">缺陷分类</div>
+              <div class="phone-field-value">{{ form.defectCategory }}</div>
+            </div>
+            <div v-if="form.introducedProject" class="phone-field">
+              <div class="phone-field-label">引入项目</div>
+              <div class="phone-field-value">{{ form.introducedProject }}</div>
+            </div>
+            <div v-if="form.startDate" class="phone-field">
+              <div class="phone-field-label">开始时间</div>
+              <div class="phone-field-value">{{ form.startDate }}</div>
+            </div>
+            <div v-if="form.severityLevel" class="phone-field">
+              <div class="phone-field-label">严重级别</div>
+              <div class="phone-field-value">
+                <span :class="`severity-badge severity-badge--${form.severityLevel.toLowerCase()}`">
+                  {{ form.severityLevel }}
+                </span>
+              </div>
+            </div>
+            <div v-if="form.impactScope" class="phone-field">
+              <div class="phone-field-label">影响范围</div>
+              <div class="phone-field-value">{{ form.impactScope }}</div>
+            </div>
+            <div v-if="form.tempResolveDate" class="phone-field">
+              <div class="phone-field-label">临时解决时间</div>
+              <div class="phone-field-value">{{ form.tempResolveDate }}</div>
+            </div>
+            <div v-if="form.tempSolution" class="phone-field">
+              <div class="phone-field-label">临时解决方案</div>
+              <div class="phone-field-value">{{ form.tempSolution }}</div>
+            </div>
+            <div v-if="form.resolveDate" class="phone-field">
+              <div class="phone-field-label">彻底解决时间</div>
+              <div class="phone-field-value">{{ form.resolveDate }}</div>
+            </div>
+            <div v-if="form.solution" class="phone-field">
+              <div class="phone-field-label">彻底解决方案</div>
+              <div class="phone-field-value">{{ form.solution }}</div>
+            </div>
+            <div v-if="form.remark" class="phone-field">
+              <div class="phone-field-label">备注</div>
+              <div class="phone-field-value">{{ form.remark }}</div>
+            </div>
+            <div v-if="!form.problemDesc && !form.defectCategory" class="phone-empty">
+              暂无内容，请先填写表单
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-home-bar"></div>
+    </div>
+    <template #footer>
+      <el-button type="primary" @click="handleCopyContent">
+        <el-icon><DocumentCopy /></el-icon>
+        一键复制
+      </el-button>
+      <el-button @click="showMobilePreview = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">
+.edit-page-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.edit-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #dcdfe6;
+    border-radius: 2px;
+  }
+}
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .title-group {
@@ -865,7 +1351,7 @@ watch(
 }
 
 .edit-form {
-  max-width: 980px;
+  max-width: 100%;
 }
 
 .ticket-select-wrap {
@@ -895,6 +1381,12 @@ watch(
   border-radius: 4px;
   font-size: 12px;
   background: #f8f9fa;
+  transition: background 0.15s;
+
+  &.is-active {
+    background: #ecf5ff;
+    outline: 1px solid #b3d8ff;
+  }
 }
 
 .severity-tag {
@@ -926,6 +1418,23 @@ watch(
   }
 }
 
+.solution-tabs-wrap {
+  width: 100%;
+  max-width: 660px;
+}
+
+.solution-tabs {
+  width: 100%;
+}
+
+.tab-pane-inner {
+  padding: 8px 0 4px;
+}
+
+.btn-icon {
+  margin-right: 4px;
+}
+
 .w-220 {
   width: 220px;
 }
@@ -942,7 +1451,450 @@ watch(
   width: 640px;
 }
 
+// Instruction card styles
+.instruction-card {
+  :deep(.el-card__header) {
+    padding: 12px 16px;
+    background: #f0f6ff;
+    border-bottom: 1px solid #d9ecff;
+  }
+
+  :deep(.el-card__body) {
+    padding: 0;
+  }
+}
+
+.instruction-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1675d1;
+}
+
+.instruction-icon {
+  font-size: 16px;
+}
+
+.instruction-body {
+  padding: 12px 16px;
+}
+
+.inst-section {
+  margin-bottom: 4px;
+}
+
+.inst-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 8px;
+
+  .el-icon {
+    color: #1675d1;
+    font-size: 14px;
+  }
+}
+
+.inst-section-desc {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  background: #fafafa;
+  border-radius: 4px;
+  border-left: 3px solid #1675d1;
+}
+
+.logic-cause-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logic-cause-item {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid #ebeef5;
+
+  &:hover {
+    background: #f0f6ff;
+    border-color: #b3d8ff;
+  }
+}
+
+.logic-cause-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #303133;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.logic-cause-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.logic-cause-tag {
+  font-size: 11px;
+  color: #909399;
+  background: #f4f4f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.logic-cause-more {
+  font-size: 11px;
+  color: #1675d1;
+  padding: 1px 5px;
+}
+
+.defect-category-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.defect-category-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #ebeef5;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #f0f6ff;
+    border-color: #b3d8ff;
+  }
+}
+
+.defect-no {
+  font-size: 11px;
+  color: #909399;
+  flex-shrink: 0;
+}
+
+.defect-name {
+  font-size: 12px;
+  color: #303133;
+  font-weight: 500;
+}
+
+.field-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-inst-item {
+  font-size: 12px;
+}
+
+.field-inst-label {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.field-inst-content {
+  color: #606266;
+  line-height: 1.6;
+}
+
+.mt4 {
+  margin-top: 4px;
+}
+
+.severity-inst-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.severity-inst-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  border-left: 3px solid #dcdfe6;
+  background: #fafafa;
+}
+
+.severity-inst-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.severity-inst-content {
+  color: #606266;
+  line-height: 1.6;
+
+  div + div {
+    margin-top: 2px;
+  }
+}
+
+.severity-inst-item--p0 {
+  border-left-color: #f56c6c;
+  .severity-inst-label { color: #f56c6c; }
+}
+
+.severity-inst-item--p1 {
+  border-left-color: #e6a23c;
+  .severity-inst-label { color: #e6a23c; }
+}
+
+.severity-inst-item--p2 {
+  border-left-color: #409eff;
+  .severity-inst-label { color: #409eff; }
+}
+
+.severity-inst-item--p3 {
+  border-left-color: #67c23a;
+  .severity-inst-label { color: #67c23a; }
+}
+
+.severity-inst-item--p4 {
+  border-left-color: #909399;
+  .severity-inst-label { color: #909399; }
+}
+
+.key-business-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-biz-group {
+  font-size: 12px;
+}
+
+.key-biz-group-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.key-biz-item {
+  color: #606266;
+  line-height: 1.6;
+  padding-left: 8px;
+  border-left: 2px solid #dcdfe6;
+  margin-bottom: 3px;
+}
+
+// Tooltip content styles (not scoped - inside popper)
+:deep(.el-popper) {
+  max-width: 300px;
+}
+
+.tooltip-content {
+  max-width: 280px;
+}
+
+.tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.tooltip-desc {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.tooltip-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tooltip-tag {
+  font-size: 11px;
+}
+
+// Mobile preview dialog
+.mobile-preview-dialog {
+  :deep(.el-dialog__body) {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    background: #f0f2f5;
+  }
+}
+
+.mobile-phone-frame {
+  width: 320px;
+  background: #1a1a1a;
+  border-radius: 40px;
+  padding: 12px 8px 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.phone-notch {
+  width: 100px;
+  height: 24px;
+  background: #1a1a1a;
+  border-radius: 0 0 16px 16px;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 1;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 12px;
+    background: #2a2a2a;
+    border-radius: 8px;
+  }
+}
+
+.phone-screen {
+  width: 100%;
+  background: #fff;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 480px;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-screen-header {
+  background: #1675d1;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-screen-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.phone-screen-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+
+  &::-webkit-scrollbar {
+    width: 3px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #dcdfe6;
+    border-radius: 2px;
+  }
+}
+
+.phone-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.phone-field {
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 8px;
+}
+
+.phone-field-label {
+  font-size: 11px;
+  color: #909399;
+  margin-bottom: 3px;
+}
+
+.phone-field-value {
+  font-size: 13px;
+  color: #303133;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.phone-empty {
+  text-align: center;
+  color: #c0c4cc;
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.phone-home-bar {
+  width: 100px;
+  height: 4px;
+  background: #4a4a4a;
+  border-radius: 2px;
+  margin-top: 8px;
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+
+  &--p0 {
+    background: #fef0f0;
+    color: #f56c6c;
+  }
+  &--p1 {
+    background: #fdf6ec;
+    color: #e6a23c;
+  }
+  &--p2 {
+    background: #ecf5ff;
+    color: #409eff;
+  }
+  &--p3 {
+    background: #f0f9eb;
+    color: #67c23a;
+  }
+  &--p4 {
+    background: #f4f4f5;
+    color: #909399;
+  }
+}
+
+@media (max-width: 1200px) {
+  .edit-sidebar {
+    width: 280px;
+  }
+}
+
 @media (max-width: 991px) {
+  .edit-page-layout {
+    flex-direction: column;
+  }
+
+  .edit-sidebar {
+    width: 100%;
+    position: static;
+    max-height: none;
+  }
+
   .header {
     flex-direction: column;
     align-items: flex-start;
