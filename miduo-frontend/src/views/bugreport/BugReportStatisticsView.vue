@@ -125,7 +125,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16" v-loading="loading">
+  <div class="statistics-page" v-loading="loading">
     <el-card shadow="never">
       <div class="toolbar">
         <div class="title">Bug简报统计看板</div>
@@ -158,7 +158,7 @@ onMounted(() => {
       </el-form>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="metrics-card">
       <div class="metric-wrapper">
         <div class="metric-item">
           <div class="label">简报总数</div>
@@ -175,96 +175,87 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="12">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="section-title">逻辑归因分布</div>
-          </template>
-          <EmptyState
-            v-if="statistics.logicCauseDistribution.length === 0"
-            description="暂无逻辑归因分布数据"
-          />
-          <BaseTable v-else :data="statistics.logicCauseDistribution">
-            <el-table-column prop="name" label="归因" min-width="220" />
-            <el-table-column prop="count" label="数量" width="100" align="center" />
-            <el-table-column label="占比" width="100" align="center">
-              <template #default="{ row }">
-                {{ row.rate != null ? row.rate + '%' : '-' }}
-              </template>
-            </el-table-column>
-          </BaseTable>
-        </el-card>
-      </el-col>
+    <div class="board-grid">
+      <el-card shadow="never" class="table-card">
+        <template #header>
+          <div class="section-title">逻辑归因分布</div>
+        </template>
+        <EmptyState
+          v-if="statistics.logicCauseDistribution.length === 0"
+          description="暂无逻辑归因分布数据"
+        />
+        <BaseTable v-else :data="statistics.logicCauseDistribution">
+          <el-table-column prop="name" label="归因" min-width="220" />
+          <el-table-column prop="count" label="数量" width="100" align="center" />
+          <el-table-column label="占比" width="100" align="center">
+            <template #default="{ row }">
+              {{ row.rate != null ? row.rate + '%' : '-' }}
+            </template>
+          </el-table-column>
+        </BaseTable>
+      </el-card>
 
-      <el-col :xs="24" :lg="12">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="section-title">缺陷分类分布</div>
-          </template>
-          <EmptyState
-            v-if="statistics.defectCategoryDistribution.length === 0"
-            description="暂无缺陷分类分布数据"
-          />
-          <BaseTable v-else :data="statistics.defectCategoryDistribution">
-            <el-table-column prop="name" label="分类" min-width="220" />
-            <el-table-column prop="count" label="数量" width="100" align="center" />
-            <el-table-column label="占比" width="100" align="center">
-              <template #default="{ row }">
-                {{ row.rate != null ? row.rate + '%' : '-' }}
-              </template>
-            </el-table-column>
-          </BaseTable>
-        </el-card>
-      </el-col>
-    </el-row>
+      <el-card shadow="never" class="table-card">
+        <template #header>
+          <div class="section-title">缺陷分类分布</div>
+        </template>
+        <EmptyState
+          v-if="statistics.defectCategoryDistribution.length === 0"
+          description="暂无缺陷分类分布数据"
+        />
+        <BaseTable v-else :data="statistics.defectCategoryDistribution">
+          <el-table-column prop="name" label="分类" min-width="220" />
+          <el-table-column prop="count" label="数量" width="100" align="center" />
+          <el-table-column label="占比" width="100" align="center">
+            <template #default="{ row }">
+              {{ row.rate != null ? row.rate + '%' : '-' }}
+            </template>
+          </el-table-column>
+        </BaseTable>
+      </el-card>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="12">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="section-title">引入项目 Top</div>
-          </template>
-          <EmptyState
-            v-if="statistics.introducedProjectTop.length === 0"
-            description="暂无引入项目统计数据"
-          />
-          <BaseTable v-else :data="statistics.introducedProjectTop">
-            <el-table-column prop="name" label="项目" min-width="220" />
-            <el-table-column prop="count" label="数量" width="100" align="center" />
-            <el-table-column label="占比" width="100" align="center">
-              <template #default="{ row }">
-                {{ row.rate != null ? row.rate + '%' : '-' }}
-              </template>
-            </el-table-column>
-          </BaseTable>
-        </el-card>
-      </el-col>
+      <el-card shadow="never" class="table-card">
+        <template #header>
+          <div class="section-title">引入项目 Top</div>
+        </template>
+        <EmptyState v-if="statistics.introducedProjectTop.length === 0" description="暂无引入项目统计数据" />
+        <BaseTable v-else :data="statistics.introducedProjectTop">
+          <el-table-column prop="name" label="项目" min-width="220" />
+          <el-table-column prop="count" label="数量" width="100" align="center" />
+          <el-table-column label="占比" width="100" align="center">
+            <template #default="{ row }">
+              {{ row.rate != null ? row.rate + '%' : '-' }}
+            </template>
+          </el-table-column>
+        </BaseTable>
+      </el-card>
 
-      <el-col :xs="24" :lg="12">
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="section-title">责任人统计</div>
-          </template>
-          <EmptyState
-            v-if="statistics.responsibleStatistics.length === 0"
-            description="暂无责任人统计数据"
-          />
-          <BaseTable v-else :data="statistics.responsibleStatistics">
-            <el-table-column prop="userName" label="责任人" min-width="220">
-              <template #default="{ row }">
-                {{ row.userName || row.userId }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="count" label="数量" width="120" />
-          </BaseTable>
-        </el-card>
-      </el-col>
-    </el-row>
-  </el-space>
+      <el-card shadow="never" class="table-card">
+        <template #header>
+          <div class="section-title">责任人统计</div>
+        </template>
+        <EmptyState v-if="statistics.responsibleStatistics.length === 0" description="暂无责任人统计数据" />
+        <BaseTable v-else :data="statistics.responsibleStatistics">
+          <el-table-column prop="userName" label="责任人" min-width="220">
+            <template #default="{ row }">
+              {{ row.userName || row.userId }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="count" label="数量" width="120" />
+        </BaseTable>
+      </el-card>
+    </div>
+  </div>
 </template>
 
 <style scoped lang="scss">
+.statistics-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - 180px);
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -281,16 +272,23 @@ onMounted(() => {
   margin-top: 14px;
 }
 
+.metrics-card {
+  :deep(.el-card__body) {
+    padding: 18px 20px;
+  }
+}
+
 .metric-wrapper {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 .metric-item {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 14px;
+  background: linear-gradient(135deg, #f7faff 0%, #eef5ff 100%);
+  border: 1px solid #dbe9ff;
+  border-radius: 10px;
+  padding: 18px 16px;
 
   .label {
     color: #909399;
@@ -299,8 +297,8 @@ onMounted(() => {
 
   .value {
     color: #1675d1;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 30px;
+    font-weight: 700;
     margin-top: 6px;
   }
 
@@ -314,8 +312,22 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.board-grid {
+  flex: 1;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-auto-rows: minmax(320px, 1fr);
+}
+
 .table-card {
   height: 100%;
+
+  :deep(.el-card__body) {
+    height: calc(100% - 58px);
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 991px) {
@@ -326,6 +338,11 @@ onMounted(() => {
 
   .metric-wrapper {
     grid-template-columns: 1fr;
+  }
+
+  .board-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(280px, auto);
   }
 }
 </style>
