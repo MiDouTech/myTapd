@@ -216,6 +216,28 @@ public class TicketApplicationService {
     }
 
     /**
+     * 新增工单评论
+     * 接口编号：API000508
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long addComment(Long ticketId, String content, Long currentUserId) {
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+        if (content == null || content.trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "评论内容不能为空");
+        }
+        TicketCommentPO comment = new TicketCommentPO();
+        comment.setTicketId(ticketId);
+        comment.setUserId(currentUserId);
+        comment.setContent(content.trim());
+        comment.setType(CommentType.COMMENT.getCode());
+        commentMapper.insert(comment);
+        return comment.getId();
+    }
+
+    /**
      * 按工单编号查询公开详情（无需登录，外网可访问）
      */
     public TicketPublicDetailOutput getPublicTicketDetail(String ticketNo) {

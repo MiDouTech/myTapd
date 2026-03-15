@@ -235,3 +235,12 @@ export function deleteTicketModule(id: number): Promise<void> {
 export function parseWecomCustomerInfo(data: WecomMessageParseInput): Promise<WecomMessageParseOutput> {
   return request.post<WecomMessageParseOutput>('/ticket/wecom/parse-customer-info', data)
 }
+
+/**
+ * 新增工单评论
+ * 接口编号：API000508
+ * 产品文档功能：工单详情 - 评论区发表评论
+ */
+export function addTicketComment(id: number, content: string): Promise<number> {
+  return request.post<number>(`/ticket/${id}/comment`, { content })
+}
