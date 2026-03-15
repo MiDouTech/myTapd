@@ -46,6 +46,16 @@ public class WecomCallbackMessageDTO implements Serializable {
     private String picUrl;
 
     /**
+     * 企微AI bot图片下载URL（chattype=single时image.download_url字段，需AES解密）
+     */
+    private String downloadUrl;
+
+    /**
+     * 企微AI bot图片AES密钥（chattype=single时image.aes_key字段，用于解密download_url内容）
+     */
+    private String aesKey;
+
+    /**
      * 解密后的原始XML
      */
     private String rawXml;

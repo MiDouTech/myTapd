@@ -224,6 +224,7 @@ public class WecomClient {
     /**
      * 通过 MediaId 下载企微媒体文件（图片），返回字节数组
      * 企微接口：GET /cgi-bin/media/get?access_token=xxx&media_id=xxx
+     * 当接口返回错误时（Content-Type: application/json），返回 null 而非错误 JSON 字节
      *
      * @param mediaId 企微 MediaId
      * @return 图片字节数组，失败时返回 null
@@ -235,7 +236,21 @@ public class WecomClient {
         try {
             String accessToken = tokenManager.getAccessToken();
             String url = buildApiUrl(GET_MEDIA_PATH) + "?access_token=" + accessToken + "&media_id=" + mediaId.trim();
-            byte[] bytes = cn.hutool.http.HttpUtil.downloadBytes(url);
+            WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+            int connectTimeout = config.getConnectTimeoutMs() != null ? config.getConnectTimeoutMs() : 10000;
+            int readTimeout = config.getReadTimeoutMs() != null ? config.getReadTimeoutMs() : 30000;
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpRequest.get(url)
+                    .timeout(connectTimeout + readTimeout)
+                    .execute();
+            String contentType = response.header("Content-Type");
+            // 企微 API 返回错误时 Content-Type 为 application/json，正常图片为 image/* 或 application/octet-stream
+            if (contentType != null && contentType.contains("application/json")) {
+                String body = response.body();
+                log.warn("企微MediaId下载返回错误响应（非图片）: mediaId={}, response={}", mediaId,
+                        body != null && body.length() > 200 ? body.substring(0, 200) : body);
+                return null;
+            }
+            byte[] bytes = response.bodyBytes();
             if (bytes == null || bytes.length == 0) {
                 log.warn("企微MediaId下载返回空数据: mediaId={}", mediaId);
                 return null;
@@ -258,7 +273,13 @@ public class WecomClient {
             return null;
         }
         try {
-            byte[] bytes = cn.hutool.http.HttpUtil.downloadBytes(picUrl.trim());
+            WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+            int connectTimeout = config.getConnectTimeoutMs() != null ? config.getConnectTimeoutMs() : 10000;
+            int readTimeout = config.getReadTimeoutMs() != null ? config.getReadTimeoutMs() : 30000;
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpRequest.get(picUrl.trim())
+                    .timeout(connectTimeout + readTimeout)
+                    .execute();
+            byte[] bytes = response.bodyBytes();
             if (bytes == null || bytes.length == 0) {
                 log.warn("企微图片PicUrl下载返回空数据: picUrl={}", picUrl);
                 return null;

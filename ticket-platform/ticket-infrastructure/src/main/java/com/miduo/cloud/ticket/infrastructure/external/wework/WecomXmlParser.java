@@ -167,15 +167,20 @@ public final class WecomXmlParser {
                     result.put("Content", "");
                 }
             } else if ("image".equalsIgnoreCase(msgType)) {
-                // 图片消息：image.media_id / image.pic_url
+                // 图片消息：image.media_id / image.pic_url / image.download_url / image.aes_key
                 result.put("Content", "");
                 JSONObject image = obj.getJSONObject("image");
                 if (image != null) {
                     result.put("MediaId", nullToEmpty(image.getStr("media_id")));
                     result.put("PicUrl", nullToEmpty(image.getStr("pic_url")));
+                    // AI bot 图片消息额外携带 download_url 和 aes_key，需 AES-256-CBC 解密后才能获得真实图片数据
+                    result.put("DownloadUrl", nullToEmpty(image.getStr("download_url")));
+                    result.put("AesKey", nullToEmpty(image.getStr("aes_key")));
                 } else {
                     result.put("MediaId", "");
                     result.put("PicUrl", "");
+                    result.put("DownloadUrl", "");
+                    result.put("AesKey", "");
                 }
             } else {
                 result.put("Content", "");
