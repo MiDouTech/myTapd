@@ -47,6 +47,10 @@ function formatDate(dateStr?: string): string {
   }
 }
 
+function isOperationLog(type?: string): boolean {
+  return type === 'OPERATION'
+}
+
 async function loadDetail(): Promise<void> {
   const ticketNo = String(route.params.ticketNo || '')
   if (!ticketNo) {
@@ -152,7 +156,8 @@ onMounted(loadDetail)
         <!-- 问题描述 -->
         <div v-if="detail.description" class="card desc-card">
           <h2 class="card-title">问题描述</h2>
-          <div class="desc-content">{{ detail.description }}</div>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div class="desc-content" v-html="detail.description" />
         </div>
 
         <!-- 评论记录 -->
@@ -174,7 +179,11 @@ onMounted(loadDetail)
                   <span class="comment-time">{{ formatDate(comment.createTime) }}</span>
                 </div>
               </div>
-              <div class="comment-body">{{ comment.content }}</div>
+              <div v-if="isOperationLog(comment.type)" class="comment-body comment-body-plain">
+                {{ comment.content }}
+              </div>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div v-else class="comment-body" v-html="comment.content || '-'" />
             </div>
           </div>
         </div>
@@ -328,8 +337,20 @@ onMounted(loadDetail)
   font-size: 14px;
   line-height: 1.7;
   color: #303133;
-  white-space: pre-wrap;
   word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(img) {
+    max-width: 100%;
+    border-radius: 4px;
+  }
 }
 
 /* 评论列表 */
@@ -394,8 +415,36 @@ onMounted(loadDetail)
   font-size: 14px;
   color: #606266;
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(img) {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+
+  :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+
+  :deep(th),
+  :deep(td) {
+    border: 1px solid #e5e6eb;
+    padding: 6px 8px;
+  }
+}
+
+.comment-body-plain {
+  white-space: pre-wrap;
 }
 
 /* 加载/错误状态 */

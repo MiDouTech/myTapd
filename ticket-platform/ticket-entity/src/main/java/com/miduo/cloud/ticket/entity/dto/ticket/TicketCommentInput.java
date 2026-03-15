@@ -14,6 +14,6 @@ import java.io.Serializable;
 public class TicketCommentInput implements Serializable {
 
     @NotBlank(message = "评论内容不能为空")
-    @Size(max = 2000, message = "评论内容不能超过2000个字符")
+    @Size(max = 20000, message = "评论内容不能超过20000个字符")
     private String content;
 }

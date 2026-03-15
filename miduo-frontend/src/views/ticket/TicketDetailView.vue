@@ -39,6 +39,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
+  TicketAttachmentOutput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
@@ -97,6 +98,9 @@ const transitForm = reactive({
 
 const imageUploadLoading = ref(false)
 const imageUploadRef = ref()
+const customerScreenshotUploadLoading = ref(false)
+const customerScreenshotUploadRef = ref()
+const customerProblemScreenshots = ref<string[]>([])
 
 const ticketModules = ref<TicketModuleOutput[]>([])
 
@@ -113,6 +117,39 @@ const closeForm = reactive({
 // ---- 评论输入 ----
 const commentInput = ref('')
 const commentSubmitLoading = ref(false)
+
+function uniqStringList(values: string[]): string[] {
+  return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
+}
+
+function parseScreenshotList(raw?: string): string[] {
+  if (!raw) {
+    return []
+  }
+  return uniqStringList(
+    raw
+      .split(/[,，;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )
+}
+
+function mergeProblemScreenshots(urls: string[]): void {
+  customerProblemScreenshots.value = uniqStringList([
+    ...customerProblemScreenshots.value,
+    ...urls.map((item) => item.trim()),
+  ])
+}
+
+function removeProblemScreenshot(url: string): void {
+  customerProblemScreenshots.value = customerProblemScreenshots.value.filter((item) => item !== url)
+}
+
+const ticketImageAttachments = computed<TicketAttachmentOutput[]>(() =>
+  (detail.value?.attachments || []).filter((attachment) => {
+    return Boolean(attachment.filePath) && isImageFile(attachment.fileType)
+  }),
+)
 
 // ---- 企微消息解析 ----
 const wecomParseDialogVisible = ref(false)
@@ -164,7 +201,7 @@ function applyWecomParseResult() {
     customerInfoForm.expectedResult = result.expectedResult
   }
   if (result.problemScreenshot) {
-    customerInfoForm.problemScreenshot = result.problemScreenshot
+    mergeProblemScreenshots(parseScreenshotList(result.problemScreenshot))
   }
   wecomParseDialogVisible.value = false
   wecomParseMessage.value = ''
@@ -279,6 +316,7 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     sceneCode: ticketDetail.bugCustomerInfo?.sceneCode || '',
     problemScreenshot: ticketDetail.bugCustomerInfo?.problemScreenshot || '',
   })
+  customerProblemScreenshots.value = parseScreenshotList(ticketDetail.bugCustomerInfo?.problemScreenshot)
 
   Object.assign(testInfoForm, {
     reproduceEnv: ticketDetail.bugTestInfo?.reproduceEnv || '',
@@ -298,6 +336,14 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     devRemark: ticketDetail.bugDevInfo?.devRemark || '',
   })
 }
+
+watch(
+  customerProblemScreenshots,
+  (screenshots) => {
+    customerInfoForm.problemScreenshot = uniqStringList(screenshots).join(',')
+  },
+  { deep: true },
+)
 
 async function loadModules(): Promise<void> {
   try {
@@ -453,6 +499,7 @@ function openBugReportDetail(reportId?: number): void {
 async function saveCustomerInfo(): Promise<void> {
   bugSubmitLoading.value = true
   try {
+    customerInfoForm.problemScreenshot = uniqStringList(customerProblemScreenshots.value).join(',')
     await updateBugCustomerInfo(ticketId.value, { ...customerInfoForm })
     notifySuccess('客服信息保存成功')
     await loadAll()
@@ -488,14 +535,31 @@ async function saveDevInfo(): Promise<void> {
   }
 }
 
+function hasRichTextContent(content?: string): boolean {
+  if (!content) {
+    return false
+  }
+  const html = content.trim()
+  if (!html) {
+    return false
+  }
+  const plainText = html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, '')
+    .replace(/\s+/g, '')
+  const hasStructureContent = /<(img|table|ul|ol|li|blockquote|pre)\b/i.test(html)
+  return plainText.length > 0 || hasStructureContent
+}
+
 async function submitComment(): Promise<void> {
-  if (!commentInput.value.trim()) {
+  const commentContent = commentInput.value || ''
+  if (!hasRichTextContent(commentContent)) {
     notifyError('请输入评论内容')
     return
   }
   commentSubmitLoading.value = true
   try {
-    await addTicketComment(ticketId.value, commentInput.value.trim())
+    await addTicketComment(ticketId.value, commentContent)
     notifySuccess('评论发表成功')
     commentInput.value = ''
     await loadAll()
@@ -521,6 +585,17 @@ function formatDuration(seconds?: number): string {
   return `${second}s`
 }
 
+async function refreshTicketAttachmentsOnly(): Promise<void> {
+  if (!ticketId.value) {
+    return
+  }
+  try {
+    detail.value = await getTicketDetail(ticketId.value)
+  } catch {
+    // 附件刷新失败不影响当前页面操作
+  }
+}
+
 async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
   if (!uploadFile?.raw) {
     return
@@ -529,7 +604,7 @@ async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
   try {
     await uploadTicketImage(ticketId.value, uploadFile.raw)
     notifySuccess('图片上传成功')
-    await loadAll()
+    await refreshTicketAttachmentsOnly()
   } finally {
     imageUploadLoading.value = false
     if (imageUploadRef.value) {
@@ -538,11 +613,35 @@ async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
   }
 }
 
+async function handleCustomerScreenshotUpload(uploadFile: { raw: File }): Promise<void> {
+  if (!uploadFile?.raw) {
+    return
+  }
+  customerScreenshotUploadLoading.value = true
+  try {
+    const result = await uploadTicketImage(ticketId.value, uploadFile.raw)
+    if (result?.url) {
+      mergeProblemScreenshots([result.url])
+    }
+    notifySuccess('问题截图上传成功')
+    await refreshTicketAttachmentsOnly()
+  } finally {
+    customerScreenshotUploadLoading.value = false
+    if (customerScreenshotUploadRef.value) {
+      ;(customerScreenshotUploadRef.value as { clearFiles: () => void }).clearFiles()
+    }
+  }
+}
+
 async function handleDeleteAttachment(attachmentId: number): Promise<void> {
+  const target = detail.value?.attachments?.find((item) => item.id === attachmentId)
   try {
     await deleteTicketAttachment(attachmentId)
+    if (target?.filePath) {
+      removeProblemScreenshot(target.filePath)
+    }
     notifySuccess('附件删除成功')
-    await loadAll()
+    await refreshTicketAttachmentsOnly()
   } catch {
     // 删除失败由全局异常处理
   }
@@ -551,6 +650,35 @@ async function handleDeleteAttachment(attachmentId: number): Promise<void> {
 function isImageFile(fileType?: string): boolean {
   if (!fileType) return false
   return fileType.startsWith('image/')
+}
+
+const STATUS_LABEL_MAP: Record<string, string> = {
+  PENDING: '待处理',
+  PENDING_ASSIGN: '待分派',
+  PENDING_DISPATCH: '待分派',
+  PENDING_ACCEPT: '待受理',
+  PROCESSING: '处理中',
+  SUSPENDED: '已挂起',
+  PENDING_VERIFY: '待验收',
+  COMPLETED: '已完成',
+  CLOSED: '已关闭',
+  PENDING_TEST: '待测试受理',
+  PENDING_TEST_ACCEPT: '待测试受理',
+  TESTING: '测试中',
+  PENDING_DEV: '待开发受理',
+  PENDING_DEV_ACCEPT: '待开发受理',
+  DEVELOPING: '开发中',
+  PENDING_CS_CONFIRM: '待客服确认',
+  SUBMITTED: '已提交',
+  DEPT_APPROVAL: '部门审批',
+  EXECUTING: '执行中',
+  REJECTED: '已驳回',
+}
+
+function getStatusLabel(status?: string): string {
+  if (!status) return '-'
+  const normalized = status.trim().toUpperCase()
+  return STATUS_LABEL_MAP[normalized] || status
 }
 
 // 优先级标签与样式
@@ -725,11 +853,100 @@ watch(
                       />
                     </el-form-item>
                     <el-form-item label="问题截图">
-                      <el-input
-                        v-model="customerInfoForm.problemScreenshot"
-                        placeholder="填写截图URL，多个可用逗号分隔"
-                        :disabled="!canEditCustomerInfo"
-                      />
+                      <div class="problem-screenshot-field">
+                        <el-upload
+                          v-if="canEditCustomerInfo"
+                          ref="customerScreenshotUploadRef"
+                          class="screenshot-upload"
+                          drag
+                          :show-file-list="false"
+                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+                          :on-change="handleCustomerScreenshotUpload"
+                          :auto-upload="false"
+                        >
+                          <div class="upload-drag-content">
+                            <el-icon class="upload-drag-icon"><Plus /></el-icon>
+                            <div class="upload-drag-text">将文件拖到此处触发上传</div>
+                            <div class="upload-drag-subtext">或点击按钮上传问题截图（支持多张）</div>
+                            <el-button type="primary" size="small" plain :loading="customerScreenshotUploadLoading">
+                              点击上传
+                            </el-button>
+                          </div>
+                        </el-upload>
+
+                        <div class="screenshot-tip">
+                          问题截图支持多选，可来源于企微附图，也可在此处手动上传补充。
+                        </div>
+
+                        <div v-if="customerProblemScreenshots.length" class="selected-screenshot-wrap">
+                          <div class="selected-screenshot-title">
+                            已选问题截图（{{ customerProblemScreenshots.length }}）
+                          </div>
+                          <div class="selected-screenshot-grid">
+                            <div
+                              v-for="url in customerProblemScreenshots"
+                              :key="url"
+                              class="selected-screenshot-item"
+                            >
+                              <el-image
+                                :src="url"
+                                :preview-src-list="customerProblemScreenshots"
+                                fit="cover"
+                                class="selected-screenshot-image"
+                              />
+                              <el-button
+                                type="danger"
+                                link
+                                size="small"
+                                :disabled="!canEditCustomerInfo"
+                                @click="removeProblemScreenshot(url)"
+                              >
+                                移除
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="candidate-screenshot-wrap">
+                          <div class="selected-screenshot-title">可选附件图片</div>
+                          <EmptyState
+                            v-if="!ticketImageAttachments.length"
+                            description="暂无图片附件，请先上传图片或等待企微消息同步"
+                          />
+                          <el-checkbox-group
+                            v-else
+                            v-model="customerProblemScreenshots"
+                            :disabled="!canEditCustomerInfo"
+                            class="candidate-screenshot-list"
+                          >
+                            <el-checkbox
+                              v-for="attachment in ticketImageAttachments"
+                              :key="attachment.id"
+                              :label="attachment.filePath || ''"
+                              class="candidate-screenshot-item"
+                            >
+                              <div class="candidate-screenshot-body">
+                                <el-image
+                                  :src="attachment.filePath"
+                                  :preview-src-list="ticketImageAttachments.map(item => item.filePath || '')"
+                                  fit="cover"
+                                  class="candidate-screenshot-image"
+                                />
+                                <div class="candidate-screenshot-meta">
+                                  <div class="candidate-screenshot-name">{{ attachment.fileName }}</div>
+                                  <el-tag
+                                    size="small"
+                                    :type="attachment.source === 'WECOM_BOT' ? 'success' : 'info'"
+                                    effect="plain"
+                                  >
+                                    {{ attachment.source === 'WECOM_BOT' ? '企微图片' : '手动上传' }}
+                                  </el-tag>
+                                </div>
+                              </div>
+                            </el-checkbox>
+                          </el-checkbox-group>
+                        </div>
+                      </div>
                     </el-form-item>
                   </el-form>
                   <div class="tab-actions">
@@ -803,11 +1020,12 @@ watch(
                       </el-select>
                     </el-form-item>
                     <el-form-item label="测试备注">
-                      <el-input
+                      <RichTextEditor
                         v-model="testInfoForm.testRemark"
-                        type="textarea"
-                        :rows="3"
                         :disabled="!canEditTestInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写测试备注，支持粘贴图片、插入表格等富文本内容..."
+                        :height="180"
                       />
                     </el-form-item>
                   </el-form>
@@ -851,11 +1069,12 @@ watch(
                       />
                     </el-form-item>
                     <el-form-item label="开发备注">
-                      <el-input
+                      <RichTextEditor
                         v-model="devInfoForm.devRemark"
-                        type="textarea"
-                        :rows="3"
                         :disabled="!canEditDevInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写开发备注，支持粘贴图片、插入表格等富文本内容..."
+                        :height="180"
                       />
                     </el-form-item>
                   </el-form>
@@ -886,7 +1105,7 @@ watch(
                             <span class="track-user">（{{ item.userName || '-' }}）</span>
                           </div>
                           <div class="track-meta">
-                            状态：{{ item.fromStatus || '-' }} → {{ item.toStatus || '-' }}
+                            状态：{{ getStatusLabel(item.fromStatus) }} → {{ getStatusLabel(item.toStatus) }}
                           </div>
                           <div class="track-meta" v-if="item.fromUserName || item.toUserName">
                             处理人：{{ item.fromUserName || '-' }} → {{ item.toUserName || '-' }}
@@ -908,7 +1127,11 @@ watch(
                       :stripe="true"
                       :header-cell-style="{ backgroundColor: '#f5f7fa' }"
                     >
-                      <el-table-column prop="nodeName" label="节点" align="center" min-width="130" />
+                      <el-table-column label="节点" align="center" min-width="130">
+                        <template #default="{ row }">
+                          {{ getStatusLabel(row.nodeName) }}
+                        </template>
+                      </el-table-column>
                       <el-table-column prop="assigneeName" label="处理人" align="center" min-width="120" />
                       <el-table-column prop="assigneeRole" label="角色" align="center" min-width="120" />
                       <el-table-column label="到达时间" align="center" min-width="170">
@@ -1047,21 +1270,27 @@ watch(
       <template #header>
         <div class="section-header">
           <span class="section-title">附件</span>
-          <el-upload
-            ref="imageUploadRef"
-            :show-file-list="false"
-            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
-            :on-change="handleImageUpload"
-            :auto-upload="false"
-          >
-            <el-button type="primary" size="small" :loading="imageUploadLoading" plain>
-              <el-icon style="margin-right: 4px"><Plus /></el-icon>
-              上传图片
-            </el-button>
-          </el-upload>
         </div>
       </template>
-      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件，点击右上角上传图片" />
+      <el-upload
+        ref="imageUploadRef"
+        class="attachment-upload-dropzone"
+        drag
+        :show-file-list="false"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+        :on-change="handleImageUpload"
+        :auto-upload="false"
+      >
+        <div class="upload-drag-content">
+          <el-icon class="upload-drag-icon"><Plus /></el-icon>
+          <div class="upload-drag-text">将文件拖到此处触发上传</div>
+          <div class="upload-drag-subtext">或点击按钮上传附件图片</div>
+          <el-button type="primary" size="small" plain :loading="imageUploadLoading">
+            点击上传
+          </el-button>
+        </div>
+      </el-upload>
+      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件，可拖拽或点击上方区域上传图片" />
       <div v-else class="attachment-list">
         <div
           v-for="attachment in detail.attachments"
@@ -1177,23 +1406,21 @@ watch(
           </el-avatar>
         </div>
         <div class="comment-input-body">
-          <el-input
+          <RichTextEditor
             v-model="commentInput"
-            type="textarea"
-            :rows="3"
-            placeholder="发表评论..."
-            resize="none"
-            class="comment-textarea"
+            :ticket-id="ticketId"
+            placeholder="发表评论（支持粘贴图片、表格等富文本内容）..."
+            :height="180"
+            class="comment-editor"
           />
           <div class="comment-submit-row">
-            <span class="comment-hint">支持 Ctrl+Enter 快速提交</span>
+            <span class="comment-hint">支持粘贴图片、表格等内容</span>
             <el-button
               type="primary"
               size="small"
               :loading="commentSubmitLoading"
-              :disabled="!commentInput.trim()"
+              :disabled="!hasRichTextContent(commentInput)"
               @click="submitComment"
-              @keydown.ctrl.enter="submitComment"
             >发表评论</el-button>
           </div>
         </div>
@@ -1220,7 +1447,11 @@ watch(
               <el-tag v-if="isOperationLog(comment.type)" type="info" size="small" effect="plain">操作记录</el-tag>
               <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
             </div>
-            <div class="comment-content">{{ comment.content || '-' }}</div>
+            <div v-if="isOperationLog(comment.type)" class="comment-content comment-content-plain">
+              {{ comment.content || '-' }}
+            </div>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div v-else class="comment-content" v-html="comment.content || '-'" />
           </div>
         </div>
       </div>
@@ -1562,6 +1793,120 @@ watch(
   margin-top: 8px;
 }
 
+.upload-drag-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-drag-icon {
+  font-size: 24px;
+  color: #1675d1;
+}
+
+.upload-drag-text {
+  font-size: 14px;
+  color: #303133;
+}
+
+.upload-drag-subtext {
+  font-size: 12px;
+  color: #909399;
+}
+
+.problem-screenshot-field {
+  width: 100%;
+}
+
+.screenshot-upload {
+  width: 100%;
+}
+
+.screenshot-tip {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.selected-screenshot-wrap + .candidate-screenshot-wrap,
+.screenshot-tip + .candidate-screenshot-wrap {
+  margin-top: 10px;
+}
+
+.selected-screenshot-title {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.selected-screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.selected-screenshot-item {
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+.selected-screenshot-image {
+  width: 100%;
+  height: 96px;
+  border-radius: 4px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.candidate-screenshot-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.candidate-screenshot-item {
+  margin-right: 0;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+
+  :deep(.el-checkbox__label) {
+    padding-left: 8px;
+    width: calc(100% - 24px);
+  }
+}
+
+.candidate-screenshot-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.candidate-screenshot-image {
+  width: 68px;
+  height: 68px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.candidate-screenshot-meta {
+  min-width: 0;
+}
+
+.candidate-screenshot-name {
+  font-size: 12px;
+  color: #303133;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 // ===== 时间追踪 =====
 .track-block + .track-block {
   margin-top: 20px;
@@ -1669,6 +2014,11 @@ watch(
 }
 
 // ===== 附件 =====
+.attachment-upload-dropzone {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
 .attachment-list {
   display: flex;
   flex-direction: column;
@@ -1772,12 +2122,11 @@ watch(
   min-width: 0;
 }
 
-.comment-textarea {
+.comment-editor {
   width: 100%;
 
-  :deep(.el-textarea__inner) {
+  :deep(.rich-text-editor) {
     border-radius: 6px;
-    resize: none;
   }
 }
 
@@ -1860,8 +2209,36 @@ watch(
   font-size: 14px;
   color: #303133;
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(img) {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+
+  :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+
+  :deep(th),
+  :deep(td) {
+    border: 1px solid #e5e6eb;
+    padding: 6px 8px;
+  }
+}
+
+.comment-content-plain {
+  white-space: pre-wrap;
 }
 
 // ===== 企微解析弹窗 =====
