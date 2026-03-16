@@ -59,6 +59,11 @@ jwt:
   token-prefix: "Bearer "
   header-name: Authorization
 
+management:
+  health:
+    rabbit:
+      enabled: false
+
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl

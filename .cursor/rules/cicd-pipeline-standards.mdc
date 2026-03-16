@@ -1,0 +1,126 @@
+# CI/CD 流水线规范（重构版）
+
+## 核心设计原则
+- **两文件配置**：所有可变值集中在 `.deploy/config.env` 和 `.deploy/services.json`，workflow 零硬编码
+- **一个 Secret**：只需配置 `CNB_TOKEN`（同时具备 registry-package:rw 和 repo-contents:rw 权限）
+- **CI 不推制品**：PR 只触发编译和测试，CD 才构建和推送镜像
+
+---
+
+## 工作流文件
+
+| 文件 | 触发条件 | 功能 |
+|---|---|---|
+| `.github/workflows/ci.yml` | PR → main/master/develop/release/** | 编译 + 测试，不推任何制品 |
+| `.github/workflows/cd.yml` | push 到受保护分支 / v*.*.* Tag | 编译 → 矩阵构建镜像 → 推 GHCR + CNB → 写版本文件 |
+
+---
+
+## 配置文件规范
+
+### `.deploy/config.env`
+```bash
+BUILD_TYPE=java            # java | dotnet
+JAVA_VERSION=8             # BUILD_TYPE=java 时
+BUILD_SUBPROJECT=ticket-bootstrap   # Maven -pl 参数，留空则整体构建
+# DOTNET_VERSION=8.0       # BUILD_TYPE=dotnet 时取消注释
+CNB_NAMESPACE=org/project/docker_images   # 不含域名和镜像名
+CNB_VERSION_REPO=https://cnb.cool/org/version-repo.git
+```
+
+### `.deploy/services.json`
+```json
+[
+  {
+    "name": "ticket-platform-backend",
+    "dockerfile": "ticket-platform/deployment/docker/Dockerfile",
+    "context": "ticket-platform",
+    "build_output": "ticket-platform/ticket-bootstrap/target"
+  },
+  {
+    "name": "ticket-platform-frontend",
+    "dockerfile": "miduo-frontend/Dockerfile",
+    "context": "miduo-frontend",
+    "build_output": ""
+  }
+]
+```
+- `build_output` 非空 → 需要预编译，CI 会先构建再 Docker；为空 → Docker 多阶段构建，无需预编译
+
+---
+
+## CD Job 流程（4 个 Job）
+
+```
+prepare → compile（有预编译才运行）─┐
+                                  ├→ build-and-push（matrix 并行）→ update-version
+          (跳过时结果=skipped)─────┘
+```
+
+1. **prepare**：读取 config.env + services.json，输出矩阵和所有配置变量
+2. **compile**：按 BUILD_TYPE 构建后端，打包 build_output 目录为 tar 上传
+3. **build-and-push**：矩阵并行，下载 tar → 恢复文件 → 双仓库登录 → 生成 Tag → 构建推送
+4. **update-version**：向 CNB_VERSION_REPO 写入 `.cnbVersion.yml`，提交加 `[skip ci]`
+
+---
+
+## 镜像 Tag 策略（docker/metadata-action@v5）
+
+| 分支/Tag | 生成的 Tag |
+|---|---|
+| main / master | `latest` + `sha-xxxxxxx` |
+| develop | `dev-latest` + `sha-xxxxxxx` |
+| release/xyz | `rc-xyz` + `sha-xxxxxxx` |
+| v1.2.3 Tag | `1.2.3` + `1.2` + `sha-xxxxxxx` |
+
+---
+
+## Dockerfile 基础镜像规范
+
+| 项目类型 | 基础镜像 |
+|---|---|
+| Java | `eclipse-temurin:<version>-jre-jammy`（官方 OpenJDK 已废弃，不用 alpine）|
+| .NET | `mcr.microsoft.com/dotnet/aspnet:<version>` |
+| 前端 | 多阶段构建：`node:20-alpine` 构建 + `nginx:1.27-alpine` 运行 |
+
+---
+
+## 版本文件格式（`.cnbVersion.yml`）
+```yaml
+version: "sha-abc1234"       # 分支推送；Tag 推送时为 "v1.2.3"
+commit: "abc1234"
+repository: "org/repo"
+ref: "main"
+updatedAt: "2026-03-16T10:00:00Z"
+services:
+  ticket-platform-backend: "sha-abc1234"
+  ticket-platform-frontend: "sha-abc1234"
+```
+
+---
+
+## 需配置的 GitHub Secret（一次性）
+
+| Secret | 用途 |
+|---|---|
+| `CNB_TOKEN` | CNB Access Token，需同时具备 registry-package:rw（推镜像）和 repo-contents:rw（写版本文件）|
+
+> `GITHUB_TOKEN` 内置，无需创建。
+
+---
+
+## 开发日常操作
+
+```bash
+# PR → 只触发编译测试
+git push origin feature/xxx
+
+# 合并到 main → CD 自动构建 latest 镜像
+git push origin main
+
+# 发布正式版本 → CD 构建语义版本镜像
+git tag v1.0.0 && git push origin v1.0.0
+
+# 不改代码重新触发 CD
+git commit --allow-empty -m "ci: retrigger" && git push
+```

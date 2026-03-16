@@ -42,12 +42,15 @@ public class SecurityConfig {
                 .antMatchers(
                         "/api/auth/**",
                         "/actuator/**",
+                        "/api/actuator/**",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/v3/api-docs/**",
                         "/wecom/callback/**",
                         "/api/wecom/callback/**",
-                        "/ws/**"
+                        "/ws/**",
+                        "/api/auth/test/**",
+                        "/api/auth/dev/login"
                 ).permitAll()
                 .anyRequest().authenticated()
                 .and()

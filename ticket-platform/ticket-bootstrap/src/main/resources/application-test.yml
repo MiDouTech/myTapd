@@ -35,6 +35,9 @@ spring:
         max-idle: 8
         min-idle: 0
 
+dev-login:
+  enabled: true
+
 wecom:
   corp-id: 
   agent-id: 
@@ -52,6 +55,11 @@ jwt:
   refresh-token-expire: 604800
   token-prefix: "Bearer "
   header-name: Authorization
+
+management:
+  health:
+    rabbit:
+      enabled: false
 
 mybatis-plus:
   configuration:

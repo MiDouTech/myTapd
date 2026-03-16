@@ -1,0 +1,14 @@
+[
+  {
+    "name": "ticket-platform-backend",
+    "dockerfile": "ticket-platform/deployment/docker/Dockerfile",
+    "context": "ticket-platform",
+    "build_output": "ticket-platform/ticket-bootstrap/target"
+  },
+  {
+    "name": "ticket-platform-frontend",
+    "dockerfile": "miduo-frontend/Dockerfile",
+    "context": "miduo-frontend",
+    "build_output": ""
+  }
+]

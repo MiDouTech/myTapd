@@ -1,0 +1,68 @@
+name: CI – Compile & Test
+
+# 仅 PR 时触发，不推送任何制品
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+      - 'release/**'
+
+jobs:
+  compile-and-test:
+    name: Compile & Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 读取 .deploy/config.env，将所有变量注入 GITHUB_ENV ──────────────────
+      - name: Load deploy config
+        run: |
+          set -a
+          source .deploy/config.env
+          set +a
+          echo "BUILD_TYPE=${BUILD_TYPE}"             >> "$GITHUB_ENV"
+          echo "JAVA_VERSION=${JAVA_VERSION:-}"       >> "$GITHUB_ENV"
+          echo "DOTNET_VERSION=${DOTNET_VERSION:-}"   >> "$GITHUB_ENV"
+          echo "BUILD_SUBPROJECT=${BUILD_SUBPROJECT:-}" >> "$GITHUB_ENV"
+          # 从 services.json 中找到第一个有 build_output 的服务的 context 作为编译目录
+          COMPILE_DIR=$(jq -r \
+            '[.[] | select(.build_output != null and .build_output != "")] | first | .context // "."' \
+            .deploy/services.json)
+          echo "COMPILE_DIR=${COMPILE_DIR}" >> "$GITHUB_ENV"
+
+      # ── Java ─────────────────────────────────────────────────────────────────
+      - name: Set up JDK ${{ env.JAVA_VERSION }} (Temurin)
+        if: env.BUILD_TYPE == 'java'
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Compile & test (Maven)
+        if: env.BUILD_TYPE == 'java'
+        working-directory: ${{ env.COMPILE_DIR }}
+        run: |
+          if [ -n "$BUILD_SUBPROJECT" ]; then
+            mvn clean verify -pl "$BUILD_SUBPROJECT" -am -B
+          else
+            mvn clean verify -B
+          fi
+
+      # ── .NET ─────────────────────────────────────────────────────────────────
+      - name: Set up .NET ${{ env.DOTNET_VERSION }}
+        if: env.BUILD_TYPE == 'dotnet'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Compile & test (.NET)
+        if: env.BUILD_TYPE == 'dotnet'
+        working-directory: ${{ env.COMPILE_DIR }}
+        run: dotnet test --configuration Release --verbosity normal
