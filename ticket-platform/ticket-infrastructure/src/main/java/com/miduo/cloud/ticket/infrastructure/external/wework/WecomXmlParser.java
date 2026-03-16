@@ -167,21 +167,10 @@ public final class WecomXmlParser {
                     result.put("Content", "");
                 }
             } else if ("image".equalsIgnoreCase(msgType)) {
-                // 图片消息：image.media_id / image.pic_url / image.download_url / image.aes_key
+                // 图片消息原始JSON诊断日志（DEBUG级别）
+                log.debug("企微 aibot 图片消息原始JSON: {}", json.length() > 3000 ? json.substring(0, 3000) : json);
                 result.put("Content", "");
-                JSONObject image = obj.getJSONObject("image");
-                if (image != null) {
-                    result.put("MediaId", nullToEmpty(image.getStr("media_id")));
-                    result.put("PicUrl", nullToEmpty(image.getStr("pic_url")));
-                    // AI bot 图片消息额外携带 download_url 和 aes_key，需 AES-256-CBC 解密后才能获得真实图片数据
-                    result.put("DownloadUrl", nullToEmpty(image.getStr("download_url")));
-                    result.put("AesKey", nullToEmpty(image.getStr("aes_key")));
-                } else {
-                    result.put("MediaId", "");
-                    result.put("PicUrl", "");
-                    result.put("DownloadUrl", "");
-                    result.put("AesKey", "");
-                }
+                extractAibotImageFields(obj, result, json);
             } else {
                 result.put("Content", "");
             }
@@ -194,6 +183,94 @@ public final class WecomXmlParser {
                     json.length() > 500 ? json.substring(0, 500) : json, ex);
             throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "企微aibot JSON消息解析失败");
         }
+    }
+
+    /**
+     * 提取企微 AI bot 图片消息字段，兼容多种 JSON 结构：
+     * 1. 标准格式：image.media_id / image.pic_url / image.download_url / image.aes_key
+     * 2. 备用格式（部分版本）：image.Media_Id / image.Pic_Url / image.Download_Url / image.Aes_Key
+     * 3. 根节点平铺：media_id / pic_url / download_url / aes_key
+     */
+    private static void extractAibotImageFields(JSONObject obj, Map<String, String> result, String rawJson) {
+        String mediaId = "";
+        String picUrl = "";
+        String downloadUrl = "";
+        String aesKey = "";
+        boolean foundInSubObj = false;
+
+        // 尝试从 "image" 或 "Image" 子对象提取
+        JSONObject imageObj = getNestedObject(obj, "image", "Image");
+        if (imageObj != null) {
+            foundInSubObj = true;
+            mediaId = firstNonEmpty(imageObj.getStr("media_id"), imageObj.getStr("MediaId"), imageObj.getStr("Media_Id"));
+            picUrl = firstNonEmpty(imageObj.getStr("pic_url"), imageObj.getStr("PicUrl"), imageObj.getStr("Pic_Url"));
+            downloadUrl = firstNonEmpty(imageObj.getStr("download_url"), imageObj.getStr("DownloadUrl"), imageObj.getStr("Download_Url"));
+            aesKey = firstNonEmpty(imageObj.getStr("aes_key"), imageObj.getStr("AesKey"), imageObj.getStr("Aes_Key"), imageObj.getStr("AES_Key"));
+        }
+
+        // 降级：若子对象为空或所有字段均为空，尝试从根节点提取
+        if (!foundInSubObj || (mediaId.isEmpty() && picUrl.isEmpty() && downloadUrl.isEmpty())) {
+            String rootMediaId = firstNonEmpty(obj.getStr("media_id"), obj.getStr("MediaId"));
+            String rootPicUrl = firstNonEmpty(obj.getStr("pic_url"), obj.getStr("PicUrl"));
+            String rootDownloadUrl = firstNonEmpty(obj.getStr("download_url"), obj.getStr("DownloadUrl"));
+            String rootAesKey = firstNonEmpty(obj.getStr("aes_key"), obj.getStr("AesKey"), obj.getStr("AES_Key"));
+
+            if (!rootMediaId.isEmpty() || !rootPicUrl.isEmpty() || !rootDownloadUrl.isEmpty()) {
+                mediaId = rootMediaId;
+                picUrl = rootPicUrl;
+                downloadUrl = rootDownloadUrl;
+                aesKey = rootAesKey;
+                log.info("企微图片消息字段从根节点提取: hasMediaId={}, hasPicUrl={}, hasDownloadUrl={}, hasAesKey={}",
+                        !mediaId.isEmpty(), !picUrl.isEmpty(), !downloadUrl.isEmpty(), !aesKey.isEmpty());
+            }
+        }
+
+        result.put("MediaId", nullToEmpty(mediaId));
+        result.put("PicUrl", nullToEmpty(picUrl));
+        result.put("DownloadUrl", nullToEmpty(downloadUrl));
+        result.put("AesKey", nullToEmpty(aesKey));
+
+        if (mediaId.isEmpty() && picUrl.isEmpty() && downloadUrl.isEmpty()) {
+            log.warn("企微图片消息所有下载字段均为空（imageSubObj={}），原始JSON片段: {}",
+                    foundInSubObj,
+                    rawJson.length() > 500 ? rawJson.substring(0, 500) : rawJson);
+        } else {
+            log.info("企微图片消息字段解析成功: imageSubObj={}, hasMediaId={}, hasPicUrl={}, hasDownloadUrl={}, hasAesKey={}",
+                    foundInSubObj, !mediaId.isEmpty(), !picUrl.isEmpty(), !downloadUrl.isEmpty(), !aesKey.isEmpty());
+        }
+    }
+
+    /**
+     * 按优先级从 JSONObject 中获取第一个非空非null的嵌套对象
+     */
+    private static JSONObject getNestedObject(JSONObject parent, String... keys) {
+        for (String key : keys) {
+            Object val = parent.get(key);
+            if (val instanceof JSONObject) {
+                return (JSONObject) val;
+            }
+            if (val != null && !(val instanceof String)) {
+                // 尝试转换
+                try {
+                    return JSONUtil.parseObj(val.toString());
+                } catch (Exception ignored) {
+                    // 转换失败，尝试下一个key
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 返回第一个非空非null的字符串值
+     */
+    private static String firstNonEmpty(String... values) {
+        for (String v : values) {
+            if (v != null && !v.trim().isEmpty()) {
+                return v.trim();
+            }
+        }
+        return "";
     }
 
     private static String nullToEmpty(String value) {

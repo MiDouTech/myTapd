@@ -59,8 +59,16 @@ public class WecomImageDownloadService {
      * @return 七牛云持久化 URL，全部失败时返回 null
      */
     public String downloadAndUpload(String mediaId, String picUrl, String downloadUrl, String aesKey, String msgId) {
+        log.info("企微图片下载开始: msgId={}, hasMediaId={}, hasPicUrl={}, hasDownloadUrl={}, hasAesKey={}",
+                msgId, isNotBlank(mediaId), isNotBlank(picUrl), isNotBlank(downloadUrl), isNotBlank(aesKey));
+
         byte[] imageBytes = null;
         String downloadSource = null;
+
+        if (!isNotBlank(mediaId) && !isNotBlank(picUrl) && !isNotBlank(downloadUrl)) {
+            log.error("企微图片下载字段全部为空，无法下载: msgId={}", msgId);
+            return null;
+        }
 
         // 优先尝试 AI bot download_url + aes_key 解密下载
         if (isNotBlank(downloadUrl) && isNotBlank(aesKey)) {
@@ -71,6 +79,8 @@ public class WecomImageDownloadService {
             } else {
                 log.warn("企微AI bot图片解密下载失败，降级MediaId: msgId={}", msgId);
             }
+        } else if (isNotBlank(downloadUrl) && !isNotBlank(aesKey)) {
+            log.warn("企微AI bot图片有download_url但aes_key为空，跳过AES解密下载，降级MediaId: msgId={}", msgId);
         }
 
         // 降级尝试 MediaId API
