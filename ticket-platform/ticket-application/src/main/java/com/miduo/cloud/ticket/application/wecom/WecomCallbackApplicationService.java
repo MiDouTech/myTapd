@@ -79,6 +79,21 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             return;
         }
 
+        // 群聊中 @机器人 附带图片时，msgType 为 mixed，msg_item 中同时含 image 和 text
+        if ("mixed".equalsIgnoreCase(message.getMsgType())) {
+            if (message.getDownloadUrl() != null && !message.getDownloadUrl().isEmpty()) {
+                imageHandlerService.handleImageMessageAsync(message);
+                log.info("企微混合消息（含图片）已投递图片处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            } else if (message.getContent() != null && !message.getContent().isEmpty()) {
+                messagePublisher.publish(message);
+                log.info("企微混合消息（纯文本）已投递异步处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            } else {
+                saveIgnoredLog(message, "mixed消息无有效内容");
+                log.info("企微混合消息已忽略（无有效内容）: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            }
+            return;
+        }
+
         if (!"text".equalsIgnoreCase(message.getMsgType())) {
             saveIgnoredLog(message, "非文本非图片消息已忽略");
             log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本非图片消息", message.getMsgId(), message.getMsgType());
