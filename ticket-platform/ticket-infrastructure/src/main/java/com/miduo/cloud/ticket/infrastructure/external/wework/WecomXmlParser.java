@@ -167,20 +167,27 @@ public final class WecomXmlParser {
                     result.put("Content", "");
                 }
             } else if ("image".equalsIgnoreCase(msgType)) {
-                // 图片消息：image.media_id / image.pic_url / image.download_url / image.aes_key
+                // 官方文档（/document/path/100719）：图片消息格式
+                //   {"msgtype":"image","image":{"url":"https://ww-aibot-img-...（5分钟有效）"}}
+                // image.url 内容已用回调 callbackAesKey 做 AES-256-CBC 加密，无单独 aes_key 字段
                 result.put("Content", "");
-                JSONObject image = obj.getJSONObject("image");
-                if (image != null) {
-                    result.put("MediaId", nullToEmpty(image.getStr("media_id")));
-                    result.put("PicUrl", nullToEmpty(image.getStr("pic_url")));
-                    // AI bot 图片消息额外携带 download_url 和 aes_key，需 AES-256-CBC 解密后才能获得真实图片数据
-                    result.put("DownloadUrl", nullToEmpty(image.getStr("download_url")));
-                    result.put("AesKey", nullToEmpty(image.getStr("aes_key")));
+                result.put("MediaId", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                JSONObject imageObj = obj.getJSONObject("image");
+                if (imageObj != null) {
+                    String imageUrl = nullToEmpty(imageObj.getStr("url"));
+                    result.put("DownloadUrl", imageUrl);
+                    if (imageUrl.isEmpty()) {
+                        log.warn("企微智能机器人图片消息 image.url 为空，原始JSON: {}",
+                                json.length() > 500 ? json.substring(0, 500) : json);
+                    } else {
+                        log.info("企微智能机器人图片消息解析成功: urlLength={}", imageUrl.length());
+                    }
                 } else {
-                    result.put("MediaId", "");
-                    result.put("PicUrl", "");
                     result.put("DownloadUrl", "");
-                    result.put("AesKey", "");
+                    log.warn("企微智能机器人图片消息 image 子对象缺失，原始JSON: {}",
+                            json.length() > 500 ? json.substring(0, 500) : json);
                 }
             } else {
                 result.put("Content", "");
