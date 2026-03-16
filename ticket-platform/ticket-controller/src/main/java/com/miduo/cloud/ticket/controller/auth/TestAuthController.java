@@ -59,7 +59,7 @@ public class TestAuthController {
     public ApiResult<LoginOutput> generateToken(@PathVariable Long userId) {
         User user = userRepository.findById(userId);
         if (user == null) {
-            return ApiResult.error(404, "用户不存在，请先调用 /api/auth/test/users 查询可用用户ID");
+            return ApiResult.fail(404, "用户不存在，请先调用 /api/auth/test/users 查询可用用户ID");
         }
 
         List<String> roleCodes = userRepository.findRoleCodes(userId);
