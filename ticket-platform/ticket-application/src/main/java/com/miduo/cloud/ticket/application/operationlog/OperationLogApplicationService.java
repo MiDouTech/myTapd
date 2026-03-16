@@ -14,8 +14,11 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.operationlog.ma
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.operationlog.po.OperationLogPO;
 import org.springframework.stereotype.Service;
 
+import java.sql.SQLSyntaxErrorException;
+import java.util.Collections;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -35,7 +38,7 @@ public class OperationLogApplicationService extends BaseApplicationService {
      * 保存操作日志（由AOP切面异步调用）
      */
     public void saveLog(OperationLogPO logPO) {
-        operationLogMapper.insert(logPO);
+        executeWithMissingTableFallback("写入操作日志", () -> operationLogMapper.insert(logPO), () -> null);
     }
 
     /**
@@ -43,27 +46,29 @@ public class OperationLogApplicationService extends BaseApplicationService {
      * 接口编号：API000600
      */
     public PageOutput<OperationLogListOutput> page(OperationLogPageInput input) {
-        Page<OperationLogPO> page = new Page<>(input.getPageNum(), input.getPageSize());
-        IPage<OperationLogPO> result = operationLogMapper.selectOperationLogPage(
-                page,
-                input.getAccountId(),
-                trimOrNull(input.getOperatorName()),
-                trimOrNull(input.getOperatorIp()),
-                trimOrNull(input.getLogLevel()),
-                trimOrNull(input.getAppCode()),
-                trimOrNull(input.getModuleName()),
-                trimOrNull(input.getOperationItem()),
-                trimOrNull(input.getOperationDetail()),
-                trimOrNull(input.getExecuteResult()),
-                trimOrNull(input.getStartTime()),
-                trimOrNull(input.getEndTime()),
-                trimOrNull(input.getSortField()),
-                trimOrNull(input.getSortOrder())
-        );
-        List<OperationLogListOutput> outputs = result.getRecords().stream()
-                .map(this::convertToListOutput)
-                .collect(Collectors.toList());
-        return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
+        return executeWithMissingTableFallback("分页查询操作日志", () -> {
+            Page<OperationLogPO> page = new Page<>(input.getPageNum(), input.getPageSize());
+            IPage<OperationLogPO> result = operationLogMapper.selectOperationLogPage(
+                    page,
+                    input.getAccountId(),
+                    trimOrNull(input.getOperatorName()),
+                    trimOrNull(input.getOperatorIp()),
+                    trimOrNull(input.getLogLevel()),
+                    trimOrNull(input.getAppCode()),
+                    trimOrNull(input.getModuleName()),
+                    trimOrNull(input.getOperationItem()),
+                    trimOrNull(input.getOperationDetail()),
+                    trimOrNull(input.getExecuteResult()),
+                    trimOrNull(input.getStartTime()),
+                    trimOrNull(input.getEndTime()),
+                    trimOrNull(input.getSortField()),
+                    trimOrNull(input.getSortOrder())
+            );
+            List<OperationLogListOutput> outputs = result.getRecords().stream()
+                    .map(this::convertToListOutput)
+                    .collect(Collectors.toList());
+            return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
+        }, () -> PageOutput.of(Collections.emptyList(), 0L, input.getPageNum(), input.getPageSize()));
     }
 
     /**
@@ -71,11 +76,13 @@ public class OperationLogApplicationService extends BaseApplicationService {
      * 接口编号：API000601
      */
     public OperationLogDetailOutput detail(Long id) {
-        OperationLogPO po = operationLogMapper.selectById(id);
-        if (po == null) {
-            return null;
-        }
-        return convertToDetailOutput(po);
+        return executeWithMissingTableFallback("查询操作日志详情", () -> {
+            OperationLogPO po = operationLogMapper.selectById(id);
+            if (po == null) {
+                return null;
+            }
+            return convertToDetailOutput(po);
+        }, () -> null);
     }
 
     /**
@@ -83,12 +90,14 @@ public class OperationLogApplicationService extends BaseApplicationService {
      * 接口编号：API000602
      */
     public OperationLogStatisticsOutput statistics() {
-        OperationLogStatisticsOutput output = new OperationLogStatisticsOutput();
-        output.setTodayTotalCount(operationLogMapper.countTodayTotal());
-        output.setTodayFailureCount(operationLogMapper.countTodayFailure());
-        output.setTodayActiveUserCount(operationLogMapper.countTodayActiveUsers());
-        output.setTodaySecurityAlertCount(operationLogMapper.countTodaySecurityAlert());
-        return output;
+        return executeWithMissingTableFallback("查询操作日志统计", () -> {
+            OperationLogStatisticsOutput output = new OperationLogStatisticsOutput();
+            output.setTodayTotalCount(operationLogMapper.countTodayTotal());
+            output.setTodayFailureCount(operationLogMapper.countTodayFailure());
+            output.setTodayActiveUserCount(operationLogMapper.countTodayActiveUsers());
+            output.setTodaySecurityAlertCount(operationLogMapper.countTodaySecurityAlert());
+            return output;
+        }, this::buildEmptyStatistics);
     }
 
     /**
@@ -96,7 +105,8 @@ public class OperationLogApplicationService extends BaseApplicationService {
      * 接口编号：API000604
      */
     public List<String> listModuleNames() {
-        return operationLogMapper.selectDistinctModuleNames();
+        return executeWithMissingTableFallback("查询操作模块列表", operationLogMapper::selectDistinctModuleNames,
+                Collections::emptyList);
     }
 
     /**
@@ -176,5 +186,47 @@ public class OperationLogApplicationService extends BaseApplicationService {
             return null;
         }
         return value.trim();
+    }
+
+    private OperationLogStatisticsOutput buildEmptyStatistics() {
+        OperationLogStatisticsOutput output = new OperationLogStatisticsOutput();
+        output.setTodayTotalCount(0L);
+        output.setTodayFailureCount(0L);
+        output.setTodayActiveUserCount(0L);
+        output.setTodaySecurityAlertCount(0L);
+        return output;
+    }
+
+    private <T> T executeWithMissingTableFallback(String action, Supplier<T> supplier, Supplier<T> fallbackSupplier) {
+        try {
+            return supplier.get();
+        } catch (RuntimeException ex) {
+            if (isSysOperationLogMissing(ex)) {
+                log.warn("操作日志表不存在，{}降级处理。请执行最新Flyway迁移以恢复完整能力。", action);
+                return fallbackSupplier.get();
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isSysOperationLogMissing(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SQLSyntaxErrorException) {
+                SQLSyntaxErrorException sqlException = (SQLSyntaxErrorException) current;
+                if ("42S02".equals(sqlException.getSQLState())) {
+                    String message = sqlException.getMessage();
+                    return message != null && message.contains("sys_operation_log");
+                }
+            }
+            String message = current.getMessage();
+            if (message != null
+                    && message.contains("sys_operation_log")
+                    && (message.contains("doesn't exist") || message.contains("does not exist"))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
