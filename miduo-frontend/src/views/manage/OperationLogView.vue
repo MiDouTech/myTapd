@@ -171,24 +171,32 @@ async function openDetail(row: OperationLogListOutput) {
 // ─────────────────────────────────────────────
 // 样式辅助
 // ─────────────────────────────────────────────
-const logLevelStyleMap: Record<string, { bg: string; color: string; border: string }> = {
+interface TagStyle {
+  bg: string
+  color: string
+  border: string
+}
+
+const logLevelStyleMap: Record<string, TagStyle> = {
   SYSTEM: { bg: '#ecf5ff', color: '#409eff', border: '#b3d8ff' },
   BUSINESS: { bg: '#f0f9eb', color: '#67c23a', border: '#c2e7b0' },
   SECURITY: { bg: '#fdf6ec', color: '#e6a23c', border: '#f5dab1' },
   ERROR: { bg: '#fef0f0', color: '#f56c6c', border: '#fbc4c4' },
 }
 
-const executeResultStyleMap: Record<string, { bg: string; color: string; border: string }> = {
+const executeResultStyleMap: Record<string, TagStyle> = {
   SUCCESS: { bg: '#f0f9eb', color: '#67c23a', border: '#c2e7b0' },
   FAILURE: { bg: '#fef0f0', color: '#f56c6c', border: '#fbc4c4' },
 }
 
-function getLogLevelStyle(level: string) {
-  return logLevelStyleMap[level] || logLevelStyleMap['BUSINESS']
+const defaultTagStyle: TagStyle = { bg: '#f0f9eb', color: '#67c23a', border: '#c2e7b0' }
+
+function getLogLevelStyle(level: string): TagStyle {
+  return logLevelStyleMap[level] ?? defaultTagStyle
 }
 
-function getExecuteResultStyle(result: string) {
-  return executeResultStyleMap[result] || executeResultStyleMap['SUCCESS']
+function getExecuteResultStyle(result: string): TagStyle {
+  return executeResultStyleMap[result] ?? defaultTagStyle
 }
 
 function formatJsonString(json: string | null | undefined): string {
