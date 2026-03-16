@@ -30,8 +30,11 @@ jobs:
       dotnet_version:    ${{ steps.config.outputs.dotnet_version }}
       build_subproject:  ${{ steps.config.outputs.build_subproject }}
       compile_dir:       ${{ steps.config.outputs.compile_dir }}
-      cnb_namespace:     ${{ steps.config.outputs.cnb_namespace }}
-      cnb_version_repo:  ${{ steps.config.outputs.cnb_version_repo }}
+      cnb_namespace:          ${{ steps.config.outputs.cnb_namespace }}
+      cnb_version_repo:       ${{ steps.config.outputs.cnb_version_repo }}
+      frontend_dir:           ${{ steps.config.outputs.frontend_dir }}
+      node_version:           ${{ steps.config.outputs.node_version }}
+      frontend_artifact_name: ${{ steps.config.outputs.frontend_artifact_name }}
 
     steps:
       - name: Checkout
@@ -47,8 +50,11 @@ jobs:
           echo "java_version=${JAVA_VERSION:-}"         >> "$GITHUB_OUTPUT"
           echo "dotnet_version=${DOTNET_VERSION:-}"     >> "$GITHUB_OUTPUT"
           echo "build_subproject=${BUILD_SUBPROJECT:-}" >> "$GITHUB_OUTPUT"
-          echo "cnb_namespace=${CNB_NAMESPACE}"         >> "$GITHUB_OUTPUT"
-          echo "cnb_version_repo=${CNB_VERSION_REPO}"   >> "$GITHUB_OUTPUT"
+          echo "cnb_namespace=${CNB_NAMESPACE}"                     >> "$GITHUB_OUTPUT"
+          echo "cnb_version_repo=${CNB_VERSION_REPO}"               >> "$GITHUB_OUTPUT"
+          echo "frontend_dir=${FRONTEND_DIR:-}"                     >> "$GITHUB_OUTPUT"
+          echo "node_version=${NODE_VERSION:-20}"                   >> "$GITHUB_OUTPUT"
+          echo "frontend_artifact_name=${FRONTEND_ARTIFACT_NAME:-}" >> "$GITHUB_OUTPUT"
           # 从 services.json 取第一个有 build_output 服务的 context 作为编译工作目录
           COMPILE_DIR=$(jq -r \
             '[.[] | select(.build_output != null and .build_output != "")] | first | .context // "."' \
@@ -128,7 +134,59 @@ jobs:
           retention-days: 1
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 3 – 并行构建所有镜像并同时推送到 GHCR 和 CNB
+  # Job 3 – 前端编译并打包为 ZIP（与后端镜像构建并行，FRONTEND_DIR 为空则跳过）
+  # ────────────────────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Build Frontend – ZIP
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.frontend_dir != ''
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ needs.prepare.outputs.node_version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ needs.prepare.outputs.node_version }}
+          cache: npm
+          cache-dependency-path: ${{ needs.prepare.outputs.frontend_dir }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ needs.prepare.outputs.frontend_dir }}
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ${{ needs.prepare.outputs.frontend_dir }}
+        env:
+          VITE_WECOM_OAUTH_URL: ${{ secrets.VITE_WECOM_OAUTH_URL }}
+        run: npm run build
+
+      - name: Package dist as ZIP
+        run: |
+          ARTIFACT="${{ needs.prepare.outputs.frontend_artifact_name }}"
+          cd "${{ needs.prepare.outputs.frontend_dir }}/dist"
+          zip -r "$GITHUB_WORKSPACE/${ARTIFACT}.zip" .
+          echo "ZIP size: $(du -sh "$GITHUB_WORKSPACE/${ARTIFACT}.zip" | cut -f1)"
+
+      - name: Upload ZIP artifact (7-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.frontend_artifact_name }}-${{ github.sha }}
+          path: ${{ needs.prepare.outputs.frontend_artifact_name }}.zip
+          retention-days: 7
+
+      - name: Attach ZIP to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ needs.prepare.outputs.frontend_artifact_name }}.zip
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 4 – 并行构建所有镜像并同时推送到 GHCR 和 CNB
   # ────────────────────────────────────────────────────────────────────────────
   build-and-push:
     name: Build & Push – ${{ matrix.name }}
@@ -227,13 +285,17 @@ jobs:
           cache-to:   type=gha,scope=${{ matrix.name }},mode=max
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 4 – 推送成功后将版本号写入 CNB 版本记录仓库
+  # Job 5 – 所有产物就绪后，将版本号写入 CNB 版本记录仓库
   # ────────────────────────────────────────────────────────────────────────────
   update-version:
     name: Update CNB Version File
     runs-on: ubuntu-latest
-    needs: [prepare, build-and-push]
-    if: needs.build-and-push.result == 'success'
+    needs: [prepare, build-and-push, build-frontend]
+    # build-frontend 可能被跳过（FRONTEND_DIR 为空），用 always() 兼容
+    if: |
+      always() &&
+      needs.build-and-push.result == 'success' &&
+      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
 
     steps:
       - name: Checkout（读取 services.json）
@@ -284,7 +346,7 @@ jobs:
           } > .cnb_version.yml
 
           sed -i "s|testVersion:.*|testVersion: ${VERSION}|" .cnb/web_trigger.yml
-          
+
           git add .cnb/web_trigger.yml
           git add .cnb_version.yml
           if git diff --staged --quiet; then

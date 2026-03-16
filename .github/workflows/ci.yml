@@ -26,10 +26,12 @@ jobs:
           set -a
           source .deploy/config.env
           set +a
-          echo "BUILD_TYPE=${BUILD_TYPE}"             >> "$GITHUB_ENV"
-          echo "JAVA_VERSION=${JAVA_VERSION:-}"       >> "$GITHUB_ENV"
-          echo "DOTNET_VERSION=${DOTNET_VERSION:-}"   >> "$GITHUB_ENV"
+          echo "BUILD_TYPE=${BUILD_TYPE}"               >> "$GITHUB_ENV"
+          echo "JAVA_VERSION=${JAVA_VERSION:-}"         >> "$GITHUB_ENV"
+          echo "DOTNET_VERSION=${DOTNET_VERSION:-}"     >> "$GITHUB_ENV"
           echo "BUILD_SUBPROJECT=${BUILD_SUBPROJECT:-}" >> "$GITHUB_ENV"
+          echo "FRONTEND_DIR=${FRONTEND_DIR:-}"         >> "$GITHUB_ENV"
+          echo "NODE_VERSION=${NODE_VERSION:-20}"       >> "$GITHUB_ENV"
           # 从 services.json 中找到第一个有 build_output 的服务的 context 作为编译目录
           COMPILE_DIR=$(jq -r \
             '[.[] | select(.build_output != null and .build_output != "")] | first | .context // "."' \
@@ -66,3 +68,38 @@ jobs:
         if: env.BUILD_TYPE == 'dotnet'
         working-directory: ${{ env.COMPILE_DIR }}
         run: dotnet test --configuration Release --verbosity normal
+
+  # ── 前端编译验证（FRONTEND_DIR 非空时并行运行）──────────────────────────────
+  validate-frontend:
+    name: Validate Frontend Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load frontend config
+        id: cfg
+        run: |
+          set -a; source .deploy/config.env; set +a
+          echo "frontend_dir=${FRONTEND_DIR:-}"   >> "$GITHUB_OUTPUT"
+          echo "node_version=${NODE_VERSION:-20}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if no frontend configured
+        if: steps.cfg.outputs.frontend_dir == ''
+        run: echo "FRONTEND_DIR 未配置，跳过前端验证。"
+
+      - name: Set up Node.js ${{ steps.cfg.outputs.node_version }}
+        if: steps.cfg.outputs.frontend_dir != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.cfg.outputs.node_version }}
+          cache: npm
+          cache-dependency-path: ${{ steps.cfg.outputs.frontend_dir }}/package-lock.json
+
+      - name: Install & build (validate only, no artifact)
+        if: steps.cfg.outputs.frontend_dir != ''
+        working-directory: ${{ steps.cfg.outputs.frontend_dir }}
+        run: npm ci && npm run build
