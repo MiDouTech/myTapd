@@ -66,6 +66,7 @@ const menuItems: MenuItem[] = [
       { index: '/manage/sla', title: 'SLA管理', icon: Setting },
       { index: '/manage/user', title: '组织账号管理', icon: Setting },
       { index: '/manage/settings', title: '系统设置', icon: Setting },
+      { index: '/manage/operation-log', title: '工单日志', icon: Setting },
     ],
   },
 ]

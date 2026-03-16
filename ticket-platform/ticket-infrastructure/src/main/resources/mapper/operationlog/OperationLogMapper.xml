@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.operationlog.mapper.OperationLogMapper">
+
+    <!-- 多条件分页查询操作日志 API000600 -->
+    <select id="selectOperationLogPage"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.operationlog.po.OperationLogPO">
+        SELECT *
+        FROM sys_operation_log
+        WHERE deleted = 0
+        <if test="accountId != null">
+            AND account_id = #{accountId}
+        </if>
+        <if test="operatorName != null and operatorName != ''">
+            AND operator_name LIKE CONCAT('%', #{operatorName}, '%')
+        </if>
+        <if test="operatorIp != null and operatorIp != ''">
+            AND operator_ip LIKE CONCAT(#{operatorIp}, '%')
+        </if>
+        <if test="logLevel != null and logLevel != ''">
+            AND log_level = #{logLevel}
+        </if>
+        <if test="appCode != null and appCode != ''">
+            AND app_code = #{appCode}
+        </if>
+        <if test="moduleName != null and moduleName != ''">
+            AND module_name LIKE CONCAT('%', #{moduleName}, '%')
+        </if>
+        <if test="operationItem != null and operationItem != ''">
+            AND operation_item LIKE CONCAT('%', #{operationItem}, '%')
+        </if>
+        <if test="operationDetail != null and operationDetail != ''">
+            AND (request_params LIKE CONCAT('%', #{operationDetail}, '%')
+                OR change_records LIKE CONCAT('%', #{operationDetail}, '%'))
+        </if>
+        <if test="executeResult != null and executeResult != ''">
+            AND execute_result = #{executeResult}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND operate_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND operate_time &lt;= #{endTime}
+        </if>
+        <choose>
+            <when test="sortField != null and sortField == 'operateTime' and sortOrder != null and sortOrder == 'asc'">
+                ORDER BY operate_time ASC
+            </when>
+            <otherwise>
+                ORDER BY operate_time DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 今日操作总数 -->
+    <select id="countTodayTotal" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_operation_log
+        WHERE deleted = 0
+          AND DATE(operate_time) = CURDATE()
+    </select>
+
+    <!-- 今日失败操作数 -->
+    <select id="countTodayFailure" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_operation_log
+        WHERE deleted = 0
+          AND execute_result = 'FAILURE'
+          AND DATE(operate_time) = CURDATE()
+    </select>
+
+    <!-- 今日活跃操作人数 -->
+    <select id="countTodayActiveUsers" resultType="long">
+        SELECT COUNT(DISTINCT account_id)
+        FROM sys_operation_log
+        WHERE deleted = 0
+          AND account_id != 0
+          AND DATE(operate_time) = CURDATE()
+    </select>
+
+    <!-- 今日安全告警数 -->
+    <select id="countTodaySecurityAlert" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_operation_log
+        WHERE deleted = 0
+          AND log_level = 'SECURITY'
+          AND DATE(operate_time) = CURDATE()
+    </select>
+
+    <!-- 所有模块名称（去重） -->
+    <select id="selectDistinctModuleNames" resultType="string">
+        SELECT DISTINCT module_name
+        FROM sys_operation_log
+        WHERE deleted = 0
+          AND module_name != ''
+        ORDER BY module_name ASC
+    </select>
+
+</mapper>
