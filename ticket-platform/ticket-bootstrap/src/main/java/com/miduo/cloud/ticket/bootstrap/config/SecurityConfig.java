@@ -48,9 +48,8 @@ public class SecurityConfig {
                         "/v3/api-docs/**",
                         "/wecom/callback/**",
                         "/api/wecom/callback/**",
-                        "/ws/**",
-                        "/api/auth/test/**",
-                        "/api/auth/dev/login"
+                        "/api/open/ticket/**",
+                        "/ws/**"
                 ).permitAll()
                 .anyRequest().authenticated()
                 .and()

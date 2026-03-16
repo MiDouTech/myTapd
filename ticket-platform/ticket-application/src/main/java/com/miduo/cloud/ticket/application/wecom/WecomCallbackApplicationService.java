@@ -30,15 +30,18 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
     private final WecomMessagePublisher messagePublisher;
     private final StringRedisTemplate redisTemplate;
     private final WecomBotMessageLogMapper botMessageLogMapper;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomCallbackApplicationService(WecomCallbackCryptoService callbackCryptoService,
                                            WecomMessagePublisher messagePublisher,
                                            StringRedisTemplate redisTemplate,
-                                           WecomBotMessageLogMapper botMessageLogMapper) {
+                                           WecomBotMessageLogMapper botMessageLogMapper,
+                                           WecomImageHandlerService imageHandlerService) {
         this.callbackCryptoService = callbackCryptoService;
         this.messagePublisher = messagePublisher;
         this.redisTemplate = redisTemplate;
         this.botMessageLogMapper = botMessageLogMapper;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -56,14 +59,10 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "回调消息体为空");
         }
 
-        Map<String, String> encryptedMap = WecomXmlParser.parseFirstLevel(requestBody);
-        String encrypted = encryptedMap.get("Encrypt");
-        if (encrypted == null || encrypted.trim().isEmpty()) {
-            throw BusinessException.of(ErrorCode.WECOM_MSG_PARSE_FAILED, "回调消息缺少Encrypt字段");
-        }
+        String encrypted = WecomXmlParser.extractEncryptField(requestBody);
 
         String plainXml = callbackCryptoService.decryptMessage(msgSignature, timestamp, nonce, encrypted);
-        Map<String, String> messageMap = WecomXmlParser.parseFirstLevel(plainXml);
+        Map<String, String> messageMap = WecomXmlParser.parseDecryptedMessage(plainXml);
         WecomCallbackMessageDTO message = buildMessage(messageMap, plainXml);
         log.info("收到企微回调消息: msgId={}, msgType={}, chatId={}, fromWecomUserid={}",
                 message.getMsgId(), message.getMsgType(), message.getChatId(), message.getFromWecomUserid());
@@ -74,9 +73,15 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             return;
         }
 
+        if ("image".equalsIgnoreCase(message.getMsgType())) {
+            imageHandlerService.handleImageMessageAsync(message);
+            log.info("企微图片消息已投递异步处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            return;
+        }
+
         if (!"text".equalsIgnoreCase(message.getMsgType())) {
-            saveIgnoredLog(message, "非文本消息已忽略");
-            log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本消息", message.getMsgId(), message.getMsgType());
+            saveIgnoredLog(message, "非文本非图片消息已忽略");
+            log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本非图片消息", message.getMsgId(), message.getMsgType());
             return;
         }
 
@@ -90,8 +95,14 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setChatId(resolveChatId(messageMap));
         message.setFromWecomUserid(safeValue(messageMap.get("FromUserName")));
         message.setContent(safeValue(messageMap.get("Content")));
+        message.setMediaId(safeValue(messageMap.get("MediaId")));
+        message.setPicUrl(safeValue(messageMap.get("PicUrl")));
+        message.setDownloadUrl(safeValue(messageMap.get("DownloadUrl")));
+        message.setAesKey(safeValue(messageMap.get("AesKey")));
         message.setRawXml(plainXml);
         message.setCreateTime(safeValue(messageMap.get("CreateTime")));
+        message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));
+        message.setChatType(safeValue(messageMap.get("ChatType")));
 
         String msgId = safeValue(messageMap.get("MsgId"));
         if (msgId.isEmpty()) {

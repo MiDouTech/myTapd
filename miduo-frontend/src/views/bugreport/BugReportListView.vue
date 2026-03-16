@@ -165,7 +165,7 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" placeholder="全部状态" clearable>
+          <el-select v-model="query.status" class="query-select" placeholder="请选择内容" clearable>
             <el-option
               v-for="option in BUG_REPORT_STATUS_OPTIONS"
               :key="option.value"
@@ -175,7 +175,13 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="缺陷分类">
-          <el-select v-model="query.defectCategory" placeholder="全部分类" clearable filterable>
+          <el-select
+            v-model="query.defectCategory"
+            class="query-select"
+            placeholder="请选择内容"
+            clearable
+            filterable
+          >
             <el-option
               v-for="item in defectCategories"
               :key="item.id"
@@ -185,7 +191,13 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="审核人">
-          <el-select v-model="query.reviewerId" placeholder="全部审核人" clearable filterable>
+          <el-select
+            v-model="query.reviewerId"
+            class="query-select"
+            placeholder="请选择内容"
+            clearable
+            filterable
+          >
             <el-option
               v-for="option in userOptions"
               :key="option.value"
@@ -195,7 +207,13 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="责任人">
-          <el-select v-model="query.responsibleUserId" placeholder="全部责任人" clearable filterable>
+          <el-select
+            v-model="query.responsibleUserId"
+            class="query-select"
+            placeholder="请选择内容"
+            clearable
+            filterable
+          >
             <el-option
               v-for="option in userOptions"
               :key="option.value"
@@ -226,7 +244,13 @@ onMounted(async () => {
       <EmptyState v-if="!loading && tableData.length === 0" description="暂无Bug简报数据" />
       <template v-else>
         <BaseTable :data="tableData" :loading="loading" @sort-change="handleSortChange">
-          <el-table-column prop="reportNo" label="简报编号" min-width="180" sortable="custom" />
+          <el-table-column prop="reportNo" label="简报编号" min-width="180" sortable="custom">
+            <template #default="{ row }">
+              <el-button type="primary" link class="cell-link" @click="openDetail(row)">
+                {{ row.reportNo }}
+              </el-button>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" min-width="120">
             <template #default="{ row }">
               <el-tag :type="getBugReportStatusTagType(row.status)">
@@ -290,6 +314,16 @@ onMounted(async () => {
 
 .query-form {
   margin-top: 14px;
+}
+
+.query-select {
+  width: 220px;
+  max-width: 100%;
+}
+
+.cell-link {
+  padding: 0;
+  font-weight: 500;
 }
 
 @media (max-width: 991px) {

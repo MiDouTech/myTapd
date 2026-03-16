@@ -42,6 +42,10 @@ public class WeworkRuntimeConfigProvider {
             config.setApiBaseUrl(defaultIfBlank(dbConfig.getApiBaseUrl(), "https://qyapi.weixin.qq.com"));
             config.setConnectTimeoutMs(defaultIfNull(dbConfig.getConnectTimeoutMs(), 10000));
             config.setReadTimeoutMs(defaultIfNull(dbConfig.getReadTimeoutMs(), 30000));
+            config.setCallbackToken(defaultIfBlank(normalize(dbConfig.getCallbackToken()),
+                    normalize(wecomProperties.getCallbackToken())));
+            config.setCallbackAesKey(defaultIfBlank(normalize(dbConfig.getCallbackAesKey()),
+                    normalize(wecomProperties.getCallbackAesKey())));
             return config;
         }
 
@@ -52,6 +56,8 @@ public class WeworkRuntimeConfigProvider {
         config.setApiBaseUrl("https://qyapi.weixin.qq.com");
         config.setConnectTimeoutMs(10000);
         config.setReadTimeoutMs(30000);
+        config.setCallbackToken(normalize(wecomProperties.getCallbackToken()));
+        config.setCallbackAesKey(normalize(wecomProperties.getCallbackAesKey()));
         return config;
     }
 
@@ -80,5 +86,7 @@ public class WeworkRuntimeConfigProvider {
         private String apiBaseUrl;
         private Integer connectTimeoutMs;
         private Integer readTimeoutMs;
+        private String callbackToken;
+        private String callbackAesKey;
     }
 }

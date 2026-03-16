@@ -1,5 +1,8 @@
 import type { PageOutput } from '@/types/common'
 import type {
+  BugChangeHistoryOutput,
+  BugChangeHistoryQuery,
+  ImageUploadOutput,
   TicketAssignInput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
@@ -8,10 +11,15 @@ import type {
   TicketCreateInput,
   TicketDetailOutput,
   TicketListOutput,
+  TicketModuleInput,
+  TicketModuleOutput,
   TicketNodeDurationOutput,
   TicketPageInput,
   TicketProcessInput,
+  TicketPublicDetailOutput,
   TicketTimeTrackOutput,
+  WecomMessageParseInput,
+  WecomMessageParseOutput,
 } from '@/types/ticket'
 import request from '@/utils/request'
 
@@ -139,4 +147,100 @@ export function getTicketTimeTrack(id: number): Promise<TicketTimeTrackOutput> {
  */
 export function getTicketNodeDuration(id: number): Promise<TicketNodeDurationOutput> {
   return request.get<TicketNodeDurationOutput>(`/ticket/${id}/node-duration`)
+}
+
+/**
+ * 查询缺陷变更历史列表
+ * 接口编号：API000501
+ * 产品文档功能：缺陷详情-变更历史Tab（PRD §3.4）
+ *
+ * @param ticketId  工单 ID
+ * @param params    可选筛选参数（changeType: 变更类型，fieldName: 变更字段）
+ */
+export function getTicketChangeHistory(
+  ticketId: number,
+  params?: BugChangeHistoryQuery,
+): Promise<BugChangeHistoryOutput[]> {
+  return request.get<BugChangeHistoryOutput[]>(`/ticket/${ticketId}/change-history`, { params })
+}
+
+/**
+ * 上传工单图片到七牛云
+ * 接口编号：API000502
+ * 产品文档功能：工单处理 - 上传图片到七牛云并保存附件记录
+ *
+ * @param ticketId 工单ID
+ * @param file     图片文件
+ */
+export function uploadTicketImage(ticketId: number, file: File): Promise<ImageUploadOutput> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ImageUploadOutput>(`/ticket/${ticketId}/image/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+/**
+ * 删除工单附件
+ * 接口编号：API000503
+ * 产品文档功能：工单处理 - 删除已上传的附件
+ *
+ * @param attachmentId 附件ID
+ */
+export function deleteTicketAttachment(attachmentId: number): Promise<void> {
+  return request.del<void>(`/ticket/attachment/delete/${attachmentId}`)
+}
+
+/**
+ * 工单公开详情（无需登录，外网可直接访问）
+ * 接口编号：API000417
+ * 产品文档功能：4.12 工单公开链接 - 外网无需登录查看工单详情
+ */
+export function getPublicTicketDetail(ticketNo: string): Promise<TicketPublicDetailOutput> {
+  return request.get<TicketPublicDetailOutput>(`/open/ticket/${ticketNo}`)
+}
+
+/**
+ * 获取工单模块列表（所属模块下拉选项）
+ * 接口编号：API000505
+ * 产品文档功能：测试信息 - 所属模块下拉选项列表
+ */
+export function getTicketModuleList(): Promise<TicketModuleOutput[]> {
+  return request.get<TicketModuleOutput[]>('/ticket-module/list')
+}
+
+/**
+ * 创建工单模块（添加自定义所属模块选项）
+ * 接口编号：API000506
+ * 产品文档功能：测试信息 - 新增所属模块选项
+ */
+export function createTicketModule(data: TicketModuleInput): Promise<number> {
+  return request.post<number>('/ticket-module/create', data)
+}
+
+/**
+ * 删除工单模块
+ * 接口编号：API000507
+ * 产品文档功能：测试信息 - 删除所属模块选项
+ */
+export function deleteTicketModule(id: number): Promise<void> {
+  return request.del<void>(`/ticket-module/delete/${id}`)
+}
+
+/**
+ * 企微消息自然语言解析 - 客服信息字段提取
+ * 接口编号：API000504
+ * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值
+ */
+export function parseWecomCustomerInfo(data: WecomMessageParseInput): Promise<WecomMessageParseOutput> {
+  return request.post<WecomMessageParseOutput>('/ticket/wecom/parse-customer-info', data)
+}
+
+/**
+ * 新增工单评论
+ * 接口编号：API000508
+ * 产品文档功能：工单详情 - 评论区发表评论
+ */
+export function addTicketComment(id: number, content: string): Promise<number> {
+  return request.post<number>(`/ticket/${id}/comment`, { content })
 }

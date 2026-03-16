@@ -34,7 +34,9 @@ export interface BugReportCreateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
@@ -54,7 +56,9 @@ export interface BugReportUpdateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
@@ -121,7 +125,9 @@ export interface BugReportDetailOutput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  tempResolveDate?: string
   solution?: string
+  tempSolution?: string
   impactScope?: string
   severityLevel?: string
   reporterId?: number
@@ -144,6 +150,8 @@ export interface BugReportDetailOutput {
 export interface BugReportDistributionItem {
   name: string
   count: number
+  /** 占比百分比，如 35.5 表示 35.5% */
+  rate?: number
 }
 
 export interface BugReportResponsibleStatItem {

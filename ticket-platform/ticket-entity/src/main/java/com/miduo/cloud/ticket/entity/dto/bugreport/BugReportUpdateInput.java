@@ -28,7 +28,11 @@ public class BugReportUpdateInput implements Serializable {
 
     private Date resolveDate;
 
+    private Date tempResolveDate;
+
     private String solution;
+
+    private String tempSolution;
 
     private String impactScope;
 

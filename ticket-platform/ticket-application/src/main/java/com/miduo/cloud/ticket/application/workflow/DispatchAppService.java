@@ -1,12 +1,17 @@
 package com.miduo.cloud.ticket.application.workflow;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.UserTicketLoadStat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
@@ -19,16 +24,27 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 分派应用服务 - 负责工单自动分派和分派策略执行
+ * 分派应用服务
+ * 支持策略：MANUAL / CATEGORY_DEFAULT / ROUND_ROBIN / LOAD_BALANCE / MATRIX
+ * 核心优化：负载均衡使用批量查询，消除 N+1 问题
  */
 @Service
 public class DispatchAppService extends BaseApplicationService {
 
     private static final String ROUND_ROBIN_INDEX_KEY = "dispatch:round_robin:group:";
+
+    /** 终态状态码（不参与负载统计） */
+    private static final List<String> TERMINAL_STATUSES = Arrays.asList(
+            TicketStatus.COMPLETED.getCode(),
+            TicketStatus.CLOSED.getCode(),
+            TicketStatus.REJECTED.getCode()
+    );
 
     private final TicketMapper ticketMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
@@ -52,7 +68,7 @@ public class DispatchAppService extends BaseApplicationService {
     }
 
     /**
-     * 自动分派工单
+     * 自动分派工单（按分派规则执行对应策略）
      */
     @Transactional(rollbackFor = Exception.class)
     public void autoDispatch(Long ticketId) {
@@ -90,45 +106,46 @@ public class DispatchAppService extends BaseApplicationService {
             case LOAD_BALANCE:
                 dispatchByLoadBalance(ticket, rule.getTargetGroupId());
                 break;
+            case MATRIX:
+                dispatchByMatrix(ticket, rule);
+                break;
             default:
-                log.info("分派策略[{}]暂不支持自动分派", strategy.getLabel());
+                log.info("分派策略[{}]为手动分派，不执行自动分配", strategy.getLabel());
                 break;
         }
     }
 
     /**
-     * 分类默认分派：根据分类绑定的默认处理组，选取组长作为处理人
+     * 分类默认分派：取分类绑定默认处理组的第一个成员（组长）
      */
     private void dispatchByCategoryDefault(TicketPO ticket, Long categoryId) {
         TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
         if (category == null || category.getDefaultGroupId() == null) {
-            log.info("分类[{}]未配置默认处理组", categoryId);
+            log.info("分类[{}]未配置默认处理组，跳过自动分派", categoryId);
             return;
         }
 
-        Long groupId = category.getDefaultGroupId();
-        List<Long> memberIds = getGroupMemberIds(groupId);
+        List<Long> memberIds = getGroupMemberIds(category.getDefaultGroupId());
         if (memberIds.isEmpty()) {
-            log.warn("处理组[{}]没有成员", groupId);
+            log.warn("处理组[{}]没有成员，跳过自动分派", category.getDefaultGroupId());
             return;
         }
 
-        Long assigneeId = memberIds.get(0);
-        assignTicket(ticket, assigneeId, "CATEGORY_DEFAULT");
+        assignTicket(ticket, memberIds.get(0), DispatchStrategy.CATEGORY_DEFAULT.getCode());
     }
 
     /**
-     * 轮询分派：在处理组内按顺序轮流分配
+     * 轮询分派：通过 Redis 计数器在处理组内轮流分配
      */
     private void dispatchByRoundRobin(TicketPO ticket, Long groupId) {
         if (groupId == null) {
-            log.warn("轮询分派未配置目标处理组");
+            log.warn("轮询分派未配置目标处理组，跳过分派");
             return;
         }
 
         List<Long> memberIds = getGroupMemberIds(groupId);
         if (memberIds.isEmpty()) {
-            log.warn("处理组[{}]没有成员", groupId);
+            log.warn("处理组[{}]没有成员，跳过分派", groupId);
             return;
         }
 
@@ -138,41 +155,122 @@ public class DispatchAppService extends BaseApplicationService {
             index = 0L;
         }
         int idx = (int) ((index - 1) % memberIds.size());
-        Long assigneeId = memberIds.get(idx);
-        assignTicket(ticket, assigneeId, "ROUND_ROBIN");
+        assignTicket(ticket, memberIds.get(idx), DispatchStrategy.ROUND_ROBIN.getCode());
     }
 
     /**
-     * 负载均衡分派：分配给当前待办最少的处理人
+     * 负载均衡分派：分配给当前未完成工单最少的处理人
+     * 使用批量查询（一次 SQL GROUP BY），消除 N+1 问题
      */
     private void dispatchByLoadBalance(TicketPO ticket, Long groupId) {
         if (groupId == null) {
-            log.warn("负载均衡分派未配置目标处理组");
+            log.warn("负载均衡分派未配置目标处理组，跳过分派");
             return;
         }
 
         List<Long> memberIds = getGroupMemberIds(groupId);
         if (memberIds.isEmpty()) {
-            log.warn("处理组[{}]没有成员", groupId);
+            log.warn("处理组[{}]没有成员，跳过分派", groupId);
             return;
         }
 
-        Long minLoadUserId = null;
-        long minCount = Long.MAX_VALUE;
+        // 批量查询所有组员的活跃工单数（一次查询，消除 N+1）
+        List<UserTicketLoadStat> loadStats = ticketMapper.selectActiveCountByUserIds(
+                memberIds, TERMINAL_STATUSES);
 
-        for (Long memberId : memberIds) {
-            LambdaQueryWrapper<TicketPO> countWrapper = new LambdaQueryWrapper<>();
-            countWrapper.eq(TicketPO::getAssigneeId, memberId)
-                    .notIn(TicketPO::getStatus, "COMPLETED", "CLOSED");
-            long count = ticketMapper.selectCount(countWrapper);
-            if (count < minCount) {
-                minCount = count;
-                minLoadUserId = memberId;
+        // 构建 userId → activeCount 的映射
+        Map<Long, Long> loadMap = loadStats.stream()
+                .collect(Collectors.toMap(UserTicketLoadStat::getUserId, UserTicketLoadStat::getActiveCount));
+
+        // 找出工单数最少的成员
+        Long minLoadUserId = memberIds.stream()
+                .min((a, b) -> {
+                    long countA = loadMap.getOrDefault(a, 0L);
+                    long countB = loadMap.getOrDefault(b, 0L);
+                    return Long.compare(countA, countB);
+                })
+                .orElse(null);
+
+        if (minLoadUserId != null) {
+            assignTicket(ticket, minLoadUserId, DispatchStrategy.LOAD_BALANCE.getCode());
+        }
+    }
+
+    /**
+     * 矩阵分派：根据工单属性（优先级/来源/分类等）匹配不同处理组/人
+     * skill_match_config 格式：
+     * {
+     *   "matchField": "priority",
+     *   "rules": [
+     *     {"value": "URGENT", "groupId": 1, "userId": null},
+     *     {"value": "HIGH",   "groupId": 2, "userId": null}
+     *   ],
+     *   "fallbackGroupId": 3
+     * }
+     */
+    private void dispatchByMatrix(TicketPO ticket, DispatchRulePO rule) {
+        String skillMatchConfig = rule.getSkillMatchConfig();
+        if (skillMatchConfig == null || skillMatchConfig.isEmpty()) {
+            log.warn("矩阵分派规则[{}]未配置 skill_match_config，降级为分类默认分派", rule.getId());
+            dispatchByCategoryDefault(ticket, ticket.getCategoryId());
+            return;
+        }
+
+        JSONObject config = JSON.parseObject(skillMatchConfig);
+        String matchField = config.getString("matchField");
+        JSONArray rules = config.getJSONArray("rules");
+        Long fallbackGroupId = config.getLong("fallbackGroupId");
+
+        String fieldValue = resolveTicketField(ticket, matchField);
+
+        Long targetGroupId = null;
+        Long targetUserId = null;
+
+        if (rules != null && fieldValue != null) {
+            for (int i = 0; i < rules.size(); i++) {
+                JSONObject r = rules.getJSONObject(i);
+                if (fieldValue.equalsIgnoreCase(r.getString("value"))) {
+                    targetGroupId = r.getLong("groupId");
+                    targetUserId = r.getLong("userId");
+                    break;
+                }
             }
         }
 
-        if (minLoadUserId != null) {
-            assignTicket(ticket, minLoadUserId, "LOAD_BALANCE");
+        // 指定了具体用户，直接分派
+        if (targetUserId != null) {
+            assignTicket(ticket, targetUserId, DispatchStrategy.MATRIX.getCode());
+            return;
+        }
+
+        // 指定了处理组，取组内第一个成员（可扩展为轮询）
+        Long groupId = targetGroupId != null ? targetGroupId : fallbackGroupId;
+        if (groupId != null) {
+            List<Long> memberIds = getGroupMemberIds(groupId);
+            if (!memberIds.isEmpty()) {
+                assignTicket(ticket, memberIds.get(0), DispatchStrategy.MATRIX.getCode());
+                return;
+            }
+        }
+
+        log.warn("矩阵分派未找到匹配规则，工单[{}] matchField={} value={}",
+                ticket.getId(), matchField, fieldValue);
+    }
+
+    /**
+     * 从工单中提取矩阵分派匹配字段值
+     */
+    private String resolveTicketField(TicketPO ticket, String fieldName) {
+        if (fieldName == null) {
+            return null;
+        }
+        switch (fieldName.toLowerCase()) {
+            case "priority":    return ticket.getPriority();
+            case "source":      return ticket.getSource();
+            case "category_id": return ticket.getCategoryId() != null
+                    ? ticket.getCategoryId().toString() : null;
+            default:
+                return null;
         }
     }
 
@@ -188,8 +286,7 @@ public class DispatchAppService extends BaseApplicationService {
     private List<Long> getGroupMemberIds(Long groupId) {
         LambdaQueryWrapper<HandlerGroupMemberPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(HandlerGroupMemberPO::getGroupId, groupId);
-        List<HandlerGroupMemberPO> members = handlerGroupMemberMapper.selectList(wrapper);
-        return members.stream()
+        return handlerGroupMemberMapper.selectList(wrapper).stream()
                 .map(HandlerGroupMemberPO::getUserId)
                 .collect(Collectors.toList());
     }

@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.application.ticket;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
@@ -37,21 +38,44 @@ public class TicketBugApplicationService extends BaseApplicationService {
     private final TicketBugTestInfoMapper bugTestInfoMapper;
     private final TicketBugDevInfoMapper bugDevInfoMapper;
     private final SysUserMapper sysUserMapper;
+    private final TicketChangeHistoryRecorder changeHistoryRecorder;
 
     public TicketBugApplicationService(TicketMapper ticketMapper,
                                        TicketBugInfoMapper bugInfoMapper,
                                        TicketBugTestInfoMapper bugTestInfoMapper,
                                        TicketBugDevInfoMapper bugDevInfoMapper,
-                                       SysUserMapper sysUserMapper) {
+                                       SysUserMapper sysUserMapper,
+                                       TicketChangeHistoryRecorder changeHistoryRecorder) {
         this.ticketMapper = ticketMapper;
         this.bugInfoMapper = bugInfoMapper;
         this.bugTestInfoMapper = bugTestInfoMapper;
         this.bugDevInfoMapper = bugDevInfoMapper;
         this.sysUserMapper = sysUserMapper;
+        this.changeHistoryRecorder = changeHistoryRecorder;
+    }
+
+    /**
+     * 系统自动初始化缺陷工单客服信息（企微机器人建单时自动填充，跳过状态和权限校验）
+     * 仅在工单刚创建、客服信息记录不存在时执行，不覆盖已有数据
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void initCustomerInfoFromBot(Long ticketId, TicketBugCustomerInfoInput input) {
+        if (ticketId == null || input == null) {
+            return;
+        }
+        TicketBugInfoPO existing = getBugInfoByTicketId(ticketId);
+        if (existing != null) {
+            return;
+        }
+        TicketBugInfoPO infoPO = new TicketBugInfoPO();
+        infoPO.setTicketId(ticketId);
+        applyCustomerInfoChanges(infoPO, input);
+        bugInfoMapper.insert(infoPO);
     }
 
     /**
      * 更新缺陷工单客服信息
+     * 变更检测必须在 apply 赋值之前，保证对比的是数据库中的旧值
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateCustomerInfo(Long ticketId, TicketBugCustomerInfoInput input, Long currentUserId) {
@@ -60,14 +84,12 @@ public class TicketBugApplicationService extends BaseApplicationService {
         assertCanEditCustomerInfo(ticket, currentUserId, roleCodes);
 
         TicketBugInfoPO infoPO = getOrCreateBugInfo(ticketId);
-        infoPO.setMerchantNo(input.getMerchantNo());
-        infoPO.setCompanyName(input.getCompanyName());
-        infoPO.setMerchantAccount(input.getMerchantAccount());
-        infoPO.setProblemDesc(input.getProblemDesc());
-        infoPO.setExpectedResult(input.getExpectedResult());
-        infoPO.setSceneCode(input.getSceneCode());
-        infoPO.setProblemScreenshot(input.getProblemScreenshot());
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, input);
+
+        applyCustomerInfoChanges(infoPO, input);
         saveBugInfo(infoPO);
+
+        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     /**
@@ -80,15 +102,12 @@ public class TicketBugApplicationService extends BaseApplicationService {
         assertCanEditTestInfo(ticket, currentUserId, roleCodes);
 
         TicketBugTestInfoPO testInfoPO = getOrCreateBugTestInfo(ticketId);
-        testInfoPO.setReproduceEnv(input.getReproduceEnv());
-        testInfoPO.setReproduceSteps(input.getReproduceSteps());
-        testInfoPO.setActualResult(input.getActualResult());
-        testInfoPO.setImpactScope(input.getImpactScope());
-        testInfoPO.setSeverityLevel(input.getSeverityLevel());
-        testInfoPO.setModuleName(input.getModuleName());
-        testInfoPO.setReproduceScreenshot(input.getReproduceScreenshot());
-        testInfoPO.setTestRemark(input.getTestRemark());
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectTestInfoChanges(testInfoPO, input);
+
+        applyTestInfoChanges(testInfoPO, input);
         saveBugTestInfo(testInfoPO);
+
+        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     /**
@@ -101,12 +120,12 @@ public class TicketBugApplicationService extends BaseApplicationService {
         assertCanEditDevInfo(ticket, currentUserId, roleCodes);
 
         TicketBugDevInfoPO devInfoPO = getOrCreateBugDevInfo(ticketId);
-        devInfoPO.setRootCause(input.getRootCause());
-        devInfoPO.setFixSolution(input.getFixSolution());
-        devInfoPO.setGitBranch(input.getGitBranch());
-        devInfoPO.setImpactAssessment(input.getImpactAssessment());
-        devInfoPO.setDevRemark(input.getDevRemark());
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectDevInfoChanges(devInfoPO, input);
+
+        applyDevInfoChanges(devInfoPO, input);
         saveBugDevInfo(devInfoPO);
+
+        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     public TicketBugCustomerInfoOutput getCustomerInfo(Long ticketId) {
@@ -157,6 +176,35 @@ public class TicketBugApplicationService extends BaseApplicationService {
         output.setImpactAssessment(po.getImpactAssessment());
         output.setDevRemark(po.getDevRemark());
         return output;
+    }
+
+    private void applyCustomerInfoChanges(TicketBugInfoPO infoPO, TicketBugCustomerInfoInput input) {
+        infoPO.setMerchantNo(input.getMerchantNo());
+        infoPO.setCompanyName(input.getCompanyName());
+        infoPO.setMerchantAccount(input.getMerchantAccount());
+        infoPO.setProblemDesc(input.getProblemDesc());
+        infoPO.setExpectedResult(input.getExpectedResult());
+        infoPO.setSceneCode(input.getSceneCode());
+        infoPO.setProblemScreenshot(input.getProblemScreenshot());
+    }
+
+    private void applyTestInfoChanges(TicketBugTestInfoPO testInfoPO, TicketBugTestInfoInput input) {
+        testInfoPO.setReproduceEnv(input.getReproduceEnv());
+        testInfoPO.setReproduceSteps(input.getReproduceSteps());
+        testInfoPO.setActualResult(input.getActualResult());
+        testInfoPO.setImpactScope(input.getImpactScope());
+        testInfoPO.setSeverityLevel(input.getSeverityLevel());
+        testInfoPO.setModuleName(input.getModuleName());
+        testInfoPO.setReproduceScreenshot(input.getReproduceScreenshot());
+        testInfoPO.setTestRemark(input.getTestRemark());
+    }
+
+    private void applyDevInfoChanges(TicketBugDevInfoPO devInfoPO, TicketBugDevInfoInput input) {
+        devInfoPO.setRootCause(input.getRootCause());
+        devInfoPO.setFixSolution(input.getFixSolution());
+        devInfoPO.setGitBranch(input.getGitBranch());
+        devInfoPO.setImpactAssessment(input.getImpactAssessment());
+        devInfoPO.setDevRemark(input.getDevRemark());
     }
 
     private TicketPO requireTicket(Long ticketId) {

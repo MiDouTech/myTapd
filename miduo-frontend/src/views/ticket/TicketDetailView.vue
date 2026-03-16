@@ -3,33 +3,64 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
+  ArrowRight,
+  Bell,
+  BellFilled,
+  ChatDotSquare,
+  Document as DocumentOutlined,
+  Plus,
+} from '@element-plus/icons-vue'
+import {
+  addTicketComment,
   assignTicket,
   closeTicket,
+  createTicketModule,
+  deleteTicketAttachment,
   followTicket,
   getTicketDetail,
+  getTicketModuleList,
   getTicketNodeDuration,
   getTicketTimeTrack,
-  processTicket,
+  parseWecomCustomerInfo,
   trackTicketRead,
   unfollowTicket,
   updateBugCustomerInfo,
   updateBugDevInfo,
   updateBugTestInfo,
+  uploadTicketImage,
 } from '@/api/ticket'
+import {
+  getAvailableActions,
+  transitTicket,
+  getFlowHistory,
+} from '@/api/workflow'
 import { getUserList } from '@/api/user'
 import EmptyState from '@/components/common/EmptyState.vue'
+import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
+  TicketAttachmentOutput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
   TicketDetailOutput,
+  TicketModuleOutput,
   TicketNodeDurationItem,
   TicketTimeTrackItem,
+  WecomMessageParseOutput,
 } from '@/types/ticket'
+import type {
+  AvailableActionOutput,
+  TicketActionItem,
+  TicketFlowRecordOutput,
+} from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
-import { notifySuccess } from '@/utils/feedback'
+import { notifySuccess, notifyError } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
+
+import BugChangeHistory from './components/bug/BugChangeHistory.vue'
+import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
+import BugStatusBadge from './components/bug/BugStatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,25 +75,145 @@ const timeTrackItems = ref<TicketTimeTrackItem[]>([])
 const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
 const bugSubmitLoading = ref(false)
 
+const activeMainTab = ref('detail')
+const changeHistoryCount = ref(0)
+
 const assignDialogVisible = ref(false)
 const processDialogVisible = ref(false)
 const closeDialogVisible = ref(false)
 const submitLoading = ref(false)
 
+// ---- 动态工作流操作 ----
+const availableActions = ref<AvailableActionOutput | null>(null)
+const selectedAction = ref<TicketActionItem | null>(null)
+const flowHistory = ref<TicketFlowRecordOutput[]>([])
+const flowHistoryLoading = ref(false)
+
+const transitForm = reactive({
+  transitionId: '',
+  targetStatus: '',
+  remark: '',
+  newAssigneeId: undefined as number | undefined,
+})
+
+const imageUploadLoading = ref(false)
+const imageUploadRef = ref()
+const customerScreenshotUploadLoading = ref(false)
+const customerScreenshotUploadRef = ref()
+const customerProblemScreenshots = ref<string[]>([])
+
+const ticketModules = ref<TicketModuleOutput[]>([])
+
 const assignForm = reactive({
   assigneeId: undefined as number | undefined,
   remark: '',
-})
-
-const processForm = reactive({
-  targetStatus: 'processing',
-  targetUserId: undefined as number | undefined,
-  remark: '',
+  newAssigneeId: undefined as number | undefined,
 })
 
 const closeForm = reactive({
   remark: '',
 })
+
+// ---- 评论输入 ----
+const commentInput = ref('')
+const commentSubmitLoading = ref(false)
+
+function uniqStringList(values: string[]): string[] {
+  return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
+}
+
+function parseScreenshotList(raw?: string): string[] {
+  if (!raw) {
+    return []
+  }
+  return uniqStringList(
+    raw
+      .split(/[,，;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )
+}
+
+function mergeProblemScreenshots(urls: string[]): void {
+  customerProblemScreenshots.value = uniqStringList([
+    ...customerProblemScreenshots.value,
+    ...urls.map((item) => item.trim()),
+  ])
+}
+
+function removeProblemScreenshot(url: string): void {
+  customerProblemScreenshots.value = customerProblemScreenshots.value.filter((item) => item !== url)
+}
+
+const ticketImageAttachments = computed<TicketAttachmentOutput[]>(() =>
+  (detail.value?.attachments || []).filter((attachment) => {
+    return Boolean(attachment.filePath) && isImageFile(attachment.fileType)
+  }),
+)
+
+// ---- 企微消息解析 ----
+const wecomParseDialogVisible = ref(false)
+const wecomParseMessage = ref('')
+const wecomParseLoading = ref(false)
+const wecomParseResult = ref<WecomMessageParseOutput | null>(null)
+
+async function handleWecomParse() {
+  if (!wecomParseMessage.value.trim()) {
+    notifyError('请粘贴企微消息内容')
+    return
+  }
+  wecomParseLoading.value = true
+  wecomParseResult.value = null
+  try {
+    const result = await parseWecomCustomerInfo({ message: wecomParseMessage.value })
+    wecomParseResult.value = result
+    if (!result.matchedFields || result.matchedFields.length === 0) {
+      notifyError('未能从消息中识别出有效字段，请检查消息格式')
+    }
+  } catch {
+    notifyError('解析失败，请稍后重试')
+  } finally {
+    wecomParseLoading.value = false
+  }
+}
+
+function applyWecomParseResult() {
+  const result = wecomParseResult.value
+  if (!result) {
+    return
+  }
+  if (result.merchantNo) {
+    customerInfoForm.merchantNo = result.merchantNo
+  }
+  if (result.companyName) {
+    customerInfoForm.companyName = result.companyName
+  }
+  if (result.merchantAccount) {
+    customerInfoForm.merchantAccount = result.merchantAccount
+  }
+  if (result.sceneCode) {
+    customerInfoForm.sceneCode = result.sceneCode
+  }
+  if (result.problemDesc) {
+    customerInfoForm.problemDesc = result.problemDesc
+  }
+  if (result.expectedResult) {
+    customerInfoForm.expectedResult = result.expectedResult
+  }
+  if (result.problemScreenshot) {
+    mergeProblemScreenshots(parseScreenshotList(result.problemScreenshot))
+  }
+  wecomParseDialogVisible.value = false
+  wecomParseMessage.value = ''
+  wecomParseResult.value = null
+  notifySuccess('已将解析结果填入表单，请确认后保存')
+}
+
+function openWecomParseDialog() {
+  wecomParseMessage.value = ''
+  wecomParseResult.value = null
+  wecomParseDialogVisible.value = true
+}
 
 const customerInfoForm = reactive<TicketBugCustomerInfoInput>({
   merchantNo: '',
@@ -81,7 +232,6 @@ const testInfoForm = reactive<TicketBugTestInfoInput>({
   impactScope: '',
   severityLevel: '',
   moduleName: '',
-  reproduceScreenshot: '',
   testRemark: '',
 })
 
@@ -166,6 +316,7 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     sceneCode: ticketDetail.bugCustomerInfo?.sceneCode || '',
     problemScreenshot: ticketDetail.bugCustomerInfo?.problemScreenshot || '',
   })
+  customerProblemScreenshots.value = parseScreenshotList(ticketDetail.bugCustomerInfo?.problemScreenshot)
 
   Object.assign(testInfoForm, {
     reproduceEnv: ticketDetail.bugTestInfo?.reproduceEnv || '',
@@ -174,7 +325,6 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactScope: ticketDetail.bugTestInfo?.impactScope || '',
     severityLevel: ticketDetail.bugTestInfo?.severityLevel || '',
     moduleName: ticketDetail.bugTestInfo?.moduleName || '',
-    reproduceScreenshot: ticketDetail.bugTestInfo?.reproduceScreenshot || '',
     testRemark: ticketDetail.bugTestInfo?.testRemark || '',
   })
 
@@ -185,6 +335,22 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     impactAssessment: ticketDetail.bugDevInfo?.impactAssessment || '',
     devRemark: ticketDetail.bugDevInfo?.devRemark || '',
   })
+}
+
+watch(
+  customerProblemScreenshots,
+  (screenshots) => {
+    customerInfoForm.problemScreenshot = uniqStringList(screenshots).join(',')
+  },
+  { deep: true },
+)
+
+async function loadModules(): Promise<void> {
+  try {
+    ticketModules.value = await getTicketModuleList()
+  } catch {
+    ticketModules.value = []
+  }
 }
 
 async function loadAll(): Promise<void> {
@@ -204,10 +370,34 @@ async function loadAll(): Promise<void> {
     timeTrackItems.value = trackOutput.tracks || []
     nodeDurationItems.value = nodeOutput.nodes || []
     fillBugForms(ticketDetail)
+
+    try {
+      availableActions.value = await getAvailableActions(ticketId.value)
+    } catch {
+      availableActions.value = null
+    }
   } finally {
     loading.value = false
   }
 }
+
+async function loadFlowHistory(): Promise<void> {
+  if (!ticketId.value) return
+  flowHistoryLoading.value = true
+  try {
+    flowHistory.value = await getFlowHistory(ticketId.value)
+  } catch {
+    flowHistory.value = []
+  } finally {
+    flowHistoryLoading.value = false
+  }
+}
+
+watch(activeMainTab, (tab) => {
+  if (tab === 'flow-history' && flowHistory.value.length === 0) {
+    loadFlowHistory()
+  }
+})
 
 async function trackReadSilently(): Promise<void> {
   if (!ticketId.value) {
@@ -238,12 +428,35 @@ async function handleAssign(): Promise<void> {
   }
 }
 
+function openTransitDialog(action: TicketActionItem): void {
+  selectedAction.value = action
+  transitForm.transitionId = action.transitionId
+  transitForm.targetStatus = action.targetStatus
+  transitForm.remark = ''
+  transitForm.newAssigneeId = undefined
+  processDialogVisible.value = true
+}
+
 async function handleProcess(): Promise<void> {
   submitLoading.value = true
   try {
-    await processTicket(ticketId.value, processForm)
-    notifySuccess('工单处理成功')
+    if (!selectedAction.value) {
+      notifyError('请选择操作')
+      return
+    }
+    if (selectedAction.value.requireRemark && !transitForm.remark?.trim()) {
+      notifyError('该操作需要填写备注')
+      return
+    }
+    await transitTicket(ticketId.value, {
+      transitionId: transitForm.transitionId,
+      targetStatus: transitForm.targetStatus,
+      remark: transitForm.remark,
+      newAssigneeId: transitForm.newAssigneeId,
+    })
+    notifySuccess('操作成功')
     processDialogVisible.value = false
+    selectedAction.value = null
     await loadAll()
   } finally {
     submitLoading.value = false
@@ -286,6 +499,7 @@ function openBugReportDetail(reportId?: number): void {
 async function saveCustomerInfo(): Promise<void> {
   bugSubmitLoading.value = true
   try {
+    customerInfoForm.problemScreenshot = uniqStringList(customerProblemScreenshots.value).join(',')
     await updateBugCustomerInfo(ticketId.value, { ...customerInfoForm })
     notifySuccess('客服信息保存成功')
     await loadAll()
@@ -297,6 +511,11 @@ async function saveCustomerInfo(): Promise<void> {
 async function saveTestInfo(): Promise<void> {
   bugSubmitLoading.value = true
   try {
+    const moduleName = testInfoForm.moduleName?.trim()
+    if (moduleName && !ticketModules.value.some((m) => m.name === moduleName)) {
+      await createTicketModule({ name: moduleName })
+      await loadModules()
+    }
     await updateBugTestInfo(ticketId.value, { ...testInfoForm })
     notifySuccess('测试信息保存成功')
     await loadAll()
@@ -313,6 +532,39 @@ async function saveDevInfo(): Promise<void> {
     await loadAll()
   } finally {
     bugSubmitLoading.value = false
+  }
+}
+
+function hasRichTextContent(content?: string): boolean {
+  if (!content) {
+    return false
+  }
+  const html = content.trim()
+  if (!html) {
+    return false
+  }
+  const plainText = html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, '')
+    .replace(/\s+/g, '')
+  const hasStructureContent = /<(img|table|ul|ol|li|blockquote|pre)\b/i.test(html)
+  return plainText.length > 0 || hasStructureContent
+}
+
+async function submitComment(): Promise<void> {
+  const commentContent = commentInput.value || ''
+  if (!hasRichTextContent(commentContent)) {
+    notifyError('请输入评论内容')
+    return
+  }
+  commentSubmitLoading.value = true
+  try {
+    await addTicketComment(ticketId.value, commentContent)
+    notifySuccess('评论发表成功')
+    commentInput.value = ''
+    await loadAll()
+  } finally {
+    commentSubmitLoading.value = false
   }
 }
 
@@ -333,8 +585,133 @@ function formatDuration(seconds?: number): string {
   return `${second}s`
 }
 
+async function refreshTicketAttachmentsOnly(): Promise<void> {
+  if (!ticketId.value) {
+    return
+  }
+  try {
+    detail.value = await getTicketDetail(ticketId.value)
+  } catch {
+    // 附件刷新失败不影响当前页面操作
+  }
+}
+
+async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
+  if (!uploadFile?.raw) {
+    return
+  }
+  imageUploadLoading.value = true
+  try {
+    await uploadTicketImage(ticketId.value, uploadFile.raw)
+    notifySuccess('图片上传成功')
+    await refreshTicketAttachmentsOnly()
+  } finally {
+    imageUploadLoading.value = false
+    if (imageUploadRef.value) {
+      ;(imageUploadRef.value as { clearFiles: () => void }).clearFiles()
+    }
+  }
+}
+
+async function handleCustomerScreenshotUpload(uploadFile: { raw: File }): Promise<void> {
+  if (!uploadFile?.raw) {
+    return
+  }
+  customerScreenshotUploadLoading.value = true
+  try {
+    const result = await uploadTicketImage(ticketId.value, uploadFile.raw)
+    if (result?.url) {
+      mergeProblemScreenshots([result.url])
+    }
+    notifySuccess('问题截图上传成功')
+    await refreshTicketAttachmentsOnly()
+  } finally {
+    customerScreenshotUploadLoading.value = false
+    if (customerScreenshotUploadRef.value) {
+      ;(customerScreenshotUploadRef.value as { clearFiles: () => void }).clearFiles()
+    }
+  }
+}
+
+async function handleDeleteAttachment(attachmentId: number): Promise<void> {
+  const target = detail.value?.attachments?.find((item) => item.id === attachmentId)
+  try {
+    await deleteTicketAttachment(attachmentId)
+    if (target?.filePath) {
+      removeProblemScreenshot(target.filePath)
+    }
+    notifySuccess('附件删除成功')
+    await refreshTicketAttachmentsOnly()
+  } catch {
+    // 删除失败由全局异常处理
+  }
+}
+
+function isImageFile(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.startsWith('image/')
+}
+
+const STATUS_LABEL_MAP: Record<string, string> = {
+  PENDING: '待处理',
+  PENDING_ASSIGN: '待分派',
+  PENDING_DISPATCH: '待分派',
+  PENDING_ACCEPT: '待受理',
+  PROCESSING: '处理中',
+  SUSPENDED: '已挂起',
+  PENDING_VERIFY: '待验收',
+  COMPLETED: '已完成',
+  CLOSED: '已关闭',
+  PENDING_TEST: '待测试受理',
+  PENDING_TEST_ACCEPT: '待测试受理',
+  TESTING: '测试中',
+  PENDING_DEV: '待开发受理',
+  PENDING_DEV_ACCEPT: '待开发受理',
+  DEVELOPING: '开发中',
+  PENDING_CS_CONFIRM: '待客服确认',
+  SUBMITTED: '已提交',
+  DEPT_APPROVAL: '部门审批',
+  EXECUTING: '执行中',
+  REJECTED: '已驳回',
+}
+
+function getStatusLabel(status?: string): string {
+  if (!status) return '-'
+  const normalized = status.trim().toUpperCase()
+  return STATUS_LABEL_MAP[normalized] || status
+}
+
+// 优先级标签与样式
+const PRIORITY_LABEL_MAP: Record<string, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低',
+  URGENT: '紧急',
+}
+const PRIORITY_TYPE_MAP: Record<string, 'danger' | 'warning' | 'info' | ''> = {
+  HIGH: 'danger',
+  MEDIUM: 'warning',
+  LOW: 'info',
+  URGENT: 'danger',
+}
+
+function getPriorityLabel(priority?: string): string {
+  if (!priority) return '-'
+  return PRIORITY_LABEL_MAP[priority.toUpperCase()] || priority
+}
+
+function getPriorityType(priority?: string): 'danger' | 'warning' | 'info' | '' {
+  if (!priority) return 'info'
+  return PRIORITY_TYPE_MAP[priority.toUpperCase()] || 'info'
+}
+
+// 评论类型图标
+function isOperationLog(type?: string): boolean {
+  return type === 'OPERATION'
+}
+
 onMounted(async () => {
-  await Promise.all([loadAll(), trackReadSilently()])
+  await Promise.all([loadAll(), trackReadSilently(), loadModules()])
 })
 
 watch(
@@ -349,315 +726,535 @@ watch(
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never" v-loading="loading">
+  <div class="ticket-detail-page">
+    <!-- 顶部信息卡片 -->
+    <el-card shadow="never" class="header-card" v-loading="loading">
       <template #header>
         <div class="detail-header">
-          <div>
-            <div class="ticket-title">{{ detail?.title || '工单详情' }}</div>
-            <div class="ticket-no">工单编号：{{ detail?.ticketNo || '-' }}</div>
+          <!-- 左侧：工单号 + 优先级 + 状态 -->
+          <div class="header-meta">
+            <span class="ticket-no-text">{{ detail?.ticketNo || '-' }}</span>
+            <el-tag
+              v-if="detail?.priority"
+              :type="getPriorityType(detail.priority)"
+              size="small"
+              effect="light"
+              class="priority-tag"
+            >
+              {{ getPriorityLabel(detail.priority) }}
+            </el-tag>
+            <BugStatusBadge
+              v-if="detail?.status"
+              :status="detail.status"
+              :status-label="detail?.statusLabel"
+            />
           </div>
-          <el-space>
-            <el-button type="primary" @click="processDialogVisible = true">处理</el-button>
-            <el-button type="warning" @click="assignDialogVisible = true">转派</el-button>
-            <el-button type="danger" @click="closeDialogVisible = true">关闭</el-button>
-            <el-button @click="toggleFollow">{{
-              detail?.isFollowed ? '取消关注' : '关注工单'
-            }}</el-button>
-          </el-space>
+          <!-- 中间：工单标题 -->
+          <div class="ticket-title-row">
+            <h2 class="ticket-title">{{ detail?.title || '工单详情' }}</h2>
+            <div v-if="detail?.categoryFullPath" class="ticket-category">
+              {{ detail.categoryFullPath }}
+            </div>
+          </div>
         </div>
       </template>
 
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="分类">{{ detail?.categoryName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{
-          detail?.statusLabel || detail?.status || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="优先级">
-          {{ detail?.priorityLabel || detail?.priority || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="处理人">{{
-          detail?.assigneeName || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="创建人">{{ detail?.creatorName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="来源">{{
-          detail?.sourceLabel || detail?.source || '-'
-        }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{
-          formatDateTime(detail?.createTime)
-        }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{
-          formatDateTime(detail?.updateTime)
-        }}</el-descriptions-item>
-        <el-descriptions-item label="期望完成时间">
-          {{ formatDateTime(detail?.expectedTime) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="模板">{{ detail?.templateName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{
-          detail?.description || '-'
-        }}</el-descriptions-item>
-      </el-descriptions>
+      <!-- 操作栏（sticky） -->
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <template v-if="availableActions && availableActions.actions.length > 0">
+            <el-button
+              v-for="action in availableActions.actions"
+              :key="action.transitionId"
+              :type="action.isReturn ? 'warning' : action.targetStatus === 'closed' ? 'danger' : 'primary'"
+              size="small"
+              @click="openTransitDialog(action)"
+            >
+              {{ action.actionName }}
+            </el-button>
+          </template>
+          <el-button size="small" type="warning" plain @click="assignDialogVisible = true">
+            转派
+          </el-button>
+        </div>
+        <div class="action-bar-right">
+          <el-button
+            size="small"
+            :type="detail?.isFollowed ? 'primary' : 'default'"
+            plain
+            @click="toggleFollow"
+          >
+            <el-icon style="margin-right: 4px">
+              <BellFilled v-if="detail?.isFollowed" />
+              <Bell v-else />
+            </el-icon>
+            {{ detail?.isFollowed ? '已关注' : '关注' }}
+          </el-button>
+        </div>
+      </div>
+
+      <!-- TAPD 三区域布局：左侧主区 + 右侧信息面板 -->
+      <div class="detail-layout">
+        <!-- 左侧主区 -->
+        <div class="detail-main">
+          <!-- 工单描述 -->
+          <div v-if="detail?.description" class="description-block">
+            <div class="block-label">描述</div>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="description-content" v-html="detail.description" />
+          </div>
+
+          <!-- 主 Tab -->
+          <el-tabs v-model="activeMainTab" class="main-tabs">
+            <el-tab-pane label="详细信息" name="detail">
+              <el-tabs v-model="activeBugTab" class="inner-tabs">
+                <el-tab-pane label="客服信息" name="customer">
+                  <!-- 企微消息一键解析入口 -->
+                  <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
+                    <el-button
+                      type="primary"
+                      plain
+                      size="small"
+                      class="wecom-parse-btn"
+                      @click="openWecomParseDialog"
+                    >
+                      <el-icon style="margin-right: 4px"><ChatDotSquare /></el-icon>
+                      企微消息一键解析
+                    </el-button>
+                    <span class="wecom-parse-hint">粘贴企微收到的客服消息，自动识别并填入下方字段</span>
+                  </div>
+                  <el-form label-width="120px" class="info-form">
+                    <el-form-item label="商户编号">
+                      <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
+                    </el-form-item>
+                    <el-form-item label="公司名称">
+                      <el-input v-model="customerInfoForm.companyName" :disabled="!canEditCustomerInfo" />
+                    </el-form-item>
+                    <el-form-item label="商户账号">
+                      <el-input v-model="customerInfoForm.merchantAccount" :disabled="!canEditCustomerInfo" />
+                    </el-form-item>
+                    <el-form-item label="场景码">
+                      <el-input v-model="customerInfoForm.sceneCode" :disabled="!canEditCustomerInfo" />
+                    </el-form-item>
+                    <el-form-item label="问题描述">
+                      <el-input
+                        v-model="customerInfoForm.problemDesc"
+                        type="textarea"
+                        :rows="3"
+                        :disabled="!canEditCustomerInfo"
+                      />
+                    </el-form-item>
+                    <el-form-item label="预期结果">
+                      <el-input
+                        v-model="customerInfoForm.expectedResult"
+                        type="textarea"
+                        :rows="3"
+                        :disabled="!canEditCustomerInfo"
+                      />
+                    </el-form-item>
+                    <el-form-item label="问题截图">
+                      <div class="problem-screenshot-field">
+                        <el-upload
+                          v-if="canEditCustomerInfo"
+                          ref="customerScreenshotUploadRef"
+                          class="screenshot-upload"
+                          drag
+                          :show-file-list="false"
+                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+                          :on-change="handleCustomerScreenshotUpload"
+                          :auto-upload="false"
+                        >
+                          <div class="upload-drag-content">
+                            <el-icon class="upload-drag-icon"><Plus /></el-icon>
+                            <div class="upload-drag-text">将文件拖到此处触发上传</div>
+                            <div class="upload-drag-subtext">或点击按钮上传问题截图（支持多张）</div>
+                            <el-button type="primary" size="small" plain :loading="customerScreenshotUploadLoading">
+                              点击上传
+                            </el-button>
+                          </div>
+                        </el-upload>
+
+                        <div class="screenshot-tip">
+                          问题截图支持多选，可来源于企微附图，也可在此处手动上传补充。
+                        </div>
+
+                        <div v-if="customerProblemScreenshots.length" class="selected-screenshot-wrap">
+                          <div class="selected-screenshot-title">
+                            已选问题截图（{{ customerProblemScreenshots.length }}）
+                          </div>
+                          <div class="selected-screenshot-grid">
+                            <div
+                              v-for="url in customerProblemScreenshots"
+                              :key="url"
+                              class="selected-screenshot-item"
+                            >
+                              <el-image
+                                :src="url"
+                                :preview-src-list="customerProblemScreenshots"
+                                fit="cover"
+                                class="selected-screenshot-image"
+                              />
+                              <el-button
+                                type="danger"
+                                link
+                                size="small"
+                                :disabled="!canEditCustomerInfo"
+                                @click="removeProblemScreenshot(url)"
+                              >
+                                移除
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="candidate-screenshot-wrap">
+                          <div class="selected-screenshot-title">可选附件图片</div>
+                          <EmptyState
+                            v-if="!ticketImageAttachments.length"
+                            description="暂无图片附件，请先上传图片或等待企微消息同步"
+                          />
+                          <el-checkbox-group
+                            v-else
+                            v-model="customerProblemScreenshots"
+                            :disabled="!canEditCustomerInfo"
+                            class="candidate-screenshot-list"
+                          >
+                            <el-checkbox
+                              v-for="attachment in ticketImageAttachments"
+                              :key="attachment.id"
+                              :label="attachment.filePath || ''"
+                              class="candidate-screenshot-item"
+                            >
+                              <div class="candidate-screenshot-body">
+                                <el-image
+                                  :src="attachment.filePath"
+                                  :preview-src-list="ticketImageAttachments.map(item => item.filePath || '')"
+                                  fit="cover"
+                                  class="candidate-screenshot-image"
+                                />
+                                <div class="candidate-screenshot-meta">
+                                  <div class="candidate-screenshot-name">{{ attachment.fileName }}</div>
+                                  <el-tag
+                                    size="small"
+                                    :type="attachment.source === 'WECOM_BOT' ? 'success' : 'info'"
+                                    effect="plain"
+                                  >
+                                    {{ attachment.source === 'WECOM_BOT' ? '企微图片' : '手动上传' }}
+                                  </el-tag>
+                                </div>
+                              </div>
+                            </el-checkbox>
+                          </el-checkbox-group>
+                        </div>
+                      </div>
+                    </el-form-item>
+                  </el-form>
+                  <div class="tab-actions">
+                    <el-button
+                      type="primary"
+                      :disabled="!canEditCustomerInfo"
+                      :loading="bugSubmitLoading"
+                      @click="saveCustomerInfo"
+                    >保存客服信息</el-button>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="测试信息" name="test">
+                  <el-form label-width="120px" class="info-form">
+                    <el-form-item label="复现环境">
+                      <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo" placeholder="请选择">
+                        <el-option label="生产环境" value="PRODUCTION" />
+                        <el-option label="测试环境" value="TEST" />
+                        <el-option label="均可复现" value="BOTH" />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="复现步骤">
+                      <RichTextEditor
+                        v-model="testInfoForm.reproduceSteps"
+                        :disabled="!canEditTestInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写复现步骤，支持粘贴截图、插入图片和表格..."
+                        :height="220"
+                      />
+                    </el-form-item>
+                    <el-form-item label="实际结果">
+                      <RichTextEditor
+                        v-model="testInfoForm.actualResult"
+                        :disabled="!canEditTestInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写实际结果，支持粘贴截图、插入图片和表格..."
+                        :height="180"
+                      />
+                    </el-form-item>
+                    <el-form-item label="影响范围">
+                      <el-select v-model="testInfoForm.impactScope" :disabled="!canEditTestInfo" placeholder="请选择">
+                        <el-option label="单一商户" value="SINGLE" />
+                        <el-option label="部分商户" value="PARTIAL" />
+                        <el-option label="全部商户" value="ALL" />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="缺陷等级">
+                      <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo" placeholder="请选择">
+                        <el-option label="致命" value="FATAL" />
+                        <el-option label="严重" value="CRITICAL" />
+                        <el-option label="一般" value="NORMAL" />
+                        <el-option label="轻微" value="MINOR" />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="所属模块">
+                      <el-select
+                        v-model="testInfoForm.moduleName"
+                        :disabled="!canEditTestInfo"
+                        filterable
+                        allow-create
+                        clearable
+                        placeholder="请选择或输入模块名称"
+                        style="width: 100%"
+                      >
+                        <el-option
+                          v-for="mod in ticketModules"
+                          :key="mod.id"
+                          :label="mod.name"
+                          :value="mod.name"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="测试备注">
+                      <RichTextEditor
+                        v-model="testInfoForm.testRemark"
+                        :disabled="!canEditTestInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写测试备注，支持粘贴图片、插入表格等富文本内容..."
+                        :height="180"
+                      />
+                    </el-form-item>
+                  </el-form>
+                  <div class="tab-actions">
+                    <el-button
+                      type="primary"
+                      :disabled="!canEditTestInfo"
+                      :loading="bugSubmitLoading"
+                      @click="saveTestInfo"
+                    >保存测试信息</el-button>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="开发信息" name="dev">
+                  <el-form label-width="120px" class="info-form">
+                    <el-form-item label="缺陷原因">
+                      <el-input
+                        v-model="devInfoForm.rootCause"
+                        type="textarea"
+                        :rows="3"
+                        :disabled="!canEditDevInfo"
+                      />
+                    </el-form-item>
+                    <el-form-item label="修复方案">
+                      <el-input
+                        v-model="devInfoForm.fixSolution"
+                        type="textarea"
+                        :rows="3"
+                        :disabled="!canEditDevInfo"
+                      />
+                    </el-form-item>
+                    <el-form-item label="关联分支">
+                      <el-input v-model="devInfoForm.gitBranch" :disabled="!canEditDevInfo" />
+                    </el-form-item>
+                    <el-form-item label="影响评估">
+                      <el-input
+                        v-model="devInfoForm.impactAssessment"
+                        type="textarea"
+                        :rows="3"
+                        :disabled="!canEditDevInfo"
+                      />
+                    </el-form-item>
+                    <el-form-item label="开发备注">
+                      <RichTextEditor
+                        v-model="devInfoForm.devRemark"
+                        :disabled="!canEditDevInfo"
+                        :ticket-id="ticketId"
+                        placeholder="请填写开发备注，支持粘贴图片、插入表格等富文本内容..."
+                        :height="180"
+                      />
+                    </el-form-item>
+                  </el-form>
+                  <div class="tab-actions">
+                    <el-button
+                      type="primary"
+                      :disabled="!canEditDevInfo"
+                      :loading="bugSubmitLoading"
+                      @click="saveDevInfo"
+                    >保存开发信息</el-button>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="时间追踪" name="track">
+                  <div class="track-block">
+                    <div class="block-label">时间链</div>
+                    <EmptyState v-if="!timeTrackItems.length" description="暂无时间追踪记录" />
+                    <el-timeline v-else>
+                      <el-timeline-item
+                        v-for="item in timeTrackItems"
+                        :key="item.id"
+                        :timestamp="formatDateTime(item.timestamp)"
+                        placement="top"
+                      >
+                        <div class="track-item">
+                          <div class="track-title">
+                            {{ item.actionLabel || item.action || '-' }}
+                            <span class="track-user">（{{ item.userName || '-' }}）</span>
+                          </div>
+                          <div class="track-meta">
+                            状态：{{ getStatusLabel(item.fromStatus) }} → {{ getStatusLabel(item.toStatus) }}
+                          </div>
+                          <div class="track-meta" v-if="item.fromUserName || item.toUserName">
+                            处理人：{{ item.fromUserName || '-' }} → {{ item.toUserName || '-' }}
+                          </div>
+                          <div class="track-meta" v-if="item.isFirstRead">首次阅读：是</div>
+                          <div class="track-meta" v-if="item.remark">备注：{{ item.remark }}</div>
+                        </div>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </div>
+
+                  <div class="track-block">
+                    <div class="block-label">节点耗时统计</div>
+                    <EmptyState v-if="!nodeDurationItems.length" description="暂无节点耗时数据" />
+                    <el-table
+                      v-else
+                      :data="nodeDurationItems"
+                      :border="false"
+                      :stripe="true"
+                      :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+                    >
+                      <el-table-column label="节点" align="center" min-width="130">
+                        <template #default="{ row }">
+                          {{ getStatusLabel(row.nodeName) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="assigneeName" label="处理人" align="center" min-width="120" />
+                      <el-table-column prop="assigneeRole" label="角色" align="center" min-width="120" />
+                      <el-table-column label="到达时间" align="center" min-width="170">
+                        <template #default="{ row }">
+                          {{ formatDateTime(row.arriveAt) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="首次阅读" align="center" min-width="170">
+                        <template #default="{ row }">
+                          {{ formatDateTime(row.firstReadAt) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="开始处理" align="center" min-width="170">
+                        <template #default="{ row }">
+                          {{ formatDateTime(row.startProcessAt) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="离开时间" align="center" min-width="170">
+                        <template #default="{ row }">
+                          {{ formatDateTime(row.leaveAt) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="等待耗时" align="center" min-width="110">
+                        <template #default="{ row }">
+                          {{ formatDuration(row.waitDurationSec) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="处理耗时" align="center" min-width="110">
+                        <template #default="{ row }">
+                          {{ formatDuration(row.processDurationSec) }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="总耗时" align="center" min-width="110">
+                        <template #default="{ row }">
+                          {{ formatDuration(row.totalDurationSec) }}
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </el-tab-pane>
+
+            <!-- 变更历史 Tab -->
+            <el-tab-pane :label="`变更历史(${changeHistoryCount})`" name="history">
+              <BugChangeHistory
+                v-if="detail?.id"
+                :ticket-id="detail.id"
+                @count-update="changeHistoryCount = $event"
+              />
+            </el-tab-pane>
+
+            <!-- 流转历史 Tab -->
+            <el-tab-pane label="流转历史" name="flow-history">
+              <div v-loading="flowHistoryLoading" class="flow-history-container">
+                <el-empty v-if="!flowHistory.length && !flowHistoryLoading" description="暂无流转记录" />
+                <el-timeline v-else>
+                  <el-timeline-item
+                    v-for="record in flowHistory"
+                    :key="record.id"
+                    :timestamp="record.createTime"
+                    placement="top"
+                  >
+                    <div class="flow-record-card">
+                      <div class="flow-record-main">
+                        <el-tag size="small" :type="record.flowType === 'RETURN' ? 'warning' : 'primary'">
+                          {{ record.flowTypeLabel || record.flowType }}
+                        </el-tag>
+                        <span v-if="record.fromStatusName" class="flow-status-text">
+                          {{ record.fromStatusName }}
+                        </span>
+                        <el-icon v-if="record.toStatus !== record.fromStatus" class="flow-arrow">
+                          <ArrowRight />
+                        </el-icon>
+                        <span v-if="record.toStatus !== record.fromStatus" class="flow-status-text flow-status-to">
+                          {{ record.toStatusName }}
+                        </span>
+                        <el-divider direction="vertical" />
+                        <span class="flow-operator">
+                          操作人：{{ record.operatorName || record.operatorId }}
+                          （{{ record.operatorRole }}）
+                        </span>
+                        <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
+                          <el-divider direction="vertical" />
+                          <span class="flow-operator">
+                            处理人：{{ record.fromAssigneeName || '-' }} → {{ record.toAssigneeName }}
+                          </span>
+                        </template>
+                      </div>
+                      <div v-if="record.remark" class="flow-record-remark">
+                        {{ record.remark }}
+                      </div>
+                    </div>
+                  </el-timeline-item>
+                </el-timeline>
+              </div>
+            </el-tab-pane>
+
+            <!-- 更多（预留） -->
+            <el-tab-pane label="更多" name="more" disabled />
+          </el-tabs>
+        </div>
+
+        <!-- 右侧信息面板（sticky） -->
+        <div class="detail-sidebar">
+          <BugDetailInfoPanel
+            v-if="detail"
+            :detail="detail"
+            :ticket-id="ticketId"
+            @refresh="loadAll"
+          />
+        </div>
+      </div>
     </el-card>
 
-    <el-card shadow="never">
-      <el-tabs v-model="activeBugTab">
-        <el-tab-pane label="客服信息" name="customer">
-          <el-form label-width="120px">
-            <el-form-item label="商户编号">
-              <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
-            </el-form-item>
-            <el-form-item label="公司名称">
-              <el-input v-model="customerInfoForm.companyName" :disabled="!canEditCustomerInfo" />
-            </el-form-item>
-            <el-form-item label="商户账号">
-              <el-input v-model="customerInfoForm.merchantAccount" :disabled="!canEditCustomerInfo" />
-            </el-form-item>
-            <el-form-item label="场景码">
-              <el-input v-model="customerInfoForm.sceneCode" :disabled="!canEditCustomerInfo" />
-            </el-form-item>
-            <el-form-item label="问题描述">
-              <el-input
-                v-model="customerInfoForm.problemDesc"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditCustomerInfo"
-              />
-            </el-form-item>
-            <el-form-item label="预期结果">
-              <el-input
-                v-model="customerInfoForm.expectedResult"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditCustomerInfo"
-              />
-            </el-form-item>
-            <el-form-item label="问题截图">
-              <el-input
-                v-model="customerInfoForm.problemScreenshot"
-                placeholder="填写截图URL，多个可用逗号分隔"
-                :disabled="!canEditCustomerInfo"
-              />
-            </el-form-item>
-          </el-form>
-          <div class="tab-actions">
-            <el-button
-              type="primary"
-              :disabled="!canEditCustomerInfo"
-              :loading="bugSubmitLoading"
-              @click="saveCustomerInfo"
-              >保存客服信息</el-button
-            >
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="测试信息" name="test">
-          <el-form label-width="120px">
-            <el-form-item label="复现环境">
-              <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo">
-                <el-option label="生产环境" value="PRODUCTION" />
-                <el-option label="测试环境" value="TEST" />
-                <el-option label="均可复现" value="BOTH" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="复现步骤">
-              <el-input
-                v-model="testInfoForm.reproduceSteps"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditTestInfo"
-              />
-            </el-form-item>
-            <el-form-item label="实际结果">
-              <el-input
-                v-model="testInfoForm.actualResult"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditTestInfo"
-              />
-            </el-form-item>
-            <el-form-item label="影响范围">
-              <el-select v-model="testInfoForm.impactScope" :disabled="!canEditTestInfo">
-                <el-option label="单一商户" value="SINGLE" />
-                <el-option label="部分商户" value="PARTIAL" />
-                <el-option label="全部商户" value="ALL" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="缺陷等级">
-              <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo">
-                <el-option label="致命" value="FATAL" />
-                <el-option label="严重" value="CRITICAL" />
-                <el-option label="一般" value="NORMAL" />
-                <el-option label="轻微" value="MINOR" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="所属模块">
-              <el-input v-model="testInfoForm.moduleName" :disabled="!canEditTestInfo" />
-            </el-form-item>
-            <el-form-item label="复现截图">
-              <el-input
-                v-model="testInfoForm.reproduceScreenshot"
-                placeholder="填写截图URL，多个可用逗号分隔"
-                :disabled="!canEditTestInfo"
-              />
-            </el-form-item>
-            <el-form-item label="测试备注">
-              <el-input
-                v-model="testInfoForm.testRemark"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditTestInfo"
-              />
-            </el-form-item>
-          </el-form>
-          <div class="tab-actions">
-            <el-button
-              type="primary"
-              :disabled="!canEditTestInfo"
-              :loading="bugSubmitLoading"
-              @click="saveTestInfo"
-              >保存测试信息</el-button
-            >
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="开发信息" name="dev">
-          <el-form label-width="120px">
-            <el-form-item label="缺陷原因">
-              <el-input
-                v-model="devInfoForm.rootCause"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditDevInfo"
-              />
-            </el-form-item>
-            <el-form-item label="修复方案">
-              <el-input
-                v-model="devInfoForm.fixSolution"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditDevInfo"
-              />
-            </el-form-item>
-            <el-form-item label="关联分支">
-              <el-input v-model="devInfoForm.gitBranch" :disabled="!canEditDevInfo" />
-            </el-form-item>
-            <el-form-item label="影响评估">
-              <el-input
-                v-model="devInfoForm.impactAssessment"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditDevInfo"
-              />
-            </el-form-item>
-            <el-form-item label="开发备注">
-              <el-input
-                v-model="devInfoForm.devRemark"
-                type="textarea"
-                :rows="3"
-                :disabled="!canEditDevInfo"
-              />
-            </el-form-item>
-          </el-form>
-          <div class="tab-actions">
-            <el-button
-              type="primary"
-              :disabled="!canEditDevInfo"
-              :loading="bugSubmitLoading"
-              @click="saveDevInfo"
-              >保存开发信息</el-button
-            >
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="时间追踪" name="track">
-          <div class="track-block">
-            <div class="section-title">时间链</div>
-            <EmptyState v-if="!timeTrackItems.length" description="暂无时间追踪记录" />
-            <el-timeline v-else>
-              <el-timeline-item
-                v-for="item in timeTrackItems"
-                :key="item.id"
-                :timestamp="formatDateTime(item.timestamp)"
-              >
-                <div class="track-item">
-                  <div class="track-title">
-                    {{ item.actionLabel || item.action || '-' }}
-                    <span class="track-user">（{{ item.userName || '-' }}）</span>
-                  </div>
-                  <div class="track-meta">
-                    状态：{{ item.fromStatus || '-' }} → {{ item.toStatus || '-' }}
-                  </div>
-                  <div class="track-meta" v-if="item.fromUserName || item.toUserName">
-                    处理人：{{ item.fromUserName || '-' }} → {{ item.toUserName || '-' }}
-                  </div>
-                  <div class="track-meta" v-if="item.isFirstRead">首次阅读：是</div>
-                  <div class="track-meta" v-if="item.remark">备注：{{ item.remark }}</div>
-                </div>
-              </el-timeline-item>
-            </el-timeline>
-          </div>
-
-          <div class="track-block">
-            <div class="section-title">节点耗时统计</div>
-            <EmptyState v-if="!nodeDurationItems.length" description="暂无节点耗时数据" />
-            <el-table
-              v-else
-              :data="nodeDurationItems"
-              :border="false"
-              :stripe="true"
-              :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-            >
-              <el-table-column prop="nodeName" label="节点" align="center" min-width="130" />
-              <el-table-column prop="assigneeName" label="处理人" align="center" min-width="120" />
-              <el-table-column prop="assigneeRole" label="角色" align="center" min-width="120" />
-              <el-table-column label="到达时间" align="center" min-width="170">
-                <template #default="{ row }">
-                  {{ formatDateTime(row.arriveAt) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="首次阅读" align="center" min-width="170">
-                <template #default="{ row }">
-                  {{ formatDateTime(row.firstReadAt) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="开始处理" align="center" min-width="170">
-                <template #default="{ row }">
-                  {{ formatDateTime(row.startProcessAt) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="离开时间" align="center" min-width="170">
-                <template #default="{ row }">
-                  {{ formatDateTime(row.leaveAt) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="等待耗时" align="center" min-width="110">
-                <template #default="{ row }">
-                  {{ formatDuration(row.waitDurationSec) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="处理耗时" align="center" min-width="110">
-                <template #default="{ row }">
-                  {{ formatDuration(row.processDurationSec) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="总耗时" align="center" min-width="110">
-                <template #default="{ row }">
-                  {{ formatDuration(row.totalDurationSec) }}
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </el-card>
-
-    <el-card shadow="never">
+    <!-- 自定义字段 -->
+    <el-card v-if="customFieldEntries.length > 0" shadow="never" class="section-card">
       <template #header>
-        <div class="section-title">自定义字段</div>
+        <div class="section-header">
+          <span class="section-title">自定义字段</span>
+        </div>
       </template>
-      <EmptyState v-if="customFieldEntries.length === 0" description="暂无自定义字段" />
       <el-table
-        v-else
         :data="customFieldEntries"
         :border="false"
         :stripe="true"
@@ -668,41 +1265,101 @@ watch(
       </el-table>
     </el-card>
 
-    <el-card shadow="never">
+    <!-- 附件 -->
+    <el-card shadow="never" class="section-card">
       <template #header>
-        <div class="section-title">附件</div>
+        <div class="section-header">
+          <span class="section-title">附件</span>
+        </div>
       </template>
-      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件" />
-      <el-table
-        v-else
-        :data="detail.attachments"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+      <el-upload
+        ref="imageUploadRef"
+        class="attachment-upload-dropzone"
+        drag
+        :show-file-list="false"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+        :on-change="handleImageUpload"
+        :auto-upload="false"
       >
-        <el-table-column prop="fileName" label="文件名" align="center" min-width="220" />
-        <el-table-column prop="fileType" label="类型" align="center" width="120" />
-        <el-table-column label="大小" align="center" width="120">
-          <template #default="{ row }">
-            {{ formatFileSize(row.fileSize) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="uploadedByName" label="上传人" align="center" width="120" />
-        <el-table-column label="上传时间" align="center" width="180">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </el-table-column>
-      </el-table>
+        <div class="upload-drag-content">
+          <el-icon class="upload-drag-icon"><Plus /></el-icon>
+          <div class="upload-drag-text">将文件拖到此处触发上传</div>
+          <div class="upload-drag-subtext">或点击按钮上传附件图片</div>
+          <el-button type="primary" size="small" plain :loading="imageUploadLoading">
+            点击上传
+          </el-button>
+        </div>
+      </el-upload>
+      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件，可拖拽或点击上方区域上传图片" />
+      <div v-else class="attachment-list">
+        <div
+          v-for="attachment in detail.attachments"
+          :key="attachment.id"
+          class="attachment-item"
+        >
+          <div class="attachment-preview">
+            <el-image
+              v-if="isImageFile(attachment.fileType)"
+              :src="attachment.filePath"
+              :preview-src-list="detail.attachments?.filter(a => isImageFile(a.fileType)).map(a => a.filePath || '')"
+              fit="cover"
+              class="attachment-thumbnail"
+              lazy
+            />
+            <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
+          </div>
+          <div class="attachment-info">
+            <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+            <div class="attachment-meta">
+              <el-tag
+                v-if="attachment.source === 'WECOM_BOT'"
+                type="success"
+                size="small"
+                effect="plain"
+              >企微</el-tag>
+              <el-tag
+                v-else
+                type="info"
+                size="small"
+                effect="plain"
+              >Web</el-tag>
+              <span>{{ formatFileSize(attachment.fileSize) }}</span>
+              <span class="meta-divider">·</span>
+              <span>{{ attachment.uploadedByName || '-' }}</span>
+              <span class="meta-divider">·</span>
+              <span>{{ formatDateTime(attachment.createTime) }}</span>
+            </div>
+          </div>
+          <div class="attachment-actions">
+            <el-button
+              v-if="isImageFile(attachment.fileType) && attachment.filePath"
+              type="primary"
+              link
+              size="small"
+              :href="attachment.filePath"
+              target="_blank"
+            >查看</el-button>
+            <el-popconfirm
+              title="确认删除此附件？"
+              @confirm="handleDeleteAttachment(attachment.id)"
+            >
+              <template #reference>
+                <el-button type="danger" link size="small">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </div>
+        </div>
+      </div>
     </el-card>
 
-    <el-card shadow="never">
+    <!-- 关联Bug简报 -->
+    <el-card v-if="detail?.bugReports?.length" shadow="never" class="section-card">
       <template #header>
-        <div class="section-title">关联Bug简报</div>
+        <div class="section-header">
+          <span class="section-title">关联Bug简报</span>
+        </div>
       </template>
-      <EmptyState v-if="!detail?.bugReports?.length" description="暂无关联Bug简报" />
       <el-table
-        v-else
         :data="detail.bugReports"
         :border="false"
         :stripe="true"
@@ -732,30 +1389,186 @@ watch(
       </el-table>
     </el-card>
 
-    <el-card shadow="never">
+    <!-- 评论与处理记录 -->
+    <el-card shadow="never" class="section-card">
       <template #header>
-        <div class="section-title">评论与处理记录</div>
+        <div class="section-header">
+          <span class="section-title">评论与处理记录</span>
+          <span class="section-count">{{ detail?.comments?.length || 0 }} 条</span>
+        </div>
       </template>
-      <EmptyState v-if="!detail?.comments?.length" description="暂无评论记录" />
-      <el-timeline v-else>
-        <el-timeline-item
+
+      <!-- 发表评论输入框 -->
+      <div class="comment-input-area">
+        <div class="comment-input-avatar">
+          <el-avatar :size="32" class="current-user-avatar">
+            {{ authStore.userInfo?.name?.charAt(0) || '我' }}
+          </el-avatar>
+        </div>
+        <div class="comment-input-body">
+          <RichTextEditor
+            v-model="commentInput"
+            :ticket-id="ticketId"
+            placeholder="发表评论（支持粘贴图片、表格等富文本内容）..."
+            :height="180"
+            class="comment-editor"
+          />
+          <div class="comment-submit-row">
+            <span class="comment-hint">支持粘贴图片、表格等内容</span>
+            <el-button
+              type="primary"
+              size="small"
+              :loading="commentSubmitLoading"
+              :disabled="!hasRichTextContent(commentInput)"
+              @click="submitComment"
+            >发表评论</el-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 评论列表 -->
+      <div class="comment-divider" v-if="detail?.comments?.length" />
+      <EmptyState v-if="!detail?.comments?.length" description="暂无评论，来发表第一条评论吧" />
+      <div v-else class="comment-list">
+        <div
           v-for="comment in detail.comments"
           :key="comment.id"
-          :timestamp="formatDateTime(comment.createTime)"
+          class="comment-item"
+          :class="{ 'comment-operation': isOperationLog(comment.type) }"
         >
-          <div class="comment-item">
-            <div class="comment-title">{{ comment.userName || '-' }}</div>
-            <div class="comment-content">{{ comment.content || '-' }}</div>
+          <div class="comment-avatar">
+            <el-avatar :size="32" class="user-avatar">
+              {{ comment.userName?.charAt(0) || '?' }}
+            </el-avatar>
           </div>
-        </el-timeline-item>
-      </el-timeline>
+          <div class="comment-body">
+            <div class="comment-header">
+              <span class="comment-username">{{ comment.userName || '-' }}</span>
+              <el-tag v-if="isOperationLog(comment.type)" type="info" size="small" effect="plain">操作记录</el-tag>
+              <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
+            </div>
+            <div v-if="isOperationLog(comment.type)" class="comment-content comment-content-plain">
+              {{ comment.content || '-' }}
+            </div>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div v-else class="comment-content" v-html="comment.content || '-'" />
+          </div>
+        </div>
+      </div>
     </el-card>
-  </el-space>
+  </div>
 
+  <!-- 企微消息解析弹窗 -->
+  <el-dialog
+    v-model="wecomParseDialogVisible"
+    title="企微消息一键解析"
+    width="640px"
+    :close-on-click-modal="false"
+    destroy-on-close
+  >
+    <div class="wecom-dialog-body">
+      <p class="wecom-dialog-tip">
+        将企微机器人收到的客服消息粘贴到下方，系统将通过自然语言智能匹配，自动识别商户编号、公司名称、问题描述等字段并填入表单。支持结构化格式与自由文本两种输入方式。
+      </p>
+      <el-collapse class="parse-example-collapse">
+        <el-collapse-item title="查看支持的消息格式示例" name="example">
+          <div class="parse-example-content">
+            <div class="parse-example-section">
+              <div class="parse-example-label">✅ 结构化格式（识别率最高）</div>
+              <pre class="parse-example-code">商户编号：10004557
+公司名称：山东英贝健生物技术有限公司
+商户账号：ybj0101
+问题描述：用户反馈支付页面无法跳转，点击支付按钮后页面白屏
+预期结果：点击支付后应正常跳转到支付页面</pre>
+            </div>
+            <div class="parse-example-section">
+              <div class="parse-example-label">✅ 自然语言格式（也可识别）</div>
+              <pre class="parse-example-code">商户10004557，山东英贝健生物技术有限公司反馈，用户无法完成支付，点击支付按钮后页面出现白屏，账号ybj0101，预期点击后正常跳转到支付页面</pre>
+            </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+      <el-input
+        v-model="wecomParseMessage"
+        type="textarea"
+        :rows="8"
+        placeholder="请粘贴企微消息内容（支持自由文本格式，系统将自动识别字段）..."
+        class="wecom-parse-textarea"
+      />
+      <div v-if="wecomParseResult" class="wecom-parse-preview">
+        <div class="preview-header">
+          <span class="preview-title">解析结果预览</span>
+          <el-tag
+            :type="(wecomParseResult.confidence ?? 0) >= 60 ? 'success' : 'warning'"
+            size="small"
+          >
+            置信度 {{ wecomParseResult.confidence ?? 0 }}%
+          </el-tag>
+        </div>
+        <el-descriptions :column="1" border size="small" class="preview-desc">
+          <el-descriptions-item v-if="wecomParseResult.merchantNo" label="商户编号">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.merchantNo }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.companyName" label="公司名称">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.companyName }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.merchantAccount" label="商户账号">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.merchantAccount }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.sceneCode" label="场景码">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.sceneCode }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.problemDesc" label="问题描述">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.problemDesc }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.expectedResult" label="预期结果">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.expectedResult }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="wecomParseResult.problemScreenshot" label="问题截图">
+            <el-tag type="success" size="small" class="matched-tag">已识别</el-tag>
+            {{ wecomParseResult.problemScreenshot }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <p
+          v-if="!wecomParseResult.matchedFields || wecomParseResult.matchedFields.length === 0"
+          class="no-match-tip"
+        >
+          未能识别到任何字段，请尝试使用"字段名：字段值"的格式发送消息
+        </p>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="wecomParseDialogVisible = false">取消</el-button>
+      <el-button
+        type="primary"
+        plain
+        :loading="wecomParseLoading"
+        :disabled="!wecomParseMessage.trim()"
+        @click="handleWecomParse"
+      >
+        {{ wecomParseResult ? '重新解析' : '开始解析' }}
+      </el-button>
+      <el-button
+        v-if="wecomParseResult && wecomParseResult.matchedFields && wecomParseResult.matchedFields.length > 0"
+        type="primary"
+        @click="applyWecomParseResult"
+      >
+        填入表单
+      </el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 分派工单弹窗 -->
   <el-dialog v-model="assignDialogVisible" title="分派工单" width="480px">
     <el-form label-width="90px">
       <el-form-item label="处理人" required>
-        <el-select v-model="assignForm.assigneeId" placeholder="请选择处理人">
+        <el-select v-model="assignForm.assigneeId" placeholder="请选择处理人" style="width: 100%">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
@@ -769,31 +1582,42 @@ watch(
     </template>
   </el-dialog>
 
-  <el-dialog v-model="processDialogVisible" title="处理工单" width="520px">
-    <el-form label-width="90px">
-      <el-form-item label="目标状态" required>
-        <el-select v-model="processForm.targetStatus">
-          <el-option label="处理中" value="processing" />
-          <el-option label="待验收" value="pending_accept" />
-          <el-option label="已完成" value="resolved" />
-          <el-option label="挂起" value="suspended" />
-        </el-select>
+  <!-- 工单操作弹窗 -->
+  <el-dialog
+    v-model="processDialogVisible"
+    :title="selectedAction ? selectedAction.actionName : '工单操作'"
+    width="520px"
+  >
+    <el-form label-width="100px">
+      <el-form-item label="目标状态">
+        <el-tag type="primary">
+          {{ selectedAction?.targetStatusName || transitForm.targetStatus }}
+        </el-tag>
+        <el-tag v-if="selectedAction?.isReturn" type="warning" style="margin-left:8px;">退回</el-tag>
       </el-form-item>
-      <el-form-item label="目标处理人">
-        <el-select v-model="processForm.targetUserId" clearable placeholder="可选">
+      <el-form-item v-if="selectedAction?.allowTransfer" label="指定处理人">
+        <el-select v-model="transitForm.newAssigneeId" clearable placeholder="可选，不选则保持当前" style="width: 100%">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="备注">
-        <el-input v-model="processForm.remark" type="textarea" />
+      <el-form-item label="备注" :required="selectedAction?.requireRemark">
+        <el-input
+          v-model="transitForm.remark"
+          type="textarea"
+          :rows="3"
+          :placeholder="selectedAction?.requireRemark ? '必填：请说明操作原因' : '可选'"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="processDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleProcess">确认处理</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handleProcess">
+        确认{{ selectedAction?.actionName || '操作' }}
+      </el-button>
     </template>
   </el-dialog>
 
+  <!-- 关闭工单弹窗 -->
   <el-dialog v-model="closeDialogVisible" title="关闭工单" width="480px">
     <el-form label-width="90px">
       <el-form-item label="关闭原因">
@@ -802,43 +1626,290 @@ watch(
     </el-form>
     <template #footer>
       <el-button @click="closeDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleCloseTicket"
-        >确认关闭</el-button
-      >
+      <el-button type="primary" :loading="submitLoading" @click="handleCloseTicket">确认关闭</el-button>
     </template>
   </el-dialog>
 </template>
 
 <style scoped lang="scss">
+.ticket-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// ===== 头部卡片 =====
+.header-card {
+  :deep(.el-card__header) {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+}
+
 .detail-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-meta {
+  display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ticket-no-text {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+  font-family: monospace;
+  background: #f5f7fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.priority-tag {
+  font-weight: 500;
+}
+
+.ticket-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .ticket-title {
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: #1d2129;
+  line-height: 1.4;
 }
 
-.ticket-no {
+.ticket-category {
+  font-size: 12px;
   color: #909399;
-  margin-top: 6px;
 }
 
-.section-title {
-  font-size: 16px;
+// ===== 操作栏 =====
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ===== 主布局 =====
+.detail-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.detail-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 60px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  border-left: 1px solid #f0f0f0;
+  padding-left: 4px;
+}
+
+// ===== 描述区块 =====
+.description-block {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fafbfc;
+  border-radius: 6px;
+  border: 1px solid #ebedf0;
+}
+
+.block-label {
+  font-size: 13px;
   font-weight: 600;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.description-content {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.7;
+  word-break: break-word;
+
+  :deep(img) {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+}
+
+// ===== Tabs =====
+.main-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 16px;
+  }
+}
+
+.inner-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 12px;
+  }
+}
+
+.info-form {
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
 }
 
 .tab-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 8px;
 }
 
+.upload-drag-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-drag-icon {
+  font-size: 24px;
+  color: #1675d1;
+}
+
+.upload-drag-text {
+  font-size: 14px;
+  color: #303133;
+}
+
+.upload-drag-subtext {
+  font-size: 12px;
+  color: #909399;
+}
+
+.problem-screenshot-field {
+  width: 100%;
+}
+
+.screenshot-upload {
+  width: 100%;
+}
+
+.screenshot-tip {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.selected-screenshot-wrap + .candidate-screenshot-wrap,
+.screenshot-tip + .candidate-screenshot-wrap {
+  margin-top: 10px;
+}
+
+.selected-screenshot-title {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.selected-screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.selected-screenshot-item {
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+.selected-screenshot-image {
+  width: 100%;
+  height: 96px;
+  border-radius: 4px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.candidate-screenshot-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.candidate-screenshot-item {
+  margin-right: 0;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+
+  :deep(.el-checkbox__label) {
+    padding-left: 8px;
+    width: calc(100% - 24px);
+  }
+}
+
+.candidate-screenshot-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.candidate-screenshot-image {
+  width: 68px;
+  height: 68px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.candidate-screenshot-meta {
+  min-width: 0;
+}
+
+.candidate-screenshot-name {
+  font-size: 12px;
+  color: #303133;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ===== 时间追踪 =====
 .track-block + .track-block {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .track-item {
@@ -849,6 +1920,7 @@ watch(
 
 .track-title {
   font-weight: 600;
+  font-size: 13px;
 }
 
 .track-user {
@@ -859,20 +1931,442 @@ watch(
 .track-meta {
   margin-top: 4px;
   color: #606266;
+  font-size: 12px;
+}
+
+// ===== 流转历史 =====
+.flow-history-container {
+  padding: 4px 0;
+}
+
+.flow-record-card {
+  background: #fafafa;
+  border: 1px solid #ebedf0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  transition: box-shadow 0.15s;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.flow-record-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flow-status-text {
+  font-size: 13px;
+  color: #303133;
+}
+
+.flow-status-to {
+  font-weight: 600;
+  color: #1675d1;
+}
+
+.flow-arrow {
+  color: #909399;
+  font-size: 14px;
+}
+
+.flow-operator {
+  color: #909399;
+  font-size: 12px;
+}
+
+.flow-record-remark {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #606266;
+  padding-left: 2px;
+}
+
+// ===== 分区卡片 =====
+.section-card {
+  :deep(.el-card__header) {
+    padding: 12px 16px;
+  }
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.section-count {
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+// ===== 附件 =====
+.attachment-upload-dropzone {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafafa;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f0f9ff;
+  }
+}
+
+.attachment-preview {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+}
+
+.attachment-thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+}
+
+.attachment-icon {
+  font-size: 28px;
+  color: #909399;
+}
+
+.attachment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meta-divider {
+  color: #d4d4d4;
+}
+
+.attachment-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+}
+
+// ===== 评论区 =====
+.comment-input-area {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.comment-input-avatar {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.current-user-avatar {
+  background: #1675d1;
+  color: #fff;
+  font-size: 13px;
+}
+
+.comment-input-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-editor {
+  width: 100%;
+
+  :deep(.rich-text-editor) {
+    border-radius: 6px;
+  }
+}
+
+.comment-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.comment-hint {
+  font-size: 12px;
+  color: #c0c4cc;
+}
+
+.comment-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 16px 0;
+}
+
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .comment-item {
-  background: #f8fafc;
-  border-radius: 6px;
-  padding: 8px 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+
+  &.comment-operation {
+    .comment-body {
+      background: #fafbfc;
+      border: 1px solid #ebedf0;
+    }
+  }
 }
 
-.comment-title {
-  font-weight: 500;
+.comment-avatar {
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  background: #e8f0fe;
+  color: #1675d1;
+  font-size: 13px;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+  background: #f5f7fa;
+  border-radius: 0 8px 8px 8px;
+  padding: 10px 14px;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.comment-username {
+  font-weight: 600;
+  font-size: 13px;
+  color: #303133;
+}
+
+.comment-time {
+  font-size: 12px;
+  color: #c0c4cc;
+  margin-left: auto;
 }
 
 .comment-content {
-  margin-top: 4px;
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.6;
+  word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(img) {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+
+  :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+
+  :deep(th),
+  :deep(td) {
+    border: 1px solid #e5e6eb;
+    padding: 6px 8px;
+  }
+}
+
+.comment-content-plain {
+  white-space: pre-wrap;
+}
+
+// ===== 企微解析弹窗 =====
+.wecom-parse-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #f0f7ff;
+  border: 1px solid #c8e0ff;
+  border-radius: 6px;
+}
+
+.wecom-parse-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.wecom-parse-hint {
+  font-size: 12px;
   color: #606266;
+}
+
+.wecom-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wecom-dialog-tip {
+  margin: 0;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.parse-example-collapse {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+
+  :deep(.el-collapse-item__header) {
+    font-size: 12px;
+    color: #909399;
+    padding: 0 12px;
+    height: 36px;
+    background: #fafafa;
+    border-radius: 6px;
+  }
+
+  :deep(.el-collapse-item__wrap) {
+    border-bottom: none;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding: 10px 12px;
+  }
+}
+
+.parse-example-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.parse-example-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.parse-example-label {
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.parse-example-code {
+  margin: 0;
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.wecom-parse-textarea {
+  width: 100%;
+}
+
+.wecom-parse-preview {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.preview-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.preview-desc {
+  width: 100%;
+}
+
+.matched-tag {
+  margin-right: 8px;
+}
+
+.no-match-tip {
+  margin: 12px;
+  font-size: 13px;
+  color: #e6a23c;
 }
 </style>

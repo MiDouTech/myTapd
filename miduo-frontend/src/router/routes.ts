@@ -165,6 +165,15 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/open/ticket/:ticketNo',
+    name: 'ticketPublicDetail',
+    component: () => import('@/views/ticket/TicketPublicView.vue'),
+    meta: {
+      title: '工单详情',
+      requiresAuth: false,
+    },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'notFound',
     component: () => import('@/views/error/NotFoundView.vue'),

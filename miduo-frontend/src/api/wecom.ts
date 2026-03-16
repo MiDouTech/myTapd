@@ -1,4 +1,9 @@
 import type {
+  NlpKeywordCreateInput,
+  NlpKeywordListOutput,
+  NlpKeywordUpdateInput,
+  NlpLogPageInput,
+  NlpLogPageOutput,
   WecomConfigOutput,
   WecomConfigUpdateInput,
   WecomConnectionTestOutput,
@@ -6,6 +11,7 @@ import type {
   WecomGroupBindingListOutput,
   WecomGroupBindingUpdateInput,
 } from '@/types/wecom'
+import type { PageOutput } from '@/types/common'
 import request from '@/utils/request'
 
 /**
@@ -63,4 +69,51 @@ export function saveWecomConfig(data: WecomConfigUpdateInput): Promise<number> {
  */
 export function testWecomConnection(): Promise<WecomConnectionTestOutput> {
   return request.post<WecomConnectionTestOutput>('/wecom/config/test-connect')
+}
+
+/**
+ * 查询NLP关键词配置列表
+ * 接口编号：API000432
+ * 产品文档功能：企微自然语言建单 - 关键词管理
+ */
+export function listNlpKeywords(matchType?: number): Promise<NlpKeywordListOutput[]> {
+  return request.get<NlpKeywordListOutput[]>('/wecom/nlp-keyword/list', {
+    params: matchType !== undefined ? { matchType } : {},
+  })
+}
+
+/**
+ * 创建NLP关键词配置
+ * 接口编号：API000433
+ * 产品文档功能：企微自然语言建单 - 新增关键词
+ */
+export function createNlpKeyword(data: NlpKeywordCreateInput): Promise<number> {
+  return request.post<number>('/wecom/nlp-keyword/create', data)
+}
+
+/**
+ * 更新NLP关键词配置
+ * 接口编号：API000434
+ * 产品文档功能：企微自然语言建单 - 修改关键词
+ */
+export function updateNlpKeyword(id: number, data: NlpKeywordUpdateInput): Promise<void> {
+  return request.put<void>(`/wecom/nlp-keyword/update/${id}`, data)
+}
+
+/**
+ * 删除NLP关键词配置
+ * 接口编号：API000435
+ * 产品文档功能：企微自然语言建单 - 删除关键词
+ */
+export function deleteNlpKeyword(id: number): Promise<void> {
+  return request.del<void>(`/wecom/nlp-keyword/delete/${id}`)
+}
+
+/**
+ * NLP解析日志分页查询
+ * 接口编号：API000436
+ * 产品文档功能：企微自然语言建单 - 解析日志
+ */
+export function pageNlpLogs(params: NlpLogPageInput): Promise<PageOutput<NlpLogPageOutput>> {
+  return request.get<PageOutput<NlpLogPageOutput>>('/wecom/nlp-log/page', { params })
 }

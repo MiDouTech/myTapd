@@ -1,37 +1,22 @@
 package com.miduo.cloud.ticket.entity.dto.auth;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import javax.validation.constraints.NotBlank;
+import lombok.Data;
+
+import java.io.Serializable;
 
 /**
- * 测试环境硬编码账号登录请求
- * 仅在 dev-login.enabled=true 时可用
+ * 临时登录请求（仅 dev-login.enabled=true 时可用）
+ * 支持两种方式：
+ * 1. 管理员账号：username=admin, password=admin2026
+ * 2. 手机号登录：username=手机号, password=admin123
  */
-@Schema(description = "测试账号登录请求")
-public class DevLoginInput {
+@Data
+public class DevLoginInput implements Serializable {
 
     @NotBlank(message = "用户名不能为空")
-    @Schema(description = "测试账号用户名", example = "admin")
     private String username;
 
     @NotBlank(message = "密码不能为空")
-    @Schema(description = "测试账号密码", example = "admin2026")
     private String password;
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
 }

@@ -35,10 +35,14 @@ public class WecomCallbackController {
                             @RequestParam("timestamp") String timestamp,
                             @RequestParam("nonce") String nonce,
                             @RequestParam("echostr") String echostr) {
+        log.info("企微URL验证请求到达: timestamp={}, nonce={}, msg_signature={}, echostr长度={}",
+                timestamp, nonce, msgSignature, echostr == null ? 0 : echostr.length());
         try {
-            return callbackApplicationService.verifyUrl(msgSignature, timestamp, nonce, echostr);
+            String result = callbackApplicationService.verifyUrl(msgSignature, timestamp, nonce, echostr);
+            log.info("企微URL验证成功，返回result长度={}", result == null ? 0 : result.length());
+            return result;
         } catch (Exception ex) {
-            log.error("企微URL验证失败", ex);
+            log.error("企微URL验证失败: timestamp={}, nonce={}, msg_signature={}", timestamp, nonce, msgSignature, ex);
             return "failed";
         }
     }
@@ -58,11 +62,13 @@ public class WecomCallbackController {
                                  @RequestParam("timestamp") String timestamp,
                                  @RequestParam("nonce") String nonce,
                                  @RequestBody String body) {
+        log.info("企微回调消息到达: timestamp={}, nonce={}, bodyLength={}", timestamp, nonce, body == null ? 0 : body.length());
+        log.debug("企微回调消息原始Body: {}", body);
         try {
             callbackApplicationService.receiveCallback(msgSignature, timestamp, nonce, body);
             return "success";
         } catch (Exception ex) {
-            log.error("企微回调消息处理失败", ex);
+            log.error("企微回调消息处理失败, body前200字符: {}", body != null && body.length() > 200 ? body.substring(0, 200) : body, ex);
             return "failed";
         }
     }

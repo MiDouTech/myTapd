@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Edit, Grid } from '@element-plus/icons-vue'
+import VueDraggable from 'vuedraggable'
 
 import {
   getDashboardCategoryDistribution,
@@ -9,8 +12,7 @@ import {
   getDashboardTrend,
   getDashboardWorkload,
 } from '@/api/dashboard'
-import BaseTable from '@/components/common/BaseTable.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
+import { useDashboardLayoutStore } from '@/stores/dashboardLayout'
 import type {
   DashboardCategoryDistributionOutput,
   DashboardEfficiencyOutput,
@@ -19,9 +21,37 @@ import type {
   DashboardTrendPointOutput,
   DashboardWorkloadOutput,
 } from '@/types/dashboard'
+import type { DashboardLayoutItem } from '@/types/dashboardLayout'
 import { notifyError } from '@/utils/feedback'
+import DashboardEfficiencyWorkloadRow from './components/DashboardEfficiencyWorkloadRow.vue'
+import DashboardOverviewRow from './components/DashboardOverviewRow.vue'
+import DashboardTrendCategoryRow from './components/DashboardTrendCategoryRow.vue'
 
+const layoutStore = useDashboardLayoutStore()
 const loading = ref(false)
+const WIDGET_LAYOUT_STORAGE_KEY = 'miduo_dashboard_widget_layout_v1'
+
+type OverviewCardKey =
+  | 'pending_accept'
+  | 'processing'
+  | 'suspended'
+  | 'completed'
+  | 'sla_breached'
+  | 'total'
+type TrendCategoryWidgetKey = 'trend' | 'category'
+type EfficiencyWorkloadWidgetKey = 'efficiency' | 'workload'
+
+interface DashboardWidgetLayout {
+  overview: OverviewCardKey[]
+  trendCategory: TrendCategoryWidgetKey[]
+  efficiencyWorkload: EfficiencyWorkloadWidgetKey[]
+}
+
+const DEFAULT_WIDGET_LAYOUT: DashboardWidgetLayout = {
+  overview: ['pending_accept', 'processing', 'suspended', 'completed', 'sla_breached', 'total'],
+  trendCategory: ['trend', 'category'],
+  efficiencyWorkload: ['efficiency', 'workload'],
+}
 
 const overview = ref<DashboardOverviewOutput>({
   pendingAcceptCount: 0,
@@ -48,54 +78,139 @@ const slaAchievement = ref<DashboardSlaAchievementOutput>({
   achievementRate: 0,
 })
 const workload = ref<DashboardWorkloadOutput[]>([])
+const widgetLayout = ref<DashboardWidgetLayout>(loadWidgetLayout())
+const editingWidgetLayout = ref<DashboardWidgetLayout>(cloneWidgetLayout(widgetLayout.value))
+let widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
 
-const topCards = computed(() => [
-  { label: '待受理', value: overview.value.pendingAcceptCount },
-  { label: '处理中', value: overview.value.processingCount },
-  { label: '已挂起', value: overview.value.suspendedCount },
-  { label: '已完成', value: overview.value.completedCount },
-  { label: 'SLA超时', value: overview.value.slaBreachedCount },
-  { label: '工单总量', value: overview.value.totalCount },
-])
-
-const trendMax = computed(() => {
-  if (trend.value.length === 0) {
-    return 1
+function cloneWidgetLayout(source: DashboardWidgetLayout): DashboardWidgetLayout {
+  return {
+    overview: [...source.overview],
+    trendCategory: [...source.trendCategory],
+    efficiencyWorkload: [...source.efficiencyWorkload],
   }
-  return Math.max(
-    ...trend.value.map((item) => Math.max(item.createdCount || 0, item.closedCount || 0, item.backlogCount || 0)),
-    1,
-  )
-})
-
-function toPercent(value: number, max: number): number {
-  if (max <= 0) {
-    return 0
-  }
-  return Math.min(Math.round((value / max) * 100), 100)
 }
 
-function toProgress(value: number): number {
-  if (value < 0) {
-    return 0
+function normalizeOrder<T extends string>(input: unknown, defaults: readonly T[]): T[] {
+  if (!Array.isArray(input)) {
+    return [...defaults]
   }
-  if (value > 100) {
-    return 100
+  const valueSet = new Set(defaults)
+  const valid = input.filter((item): item is T => typeof item === 'string' && valueSet.has(item as T))
+  const merged = [...valid]
+  defaults.forEach((item) => {
+    if (!merged.includes(item)) {
+      merged.push(item)
+    }
+  })
+  return merged
+}
+
+function loadWidgetLayout(): DashboardWidgetLayout {
+  const defaults = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+  const raw = window.localStorage.getItem(WIDGET_LAYOUT_STORAGE_KEY)
+  if (!raw) {
+    return defaults
   }
-  return Number(value.toFixed(2))
+  try {
+    const parsed = JSON.parse(raw) as Partial<DashboardWidgetLayout>
+    return {
+      overview: normalizeOrder(parsed.overview, defaults.overview),
+      trendCategory: normalizeOrder(parsed.trendCategory, defaults.trendCategory),
+      efficiencyWorkload: normalizeOrder(parsed.efficiencyWorkload, defaults.efficiencyWorkload),
+    }
+  } catch {
+    return defaults
+  }
+}
+
+function persistWidgetLayout(layout: DashboardWidgetLayout): void {
+  window.localStorage.setItem(WIDGET_LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+}
+
+function handleEnterEditMode(): void {
+  layoutStore.enterEditMode()
+  widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+  editingWidgetLayout.value = cloneWidgetLayout(widgetLayout.value)
+}
+
+function handleCancelEditMode(): void {
+  layoutStore.cancelEditMode()
+  editingWidgetLayout.value = cloneWidgetLayout(widgetLayoutSnapshot)
+}
+
+function handleOverviewOrderChange(order: OverviewCardKey[]): void {
+  editingWidgetLayout.value.overview = [...order]
+}
+
+function handleTrendCategoryOrderChange(order: TrendCategoryWidgetKey[]): void {
+  editingWidgetLayout.value.trendCategory = [...order]
+}
+
+function handleEfficiencyWorkloadOrderChange(order: EfficiencyWorkloadWidgetKey[]): void {
+  editingWidgetLayout.value.efficiencyWorkload = [...order]
+}
+
+/**
+ * draggableRows: 双向绑定给 VueDraggable 的可拖拽行组列表
+ * 修改此数组仅影响 editingLayout 中的非固定部分
+ */
+const draggableRows = computed({
+  get: (): DashboardLayoutItem[] => layoutStore.draggableLayout,
+  set: (newList: DashboardLayoutItem[]) => {
+    layoutStore.updateEditingOrder(newList)
+  },
+})
+
+function onDragEnd(): void {
+  // draggableRows setter already handles the reorder via updateEditingOrder
+}
+
+async function handleSaveLayout(): Promise<void> {
+  try {
+    await layoutStore.saveLayout()
+    widgetLayout.value = cloneWidgetLayout(editingWidgetLayout.value)
+    widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+    persistWidgetLayout(widgetLayout.value)
+    ElMessage.success('布局已保存')
+  } catch (error) {
+    ElMessage.error((error as Error).message || '保存布局失败')
+  }
+}
+
+async function handleResetLayout(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      '确认恢复为系统默认布局？您当前的自定义布局将被清除。',
+      '恢复默认',
+      {
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    await layoutStore.resetLayout()
+    widgetLayout.value = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+    editingWidgetLayout.value = cloneWidgetLayout(DEFAULT_WIDGET_LAYOUT)
+    widgetLayoutSnapshot = cloneWidgetLayout(widgetLayout.value)
+    persistWidgetLayout(widgetLayout.value)
+    ElMessage.success('已恢复默认布局')
+  } catch {
+    // user cancelled
+  }
 }
 
 async function loadDashboard(): Promise<void> {
   loading.value = true
   try {
-    const [overviewData, trendData, categoryData, efficiencyData, slaData, workloadData] = await Promise.all([
-      getDashboardOverview(),
-      getDashboardTrend({ days: 14 }),
-      getDashboardCategoryDistribution(),
-      getDashboardEfficiency(),
-      getDashboardSlaAchievement(),
-      getDashboardWorkload({ limit: 10 }),
-    ])
+    const [overviewData, trendData, categoryData, efficiencyData, slaData, workloadData] =
+      await Promise.all([
+        getDashboardOverview(),
+        getDashboardTrend({ days: 14 }),
+        getDashboardCategoryDistribution(),
+        getDashboardEfficiency(),
+        getDashboardSlaAchievement(),
+        getDashboardWorkload({ limit: 10 }),
+      ])
 
     overview.value = {
       pendingAcceptCount: overviewData.pendingAcceptCount || 0,
@@ -129,283 +244,195 @@ async function loadDashboard(): Promise<void> {
 }
 
 onMounted(() => {
-  loadDashboard()
+  void Promise.all([layoutStore.fetchLayout(), loadDashboard()])
 })
 </script>
 
 <template>
   <div class="dashboard-page" v-loading="loading">
-    <el-row :gutter="16" class="stat-row">
-      <el-col v-for="card in topCards" :key="card.label" :xs="12" :sm="8" :md="4">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-title">{{ card.label }}</div>
-          <div class="stat-value">{{ card.value }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 页面头部：标题 + 操作按钮 -->
+    <div class="dashboard-header">
+      <div class="dashboard-title">数据看板</div>
+      <div class="header-actions">
+        <!-- 查看模式：编辑布局按钮 -->
+        <el-button
+          v-if="!layoutStore.isEditMode"
+          class="edit-layout-btn"
+          type="primary"
+          plain
+          size="small"
+          :icon="Edit"
+          @click="handleEnterEditMode"
+        >
+          编辑布局
+        </el-button>
+        <!-- 编辑模式：恢复默认 / 取消 / 保存布局 -->
+        <div v-else class="edit-mode-actions">
+          <el-button type="default" link @click="handleResetLayout">恢复默认</el-button>
+          <el-button size="small" @click="handleCancelEditMode">取消</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            :loading="layoutStore.saving"
+            @click="handleSaveLayout"
+          >
+            保存布局
+          </el-button>
+        </div>
+      </div>
+    </div>
 
-    <el-row :gutter="16" class="section-row">
-      <el-col :xs="24" :lg="14">
-        <el-card shadow="never">
-          <template #header>
-            <div class="section-title">工单趋势（近14天）</div>
-          </template>
-          <EmptyState v-if="trend.length === 0" description="暂无趋势数据" />
-          <div v-else class="trend-list">
-            <div v-for="item in trend" :key="item.day" class="trend-item">
-              <div class="trend-day">{{ item.day }}</div>
-              <div class="trend-bars">
-                <div class="trend-bar">
-                  <span class="label created">新建 {{ item.createdCount }}</span>
-                  <el-progress
-                    :stroke-width="8"
-                    :show-text="false"
-                    :percentage="toPercent(item.createdCount || 0, trendMax)"
-                    color="#1675d1"
-                  />
-                </div>
-                <div class="trend-bar">
-                  <span class="label closed">关闭 {{ item.closedCount }}</span>
-                  <el-progress
-                    :stroke-width="8"
-                    :show-text="false"
-                    :percentage="toPercent(item.closedCount || 0, trendMax)"
-                    color="#67c23a"
-                  />
-                </div>
-                <div class="trend-bar">
-                  <span class="label backlog">积压 {{ item.backlogCount }}</span>
-                  <el-progress
-                    :stroke-width="8"
-                    :show-text="false"
-                    :percentage="toPercent(item.backlogCount || 0, trendMax)"
-                    color="#e6a23c"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="10">
-        <el-card shadow="never">
-          <template #header>
-            <div class="section-title">分类分布</div>
-          </template>
-          <EmptyState v-if="categories.length === 0" description="暂无分类分布数据" />
-          <div v-else class="category-list">
-            <div v-for="item in categories" :key="`${item.categoryId}-${item.categoryName}`" class="category-item">
-              <div class="category-head">
-                <span class="name">{{ item.categoryName }}</span>
-                <span class="count">{{ item.ticketCount }}（{{ item.percentage }}%）</span>
-              </div>
-              <el-progress :show-text="false" :stroke-width="10" :percentage="toProgress(item.percentage || 0)" />
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 编辑模式提示条 -->
+    <el-alert
+      v-if="layoutStore.isEditMode"
+      class="edit-tip"
+      type="info"
+      :closable="false"
+      show-icon
+      title="可拖拽行组与卡片小块调整布局，仅对您自己生效"
+    />
 
-    <el-row :gutter="16" class="section-row">
-      <el-col :xs="24" :lg="10">
-        <el-card shadow="never">
-          <template #header>
-            <div class="section-title">处理效率与SLA</div>
-          </template>
-          <div class="metric-grid">
-            <div class="metric-item">
-              <div class="metric-label">平均响应时长（分钟）</div>
-              <div class="metric-value">{{ efficiency.avgResponseMinutes }}</div>
-            </div>
-            <div class="metric-item">
-              <div class="metric-label">平均解决时长（分钟）</div>
-              <div class="metric-value">{{ efficiency.avgResolveMinutes }}</div>
-            </div>
+    <!-- 固定置顶：overview 行组（不参与拖拽） -->
+    <DashboardOverviewRow
+      :data="overview"
+      :editable="layoutStore.isEditMode"
+      :card-order="layoutStore.isEditMode ? editingWidgetLayout.overview : widgetLayout.overview"
+      @update:card-order="handleOverviewOrderChange"
+    />
+
+    <!-- 编辑模式：vuedraggable 包裹可拖拽行组 -->
+    <VueDraggable
+      v-if="layoutStore.isEditMode"
+      v-model="draggableRows"
+      item-key="rowGroupKey"
+      handle=".drag-handle"
+      :animation="200"
+      ghost-class="drag-ghost"
+      @end="onDragEnd"
+    >
+      <template #item="{ element }">
+        <div class="draggable-row-wrapper edit-mode">
+          <div class="drag-handle">
+            <el-icon><Grid /></el-icon>
           </div>
-          <div class="circle-metrics">
-            <div class="circle-item">
-              <div class="circle-title">处理完成率</div>
-              <el-progress
-                type="circle"
-                :percentage="toProgress(efficiency.completionRate || 0)"
-                :stroke-width="8"
-                color="#1675d1"
-              />
-            </div>
-            <div class="circle-item">
-              <div class="circle-title">SLA达成率</div>
-              <el-progress
-                type="circle"
-                :percentage="toProgress(slaAchievement.achievementRate || 0)"
-                :stroke-width="8"
-                color="#67c23a"
-              />
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="14">
-        <el-card shadow="never">
-          <template #header>
-            <div class="section-title">人员工作量 TOP10</div>
-          </template>
-          <EmptyState v-if="workload.length === 0" description="暂无人员工作量数据" />
-          <BaseTable v-else :data="workload">
-            <el-table-column prop="assigneeName" label="处理人" min-width="140" />
-            <el-table-column prop="totalCount" label="处理总量" min-width="120" />
-            <el-table-column prop="processingCount" label="处理中" min-width="120" />
-            <el-table-column prop="completedCount" label="已完成" min-width="120" />
-          </BaseTable>
-        </el-card>
-      </el-col>
-    </el-row>
+          <DashboardTrendCategoryRow
+            v-if="element.rowGroupKey === 'trend_category'"
+            :trend="trend"
+            :categories="categories"
+            :editable="layoutStore.isEditMode"
+            :card-order="editingWidgetLayout.trendCategory"
+            @update:card-order="handleTrendCategoryOrderChange"
+          />
+          <DashboardEfficiencyWorkloadRow
+            v-else-if="element.rowGroupKey === 'efficiency_workload'"
+            :efficiency="efficiency"
+            :sla-achievement="slaAchievement"
+            :workload="workload"
+            :editable="layoutStore.isEditMode"
+            :card-order="editingWidgetLayout.efficiencyWorkload"
+            @update:card-order="handleEfficiencyWorkloadOrderChange"
+          />
+        </div>
+      </template>
+    </VueDraggable>
+
+    <!-- 查看模式：普通 v-for -->
+    <template v-else v-for="rowGroup in layoutStore.draggableLayout" :key="rowGroup.rowGroupKey">
+      <DashboardTrendCategoryRow
+        v-if="rowGroup.rowGroupKey === 'trend_category'"
+        :trend="trend"
+        :categories="categories"
+        :card-order="widgetLayout.trendCategory"
+      />
+      <DashboardEfficiencyWorkloadRow
+        v-else-if="rowGroup.rowGroupKey === 'efficiency_workload'"
+        :efficiency="efficiency"
+        :sla-achievement="slaAchievement"
+        :workload="workload"
+        :card-order="widgetLayout.efficiencyWorkload"
+      />
+    </template>
   </div>
 </template>
 
 <style scoped lang="scss">
 .dashboard-page {
-  .stat-row,
-  .section-row {
-    margin-bottom: 16px;
-  }
+  // Global layout styles only
 }
 
-.stat-card {
-  margin-bottom: 12px;
-}
-
-.stat-title {
-  color: #909399;
-  font-size: 14px;
-}
-
-.stat-value {
-  color: #1675d1;
-  font-size: 30px;
-  font-weight: 600;
-  margin-top: 8px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.trend-list {
-  max-height: 460px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.trend-item {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.trend-day {
-  color: #606266;
-  font-size: 13px;
-  line-height: 22px;
-}
-
-.trend-bars {
+.dashboard-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.dashboard-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.trend-bar {
-  .label {
-    display: inline-block;
-    min-width: 90px;
-    margin-bottom: 4px;
-    font-size: 12px;
-  }
-
-  .created {
-    color: #1675d1;
-  }
-
-  .closed {
-    color: #67c23a;
-  }
-
-  .backlog {
-    color: #e6a23c;
-  }
-}
-
-.category-list {
+.edit-mode-actions {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.category-head {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-
-  .name {
-    color: #303133;
-    font-size: 14px;
-  }
-
-  .count {
-    color: #909399;
-    font-size: 13px;
-  }
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.metric-item {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 12px;
-
-  .metric-label {
-    color: #909399;
-    font-size: 12px;
-  }
-
-  .metric-value {
-    color: #1675d1;
-    font-size: 22px;
-    font-weight: 600;
-    margin-top: 6px;
-  }
-}
-
-.circle-metrics {
-  margin-top: 20px;
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.circle-item {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
 
-  .circle-title {
-    color: #606266;
-    font-size: 13px;
+.edit-tip {
+  margin-bottom: 12px;
+}
+
+.draggable-row-wrapper {
+  position: relative;
+
+  &.edit-mode {
+    border: 1px dashed #1675d1;
+    border-radius: 8px;
+    background: rgba(22, 117, 209, 0.02);
+    margin-bottom: 16px;
+    padding-top: 8px;
   }
 }
 
-@media (max-width: 991px) {
-  .trend-item {
-    grid-template-columns: 1fr;
+.drag-handle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  cursor: grab;
+  color: #909399;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #1675d1;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+:global(.drag-ghost) {
+  opacity: 0.4;
+  background: #e8f4ff;
+  border: 2px solid #1675d1 !important;
+}
+
+@media (max-width: 767px) {
+  .edit-layout-btn,
+  .edit-mode-actions,
+  .edit-tip {
+    display: none !important;
   }
 }
 </style>

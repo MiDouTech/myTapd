@@ -42,6 +42,7 @@
         <fastjson2.version>2.0.47</fastjson2.version>
         <minio.version>8.5.7</minio.version>
         <flyway.version>8.5.13</flyway.version>
+        <qiniu.version>7.14.0</qiniu.version>
     </properties>
 
     <dependencyManagement>
@@ -140,6 +141,13 @@
                 <groupId>io.minio</groupId>
                 <artifactId>minio</artifactId>
                 <version>${minio.version}</version>
+            </dependency>
+
+            <!-- ==================== 七牛云存储 ==================== -->
+            <dependency>
+                <groupId>com.qiniu</groupId>
+                <artifactId>qiniu-java-sdk</artifactId>
+                <version>${qiniu.version}</version>
             </dependency>
 
             <!-- ==================== 数据库迁移 ==================== -->

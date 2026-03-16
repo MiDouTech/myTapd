@@ -51,7 +51,12 @@ public class WecomBotMessageParser {
         if (content.startsWith("#缺陷")) {
             return parseBugTemplate(content);
         }
-        return parseGeneralTemplate(content, defaultCategoryPath);
+
+        if (content.startsWith("#")) {
+            return parseGeneralTemplate(content, defaultCategoryPath);
+        }
+
+        return WecomBotParseResult.naturalLanguage(content);
     }
 
     private WecomBotParseResult parseQueryCommand(String content) {
@@ -175,8 +180,9 @@ public class WecomBotMessageParser {
 
     private String stripBotMention(String content) {
         String result = content.trim();
-        result = result.replaceFirst("^@工单助手\\s*", "");
-        result = result.replaceFirst("^<@[^>]+>\\s*", "");
+        // 兼容普通空格和不间断空格(\u00a0)
+        result = result.replaceFirst("^@工单助手[\\s\u00a0]*", "");
+        result = result.replaceFirst("^<@[^>]+>[\\s\u00a0]*", "");
         return result;
     }
 

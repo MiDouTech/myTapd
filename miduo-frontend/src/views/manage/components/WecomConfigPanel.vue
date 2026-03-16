@@ -7,13 +7,21 @@ import type { WecomConfigUpdateInput } from '@/types/wecom'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
 
+const emit = defineEmits<{
+  (e: 'open-nlp-keyword'): void
+  (e: 'open-nlp-log'): void
+}>()
+
 const loading = ref(false)
 const submitLoading = ref(false)
 const testLoading = ref(false)
 const hasPersistedConfig = ref(false)
 const corpSecretMasked = ref('')
+const callbackAesKeyMasked = ref('')
 const latestUpdateTime = ref('')
 const formRef = ref<FormInstance>()
+
+const nlpEnabled = ref(false)
 
 const defaultForm: WecomConfigUpdateInput = {
   corpId: '',
@@ -27,6 +35,8 @@ const defaultForm: WecomConfigUpdateInput = {
   retryCount: 0,
   batchSize: 100,
   enabled: true,
+  callbackToken: '',
+  callbackAesKey: '',
 }
 
 const form = reactive<WecomConfigUpdateInput>({
@@ -97,6 +107,7 @@ const rules: FormRules<WecomConfigUpdateInput> = {
 function resetForm(): void {
   Object.assign(form, defaultForm)
   corpSecretMasked.value = ''
+  callbackAesKeyMasked.value = ''
   latestUpdateTime.value = '-'
   hasPersistedConfig.value = false
 }
@@ -121,8 +132,11 @@ async function loadConfig(): Promise<void> {
     form.retryCount = detail.retryCount ?? defaultForm.retryCount
     form.batchSize = detail.batchSize ?? defaultForm.batchSize
     form.enabled = detail.enabled ?? defaultForm.enabled
+    form.callbackToken = detail.callbackToken || ''
+    form.callbackAesKey = ''
 
     corpSecretMasked.value = detail.corpSecretMasked || ''
+    callbackAesKeyMasked.value = detail.callbackAesKeyMasked || ''
     latestUpdateTime.value = formatDateTime(detail.updateTime)
     hasPersistedConfig.value = true
   } catch {
@@ -248,7 +262,67 @@ onMounted(async () => {
         <el-form-item label="配置状态" prop="enabled">
           <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
         </el-form-item>
+
+        <el-divider content-position="left">回调配置（企微消息推送验证）</el-divider>
+
+        <el-alert
+          v-if="hasPersistedConfig && callbackAesKeyMasked"
+          :title="`已保存AESKey：${callbackAesKeyMasked}（安全策略：每次保存都需要重新输入完整AESKey）`"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+        />
+
+        <el-form-item label="回调Token" prop="callbackToken">
+          <el-input
+            v-model="form.callbackToken"
+            placeholder="请输入企微回调Token（企微回调配置页面中设置的Token）"
+          />
+        </el-form-item>
+        <el-form-item label="回调AESKey" prop="callbackAesKey">
+          <el-input
+            v-model="form.callbackAesKey"
+            show-password
+            placeholder="请输入企微回调EncodingAESKey（43位，每次保存需完整输入）"
+          />
+        </el-form-item>
       </el-form>
+    </el-card>
+
+    <!-- 自然语言建单配置区 -->
+    <el-card shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span class="card-title">自然语言建单配置</span>
+        </div>
+      </template>
+
+      <el-form label-width="150px" class="config-form">
+        <el-form-item label="功能开关">
+          <el-switch v-model="nlpEnabled" active-text="启用自然语言建单" inactive-text="停用" />
+        </el-form-item>
+        <el-form-item label="关键词规则配置">
+          <el-button type="primary" plain @click="emit('open-nlp-keyword')">
+            管理关键词规则
+          </el-button>
+          <span class="field-hint">配置意图识别、分类推断和优先级识别关键词</span>
+        </el-form-item>
+        <el-form-item label="解析日志">
+          <el-button plain @click="emit('open-nlp-log')">
+            查看解析日志
+          </el-button>
+          <span class="field-hint">查看自然语言建单的识别效果和处理记录</span>
+        </el-form-item>
+      </el-form>
+
+      <el-alert
+        title="自然语言建单：用户在企微群 @工单助手 后，直接发送任意自由文本，系统自动解析意图，回复工单预览卡片，用户回复「1」确认创建。群聊超时60秒，私聊超时300秒。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-top: 8px;"
+      />
     </el-card>
   </el-space>
 </template>
@@ -273,5 +347,11 @@ onMounted(async () => {
 
 .config-form {
   max-width: 760px;
+}
+
+.field-hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
 }
 </style>

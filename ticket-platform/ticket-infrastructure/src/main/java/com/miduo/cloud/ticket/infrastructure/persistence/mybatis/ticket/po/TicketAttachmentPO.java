@@ -23,6 +23,12 @@ public class TicketAttachmentPO extends BaseEntity {
     @TableField("file_size")
     private Long fileSize;
 
+    @TableField("source")
+    private String source;
+
+    @TableField("wecom_msg_id")
+    private String wecomMsgId;
+
     @TableField("file_type")
     private String fileType;
 

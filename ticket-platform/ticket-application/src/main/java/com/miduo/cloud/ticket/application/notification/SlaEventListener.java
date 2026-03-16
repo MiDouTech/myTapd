@@ -55,16 +55,22 @@ public class SlaEventListener {
         log.info("接收到SLA预警事件: ticketId={}, timerType={}, level={}",
                 event.getTicketId(), event.getTimerType(), event.getSlaLevel());
 
-        String title = String.format("SLA预警 - 工单 #%d", event.getTicketId());
-        String content = String.format("工单 #%d 的%s时限已使用 %d/%d 分钟，预警等级：%s",
-                event.getTicketId(),
+        TicketPO ticket = getTicket(event.getTicketId());
+        if (ticket == null) {
+            return;
+        }
+
+        String ticketRef = ticket.getTicketNo() != null ? ticket.getTicketNo()
+                : "#" + event.getTicketId();
+        String title = String.format("SLA预警 - 工单 %s", ticketRef);
+        String content = String.format("工单 %s 的%s时限已使用 %d/%d 分钟，预警等级：%s",
+                ticketRef,
                 "RESPONSE".equals(event.getTimerType()) ? "响应" : "解决",
                 event.getElapsedMinutes(),
                 event.getThresholdMinutes(),
                 event.getSlaLevel());
 
-        TicketPO ticket = getTicket(event.getTicketId());
-        if (ticket != null && ticket.getAssigneeId() != null) {
+        if (ticket.getAssigneeId() != null) {
             orchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
                     NotificationType.SLA_WARNING, title, content);
         }
@@ -77,17 +83,19 @@ public class SlaEventListener {
         log.info("接收到SLA超时事件: ticketId={}, timerType={}",
                 event.getTicketId(), event.getTimerType());
 
-        String title = String.format("SLA超时 - 工单 #%d", event.getTicketId());
-        String content = String.format("工单 #%d 的%s时限已超时，已用 %d 分钟，限时 %d 分钟",
-                event.getTicketId(),
-                "RESPONSE".equals(event.getTimerType()) ? "响应" : "解决",
-                event.getElapsedMinutes(),
-                event.getThresholdMinutes());
-
         TicketPO ticket = getTicket(event.getTicketId());
         if (ticket == null) {
             return;
         }
+
+        String ticketRef = ticket.getTicketNo() != null ? ticket.getTicketNo()
+                : "#" + event.getTicketId();
+        String title = String.format("SLA超时 - 工单 %s", ticketRef);
+        String content = String.format("工单 %s 的%s时限已超时，已用 %d 分钟，限时 %d 分钟",
+                ticketRef,
+                "RESPONSE".equals(event.getTimerType()) ? "响应" : "解决",
+                event.getElapsedMinutes(),
+                event.getThresholdMinutes());
 
         Set<Long> receivers = new LinkedHashSet<>();
         if (ticket.getAssigneeId() != null) {
@@ -115,8 +123,12 @@ public class SlaEventListener {
             return;
         }
 
-        String title = String.format("工单催办 - 工单 #%d", event.getTicketId());
-        String content = String.format("工单 #%d 被催办，请尽快处理", event.getTicketId());
+        TicketPO ticket = getTicket(event.getTicketId());
+        String ticketRef = (ticket != null && ticket.getTicketNo() != null)
+                ? ticket.getTicketNo() : "#" + event.getTicketId();
+
+        String title = String.format("工单催办 - 工单 %s", ticketRef);
+        String content = String.format("工单 %s 被催办，请尽快处理", ticketRef);
 
         orchestrator.dispatch(event.getHandlerId(), event.getTicketId(), null,
                 NotificationType.URGE, title, content);

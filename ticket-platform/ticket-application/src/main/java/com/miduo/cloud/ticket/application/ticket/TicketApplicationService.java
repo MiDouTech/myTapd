@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -15,11 +16,13 @@ import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import com.miduo.cloud.ticket.entity.dto.workflow.TransitInput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportResponsibleMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
@@ -75,10 +78,16 @@ public class TicketApplicationService {
     private BugReportTicketMapper bugReportTicketMapper;
 
     @Resource
+    private BugReportResponsibleMapper bugReportResponsibleMapper;
+
+    @Resource
     private TicketTimeTrackApplicationService ticketTimeTrackService;
 
     @Resource
     private TicketBugApplicationService ticketBugApplicationService;
+
+    @Resource
+    private TicketWorkflowAppService ticketWorkflowAppService;
 
     @Resource
     private ApplicationEventPublisher eventPublisher;
@@ -206,6 +215,139 @@ public class TicketApplicationService {
         return buildDetailOutput(ticket, currentUserId);
     }
 
+    /**
+     * 新增工单评论
+     * 接口编号：API000508
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long addComment(Long ticketId, String content, Long currentUserId) {
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+        if (content == null || content.trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "评论内容不能为空");
+        }
+        TicketCommentPO comment = new TicketCommentPO();
+        comment.setTicketId(ticketId);
+        comment.setUserId(currentUserId);
+        comment.setContent(content.trim());
+        comment.setType(CommentType.COMMENT.getCode());
+        commentMapper.insert(comment);
+        return comment.getId();
+    }
+
+    /**
+     * 按工单编号查询公开详情（无需登录，外网可访问）
+     */
+    public TicketPublicDetailOutput getPublicTicketDetail(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "工单编号不能为空");
+        }
+        TicketPO ticket = ticketMapper.selectOne(
+                new LambdaQueryWrapper<TicketPO>()
+                        .eq(TicketPO::getTicketNo, ticketNo.trim())
+                        .last("LIMIT 1")
+        );
+        if (ticket == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+        return buildPublicDetailOutput(ticket);
+    }
+
+    private TicketPublicDetailOutput buildPublicDetailOutput(TicketPO ticket) {
+        TicketPublicDetailOutput output = new TicketPublicDetailOutput();
+        output.setId(ticket.getId());
+        output.setTicketNo(ticket.getTicketNo());
+        output.setTitle(ticket.getTitle());
+        output.setDescription(ticket.getDescription());
+        output.setPriority(ticket.getPriority());
+        output.setStatus(ticket.getStatus());
+        output.setSource(ticket.getSource());
+        output.setExpectedTime(ticket.getExpectedTime());
+        output.setResolvedAt(ticket.getResolvedAt());
+        output.setClosedAt(ticket.getClosedAt());
+        output.setCreateTime(ticket.getCreateTime());
+        output.setUpdateTime(ticket.getUpdateTime());
+
+        Priority priority = Priority.fromCode(ticket.getPriority());
+        if (priority != null) {
+            output.setPriorityLabel(priority.getLabel());
+        }
+
+        TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
+        if (status != null) {
+            output.setStatusLabel(status.getLabel());
+        }
+
+        TicketSource source = TicketSource.fromCode(ticket.getSource());
+        if (source != null) {
+            output.setSourceLabel(source.getLabel());
+        }
+
+        if (ticket.getCategoryId() != null) {
+            TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
+            if (category != null) {
+                output.setCategoryName(category.getName());
+                output.setCategoryFullPath(category.getPath());
+            }
+        }
+
+        Set<Long> userIds = new HashSet<>();
+        if (ticket.getCreatorId() != null) {
+            userIds.add(ticket.getCreatorId());
+        }
+        if (ticket.getAssigneeId() != null) {
+            userIds.add(ticket.getAssigneeId());
+        }
+
+        List<TicketCommentPO> comments = commentMapper.selectList(
+                new LambdaQueryWrapper<TicketCommentPO>()
+                        .eq(TicketCommentPO::getTicketId, ticket.getId())
+                        .orderByAsc(TicketCommentPO::getCreateTime)
+        );
+        if (comments != null) {
+            for (TicketCommentPO c : comments) {
+                if (c.getUserId() != null) {
+                    userIds.add(c.getUserId());
+                }
+            }
+        }
+
+        Map<Long, SysUserPO> userMap = Collections.emptyMap();
+        if (!userIds.isEmpty()) {
+            List<SysUserPO> users = userMapper.selectBatchIds(userIds);
+            userMap = users.stream().collect(Collectors.toMap(SysUserPO::getId, u -> u));
+        }
+
+        SysUserPO creator = userMap.get(ticket.getCreatorId());
+        if (creator != null) {
+            output.setCreatorName(creator.getName());
+        }
+        SysUserPO assignee = userMap.get(ticket.getAssigneeId());
+        if (assignee != null) {
+            output.setAssigneeName(assignee.getName());
+        }
+
+        if (comments != null) {
+            Map<Long, SysUserPO> finalUserMap = userMap;
+            output.setComments(comments.stream().map(c -> {
+                TicketPublicDetailOutput.CommentOutput co = new TicketPublicDetailOutput.CommentOutput();
+                co.setId(c.getId());
+                co.setContent(c.getContent());
+                co.setType(c.getType());
+                co.setCreateTime(c.getCreateTime());
+                SysUserPO commentUser = finalUserMap.get(c.getUserId());
+                if (commentUser != null) {
+                    co.setUserName(commentUser.getName());
+                }
+                return co;
+            }).collect(Collectors.toList()));
+        }
+
+        return output;
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void assignTicket(Long ticketId, TicketAssignInput input, Long currentUserId) {
         TicketPO ticket = ticketMapper.selectById(ticketId);
@@ -237,54 +379,20 @@ public class TicketApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public void processTicket(Long ticketId, TicketProcessInput input, Long currentUserId) {
-        TicketPO ticket = ticketMapper.selectById(ticketId);
-        if (ticket == null) {
-            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
-        }
+        // 委托给工作流应用服务执行，确保经过工作流引擎校验（含角色检查）
+        TransitInput transitInput = new TransitInput();
+        transitInput.setTargetStatus(input.getTargetStatus() != null
+                ? input.getTargetStatus().toLowerCase() : null);
+        transitInput.setNewAssigneeId(input.getTargetUserId());
+        transitInput.setRemark(input.getRemark());
 
-        String fromStatus = ticket.getStatus();
-        String toStatus = input.getTargetStatus();
-        Long oldAssigneeId = ticket.getAssigneeId();
-
-        workflowService.validateTransition(ticket.getWorkflowId(), fromStatus, toStatus);
-
-        ticket.setStatus(toStatus);
-
-        if (input.getTargetUserId() != null) {
-            ticket.setAssigneeId(input.getTargetUserId());
-        }
-        Long newAssigneeId = ticket.getAssigneeId();
-
-        if (workflowService.isTerminalStatus(ticket.getWorkflowId(), toStatus)) {
-            if ("COMPLETED".equals(toStatus)) {
-                ticket.setResolvedAt(new Date());
-            }
-            ticket.setClosedAt(new Date());
-        }
-
-        ticketMapper.updateById(ticket);
-
-        if ("COMPLETED".equalsIgnoreCase(toStatus) || "CLOSED".equalsIgnoreCase(toStatus)) {
-            safePublishEvent(new TicketCompletedEvent(ticketId, toStatus, currentUserId, new Date()));
-        }
-
-        recordLog(ticketId, currentUserId, TicketAction.PROCESS.getCode(),
-                fromStatus, toStatus, input.getRemark());
-        String transitionAction = ticketTimeTrackService.resolveTransitionAction(fromStatus, toStatus);
-        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, transitionAction,
-                fromStatus, toStatus, oldAssigneeId, newAssigneeId, input.getRemark());
+        ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
 
         if (input.getRemark() != null && !input.getRemark().isEmpty()) {
             recordOperationComment(ticketId, currentUserId, input.getRemark());
         }
 
-        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, toStatus, currentUserId));
-        if (input.getTargetUserId() != null && !input.getTargetUserId().equals(oldAssigneeId)) {
-            safePublishEvent(new TicketAssignedEvent(
-                    ticketId, input.getTargetUserId(), oldAssigneeId, currentUserId, "PROCESS_ASSIGN"));
-        }
-
-        log.info("工单处理: ticketId={}, {} -> {}", ticketId, fromStatus, toStatus);
+        log.info("工单处理（委托工作流）: ticketId={}, targetStatus={}", ticketId, input.getTargetStatus());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -295,20 +403,20 @@ public class TicketApplicationService {
         }
 
         String fromStatus = ticket.getStatus();
-        Long assigneeId = ticket.getAssigneeId();
-        ticket.setStatus("CLOSED");
-        ticket.setClosedAt(new Date());
-        ticketMapper.updateById(ticket);
 
-        safePublishEvent(new TicketCompletedEvent(ticketId, "CLOSED", currentUserId, new Date()));
+        // 通过工作流引擎执行关闭流转（确保经过校验，不绕过）
+        TransitInput transitInput = new TransitInput();
+        transitInput.setTargetStatus(TicketStatus.CLOSED.getCode());
+        transitInput.setRemark(input != null ? input.getRemark() : null);
 
-        recordLog(ticketId, currentUserId, TicketAction.CLOSE.getCode(),
-                fromStatus, "CLOSED",
-                input != null ? input.getRemark() : null);
-        ticketTimeTrackService.recordStatusTrack(ticketId, currentUserId, TicketAction.COMPLETE.getCode(),
-                fromStatus, "CLOSED", assigneeId, assigneeId, input != null ? input.getRemark() : null);
-
-        safePublishEvent(new TicketStatusChangedEvent(ticketId, fromStatus, "CLOSED", currentUserId));
+        try {
+            ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
+        } catch (BusinessException e) {
+            // 如果工作流校验失败（例如管理员强制关闭），记录日志后抛出
+            log.warn("工单[{}]关闭时工作流校验失败（fromStatus={}）: {}",
+                    ticketId, fromStatus, e.getMessage());
+            throw e;
+        }
 
         log.info("工单关闭: ticketId={}", ticketId);
     }
@@ -476,6 +584,10 @@ public class TicketApplicationService {
                 if (uploader != null) {
                     ao.setUploadedByName(uploader.getName());
                 }
+                ao.setSource(a.getSource());
+                ao.setWecomMsgId(a.getWecomMsgId());
+                AttachmentSource attachmentSource = AttachmentSource.fromCode(a.getSource());
+                ao.setSourceLabel(attachmentSource.getLabel());
                 ao.setCreateTime(a.getCreateTime());
                 return ao;
             }).collect(Collectors.toList()));
@@ -563,6 +675,8 @@ public class TicketApplicationService {
             );
             output.setIsFollowed(followCount != null && followCount > 0);
         }
+
+        output.setBugSummaryInfo(buildBugSummaryInfo(ticket));
 
         return output;
     }
@@ -660,5 +774,72 @@ public class TicketApplicationService {
             // 时间追踪为衍生链路，失败时降级，避免影响主创建流程
             log.error("记录工单创建时间追踪失败，已降级跳过: ticketId={}", ticket.getId(), ex);
         }
+    }
+
+    /**
+     * 组装缺陷维度摘要信息（从 bug_report 关联获取）
+     * 取与该工单关联的最新一条简报作为数据源
+     * 若工单未关联简报则返回 null
+     */
+    private BugSummaryInfoOutput buildBugSummaryInfo(TicketPO ticket) {
+        BugReportTicketPO latestReportTicket = bugReportTicketMapper.selectOne(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getTicketId, ticket.getId())
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+                        .last("LIMIT 1")
+        );
+        if (latestReportTicket == null) {
+            return null;
+        }
+
+        BugReportPO report = bugReportMapper.selectById(latestReportTicket.getReportId());
+        if (report == null) {
+            return null;
+        }
+
+        BugSummaryInfoOutput output = new BugSummaryInfoOutput();
+        output.setBugReportId(report.getId());
+        output.setBugReportNo(report.getReportNo());
+        output.setDefectCategory(report.getDefectCategory());
+
+        List<BugReportResponsiblePO> responsibles = bugReportResponsibleMapper.selectList(
+                new LambdaQueryWrapper<BugReportResponsiblePO>()
+                        .eq(BugReportResponsiblePO::getReportId, report.getId())
+        );
+        if (responsibles != null && !responsibles.isEmpty()) {
+            Set<Long> userIds = responsibles.stream()
+                    .map(BugReportResponsiblePO::getUserId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!userIds.isEmpty()) {
+                List<SysUserPO> users = userMapper.selectBatchIds(userIds);
+                if (users != null && !users.isEmpty()) {
+                    String names = users.stream()
+                            .map(SysUserPO::getName)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.joining("、"));
+                    output.setResponsibleUserName(names);
+                }
+            }
+        }
+
+        boolean isValid = BugReportStatus.ARCHIVED.getCode().equals(report.getStatus());
+        output.setIsValidReport(isValid ? "YES" : "NO");
+        output.setIsValidReportLabel(isValid ? "是" : "否");
+
+        if (ticket.getExpectedTime() != null && !isTerminalStatus(ticket.getStatus())) {
+            output.setIsOverdue(new Date().after(ticket.getExpectedTime()));
+        } else {
+            output.setIsOverdue(false);
+        }
+
+        return output;
+    }
+
+    private boolean isTerminalStatus(String status) {
+        return "COMPLETED".equalsIgnoreCase(status)
+                || "CLOSED".equalsIgnoreCase(status)
+                || "completed".equals(status)
+                || "closed".equals(status);
     }
 }

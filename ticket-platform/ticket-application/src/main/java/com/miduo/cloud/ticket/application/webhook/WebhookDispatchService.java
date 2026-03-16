@@ -1,18 +1,24 @@
 package com.miduo.cloud.ticket.application.webhook;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
+import com.miduo.cloud.ticket.common.enums.Priority;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookDispatchLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookDispatchLogPO;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
@@ -41,16 +47,22 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
 
+    @Value("${ticket.detail-url:http://ticket.t.miduonet.com/open/ticket}")
+    private String ticketDetailUrl;
+
     private final WebhookConfigMapper webhookConfigMapper;
     private final WebhookDispatchLogMapper webhookDispatchLogMapper;
     private final TicketMapper ticketMapper;
+    private final SysUserMapper sysUserMapper;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
-                                  TicketMapper ticketMapper) {
+                                  TicketMapper ticketMapper,
+                                  SysUserMapper sysUserMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -170,6 +182,13 @@ public class WebhookDispatchService extends BaseApplicationService {
         snapshot.setPriority(ticket.getPriority());
         snapshot.setCreatorId(ticket.getCreatorId());
         snapshot.setAssigneeId(ticket.getAssigneeId());
+        if (ticket.getCreatorId() != null) {
+            SysUserPO creator = sysUserMapper.selectById(ticket.getCreatorId());
+            if (creator != null) {
+                snapshot.setCreatorWecomUserid(creator.getWecomUserid());
+                snapshot.setCreatorName(creator.getName());
+            }
+        }
         return snapshot;
     }
 
@@ -336,28 +355,107 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (eventTime != null && !eventTime.isEmpty()) {
             content.append("时间：").append(eventTime).append("\n");
         }
-        content.append("工单ID：").append(ticketId == null ? "-" : ticketId).append("\n");
         if (ticket != null) {
             content.append("工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
             content.append("标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
-            content.append("状态：").append(safeJsonString(ticket, "status", "-")).append("\n");
-            content.append("优先级：").append(safeJsonString(ticket, "priority", "-")).append("\n");
+            String statusCode = safeJsonString(ticket, "status", "-");
+            content.append("状态：").append(resolveStatusLabel(statusCode)).append("\n");
+            String priorityCode = safeJsonString(ticket, "priority", "-");
+            content.append("优先级：").append(resolvePriorityLabel(priorityCode)).append("\n");
         }
         if (data != null) {
-            String dataJson = JSON.toJSONString(data);
-            if (dataJson != null && !dataJson.trim().isEmpty()) {
-                content.append("变更：").append(dataJson);
+            String changeSummary = buildChangeSummary(data);
+            if (changeSummary != null && !changeSummary.trim().isEmpty()) {
+                content.append("变更：").append(changeSummary).append("\n");
             }
         }
+        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
+        if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+            String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
+            content.append("详情：").append(baseUrl).append("/").append(ticketNo);
+        }
+
+        String creatorWecomUserid = ticket != null ? safeJsonString(ticket, "creatorWecomUserid", null) : null;
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
         text.put("content", normalizedContent);
+        if (creatorWecomUserid != null && !creatorWecomUserid.isEmpty()) {
+            JSONArray mentionedList = new JSONArray();
+            mentionedList.add(creatorWecomUserid);
+            text.put("mentioned_list", mentionedList);
+        }
 
         JSONObject payload = new JSONObject();
         payload.put("msgtype", "text");
         payload.put("text", text);
         return JSON.toJSONString(payload);
+    }
+
+    private String resolveStatusLabel(String code) {
+        if (code == null || "-".equals(code)) {
+            return "-";
+        }
+        TicketStatus status = TicketStatus.fromCode(code);
+        return status != null ? status.getLabel() : code;
+    }
+
+    private String resolvePriorityLabel(String code) {
+        if (code == null || "-".equals(code)) {
+            return "-";
+        }
+        Priority priority = Priority.fromCode(code);
+        return priority != null ? priority.getLabel() : code;
+    }
+
+    private String buildChangeSummary(Object data) {
+        if (data == null) {
+            return null;
+        }
+        try {
+            JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+            if (json == null || json.isEmpty()) {
+                return null;
+            }
+            StringBuilder sb = new StringBuilder();
+            if (json.containsKey("categoryId")) {
+                sb.append("分类ID: ").append(json.get("categoryId"));
+            }
+            if (json.containsKey("priority")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("优先级: ").append(resolvePriorityLabel(json.getString("priority")));
+            }
+            if (json.containsKey("oldStatus")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("原状态: ").append(resolveStatusLabel(json.getString("oldStatus")));
+            }
+            if (json.containsKey("newStatus")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("新状态: ").append(resolveStatusLabel(json.getString("newStatus")));
+            }
+            if (json.containsKey("assigneeId")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("指派给: ").append(json.get("assigneeId"));
+            }
+            if (json.containsKey("assignType")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append("分派类型: ").append(json.getString("assignType"));
+            }
+            return sb.length() > 0 ? sb.toString() : null;
+        } catch (Exception ex) {
+            log.warn("解析变更数据失败: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private String safeJsonString(JSONObject jsonObject, String key) {
@@ -515,6 +613,8 @@ public class WebhookDispatchService extends BaseApplicationService {
         private String status;
         private String priority;
         private Long creatorId;
+        private String creatorName;
+        private String creatorWecomUserid;
         private Long assigneeId;
     }
 

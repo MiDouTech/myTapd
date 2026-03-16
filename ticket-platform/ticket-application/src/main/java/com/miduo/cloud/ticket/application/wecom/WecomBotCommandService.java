@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.application.wecom.model.WecomBotParseResult;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WecomBotCommandType;
+import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -40,17 +41,23 @@ public class WecomBotCommandService {
     private final TicketCategoryMapper ticketCategoryMapper;
     private final TicketApplicationService ticketApplicationService;
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
+    private final WecomProperties wecomProperties;
+    private final WecomImageHandlerService imageHandlerService;
 
     public WecomBotCommandService(SysUserMapper sysUserMapper,
                                   TicketMapper ticketMapper,
                                   TicketCategoryMapper ticketCategoryMapper,
                                   TicketApplicationService ticketApplicationService,
-                                  TicketUrgeApplicationService ticketUrgeApplicationService) {
+                                  TicketUrgeApplicationService ticketUrgeApplicationService,
+                                  WecomProperties wecomProperties,
+                                  WecomImageHandlerService imageHandlerService) {
         this.sysUserMapper = sysUserMapper;
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketApplicationService = ticketApplicationService;
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
+        this.wecomProperties = wecomProperties;
+        this.imageHandlerService = imageHandlerService;
     }
 
     /**
@@ -99,7 +106,7 @@ public class WecomBotCommandService {
             return result;
         }
         if (commandType == WecomBotCommandType.CREATE) {
-            return handleCreateCommand(parseResult, chatId, sender.getId(), defaultCategoryId);
+            return handleCreateCommand(parseResult, chatId, fromWecomId, sender.getId(), defaultCategoryId);
         }
 
         result.setReplyContent("❌ 暂不支持该指令，请发送“@工单助手 帮助”查看可用命令");
@@ -108,6 +115,7 @@ public class WecomBotCommandService {
 
     private CommandHandleResult handleCreateCommand(WecomBotParseResult parseResult,
                                                     String chatId,
+                                                    String fromWecomId,
                                                     Long senderId,
                                                     Long defaultCategoryId) {
         CommandHandleResult result = new CommandHandleResult();
@@ -130,14 +138,21 @@ public class WecomBotCommandService {
         Long ticketId = ticketApplicationService.createTicket(input, senderId);
         TicketPO ticket = ticketMapper.selectById(ticketId);
 
+        int linkedImages = imageHandlerService.linkPendingImagesToTicket(ticketId, chatId, fromWecomId);
         String categoryName = buildCategoryPathName(categoryId);
+        String ticketNo = ticket != null ? ticket.getTicketNo() : "";
+        String publicLink = buildPublicTicketLink(ticketNo);
         result.setTicketId(ticketId);
-        result.setReplyContent("✅ 工单创建成功\n" +
-                "工单编号：" + safeValue(ticket != null ? ticket.getTicketNo() : "") + "\n" +
-                "标题：" + safeValue(parseResult.getTitle()) + "\n" +
-                "分类：" + safeValue(categoryName) + "\n" +
-                "优先级：" + safeValue(parseResult.getPriority()) + "\n" +
-                "请到系统内查看详情。");
+        StringBuilder replyBuilder = new StringBuilder("✅ 工单创建成功\n")
+                .append("工单编号：").append(safeValue(ticketNo)).append("\n")
+                .append("标题：").append(safeValue(parseResult.getTitle())).append("\n")
+                .append("分类：").append(safeValue(categoryName)).append("\n")
+                .append("优先级：").append(safeValue(parseResult.getPriority())).append("\n");
+        if (linkedImages > 0) {
+            replyBuilder.append("🖼️ 图片附件：").append(linkedImages).append("张（已上传）\n");
+        }
+        replyBuilder.append("查看详情：").append(publicLink);
+        result.setReplyContent(replyBuilder.toString());
         return result;
     }
 
@@ -309,6 +324,21 @@ public class WecomBotCommandService {
 
     private String safeValue(String value) {
         return value == null ? "-" : value;
+    }
+
+    private String buildPublicTicketLink(String ticketNo) {
+        if (ticketNo == null || ticketNo.trim().isEmpty()) {
+            return "-";
+        }
+        String domain = wecomProperties.getTrustedDomain();
+        if (domain == null || domain.trim().isEmpty()) {
+            return "-";
+        }
+        String normalizedDomain = domain.trim();
+        if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
+            normalizedDomain = "https://" + normalizedDomain;
+        }
+        return normalizedDomain + "/open/ticket/" + ticketNo.trim();
     }
 
     /**

@@ -199,7 +199,7 @@ onMounted(() => {
         />
       </el-form-item>
       <el-form-item label="工单来源">
-        <el-select v-model="form.source" class="w-420">
+        <el-select v-model="form.source" class="w-420" placeholder="请选择">
           <el-option label="Web" value="web" />
           <el-option label="企业微信" value="wecom" />
           <el-option label="邮件" value="email" />

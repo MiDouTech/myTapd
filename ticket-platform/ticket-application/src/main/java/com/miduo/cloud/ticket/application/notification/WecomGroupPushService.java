@@ -5,9 +5,12 @@ import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomGroupBindingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomGroupBindingPO;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 
@@ -20,13 +23,16 @@ public class WecomGroupPushService extends BaseApplicationService {
     private final TicketMapper ticketMapper;
     private final WecomGroupBindingMapper groupBindingMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
+    private final SysUserMapper sysUserMapper;
 
     public WecomGroupPushService(TicketMapper ticketMapper,
                                  WecomGroupBindingMapper groupBindingMapper,
-                                 WecomGroupWebhookSender groupWebhookSender) {
+                                 WecomGroupWebhookSender groupWebhookSender,
+                                 SysUserMapper sysUserMapper) {
         this.ticketMapper = ticketMapper;
         this.groupBindingMapper = groupBindingMapper;
         this.groupWebhookSender = groupWebhookSender;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -51,6 +57,8 @@ public class WecomGroupPushService extends BaseApplicationService {
             return;
         }
 
+        String creatorWecomUserid = resolveCreatorWecomUserid(ticket.getCreatorId());
+
         Set<String> pushedWebhookUrls = new HashSet<>();
         for (WecomGroupBindingPO binding : bindings) {
             String webhookUrl = binding.getWebhookUrl();
@@ -67,12 +75,119 @@ public class WecomGroupPushService extends BaseApplicationService {
             try {
                 log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
-                groupWebhookSender.sendToWebhook(webhookUrl, title, content);
+                groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content,
+                        creatorWecomUserid != null ? Collections.singletonList(creatorWecomUserid) : null);
             } catch (Exception ex) {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
             }
         }
+    }
+
+    /**
+     * 根据多个关联工单的群绑定关系，发送预格式化的 Bug 简报归档通知（含@mention）
+     * 正文直接使用已组装的 markdownBody，不额外包装
+     *
+     * @param ticketIds             关联的工单ID列表
+     * @param markdownBody          已组装的Markdown正文（含标题行）
+     * @param mentionedWecomUserIds 需要@的企微userId列表
+     */
+    public void pushReportNoticeByTickets(List<Long> ticketIds, String markdownBody,
+                                          List<String> mentionedWecomUserIds) {
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            log.debug("Bug简报归档群通知跳过：ticketIds为空");
+            return;
+        }
+        List<TicketPO> tickets = ticketMapper.selectBatchIds(ticketIds);
+        if (CollectionUtils.isEmpty(tickets)) {
+            log.warn("Bug简报归档群通知跳过：未查到工单数据, ticketIds={}", ticketIds);
+            return;
+        }
+        Set<String> pushedWebhookUrls = new HashSet<>();
+        for (TicketPO ticket : tickets) {
+            List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
+            for (WecomGroupBindingPO binding : bindings) {
+                String webhookUrl = binding.getWebhookUrl();
+                if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+                    continue;
+                }
+                if (!pushedWebhookUrls.add(webhookUrl)) {
+                    continue;
+                }
+                try {
+                    log.info("Bug简报归档群通知发送中: ticketId={}, bindingId={}, webhook={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl));
+                    groupWebhookSender.sendReportNoticeToWebhook(webhookUrl, markdownBody, mentionedWecomUserIds);
+                } catch (Exception ex) {
+                    log.error("Bug简报归档群通知失败: ticketId={}, bindingId={}, webhook={}, reason={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
+                }
+            }
+        }
+        if (pushedWebhookUrls.isEmpty()) {
+            log.debug("Bug简报归档群通知跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
+        }
+    }
+
+    /**
+     * 根据多个关联工单的群绑定关系，推送 @mention 群消息
+     * 适用于 Bug 简报归档后通知工单创建人和处理人
+     *
+     * @param ticketIds             关联的工单ID列表
+     * @param title                 消息标题
+     * @param content               消息正文
+     * @param mentionedWecomUserIds 需要@的企微userId列表
+     */
+    public void pushByTicketsWithMention(List<Long> ticketIds, String title, String content,
+                                         List<String> mentionedWecomUserIds) {
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            log.debug("企微群@mention推送跳过：ticketIds为空");
+            return;
+        }
+
+        List<TicketPO> tickets = ticketMapper.selectBatchIds(ticketIds);
+        if (CollectionUtils.isEmpty(tickets)) {
+            log.warn("企微群@mention推送跳过：未查到工单数据, ticketIds={}", ticketIds);
+            return;
+        }
+
+        Set<String> pushedWebhookUrls = new HashSet<>();
+        for (TicketPO ticket : tickets) {
+            List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
+            for (WecomGroupBindingPO binding : bindings) {
+                String webhookUrl = binding.getWebhookUrl();
+                if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+                    continue;
+                }
+                if (!pushedWebhookUrls.add(webhookUrl)) {
+                    continue;
+                }
+                try {
+                    log.info("企微群@mention推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
+                            ticket.getId(), binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
+                    groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content, mentionedWecomUserIds);
+                } catch (Exception ex) {
+                    log.error("企微群@mention推送失败: ticketId={}, bindingId={}, webhook={}, reason={}",
+                            ticket.getId(), binding.getId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
+                }
+            }
+        }
+
+        if (pushedWebhookUrls.isEmpty()) {
+            log.debug("企微群@mention推送跳过：关联工单均未绑定群, ticketIds={}", ticketIds);
+        }
+    }
+
+    private String resolveCreatorWecomUserid(Long creatorId) {
+        if (creatorId == null) {
+            return null;
+        }
+        SysUserPO creator = sysUserMapper.selectById(creatorId);
+        if (creator == null) {
+            return null;
+        }
+        String wecomUserid = creator.getWecomUserid();
+        return (wecomUserid != null && !wecomUserid.trim().isEmpty()) ? wecomUserid.trim() : null;
     }
 
     private List<WecomGroupBindingPO> findRelatedBindings(String sourceChatId, Long categoryId) {

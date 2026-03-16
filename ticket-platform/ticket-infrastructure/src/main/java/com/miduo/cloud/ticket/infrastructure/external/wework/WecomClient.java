@@ -27,6 +27,7 @@ public class WecomClient {
     private static final String GET_DEPARTMENT_LIST_PATH = "/cgi-bin/department/list";
     private static final String GET_DEPARTMENT_USER_PATH = "/cgi-bin/user/list";
     private static final String SEND_APP_MESSAGE_PATH = "/cgi-bin/message/send";
+    private static final String GET_MEDIA_PATH = "/cgi-bin/media/get";
     private static final Long ROOT_DEPARTMENT_ID = 1L;
 
     private final WecomTokenManager tokenManager;
@@ -217,6 +218,148 @@ public class WecomClient {
             String errMsg = result != null ? result.getString("errmsg") : "response is null";
             log.error("发送企微应用消息失败: toUser={}, errMsg={}", toUser, errMsg);
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用消息失败: " + errMsg);
+        }
+    }
+
+    /**
+     * 通过 MediaId 下载企微媒体文件（图片），返回字节数组
+     * 企微接口：GET /cgi-bin/media/get?access_token=xxx&media_id=xxx
+     * 当接口返回错误时（Content-Type: application/json），返回 null 而非错误 JSON 字节
+     *
+     * @param mediaId 企微 MediaId
+     * @return 图片字节数组，失败时返回 null
+     */
+    public byte[] downloadMediaById(String mediaId) {
+        if (mediaId == null || mediaId.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String accessToken = tokenManager.getAccessToken();
+            String url = buildApiUrl(GET_MEDIA_PATH) + "?access_token=" + accessToken + "&media_id=" + mediaId.trim();
+            WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+            int connectTimeout = config.getConnectTimeoutMs() != null ? config.getConnectTimeoutMs() : 10000;
+            int readTimeout = config.getReadTimeoutMs() != null ? config.getReadTimeoutMs() : 30000;
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpRequest.get(url)
+                    .timeout(connectTimeout + readTimeout)
+                    .execute();
+            String contentType = response.header("Content-Type");
+            // 企微 API 返回错误时 Content-Type 为 application/json，正常图片为 image/* 或 application/octet-stream
+            if (contentType != null && contentType.contains("application/json")) {
+                String body = response.body();
+                log.warn("企微MediaId下载返回错误响应（非图片）: mediaId={}, response={}", mediaId,
+                        body != null && body.length() > 200 ? body.substring(0, 200) : body);
+                return null;
+            }
+            byte[] bytes = response.bodyBytes();
+            if (bytes == null || bytes.length == 0) {
+                log.warn("企微MediaId下载返回空数据: mediaId={}", mediaId);
+                return null;
+            }
+            return bytes;
+        } catch (Exception e) {
+            log.warn("企微MediaId下载失败: mediaId={}, error={}", mediaId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过 HTTP 下载图片临时预览 URL
+     *
+     * @param picUrl 企微图片临时URL
+     * @return 图片字节数组，失败时返回 null
+     */
+    public byte[] downloadImageByUrl(String picUrl) {
+        if (picUrl == null || picUrl.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+            int connectTimeout = config.getConnectTimeoutMs() != null ? config.getConnectTimeoutMs() : 10000;
+            int readTimeout = config.getReadTimeoutMs() != null ? config.getReadTimeoutMs() : 30000;
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpRequest.get(picUrl.trim())
+                    .timeout(connectTimeout + readTimeout)
+                    .execute();
+            byte[] bytes = response.bodyBytes();
+            if (bytes == null || bytes.length == 0) {
+                log.warn("企微图片PicUrl下载返回空数据: picUrl={}", picUrl);
+                return null;
+            }
+            return bytes;
+        } catch (Exception e) {
+            log.warn("企微图片PicUrl下载失败: picUrl={}, error={}", picUrl, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过企微AI bot response_url直接回复消息
+     * 适用于AI bot单聊场景，无需access_token
+     * AI bot response_url 仅支持 markdown 类型消息
+     */
+    public void sendAibotReply(String responseUrl, String content) {
+        if (responseUrl == null || responseUrl.trim().isEmpty()) {
+            log.warn("企微AI bot response_url为空，跳过回复");
+            return;
+        }
+        if (content == null || content.trim().isEmpty()) {
+            log.warn("企微AI bot回复内容为空，跳过发送");
+            return;
+        }
+
+        JSONObject markdown = new JSONObject();
+        markdown.put("content", content);
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "markdown");
+        payload.put("markdown", markdown);
+
+        String response = HttpUtil.post(responseUrl.trim(), payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微AI bot回复失败: errMsg={}", errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微AI bot回复失败: " + errMsg);
+        }
+        log.info("企微AI bot回复发送成功");
+    }
+
+    /**
+     * 发送企微应用文本消息（text类型，无url字段要求）
+     * 适用于bot单聊通知场景
+     */
+    public void sendTextMessage(String toUser, String content) {
+        if (toUser == null || toUser.trim().isEmpty()) {
+            log.warn("企微应用文本消息接收人为空，跳过发送");
+            return;
+        }
+
+        int agentId;
+        try {
+            String configAgentId = runtimeConfigProvider.getRuntimeConfig().getAgentId();
+            agentId = Integer.parseInt(configAgentId);
+        } catch (Exception ex) {
+            log.error("企微AgentId配置非法");
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "企微AgentId配置非法");
+        }
+
+        String accessToken = tokenManager.getAccessToken();
+        String requestUrl = buildApiUrl(SEND_APP_MESSAGE_PATH) + "?access_token=" + accessToken;
+
+        JSONObject text = new JSONObject();
+        text.put("content", content == null ? "" : content);
+
+        JSONObject payload = new JSONObject();
+        payload.put("touser", toUser);
+        payload.put("msgtype", "text");
+        payload.put("agentid", agentId);
+        payload.put("text", text);
+
+        String response = HttpUtil.post(requestUrl, payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微应用文本消息失败: toUser={}, errMsg={}", toUser, errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用文本消息失败: " + errMsg);
         }
     }
 

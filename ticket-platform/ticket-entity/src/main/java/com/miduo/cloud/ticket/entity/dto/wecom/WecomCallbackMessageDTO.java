@@ -36,6 +36,26 @@ public class WecomCallbackMessageDTO implements Serializable {
     private String content;
 
     /**
+     * 企微图片MediaId（MsgType=image时有值）
+     */
+    private String mediaId;
+
+    /**
+     * 企微图片临时预览URL（MsgType=image时有值）
+     */
+    private String picUrl;
+
+    /**
+     * 企微AI bot图片下载URL（chattype=single时image.download_url字段，需AES解密）
+     */
+    private String downloadUrl;
+
+    /**
+     * 企微AI bot图片AES密钥（chattype=single时image.aes_key字段，用于解密download_url内容）
+     */
+    private String aesKey;
+
+    /**
      * 解密后的原始XML
      */
     private String rawXml;
@@ -44,4 +64,14 @@ public class WecomCallbackMessageDTO implements Serializable {
      * 消息时间戳
      */
     private String createTime;
+
+    /**
+     * 企微AI bot回调消息的response_url，用于直接回复消息（无需access_token）
+     */
+    private String responseUrl;
+
+    /**
+     * 聊天类型（single=单聊，group=群聊），企微AI bot消息携带
+     */
+    private String chatType;
 }

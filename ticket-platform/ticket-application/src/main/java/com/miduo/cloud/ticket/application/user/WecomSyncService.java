@@ -31,6 +31,9 @@ public class WecomSyncService extends BaseApplicationService {
     private static final Long ROOT_DEPARTMENT_ID = 1L;
     private static final Long DEFAULT_SUBMITTER_ROLE_ID = 4L;
 
+    /** 系统内置账号前缀，这类账号不参与企微同步失活收敛 */
+    private static final String SYSTEM_ACCOUNT_PREFIX = "DEV_";
+
     private final WecomClient wecomClient;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
@@ -249,8 +252,16 @@ public class WecomSyncService extends BaseApplicationService {
             wecomUsers = Collections.emptyList();
         }
 
+        long missingPhone = wecomUsers.stream().filter(u -> u != null && (u.getMobile() == null || u.getMobile().trim().isEmpty())).count();
+        long missingPosition = wecomUsers.stream().filter(u -> u != null && (u.getPosition() == null || u.getPosition().trim().isEmpty())).count();
+        log.info("企微通讯录列表接口返回成员{}人，其中手机号缺失{}人，职位缺失{}人", wecomUsers.size(), missingPhone, missingPosition);
+        if (missingPhone > 0) {
+            log.warn("手机号缺失可能是企业微信应用未开通「获取成员手机号」权限，请在企微管理后台->应用管理->通讯录同步中确认权限配置");
+        }
+
         Map<String, User> existingUserMap = userRepository.findAll().stream()
                 .filter(u -> u.getWecomUserid() != null && !u.getWecomUserid().trim().isEmpty())
+                .filter(u -> !u.getWecomUserid().trim().startsWith(SYSTEM_ACCOUNT_PREFIX))
                 .collect(Collectors.toMap(u -> u.getWecomUserid().trim(), Function.identity(), (a, b) -> a, HashMap::new));
         Set<String> incomingUserIds = new HashSet<>();
         Date syncTime = new Date();
@@ -289,8 +300,9 @@ public class WecomSyncService extends BaseApplicationService {
                     existing.setName(latestName);
                     changed = true;
                 }
+                // 手机号和职位仅在 API 有返回值时才更新，避免因权限不足导致误清空数据库中已有的值
                 String latestPhone = trimToNull(wecomUser.getMobile());
-                if (!Objects.equals(latestPhone, existing.getPhone())) {
+                if (latestPhone != null && !Objects.equals(latestPhone, existing.getPhone())) {
                     existing.setPhone(latestPhone);
                     changed = true;
                 }
@@ -300,12 +312,13 @@ public class WecomSyncService extends BaseApplicationService {
                     changed = true;
                 }
                 String latestPosition = trimToNull(wecomUser.getPosition());
-                if (!Objects.equals(latestPosition, existing.getPosition())) {
+                if (latestPosition != null && !Objects.equals(latestPosition, existing.getPosition())) {
                     existing.setPosition(latestPosition);
                     changed = true;
                 }
+                // 性别仅在 API 明确返回有效值（1:男 2:女）时才更新，避免用"未知(0)"覆盖已有值
                 Integer latestGender = normalizeGender(wecomUser.getGender());
-                if (!Objects.equals(latestGender, existing.getGender())) {
+                if (latestGender != null && latestGender != 0 && !Objects.equals(latestGender, existing.getGender())) {
                     existing.setGender(latestGender);
                     changed = true;
                 }

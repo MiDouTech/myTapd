@@ -11,13 +11,15 @@ import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue
 import WebhookDispatchLogPanel from '@/views/manage/components/WebhookDispatchLogPanel.vue'
 import WecomConfigPanel from '@/views/manage/components/WecomConfigPanel.vue'
 import WecomGroupBindingPanel from '@/views/manage/components/WecomGroupBindingPanel.vue'
+import WecomNlpKeywordPanel from '@/views/manage/components/WecomNlpKeywordPanel.vue'
+import WecomNlpLogPanel from '@/views/manage/components/WecomNlpLogPanel.vue'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const route = useRoute()
 const router = useRouter()
 
 const tabValues = ['basic', 'notification', 'integration'] as const
-const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom'] as const
+const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom', 'nlpKeyword', 'nlpLog'] as const
 
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
@@ -251,7 +253,10 @@ onMounted(async () => {
       <el-tab-pane label="集成设置" name="integration">
         <el-tabs v-model="activeSection" class="integration-tabs">
           <el-tab-pane label="企微连接配置" name="wecomConfig">
-            <WecomConfigPanel />
+            <WecomConfigPanel
+              @open-nlp-keyword="activeSection = 'nlpKeyword'"
+              @open-nlp-log="activeSection = 'nlpLog'"
+            />
           </el-tab-pane>
 
           <el-tab-pane label="Webhook配置" name="webhook">
@@ -264,6 +269,14 @@ onMounted(async () => {
 
           <el-tab-pane label="企微群绑定" name="wecom">
             <WecomGroupBindingPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="NLP关键词配置" name="nlpKeyword">
+            <WecomNlpKeywordPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="NLP解析日志" name="nlpLog">
+            <WecomNlpLogPanel />
           </el-tab-pane>
         </el-tabs>
       </el-tab-pane>

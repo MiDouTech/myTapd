@@ -19,9 +19,14 @@ spring:
     baseline-version: 0
     encoding: UTF-8
     validate-on-migrate: true
+    ignore-migration-patterns: "*:missing"
     out-of-order: false
     table: flyway_schema_history
     clean-disabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 50MB
 
 mybatis-plus:
   global-config:

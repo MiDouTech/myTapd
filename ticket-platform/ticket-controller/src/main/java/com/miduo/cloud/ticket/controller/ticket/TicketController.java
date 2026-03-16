@@ -3,12 +3,15 @@ package com.miduo.cloud.ticket.controller.ticket;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
+import com.miduo.cloud.ticket.application.wecom.WecomMessageFieldParser;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
+import com.miduo.cloud.ticket.entity.dto.wecom.WecomMessageParseInput;
+import com.miduo.cloud.ticket.entity.dto.wecom.WecomMessageParseOutput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +32,9 @@ public class TicketController {
 
     @Resource
     private TicketTimeTrackApplicationService ticketTimeTrackApplicationService;
+
+    @Resource
+    private WecomMessageFieldParser wecomMessageFieldParser;
 
     /**
      * 创建工单
@@ -214,6 +220,33 @@ public class TicketController {
     public ApiResult<TicketNodeDurationOutput> getNodeDuration(@PathVariable Long id) {
         TicketNodeDurationOutput output = ticketTimeTrackApplicationService.getNodeDuration(id);
         return ApiResult.success(output);
+    }
+
+    /**
+     * 企微消息自然语言解析 - 客服信息字段提取
+     * 接口编号：API000504
+     * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值
+     */
+    @PostMapping("/wecom/parse-customer-info")
+    @Operation(summary = "企微消息解析为客服信息字段", description = "接口编号：API000504")
+    public ApiResult<WecomMessageParseOutput> parseWecomCustomerInfo(
+            @Valid @RequestBody WecomMessageParseInput input) {
+        WecomMessageParseOutput output = wecomMessageFieldParser.parse(input.getMessage());
+        return ApiResult.success(output);
+    }
+
+    /**
+     * 新增工单评论
+     * 接口编号：API000508
+     * 产品文档功能：工单详情 - 评论区发表评论
+     */
+    @PostMapping("/{id}/comment")
+    @Operation(summary = "新增工单评论", description = "接口编号：API000508")
+    public ApiResult<Long> addComment(@PathVariable Long id,
+                                      @Valid @RequestBody TicketCommentInput input) {
+        Long currentUserId = getCurrentUserId();
+        Long commentId = ticketService.addComment(id, input.getContent(), currentUserId);
+        return ApiResult.success(commentId);
     }
 
     private Long getCurrentUserId() {

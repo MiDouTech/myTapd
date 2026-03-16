@@ -82,8 +82,17 @@ export interface TicketBugTestInfoInput {
   impactScope?: string
   severityLevel?: string
   moduleName?: string
-  reproduceScreenshot?: string
   testRemark?: string
+}
+
+export interface TicketModuleOutput {
+  id: number
+  name: string
+  sort: number
+}
+
+export interface TicketModuleInput {
+  name: string
 }
 
 export interface TicketBugDevInfoInput {
@@ -145,7 +154,17 @@ export interface TicketAttachmentOutput {
   fileType?: string
   uploadedBy?: number
   uploadedByName?: string
+  source?: string
+  sourceLabel?: string
+  wecomMsgId?: string
   createTime?: string
+}
+
+export interface ImageUploadOutput {
+  url: string
+  fileName?: string
+  fileSize?: number
+  fileType?: string
 }
 
 export interface TicketCommentOutput {
@@ -214,4 +233,105 @@ export interface TicketDetailOutput {
   bugTestInfo?: TicketBugTestInfoInput
   bugDevInfo?: TicketBugDevInfoInput
   isFollowed?: boolean
+  /** 缺陷维度摘要信息（从 Bug 简报关联获取，工单未关联简报时为 null） */
+  bugSummaryInfo?: BugSummaryInfoOutput
+}
+
+/** 单个字段变更明细 */
+export interface BugFieldChangeItem {
+  fieldName: string
+  fieldLabel: string
+  oldValue: string | null
+  oldLabel: string | null
+  newValue: string | null
+  newLabel: string | null
+}
+
+/** 变更历史条目（API000501） */
+export interface BugChangeHistoryOutput {
+  id: number
+  seq: number
+  changeTime: string
+  changeByUserId: number
+  changeByUserName: string
+  changeByAvatar: string | null
+  changeType: string
+  changeTypeLabel: string
+  fields: BugFieldChangeItem[]
+}
+
+/** 缺陷维度摘要信息（从 Bug 简报关联获取） */
+export interface BugSummaryInfoOutput {
+  bugReportId: number | null
+  bugReportNo: string | null
+  defectCategory: string | null
+  defectCategoryLabel: string | null
+  isValidReport: string | null
+  isValidReportLabel: string | null
+  responsibleUserName: string | null
+  isOverdue: boolean | null
+}
+
+/** 变更历史查询参数 */
+export interface BugChangeHistoryQuery {
+  changeType?: string
+  fieldName?: string
+}
+
+/**
+ * 企微消息解析输入参数
+ * 接口编号：API000504
+ */
+export interface WecomMessageParseInput {
+  message: string
+}
+
+/**
+ * 企微消息解析输出结果
+ * 接口编号：API000504
+ */
+export interface WecomMessageParseOutput {
+  merchantNo?: string
+  companyName?: string
+  merchantAccount?: string
+  sceneCode?: string
+  problemDesc?: string
+  expectedResult?: string
+  problemScreenshot?: string
+  /** 成功匹配的字段名列表，用于前端高亮提示 */
+  matchedFields?: string[]
+  /** 解析置信度 0-100 */
+  confidence?: number
+}
+
+/** 工单公开详情（无需登录，外网访问） */
+export interface TicketPublicCommentOutput {
+  id: number
+  userName?: string
+  content?: string
+  type?: string
+  createTime?: string
+}
+
+export interface TicketPublicDetailOutput {
+  id: number
+  ticketNo: string
+  title?: string
+  description?: string
+  categoryName?: string
+  categoryFullPath?: string
+  priority?: string
+  priorityLabel?: string
+  status?: string
+  statusLabel?: string
+  creatorName?: string
+  assigneeName?: string
+  source?: string
+  sourceLabel?: string
+  expectedTime?: string
+  resolvedAt?: string
+  closedAt?: string
+  createTime?: string
+  updateTime?: string
+  comments?: TicketPublicCommentOutput[]
 }

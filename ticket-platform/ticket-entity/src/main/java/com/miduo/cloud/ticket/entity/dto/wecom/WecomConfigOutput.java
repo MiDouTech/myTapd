@@ -24,4 +24,6 @@ public class WecomConfigOutput implements Serializable {
     private Integer batchSize;
     private Boolean enabled;
     private Date updateTime;
+    private String callbackToken;
+    private String callbackAesKeyMasked;
 }

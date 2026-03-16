@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.workflow.AvailableActionOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.ReturnInput;
+import com.miduo.cloud.ticket.entity.dto.workflow.TicketFlowRecordOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TransferInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TransitInput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.List;
 
 /**
  * 工单工作流操作接口 - 状态流转、转派、退回
@@ -79,6 +81,18 @@ public class TicketWorkflowController {
         Long operatorId = getCurrentUserId();
         ticketWorkflowAppService.returnTicket(id, input, operatorId);
         return ApiResult.success();
+    }
+
+    /**
+     * 查询工单流转历史
+     * 接口编号：API000018
+     * 产品文档功能：4.4 工作流引擎 - 流转历史记录
+     */
+    @Operation(summary = "查询工单流转历史", description = "接口编号：API000018")
+    @GetMapping("/{id}/flow-history")
+    public ApiResult<List<TicketFlowRecordOutput>> getFlowHistory(@PathVariable Long id) {
+        List<TicketFlowRecordOutput> result = ticketWorkflowAppService.getFlowHistory(id);
+        return ApiResult.success(result);
     }
 
     /**

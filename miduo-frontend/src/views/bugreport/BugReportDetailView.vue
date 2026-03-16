@@ -211,6 +211,65 @@ function openAttachment(attachment: BugReportAttachmentOutput): void {
   window.open(attachment.filePath, '_blank')
 }
 
+function formatDateDisplay(value?: string | null): string {
+  if (!value) return '-'
+  return String(value).slice(0, 10)
+}
+
+function getSeverityLabel(level?: string): string {
+  const map: Record<string, string> = {
+    P0: 'P0（致命）',
+    P1: 'P1（重大）',
+    P2: 'P2（严重）',
+    P3: 'P3（一般）',
+    P4: 'P4（轻微）',
+  }
+  return level ? (map[level] || level) : '-'
+}
+
+function getSeverityTagType(level?: string): '' | 'success' | 'warning' | 'danger' | 'info' {
+  const map: Record<string, '' | 'success' | 'warning' | 'danger' | 'info'> = {
+    P0: 'danger',
+    P1: 'warning',
+    P2: '',
+    P3: 'success',
+    P4: 'info',
+  }
+  return level ? (map[level] ?? 'info') : 'info'
+}
+
+function buildCopyText(): string {
+  const d = detail.value
+  if (!d) return ''
+  const responsibleNames = (d.responsibleUsers || []).map((u) => u.userName || String(u.userId)).join('、') || '-'
+  const lines: string[] = [
+    `问题描述：${d.problemDesc || '-'}`,
+    `逻辑归因：${[d.logicCauseLevel1, d.logicCauseLevel2].filter(Boolean).join(' / ') || '-'}`,
+    `缺陷分类：${d.defectCategory || '-'}`,
+    `引入项目：${d.introducedProject || '-'}`,
+    `开始时间：${formatDateDisplay(d.startDate)}`,
+    `临时解决时间：${formatDateDisplay(d.tempResolveDate)}`,
+    `临时解决方案：${d.tempSolution || '-'}`,
+    `彻底解决时间：${formatDateDisplay(d.resolveDate)}`,
+    `彻底解决方案：${d.solution || '-'}`,
+    `影响范围：${d.impactScope || '-'}`,
+    `缺陷等级：${d.severityLevel || '-'}`,
+    `反馈人：${d.reporterName || '-'}`,
+    `审核人：${d.reviewerName || '-'}`,
+    `责任人：${responsibleNames}`,
+  ]
+  return lines.join('\n')
+}
+
+function handleCopyReport(): void {
+  const text = buildCopyText()
+  if (!text) return
+  navigator.clipboard.writeText(text).then(
+    () => notifySuccess('Bug简报已复制到剪贴板'),
+    () => notifyWarning('复制失败，请手动复制'),
+  )
+}
+
 onMounted(async () => {
   await Promise.all([loadUsers(), loadDetail()])
 })
@@ -243,6 +302,7 @@ watch(
           </div>
           <el-space>
             <el-button @click="handleBack">返回列表</el-button>
+            <el-button type="default" @click="handleCopyReport">一键复制</el-button>
             <el-button v-if="canEdit" type="primary" plain @click="handleEdit">编辑</el-button>
             <el-button v-if="canSubmit" type="primary" @click="openSubmitDialog">提交审核</el-button>
             <el-button v-if="canReview" type="success" @click="openReviewDialog('approve')"
@@ -267,7 +327,14 @@ watch(
           {{ detail?.defectCategory || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="严重级别">
-          {{ detail?.severityLevel || '-' }}
+          <el-tag
+            v-if="detail?.severityLevel"
+            :type="getSeverityTagType(detail.severityLevel)"
+            size="small"
+          >
+            {{ getSeverityLabel(detail.severityLevel) }}
+          </el-tag>
+          <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="引入项目">
           {{ detail?.introducedProject || '-' }}
@@ -275,8 +342,14 @@ watch(
         <el-descriptions-item label="影响范围">
           {{ detail?.impactScope || '-' }}
         </el-descriptions-item>
-        <el-descriptions-item label="问题周期">
-          {{ formatDateTime(detail?.startDate) }} ~ {{ formatDateTime(detail?.resolveDate) }}
+        <el-descriptions-item label="开始时间">
+          {{ formatDateDisplay(detail?.startDate) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="临时解决时间">
+          {{ formatDateDisplay(detail?.tempResolveDate) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="彻底解决时间">
+          {{ formatDateDisplay(detail?.resolveDate) }}
         </el-descriptions-item>
         <el-descriptions-item label="提交时间">
           {{ formatDateTime(detail?.submittedAt) }}
@@ -294,10 +367,13 @@ watch(
           {{ detail?.reviewComment || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="问题描述" :span="2">
-          {{ detail?.problemDesc || '-' }}
+          <span class="pre-wrap">{{ detail?.problemDesc || '-' }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="解决方案" :span="2">
-          {{ detail?.solution || '-' }}
+        <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
+          <span class="pre-wrap">{{ detail.tempSolution }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="彻底解决方案" :span="2">
+          <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detail?.remark || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -499,6 +575,11 @@ watch(
 .log-content {
   margin-top: 4px;
   color: #606266;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 991px) {

@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.UserTicketLoadStat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -30,4 +31,15 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
     List<Long> selectFollowedTicketIds(@Param("userId") Long userId);
 
     List<Long> selectParticipatedTicketIds(@Param("userId") Long userId);
+
+    /**
+     * 批量统计多个用户的未完成工单数（负载均衡分派使用，避免 N+1 查询）
+     *
+     * @param userIds        用户ID列表
+     * @param excludeStatuses 排除的终态状态码列表（如 completed、closed）
+     * @return 每个用户的未完成工单数列表
+     */
+    List<UserTicketLoadStat> selectActiveCountByUserIds(
+            @Param("userIds") List<Long> userIds,
+            @Param("excludeStatuses") List<String> excludeStatuses);
 }

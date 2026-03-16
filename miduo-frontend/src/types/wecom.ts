@@ -41,6 +41,8 @@ export interface WecomConfigOutput {
   batchSize?: number
   enabled?: boolean
   updateTime?: string
+  callbackToken?: string
+  callbackAesKeyMasked?: string
 }
 
 export interface WecomConfigUpdateInput {
@@ -55,10 +57,70 @@ export interface WecomConfigUpdateInput {
   retryCount: number
   batchSize: number
   enabled: boolean
+  callbackToken?: string
+  callbackAesKey?: string
 }
 
 export interface WecomConnectionTestOutput {
   success: boolean
   message: string
   departmentCount: number
+}
+
+// NLP关键词管理相关类型
+export interface NlpKeywordListOutput {
+  id: number
+  keyword: string
+  matchType: number
+  matchTypeLabel?: string
+  targetValue: string
+  confidence: number
+  sortOrder: number
+  isActive: number
+  createTime?: string
+  updateTime?: string
+}
+
+export interface NlpKeywordCreateInput {
+  keyword: string
+  matchType: number
+  targetValue: string
+  confidence: number
+  sortOrder: number
+  isActive: number
+}
+
+export interface NlpKeywordUpdateInput {
+  keyword: string
+  matchType: number
+  targetValue: string
+  confidence: number
+  sortOrder: number
+  isActive: number
+}
+
+// NLP解析日志相关类型
+export interface NlpLogPageInput {
+  pageNum?: number
+  pageSize?: number
+  parseType?: string
+  chatId?: string
+  fromWecomUserid?: string
+  minConfidence?: number
+  startTime?: string
+  endTime?: string
+}
+
+export interface NlpLogPageOutput {
+  id: number
+  chatId?: string
+  msgId?: string
+  fromWecomUserid?: string
+  rawMessage?: string
+  status?: string
+  parseType?: string
+  nlpConfidence?: number
+  ticketId?: number
+  errorMsg?: string
+  createTime?: string
 }

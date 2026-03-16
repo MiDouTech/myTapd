@@ -26,4 +26,19 @@ public final class RedisKeyConstants {
 
     public static final String WS_USER_SESSION_PREFIX = "ws:user:session:";
     public static final String SLA_CHECK_LOCK = "sla:check:lock";
+
+    /**
+     * NLP关键词缓存（TTL 5分钟）
+     */
+    public static final String WECOM_NLP_KEYWORDS_CACHE = "wecom:nlp:keywords";
+
+    /**
+     * 企微工单草稿会话（群聊），格式：wecom:draft:{chatId}:{wecomUserId}
+     */
+    public static final String WECOM_DRAFT_SESSION_PREFIX = "wecom:draft:";
+
+    /**
+     * 企微图片待处理提示去重，格式：wecom:image:notify:{chatId}:{fromUserId}
+     */
+    public static final String WECOM_IMAGE_NOTIFY_DEDUP_PREFIX = "wecom:image:notify:";
 }
