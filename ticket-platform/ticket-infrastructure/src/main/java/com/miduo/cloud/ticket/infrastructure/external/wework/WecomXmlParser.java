@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.infrastructure.external.wework;
 
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -187,6 +188,49 @@ public final class WecomXmlParser {
                 } else {
                     result.put("DownloadUrl", "");
                     log.warn("企微智能机器人图片消息 image 子对象缺失，原始JSON: {}",
+                            json.length() > 500 ? json.substring(0, 500) : json);
+                }
+            } else if ("mixed".equalsIgnoreCase(msgType)) {
+                // 群聊中 @机器人 同时附带图片时，msgtype 为 mixed
+                // mixed.msg_item 数组包含若干子消息（image / text），逐项提取
+                result.put("Content", "");
+                result.put("DownloadUrl", "");
+                result.put("MediaId", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                JSONObject mixedObj = obj.getJSONObject("mixed");
+                if (mixedObj != null) {
+                    JSONArray msgItems = mixedObj.getJSONArray("msg_item");
+                    if (msgItems != null) {
+                        for (int i = 0; i < msgItems.size(); i++) {
+                            JSONObject item = msgItems.getJSONObject(i);
+                            if (item == null) {
+                                continue;
+                            }
+                            String itemType = nullToEmpty(item.getStr("msgtype"));
+                            if ("image".equalsIgnoreCase(itemType)) {
+                                JSONObject imageObj = item.getJSONObject("image");
+                                if (imageObj != null) {
+                                    String imageUrl = nullToEmpty(imageObj.getStr("url"));
+                                    result.put("DownloadUrl", imageUrl);
+                                    if (!imageUrl.isEmpty()) {
+                                        log.info("企微混合消息中图片解析成功: urlLength={}", imageUrl.length());
+                                    } else {
+                                        log.warn("企微混合消息中图片 url 为空，原始JSON: {}",
+                                                json.length() > 500 ? json.substring(0, 500) : json);
+                                    }
+                                }
+                            } else if ("text".equalsIgnoreCase(itemType)) {
+                                JSONObject textObj = item.getJSONObject("text");
+                                if (textObj != null) {
+                                    result.put("Content", nullToEmpty(textObj.getStr("content")));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (result.get("DownloadUrl").isEmpty()) {
+                    log.warn("企微混合消息未提取到图片内容，原始JSON: {}",
                             json.length() > 500 ? json.substring(0, 500) : json);
                 }
             } else {
