@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.ticket;
 
 import com.miduo.cloud.ticket.application.category.CategoryApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.category.CategoryCreateInput;
 import com.miduo.cloud.ticket.entity.dto.category.CategoryDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.category.CategoryTreeOutput;
@@ -51,6 +52,7 @@ public class CategoryController {
      * 接口编号：API000003
      * 产品文档功能：4.3.1 工单分类体系 - 新增分类
      */
+    @OperationLog(moduleName = "分类管理", operationItem = "新增分类")
     @PostMapping("/create")
     @Operation(summary = "新增分类", description = "接口编号：API000003")
     public ApiResult<Long> createCategory(@Valid @RequestBody CategoryCreateInput input) {
@@ -63,6 +65,7 @@ public class CategoryController {
      * 接口编号：API000004
      * 产品文档功能：4.3.1 工单分类体系 - 修改分类
      */
+    @OperationLog(moduleName = "分类管理", operationItem = "修改分类")
     @PutMapping("/update/{id}")
     @Operation(summary = "修改分类", description = "接口编号：API000004")
     public ApiResult<Void> updateCategory(@PathVariable Long id,
@@ -76,6 +79,7 @@ public class CategoryController {
      * 接口编号：API000422
      * 产品文档功能：4.3.1 工单分类体系 - 删除分类
      */
+    @OperationLog(moduleName = "分类管理", operationItem = "删除分类")
     @DeleteMapping("/delete/{id}")
     @Operation(summary = "删除分类", description = "接口编号：API000422")
     public ApiResult<Void> deleteCategory(@PathVariable Long id) {

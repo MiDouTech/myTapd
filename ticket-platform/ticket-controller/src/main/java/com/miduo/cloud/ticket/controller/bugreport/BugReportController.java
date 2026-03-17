@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.bugreport.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +55,7 @@ public class BugReportController {
      * 接口编号：API000022
      * 产品文档功能：4.12 Bug简报管理 - 简报创建
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "创建Bug简报")
     @PostMapping("/create")
     @Operation(summary = "创建Bug简报", description = "接口编号：API000022")
     public ApiResult<Long> create(@Valid @RequestBody BugReportCreateInput input) {
@@ -65,6 +67,7 @@ public class BugReportController {
      * 接口编号：API000023
      * 产品文档功能：4.12 Bug简报管理 - 简报编辑
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "更新Bug简报")
     @PutMapping("/update/{id}")
     @Operation(summary = "更新Bug简报", description = "接口编号：API000023")
     public ApiResult<Void> update(@PathVariable("id") Long id, @RequestBody BugReportUpdateInput input) {
@@ -77,6 +80,7 @@ public class BugReportController {
      * 接口编号：API000024
      * 产品文档功能：4.12 Bug简报管理 - 提交审核
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "提交审核")
     @PutMapping("/submit/{id}")
     @Operation(summary = "提交Bug简报审核", description = "接口编号：API000024")
     public ApiResult<Void> submit(@PathVariable("id") Long id,
@@ -90,6 +94,7 @@ public class BugReportController {
      * 接口编号：API000025
      * 产品文档功能：4.12 Bug简报管理 - 审核通过归档
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "审核通过")
     @PutMapping("/approve/{id}")
     @Operation(summary = "审核通过", description = "接口编号：API000025")
     public ApiResult<Void> approve(@PathVariable("id") Long id, @Valid @RequestBody BugReportReviewInput input) {
@@ -102,6 +107,7 @@ public class BugReportController {
      * 接口编号：API000026
      * 产品文档功能：4.12 Bug简报管理 - 审核不通过
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "审核驳回")
     @PutMapping("/reject/{id}")
     @Operation(summary = "审核驳回", description = "接口编号：API000026")
     public ApiResult<Void> reject(@PathVariable("id") Long id, @Valid @RequestBody BugReportReviewInput input) {
@@ -114,6 +120,7 @@ public class BugReportController {
      * 接口编号：API000027
      * 产品文档功能：4.12 Bug简报管理 - 作废
      */
+    @OperationLog(moduleName = "Bug简报管理", operationItem = "作废简报")
     @PutMapping("/void/{id}")
     @Operation(summary = "作废简报", description = "接口编号：API000027")
     public ApiResult<Void> voidReport(@PathVariable("id") Long id) {

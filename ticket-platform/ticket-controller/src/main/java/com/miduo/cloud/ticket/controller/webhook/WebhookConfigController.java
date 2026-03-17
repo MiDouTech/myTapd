@@ -4,6 +4,7 @@ import com.miduo.cloud.ticket.application.webhook.WebhookConfigApplicationServic
 import com.miduo.cloud.ticket.application.webhook.WebhookDispatchLogApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigCreateInput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigPageInput;
@@ -60,6 +61,7 @@ public class WebhookConfigController {
      * 接口编号：API000419
      * 产品文档功能：4.11 开放能力 - 新增Webhook配置
      */
+    @OperationLog(moduleName = "Webhook配置", operationItem = "创建Webhook配置")
     @Operation(summary = "创建Webhook配置", description = "接口编号：API000419")
     @PostMapping("/create")
     public ApiResult<Long> create(@Valid @RequestBody WebhookConfigCreateInput input) {
@@ -71,6 +73,7 @@ public class WebhookConfigController {
      * 接口编号：API000420
      * 产品文档功能：4.11 开放能力 - 更新Webhook配置
      */
+    @OperationLog(moduleName = "Webhook配置", operationItem = "更新Webhook配置")
     @Operation(summary = "更新Webhook配置", description = "接口编号：API000420")
     @PutMapping("/update/{id}")
     public ApiResult<Void> update(@PathVariable Long id,
@@ -84,6 +87,7 @@ public class WebhookConfigController {
      * 接口编号：API000421
      * 产品文档功能：4.11 开放能力 - 删除Webhook配置
      */
+    @OperationLog(moduleName = "Webhook配置", operationItem = "删除Webhook配置")
     @Operation(summary = "删除Webhook配置", description = "接口编号：API000421")
     @DeleteMapping("/delete/{id}")
     public ApiResult<Void> delete(@PathVariable Long id) {

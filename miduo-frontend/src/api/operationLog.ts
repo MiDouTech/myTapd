@@ -1,6 +1,5 @@
 import type { PageOutput } from '@/types/common'
 import type {
-  AppCodeOutput,
   OperationLogDetailOutput,
   OperationLogListOutput,
   OperationLogPageInput,
@@ -44,13 +43,4 @@ export function getOperationLogStatistics(): Promise<OperationLogStatisticsOutpu
  */
 export function getOperationLogModuleList(): Promise<string[]> {
   return request.get<string[]>('/operation-log/module/list')
-}
-
-/**
- * 获取所属应用枚举列表
- * 接口编号：API000605
- * 产品文档功能：PRD §3.1 所属应用下拉选项
- */
-export function getOperationLogAppList(): Promise<AppCodeOutput[]> {
-  return request.get<AppCodeOutput[]>('/operation-log/app/list')
 }

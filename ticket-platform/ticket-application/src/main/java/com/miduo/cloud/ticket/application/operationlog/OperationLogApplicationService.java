@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
-import com.miduo.cloud.ticket.common.enums.AppCodeEnum;
 import com.miduo.cloud.ticket.common.enums.ExecuteResultEnum;
 import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
 import com.miduo.cloud.ticket.entity.dto.operationlog.*;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Service;
 
 import java.sql.SQLSyntaxErrorException;
 import java.util.Collections;
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -54,7 +52,7 @@ public class OperationLogApplicationService extends BaseApplicationService {
                     trimOrNull(input.getOperatorName()),
                     trimOrNull(input.getOperatorIp()),
                     trimOrNull(input.getLogLevel()),
-                    trimOrNull(input.getAppCode()),
+                    null,
                     trimOrNull(input.getModuleName()),
                     trimOrNull(input.getOperationItem()),
                     trimOrNull(input.getOperationDetail()),
@@ -109,16 +107,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
                 Collections::emptyList);
     }
 
-    /**
-     * 获取所属应用枚举列表
-     * 接口编号：API000605
-     */
-    public List<AppCodeOutput> listAppCodes() {
-        return Arrays.stream(AppCodeEnum.values())
-                .map(e -> new AppCodeOutput(e.getCode(), e.getAppName()))
-                .collect(Collectors.toList());
-    }
-
     private OperationLogListOutput convertToListOutput(OperationLogPO po) {
         OperationLogListOutput output = new OperationLogListOutput();
         output.setId(po.getId());
@@ -129,8 +117,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
         output.setLogLevel(po.getLogLevel());
         LogLevelEnum logLevel = LogLevelEnum.fromCode(po.getLogLevel());
         output.setLogLevelDesc(logLevel.getDesc());
-        output.setAppCode(po.getAppCode());
-        output.setAppName(po.getAppName());
         output.setModuleName(po.getModuleName());
         output.setRequestPath(po.getRequestPath());
         output.setOperationItem(po.getOperationItem());
@@ -151,8 +137,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
         output.setLogLevel(po.getLogLevel());
         LogLevelEnum logLevel = LogLevelEnum.fromCode(po.getLogLevel());
         output.setLogLevelDesc(logLevel.getDesc());
-        output.setAppCode(po.getAppCode());
-        output.setAppName(po.getAppName());
         output.setModuleName(po.getModuleName());
         output.setRequestPath(po.getRequestPath());
         output.setRequestMethod(po.getRequestMethod());

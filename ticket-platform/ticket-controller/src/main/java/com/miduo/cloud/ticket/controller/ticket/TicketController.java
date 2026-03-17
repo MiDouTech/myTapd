@@ -9,6 +9,7 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomMessageParseInput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomMessageParseOutput;
@@ -41,6 +42,7 @@ public class TicketController {
      * 接口编号：API000006
      * 产品文档功能：4.2.1 工单创建 - 选择分类→加载模板→填写→提交
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "创建工单")
     @PostMapping("/create")
     @Operation(summary = "创建工单", description = "接口编号：API000006")
     public ApiResult<Long> createTicket(@Valid @RequestBody TicketCreateInput input) {
@@ -80,6 +82,7 @@ public class TicketController {
      * 接口编号：API000009
      * 产品文档功能：4.5.1 分派策略 - 手动分派指定处理人
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "手动分派工单")
     @PutMapping("/assign/{id}")
     @Operation(summary = "手动分派工单", description = "接口编号：API000009")
     public ApiResult<Void> assignTicket(@PathVariable Long id,
@@ -94,6 +97,7 @@ public class TicketController {
      * 接口编号：API000010
      * 产品文档功能：4.2.3 核心操作 - 处理、转派、挂起、恢复、验收通过/不通过
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "处理工单")
     @PutMapping("/process/{id}")
     @Operation(summary = "处理工单并流转", description = "接口编号：API000010")
     public ApiResult<Void> processTicket(@PathVariable Long id,
@@ -108,6 +112,7 @@ public class TicketController {
      * 接口编号：API000011
      * 产品文档功能：4.2.3 核心操作 - 关闭工单
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "关闭工单")
     @PutMapping("/close/{id}")
     @Operation(summary = "关闭工单", description = "接口编号：API000011")
     public ApiResult<Void> closeTicket(@PathVariable Long id,
@@ -161,6 +166,7 @@ public class TicketController {
      * 接口编号：API000021
      * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "更新客服信息")
     @PutMapping("/bug/customer-info/{id}")
     @Operation(summary = "更新缺陷工单客服信息", description = "接口编号：API000021")
     public ApiResult<Void> updateBugCustomerInfo(@PathVariable Long id,
@@ -175,6 +181,7 @@ public class TicketController {
      * 接口编号：API000022
      * 产品文档功能：4.2.3 缺陷工单详情页 - 测试信息区
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "更新测试信息")
     @PutMapping("/bug/test-info/{id}")
     @Operation(summary = "更新缺陷工单测试信息", description = "接口编号：API000022")
     public ApiResult<Void> updateBugTestInfo(@PathVariable Long id,
@@ -189,6 +196,7 @@ public class TicketController {
      * 接口编号：API000023
      * 产品文档功能：4.2.3 缺陷工单详情页 - 开发信息区
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "更新开发信息")
     @PutMapping("/bug/dev-info/{id}")
     @Operation(summary = "更新缺陷工单开发信息", description = "接口编号：API000023")
     public ApiResult<Void> updateBugDevInfo(@PathVariable Long id,
@@ -240,6 +248,7 @@ public class TicketController {
      * 接口编号：API000508
      * 产品文档功能：工单详情 - 评论区发表评论
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "新增评论")
     @PostMapping("/{id}/comment")
     @Operation(summary = "新增工单评论", description = "接口编号：API000508")
     public ApiResult<Long> addComment(@PathVariable Long id,

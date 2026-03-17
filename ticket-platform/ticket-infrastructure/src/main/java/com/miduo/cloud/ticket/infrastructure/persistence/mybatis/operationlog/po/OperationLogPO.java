@@ -32,12 +32,6 @@ public class OperationLogPO extends BaseEntity {
     @TableField("log_level")
     private String logLevel;
 
-    @TableField("app_code")
-    private String appCode;
-
-    @TableField("app_name")
-    private String appName;
-
     @TableField("module_name")
     private String moduleName;
 

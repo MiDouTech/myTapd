@@ -2,9 +2,7 @@ package com.miduo.cloud.ticket.controller.aspect;
 
 import com.alibaba.fastjson2.JSON;
 import com.miduo.cloud.ticket.application.operationlog.OperationLogApplicationService;
-import com.miduo.cloud.ticket.common.enums.AppCodeEnum;
 import com.miduo.cloud.ticket.common.enums.ExecuteResultEnum;
-import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.common.security.SecurityUserDetails;
 import com.miduo.cloud.ticket.controller.annotation.OperationLog;
@@ -80,9 +78,6 @@ public class OperationLogAspect {
         OperationLog annotation = method.getAnnotation(OperationLog.class);
 
         if (annotation != null) {
-            AppCodeEnum appCode = annotation.appCode();
-            logPO.setAppCode(appCode.getCode());
-            logPO.setAppName(appCode.getAppName());
             logPO.setModuleName(annotation.moduleName());
             logPO.setOperationItem(annotation.operationItem());
             logPO.setLogLevel(annotation.logLevel().getCode());

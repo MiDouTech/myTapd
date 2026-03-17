@@ -20,9 +20,6 @@
         <if test="logLevel != null and logLevel != ''">
             AND log_level = #{logLevel}
         </if>
-        <if test="appCode != null and appCode != ''">
-            AND app_code = #{appCode}
-        </if>
         <if test="moduleName != null and moduleName != ''">
             AND module_name LIKE CONCAT('%', #{moduleName}, '%')
         </if>
