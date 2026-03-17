@@ -31,9 +31,6 @@ public class OperationLogPageInput extends PageInput {
     /** 日志级别枚举：SYSTEM/BUSINESS/SECURITY/ERROR */
     private String logLevel;
 
-    /** 所属应用编码枚举 */
-    private String appCode;
-
     /** 操作模块名称，模糊匹配 */
     private String moduleName;
 

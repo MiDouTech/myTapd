@@ -12,7 +12,6 @@ export interface OperationLogPageInput extends PageQuery {
   operatorName?: string
   operatorIp?: string
   logLevel?: string
-  appCode?: string
   moduleName?: string
   operationItem?: string
   operationDetail?: string
@@ -33,8 +32,6 @@ export interface OperationLogListOutput {
   operatorIp: string
   logLevel: string
   logLevelDesc: string
-  appCode: string
-  appName: string
   moduleName: string
   requestPath: string
   operationItem: string
@@ -65,8 +62,6 @@ export interface OperationLogDetailOutput {
   userAgent: string
   logLevel: string
   logLevelDesc: string
-  appCode: string
-  appName: string
   moduleName: string
   requestPath: string
   requestMethod: string
@@ -90,13 +85,4 @@ export interface OperationLogStatisticsOutput {
   todayFailureCount: number
   todayActiveUserCount: number
   todaySecurityAlertCount: number
-}
-
-/**
- * 所属应用枚举输出
- * 接口编号：API000605
- */
-export interface AppCodeOutput {
-  code: string
-  appName: string
 }

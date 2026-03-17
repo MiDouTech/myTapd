@@ -37,12 +37,6 @@ public class OperationLogDetailOutput implements Serializable {
     /** 日志级别描述 */
     private String logLevelDesc;
 
-    /** 所属应用编码 */
-    private String appCode;
-
-    /** 所属应用名称 */
-    private String appName;
-
     /** 操作模块名称 */
     private String moduleName;
 

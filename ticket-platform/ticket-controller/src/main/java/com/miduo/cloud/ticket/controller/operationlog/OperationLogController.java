@@ -3,7 +3,10 @@ package com.miduo.cloud.ticket.controller.operationlog;
 import com.miduo.cloud.ticket.application.operationlog.OperationLogApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
-import com.miduo.cloud.ticket.entity.dto.operationlog.*;
+import com.miduo.cloud.ticket.entity.dto.operationlog.OperationLogDetailOutput;
+import com.miduo.cloud.ticket.entity.dto.operationlog.OperationLogListOutput;
+import com.miduo.cloud.ticket.entity.dto.operationlog.OperationLogPageInput;
+import com.miduo.cloud.ticket.entity.dto.operationlog.OperationLogStatisticsOutput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -88,14 +91,4 @@ public class OperationLogController {
         return ApiResult.success(operationLogService.listModuleNames());
     }
 
-    /**
-     * 获取所属应用枚举列表
-     * 接口编号：API000605
-     * 产品文档功能：PRD §3.1 所属应用下拉选项
-     */
-    @Operation(summary = "获取所属应用枚举列表", description = "接口编号：API000605")
-    @GetMapping("/app/list")
-    public ApiResult<List<AppCodeOutput>> listApps() {
-        return ApiResult.success(operationLogService.listAppCodes());
-    }
 }

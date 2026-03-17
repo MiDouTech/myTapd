@@ -3,14 +3,12 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import {
-  getOperationLogAppList,
   getOperationLogDetail,
   getOperationLogModuleList,
   getOperationLogPage,
   getOperationLogStatistics,
 } from '@/api/operationLog'
 import type {
-  AppCodeOutput,
   OperationLogDetailOutput,
   OperationLogListOutput,
   OperationLogPageInput,
@@ -38,16 +36,10 @@ async function loadStatistics() {
 // ─────────────────────────────────────────────
 // 枚举数据
 // ─────────────────────────────────────────────
-const appList = ref<AppCodeOutput[]>([])
 const moduleList = ref<string[]>([])
 
 async function loadEnums() {
-  const [apps, modules] = await Promise.all([
-    getOperationLogAppList().catch(() => [] as AppCodeOutput[]),
-    getOperationLogModuleList().catch(() => [] as string[]),
-  ])
-  appList.value = apps
-  moduleList.value = modules
+  moduleList.value = await getOperationLogModuleList().catch(() => [] as string[])
 }
 
 // ─────────────────────────────────────────────
@@ -62,7 +54,6 @@ const defaultSearchForm = (): OperationLogPageInput => ({
   operatorName: undefined,
   operatorIp: undefined,
   logLevel: undefined,
-  appCode: undefined,
   moduleName: undefined,
   operationItem: undefined,
   operationDetail: undefined,
@@ -301,22 +292,6 @@ onMounted(() => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="所属应用">
-          <el-select
-            v-model="searchForm.appCode"
-            placeholder="全部"
-            clearable
-            style="width: 140px"
-          >
-            <el-option
-              v-for="app in appList"
-              :key="app.code"
-              :label="app.appName"
-              :value="app.code"
-            />
-          </el-select>
-        </el-form-item>
-
         <el-form-item label="操作模块">
           <el-input
             v-model="searchForm.moduleName"
@@ -405,8 +380,6 @@ onMounted(() => {
             >{{ row.logLevelDesc }}</span>
           </template>
         </el-table-column>
-
-        <el-table-column prop="appName" label="所属应用" min-width="100" show-overflow-tooltip />
 
         <el-table-column prop="moduleName" label="操作模块" min-width="120" show-overflow-tooltip />
 
@@ -512,7 +485,6 @@ onMounted(() => {
                 }"
               >{{ currentDetail.executeResultDesc }}</span>
             </el-descriptions-item>
-            <el-descriptions-item label="所属应用">{{ currentDetail.appName }}</el-descriptions-item>
             <el-descriptions-item label="操作模块">{{
               currentDetail.moduleName
             }}</el-descriptions-item>

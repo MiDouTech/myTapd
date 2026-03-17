@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.sla;
 
 import com.miduo.cloud.ticket.application.sla.SlaApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.sla.SlaPolicyCreateInput;
 import com.miduo.cloud.ticket.entity.dto.sla.SlaPolicyOutput;
 import com.miduo.cloud.ticket.entity.dto.sla.SlaPolicyUpdateInput;
@@ -43,6 +44,7 @@ public class SlaPolicyController {
      * 接口编号：API000002
      * 产品文档功能：4.7 SLA管理 - 新增SLA策略
      */
+    @OperationLog(moduleName = "SLA管理", operationItem = "创建SLA策略")
     @Operation(summary = "创建SLA策略", description = "接口编号：API000002")
     @PostMapping("/create")
     public ApiResult<SlaPolicyOutput> createPolicy(@Valid @RequestBody SlaPolicyCreateInput input) {
@@ -55,6 +57,7 @@ public class SlaPolicyController {
      * 接口编号：API000003
      * 产品文档功能：4.7 SLA管理 - 更新SLA策略
      */
+    @OperationLog(moduleName = "SLA管理", operationItem = "更新SLA策略")
     @Operation(summary = "更新SLA策略", description = "接口编号：API000003")
     @PutMapping("/update")
     public ApiResult<SlaPolicyOutput> updatePolicy(@Valid @RequestBody SlaPolicyUpdateInput input) {

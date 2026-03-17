@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
-import com.miduo.cloud.ticket.common.enums.AppCodeEnum;
 import com.miduo.cloud.ticket.common.enums.ExecuteResultEnum;
 import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
 import com.miduo.cloud.ticket.entity.dto.operationlog.*;
@@ -16,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.sql.SQLSyntaxErrorException;
 import java.util.Collections;
-import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -42,6 +41,41 @@ public class OperationLogApplicationService extends BaseApplicationService {
     }
 
     /**
+     * 记录登录日志（安全级别，由认证服务在登录成功/失败后调用）
+     *
+     * @param userId        登录用户ID，登录失败时传 null
+     * @param userName      登录用户姓名，登录失败时传空串
+     * @param operatorIp    客户端IP
+     * @param userAgent     客户端User-Agent
+     * @param operationItem 操作项描述（如"企微扫码登录"、"测试账号登录"）
+     * @param success       是否成功
+     * @param errorMessage  失败原因（成功时传 null）
+     */
+    public void saveLoginLog(Long userId, String userName, String operatorIp, String userAgent,
+                             String operationItem, boolean success, String errorMessage) {
+        OperationLogPO logPO = new OperationLogPO();
+        logPO.setOperateTime(new Date());
+        logPO.setAccountId(userId != null ? userId : 0L);
+        logPO.setOperatorName(userName != null ? userName : "");
+        logPO.setOperatorIp(operatorIp != null ? operatorIp : "");
+        logPO.setUserAgent(userAgent != null ? userAgent : "");
+        logPO.setLogLevel(LogLevelEnum.SECURITY.getCode());
+        logPO.setModuleName("认证管理");
+        logPO.setOperationItem(operationItem);
+        logPO.setRequestPath("/api/auth/login");
+        logPO.setRequestMethod("POST");
+        logPO.setExecuteResult(success ? ExecuteResultEnum.SUCCESS.getCode() : ExecuteResultEnum.FAILURE.getCode());
+        if (!success && errorMessage != null) {
+            logPO.setErrorMessage(errorMessage);
+        }
+        try {
+            saveLog(logPO);
+        } catch (Exception e) {
+            log.warn("保存登录日志失败，不影响登录流程", e);
+        }
+    }
+
+    /**
      * 多条件分页查询操作日志
      * 接口编号：API000600
      */
@@ -54,7 +88,7 @@ public class OperationLogApplicationService extends BaseApplicationService {
                     trimOrNull(input.getOperatorName()),
                     trimOrNull(input.getOperatorIp()),
                     trimOrNull(input.getLogLevel()),
-                    trimOrNull(input.getAppCode()),
+                    null,
                     trimOrNull(input.getModuleName()),
                     trimOrNull(input.getOperationItem()),
                     trimOrNull(input.getOperationDetail()),
@@ -109,16 +143,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
                 Collections::emptyList);
     }
 
-    /**
-     * 获取所属应用枚举列表
-     * 接口编号：API000605
-     */
-    public List<AppCodeOutput> listAppCodes() {
-        return Arrays.stream(AppCodeEnum.values())
-                .map(e -> new AppCodeOutput(e.getCode(), e.getAppName()))
-                .collect(Collectors.toList());
-    }
-
     private OperationLogListOutput convertToListOutput(OperationLogPO po) {
         OperationLogListOutput output = new OperationLogListOutput();
         output.setId(po.getId());
@@ -129,8 +153,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
         output.setLogLevel(po.getLogLevel());
         LogLevelEnum logLevel = LogLevelEnum.fromCode(po.getLogLevel());
         output.setLogLevelDesc(logLevel.getDesc());
-        output.setAppCode(po.getAppCode());
-        output.setAppName(po.getAppName());
         output.setModuleName(po.getModuleName());
         output.setRequestPath(po.getRequestPath());
         output.setOperationItem(po.getOperationItem());
@@ -151,8 +173,6 @@ public class OperationLogApplicationService extends BaseApplicationService {
         output.setLogLevel(po.getLogLevel());
         LogLevelEnum logLevel = LogLevelEnum.fromCode(po.getLogLevel());
         output.setLogLevelDesc(logLevel.getDesc());
-        output.setAppCode(po.getAppCode());
-        output.setAppName(po.getAppName());
         output.setModuleName(po.getModuleName());
         output.setRequestPath(po.getRequestPath());
         output.setRequestMethod(po.getRequestMethod());

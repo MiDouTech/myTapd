@@ -1,6 +1,5 @@
 package com.miduo.cloud.ticket.controller.annotation;
 
-import com.miduo.cloud.ticket.common.enums.AppCodeEnum;
 import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
 
 import java.lang.annotation.*;
@@ -14,9 +13,6 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface OperationLog {
-
-    /** 所属应用编码（与AppCodeEnum对应），默认工单系统 */
-    AppCodeEnum appCode() default AppCodeEnum.TICKET_SYSTEM;
 
     /** 操作模块名称 */
     String moduleName();

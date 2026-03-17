@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 
 /**
@@ -36,8 +37,9 @@ public class AuthController {
      */
     @Operation(summary = "企微扫码登录", description = "接口编号：API000400。用企微授权code换取JWT Token")
     @PostMapping("/wecom/login")
-    public ApiResult<LoginOutput> wecomLogin(@Valid @RequestBody WecomLoginInput input) {
-        LoginOutput output = authApplicationService.wecomLogin(input);
+    public ApiResult<LoginOutput> wecomLogin(@Valid @RequestBody WecomLoginInput input,
+                                             HttpServletRequest request) {
+        LoginOutput output = authApplicationService.wecomLogin(input, getClientIp(request), getUserAgent(request));
         return ApiResult.success(output);
     }
 
@@ -60,8 +62,28 @@ public class AuthController {
      */
     @Operation(summary = "测试账号登录", description = "接口编号：API000402。仅在 dev-login.enabled=true 时可用，生产环境禁止开启")
     @PostMapping("/dev/login")
-    public ApiResult<LoginOutput> devLogin(@Valid @RequestBody DevLoginInput input) {
-        LoginOutput output = authApplicationService.devLogin(input);
+    public ApiResult<LoginOutput> devLogin(@Valid @RequestBody DevLoginInput input,
+                                           HttpServletRequest request) {
+        LoginOutput output = authApplicationService.devLogin(input, getClientIp(request), getUserAgent(request));
         return ApiResult.success(output);
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip != null ? ip : "";
+    }
+
+    private String getUserAgent(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        return ua != null ? ua : "";
     }
 }
