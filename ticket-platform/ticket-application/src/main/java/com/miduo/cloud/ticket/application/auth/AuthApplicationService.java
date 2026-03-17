@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.auth;
 
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.operationlog.OperationLogApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.user.model.Department;
@@ -36,44 +37,58 @@ public class AuthApplicationService extends BaseApplicationService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final TokenService tokenService;
+    private final OperationLogApplicationService operationLogService;
 
     public AuthApplicationService(WecomClient wecomClient,
                                   UserRepository userRepository,
                                   DepartmentRepository departmentRepository,
-                                  TokenService tokenService) {
+                                  TokenService tokenService,
+                                  OperationLogApplicationService operationLogService) {
         this.wecomClient = wecomClient;
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
         this.tokenService = tokenService;
+        this.operationLogService = operationLogService;
     }
 
     /**
      * 企微扫码登录
      */
     @Transactional
-    public LoginOutput wecomLogin(WecomLoginInput input) {
-        WecomClient.WecomUserIdentity identity = wecomClient.getUserInfoByCode(input.getCode());
-        if (identity == null || identity.getUserId() == null || identity.getUserId().isEmpty()) {
-            throw BusinessException.of(ErrorCode.WECOM_AUTH_FAILED, "无法获取企微用户身份");
+    public LoginOutput wecomLogin(WecomLoginInput input, String operatorIp, String userAgent) {
+        try {
+            WecomClient.WecomUserIdentity identity = wecomClient.getUserInfoByCode(input.getCode());
+            if (identity == null || identity.getUserId() == null || identity.getUserId().isEmpty()) {
+                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "企微扫码登录", false, "无法获取企微用户身份");
+                throw BusinessException.of(ErrorCode.WECOM_AUTH_FAILED, "无法获取企微用户身份");
+            }
+
+            String wecomUserId = identity.getUserId();
+            log.info("企微登录: wecomUserId={}", wecomUserId);
+
+            User user = userRepository.findByWecomUserid(wecomUserId);
+
+            if (user == null) {
+                user = autoCreateUser(wecomUserId);
+            }
+
+            if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+                operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, "企微扫码登录", false, "账号已被禁用");
+                throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
+            }
+
+            List<String> roleCodes = userRepository.findRoleCodes(user.getId());
+            user.setRoleCodes(roleCodes);
+
+            LoginOutput output = buildLoginOutput(user);
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, "企微扫码登录", true, null);
+            return output;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "企微扫码登录", false, e.getMessage());
+            throw e;
         }
-
-        String wecomUserId = identity.getUserId();
-        log.info("企微登录: wecomUserId={}", wecomUserId);
-
-        User user = userRepository.findByWecomUserid(wecomUserId);
-
-        if (user == null) {
-            user = autoCreateUser(wecomUserId);
-        }
-
-        if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
-        }
-
-        List<String> roleCodes = userRepository.findRoleCodes(user.getId());
-        user.setRoleCodes(roleCodes);
-
-        return buildLoginOutput(user);
     }
 
     /**
@@ -105,25 +120,39 @@ public class AuthApplicationService extends BaseApplicationService {
      * 接口编号：API000402
      */
     @Transactional
-    public LoginOutput devLogin(DevLoginInput input) {
+    public LoginOutput devLogin(DevLoginInput input, String operatorIp, String userAgent) {
         if (!devLoginEnabled) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "当前环境不允许使用测试登录");
             throw BusinessException.of(ErrorCode.FORBIDDEN, "当前环境不允许使用测试登录");
         }
 
-        // 管理员账号登录
-        if (DEV_USERNAME.equals(input.getUsername())) {
-            if (!DEV_PASSWORD.equals(input.getPassword())) {
+        try {
+            LoginOutput output;
+            if (DEV_USERNAME.equals(input.getUsername())) {
+                if (!DEV_PASSWORD.equals(input.getPassword())) {
+                    operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "账号或密码错误");
+                    throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
+                }
+                output = loginAsDevAdmin();
+            } else if (PHONE_LOGIN_PASSWORD.equals(input.getPassword())) {
+                output = loginByPhone(input.getUsername());
+            } else {
+                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "账号或密码错误");
                 throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
             }
-            return loginAsDevAdmin();
-        }
 
-        // 手机号登录
-        if (PHONE_LOGIN_PASSWORD.equals(input.getPassword())) {
-            return loginByPhone(input.getUsername());
+            LoginOutput.UserInfo userInfo = output.getUserInfo();
+            operationLogService.saveLoginLog(
+                    userInfo != null ? userInfo.getId() : null,
+                    userInfo != null ? userInfo.getName() : "",
+                    operatorIp, userAgent, "测试账号登录", true, null);
+            return output;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, e.getMessage());
+            throw e;
         }
-
-        throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
     }
 
     /**

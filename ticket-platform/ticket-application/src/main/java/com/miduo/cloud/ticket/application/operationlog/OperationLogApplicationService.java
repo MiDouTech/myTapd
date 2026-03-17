@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.sql.SQLSyntaxErrorException;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -37,6 +38,41 @@ public class OperationLogApplicationService extends BaseApplicationService {
      */
     public void saveLog(OperationLogPO logPO) {
         executeWithMissingTableFallback("写入操作日志", () -> operationLogMapper.insert(logPO), () -> null);
+    }
+
+    /**
+     * 记录登录日志（安全级别，由认证服务在登录成功/失败后调用）
+     *
+     * @param userId        登录用户ID，登录失败时传 null
+     * @param userName      登录用户姓名，登录失败时传空串
+     * @param operatorIp    客户端IP
+     * @param userAgent     客户端User-Agent
+     * @param operationItem 操作项描述（如"企微扫码登录"、"测试账号登录"）
+     * @param success       是否成功
+     * @param errorMessage  失败原因（成功时传 null）
+     */
+    public void saveLoginLog(Long userId, String userName, String operatorIp, String userAgent,
+                             String operationItem, boolean success, String errorMessage) {
+        OperationLogPO logPO = new OperationLogPO();
+        logPO.setOperateTime(new Date());
+        logPO.setAccountId(userId != null ? userId : 0L);
+        logPO.setOperatorName(userName != null ? userName : "");
+        logPO.setOperatorIp(operatorIp != null ? operatorIp : "");
+        logPO.setUserAgent(userAgent != null ? userAgent : "");
+        logPO.setLogLevel(LogLevelEnum.SECURITY.getCode());
+        logPO.setModuleName("认证管理");
+        logPO.setOperationItem(operationItem);
+        logPO.setRequestPath("/api/auth/login");
+        logPO.setRequestMethod("POST");
+        logPO.setExecuteResult(success ? ExecuteResultEnum.SUCCESS.getCode() : ExecuteResultEnum.FAILURE.getCode());
+        if (!success && errorMessage != null) {
+            logPO.setErrorMessage(errorMessage);
+        }
+        try {
+            saveLog(logPO);
+        } catch (Exception e) {
+            log.warn("保存登录日志失败，不影响登录流程", e);
+        }
     }
 
     /**
