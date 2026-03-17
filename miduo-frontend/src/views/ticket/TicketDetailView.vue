@@ -248,7 +248,7 @@ const roleCodes = computed(() =>
   (authStore.userInfo?.roleCodes ?? []).map((item) => String(item).toUpperCase()),
 )
 const currentUserId = computed(() => authStore.userInfo?.id)
-const currentStatus = computed(() => String(detail.value?.status || '').toUpperCase())
+const currentStatus = computed(() => normalizeStatus(detail.value?.status))
 
 const customFieldEntries = computed(() => {
   if (!detail.value?.customFields) {
@@ -261,7 +261,7 @@ const canEditCustomerInfo = computed(() => {
   if (hasRole('ADMIN', 'TICKET_ADMIN')) {
     return true
   }
-  if (!['PENDING_DISPATCH', 'PENDING_TEST', 'PENDING_TEST_ACCEPT', 'PENDING_CS_CONFIRM'].includes(currentStatus.value)) {
+  if (!['pending_assign', 'pending_test_accept', 'investigating', 'pending_cs_confirm'].includes(currentStatus.value)) {
     return false
   }
   if (hasRole('CUSTOMER_SERVICE', 'SUBMITTER')) {
@@ -274,7 +274,7 @@ const canEditTestInfo = computed(() => {
   if (hasRole('ADMIN', 'TICKET_ADMIN')) {
     return true
   }
-  if (!['PENDING_TEST', 'PENDING_TEST_ACCEPT', 'TESTING', 'PENDING_VERIFY'].includes(currentStatus.value)) {
+  if (!['pending_test_accept', 'testing', 'investigating', 'pending_verify'].includes(currentStatus.value)) {
     return false
   }
   if (hasRole('TESTER')) {
@@ -290,7 +290,7 @@ const canEditDevInfo = computed(() => {
   if (hasRole('ADMIN', 'TICKET_ADMIN')) {
     return true
   }
-  if (!['PENDING_DEV', 'PENDING_DEV_ACCEPT', 'DEVELOPING', 'PENDING_VERIFY'].includes(currentStatus.value)) {
+  if (!['pending_dev_accept', 'developing', 'processing', 'temp_resolved', 'pending_verify'].includes(currentStatus.value)) {
     return false
   }
   if (hasRole('DEVELOPER')) {
@@ -304,6 +304,17 @@ const canEditDevInfo = computed(() => {
 
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
+}
+
+function normalizeStatus(status?: string): string {
+  if (!status) {
+    return ''
+  }
+  const code = status.trim().toLowerCase()
+  if (code === 'pending_dispatch') return 'pending_assign'
+  if (code === 'pending_test') return 'pending_test_accept'
+  if (code === 'pending_dev') return 'pending_dev_accept'
+  return code
 }
 
 function fillBugForms(ticketDetail: TicketDetailOutput): void {
@@ -653,31 +664,30 @@ function isImageFile(fileType?: string): boolean {
 }
 
 const STATUS_LABEL_MAP: Record<string, string> = {
-  PENDING: '待处理',
-  PENDING_ASSIGN: '待分派',
-  PENDING_DISPATCH: '待分派',
-  PENDING_ACCEPT: '待受理',
-  PROCESSING: '处理中',
-  SUSPENDED: '已挂起',
-  PENDING_VERIFY: '待验收',
-  COMPLETED: '已完成',
-  CLOSED: '已关闭',
-  PENDING_TEST: '待测试受理',
-  PENDING_TEST_ACCEPT: '待测试受理',
-  TESTING: '测试中',
-  PENDING_DEV: '待开发受理',
-  PENDING_DEV_ACCEPT: '待开发受理',
-  DEVELOPING: '开发中',
-  PENDING_CS_CONFIRM: '待客服确认',
-  SUBMITTED: '已提交',
-  DEPT_APPROVAL: '部门审批',
-  EXECUTING: '执行中',
-  REJECTED: '已驳回',
+  pending: '待处理',
+  pending_assign: '待分派',
+  pending_accept: '待受理',
+  processing: '处理中',
+  suspended: '已挂起',
+  pending_verify: '待验收',
+  completed: '已完成',
+  closed: '已关闭',
+  pending_test_accept: '待测试受理',
+  testing: '测试中',
+  investigating: '排查中',
+  pending_dev_accept: '待开发受理',
+  developing: '开发中',
+  temp_resolved: '临时解决',
+  pending_cs_confirm: '待客服确认',
+  submitted: '已提交',
+  dept_approval: '部门审批',
+  executing: '执行中',
+  rejected: '已驳回',
 }
 
 function getStatusLabel(status?: string): string {
   if (!status) return '-'
-  const normalized = status.trim().toUpperCase()
+  const normalized = normalizeStatus(status)
   return STATUS_LABEL_MAP[normalized] || status
 }
 
@@ -995,10 +1005,11 @@ watch(
                     </el-form-item>
                     <el-form-item label="缺陷等级">
                       <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo" placeholder="请选择">
-                        <el-option label="致命" value="FATAL" />
-                        <el-option label="严重" value="CRITICAL" />
-                        <el-option label="一般" value="NORMAL" />
-                        <el-option label="轻微" value="MINOR" />
+                        <el-option label="P0（致命）" value="P0" />
+                        <el-option label="P1（严重）" value="P1" />
+                        <el-option label="P2（一般）" value="P2" />
+                        <el-option label="P3（轻微）" value="P3" />
+                        <el-option label="P4（建议）" value="P4" />
                       </el-select>
                     </el-form-item>
                     <el-form-item label="所属模块">

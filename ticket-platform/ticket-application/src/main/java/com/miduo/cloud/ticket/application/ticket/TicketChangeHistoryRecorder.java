@@ -19,6 +19,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -100,8 +101,10 @@ public class TicketChangeHistoryRecorder {
     public List<BugFieldChangeItem> detectTestInfoChanges(TicketBugTestInfoPO old,
                                                            TicketBugTestInfoInput input) {
         List<BugFieldChangeItem> changes = new ArrayList<>();
+        String oldSeverity = normalizeSeverityCode(old.getSeverityLevel());
+        String newSeverity = normalizeSeverityCode(input.getSeverityLevel());
         detectEnumChange(changes, "severity_level", "缺陷等级",
-                old.getSeverityLevel(), input.getSeverityLevel(), this::getSeverityLevelLabel);
+                oldSeverity, newSeverity, this::getSeverityLevelLabel);
         detectChange(changes, "reproduce_env", "复现环境", old.getReproduceEnv(), input.getReproduceEnv());
         detectChange(changes, "impact_scope", "影响范围", old.getImpactScope(), input.getImpactScope());
         detectChange(changes, "module_name", "所属模块", old.getModuleName(), input.getModuleName());
@@ -183,8 +186,28 @@ public class TicketChangeHistoryRecorder {
     }
 
     private String getSeverityLevelLabel(String code) {
-        SeverityLevel level = SeverityLevel.fromCode(code);
+        SeverityLevel level = SeverityLevel.fromCode(normalizeSeverityCode(code));
         return level != null ? level.getLabel() : code;
+    }
+
+    private String normalizeSeverityCode(String source) {
+        if (source == null) {
+            return null;
+        }
+        String value = source.trim().toUpperCase(Locale.ROOT);
+        if ("FATAL".equals(value)) {
+            return "P0";
+        }
+        if ("CRITICAL".equals(value)) {
+            return "P1";
+        }
+        if ("NORMAL".equals(value)) {
+            return "P2";
+        }
+        if ("MINOR".equals(value)) {
+            return "P3";
+        }
+        return value;
     }
 
     /**
