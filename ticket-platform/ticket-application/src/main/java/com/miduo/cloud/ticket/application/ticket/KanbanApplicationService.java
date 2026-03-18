@@ -152,10 +152,13 @@ public class KanbanApplicationService extends BaseApplicationService {
                 || "pending_dev_accept".equals(code)) {
             return 1;
         }
-        if ("processing".equals(code) || "testing".equals(code) || "developing".equals(code)) {
+        if ("processing".equals(code)
+                || "testing".equals(code)
+                || "investigating".equals(code)
+                || "developing".equals(code)) {
             return 2;
         }
-        if ("suspended".equals(code)) {
+        if ("temp_resolved".equals(code) || "suspended".equals(code)) {
             return 3;
         }
         if ("pending_verify".equals(code) || "pending_cs_confirm".equals(code)) {

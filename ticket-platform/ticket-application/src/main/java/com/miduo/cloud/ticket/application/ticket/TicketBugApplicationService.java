@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.SeverityLevel;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
@@ -11,6 +13,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,15 +25,25 @@ import java.util.stream.Collectors;
 public class TicketBugApplicationService extends BaseApplicationService {
 
     private static final Set<String> CUSTOMER_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            "PENDING_DISPATCH", "PENDING_TEST", "PENDING_TEST_ACCEPT", "PENDING_CS_CONFIRM"
+            TicketStatus.PENDING_ASSIGN.getCode(),
+            TicketStatus.PENDING_TEST_ACCEPT.getCode(),
+            TicketStatus.INVESTIGATING.getCode(),
+            TicketStatus.PENDING_CS_CONFIRM.getCode()
     ));
 
     private static final Set<String> TEST_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            "PENDING_TEST", "PENDING_TEST_ACCEPT", "TESTING", "PENDING_VERIFY"
+            TicketStatus.PENDING_TEST_ACCEPT.getCode(),
+            TicketStatus.TESTING.getCode(),
+            TicketStatus.INVESTIGATING.getCode(),
+            TicketStatus.PENDING_VERIFY.getCode()
     ));
 
     private static final Set<String> DEV_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            "PENDING_DEV", "PENDING_DEV_ACCEPT", "DEVELOPING", "PENDING_VERIFY"
+            TicketStatus.PENDING_DEV_ACCEPT.getCode(),
+            TicketStatus.DEVELOPING.getCode(),
+            TicketStatus.PROCESSING.getCode(),
+            TicketStatus.TEMP_RESOLVED.getCode(),
+            TicketStatus.PENDING_VERIFY.getCode()
     ));
 
     private final TicketMapper ticketMapper;
@@ -101,10 +114,11 @@ public class TicketBugApplicationService extends BaseApplicationService {
         List<String> roleCodes = getRoleCodes(currentUserId);
         assertCanEditTestInfo(ticket, currentUserId, roleCodes);
 
+        TicketBugTestInfoInput normalizedInput = normalizeTestInfoInput(input);
         TicketBugTestInfoPO testInfoPO = getOrCreateBugTestInfo(ticketId);
-        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectTestInfoChanges(testInfoPO, input);
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectTestInfoChanges(testInfoPO, normalizedInput);
 
-        applyTestInfoChanges(testInfoPO, input);
+        applyTestInfoChanges(testInfoPO, normalizedInput);
         saveBugTestInfo(testInfoPO);
 
         changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
@@ -197,6 +211,19 @@ public class TicketBugApplicationService extends BaseApplicationService {
         testInfoPO.setModuleName(input.getModuleName());
         testInfoPO.setReproduceScreenshot(input.getReproduceScreenshot());
         testInfoPO.setTestRemark(input.getTestRemark());
+    }
+
+    private TicketBugTestInfoInput normalizeTestInfoInput(TicketBugTestInfoInput input) {
+        TicketBugTestInfoInput normalized = new TicketBugTestInfoInput();
+        normalized.setReproduceEnv(input.getReproduceEnv());
+        normalized.setReproduceSteps(input.getReproduceSteps());
+        normalized.setActualResult(input.getActualResult());
+        normalized.setImpactScope(input.getImpactScope());
+        normalized.setSeverityLevel(normalizeSeverityLevel(input.getSeverityLevel()));
+        normalized.setModuleName(input.getModuleName());
+        normalized.setReproduceScreenshot(input.getReproduceScreenshot());
+        normalized.setTestRemark(input.getTestRemark());
+        return normalized;
     }
 
     private void applyDevInfoChanges(TicketBugDevInfoPO devInfoPO, TicketBugDevInfoInput input) {
@@ -304,21 +331,54 @@ public class TicketBugApplicationService extends BaseApplicationService {
     }
 
     private boolean isTestStage(String status) {
-        return "PENDING_TEST".equals(status)
-                || "PENDING_TEST_ACCEPT".equals(status)
-                || "TESTING".equals(status)
-                || "PENDING_VERIFY".equals(status);
+        return TicketStatus.PENDING_TEST_ACCEPT.getCode().equals(status)
+                || TicketStatus.TESTING.getCode().equals(status)
+                || TicketStatus.INVESTIGATING.getCode().equals(status)
+                || TicketStatus.PENDING_VERIFY.getCode().equals(status);
     }
 
     private boolean isDevStage(String status) {
-        return "PENDING_DEV".equals(status)
-                || "PENDING_DEV_ACCEPT".equals(status)
-                || "DEVELOPING".equals(status)
-                || "PENDING_VERIFY".equals(status);
+        return TicketStatus.PENDING_DEV_ACCEPT.getCode().equals(status)
+                || TicketStatus.DEVELOPING.getCode().equals(status)
+                || TicketStatus.PROCESSING.getCode().equals(status)
+                || TicketStatus.TEMP_RESOLVED.getCode().equals(status)
+                || TicketStatus.PENDING_VERIFY.getCode().equals(status);
     }
 
     private String normalizeStatus(String status) {
-        return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        TicketStatus normalized = TicketStatus.fromCode(status);
+        if (normalized != null) {
+            return normalized.getCode();
+        }
+        return status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeSeverityLevel(String source) {
+        if (!StringUtils.hasText(source)) {
+            return source;
+        }
+        String value = source.trim().toUpperCase(Locale.ROOT);
+        switch (value) {
+            case "FATAL":
+                value = "P0";
+                break;
+            case "CRITICAL":
+                value = "P1";
+                break;
+            case "NORMAL":
+                value = "P2";
+                break;
+            case "MINOR":
+                value = "P3";
+                break;
+            default:
+                break;
+        }
+        SeverityLevel level = SeverityLevel.fromCode(value);
+        if (level == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "缺陷等级仅支持P0-P4");
+        }
+        return level.getCode();
     }
 
     private TicketBugInfoPO getOrCreateBugInfo(Long ticketId) {

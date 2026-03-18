@@ -24,8 +24,10 @@ public enum TicketStatus {
     // ---- 缺陷工单专属状态 ----
     PENDING_TEST_ACCEPT("pending_test_accept", "待测试受理"),
     TESTING("testing", "测试中"),
+    INVESTIGATING("investigating", "排查中"),
     PENDING_DEV_ACCEPT("pending_dev_accept", "待开发受理"),
     DEVELOPING("developing", "开发中"),
+    TEMP_RESOLVED("temp_resolved", "临时解决"),
     PENDING_CS_CONFIRM("pending_cs_confirm", "待客服确认"),
 
     // ---- 审批工单专属状态 ----
