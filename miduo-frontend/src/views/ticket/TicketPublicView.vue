@@ -129,11 +129,22 @@ onMounted(loadDetail)
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">分类</span>
-              <span class="info-value">{{ detail.categoryFullPath || detail.categoryName || '-' }}</span>
+              <span class="info-value category-path">{{ detail.categoryFullPath || detail.categoryName || '-' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">来源</span>
               <span class="info-value">{{ detail.sourceLabel || detail.source || '-' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">优先级</span>
+              <span class="info-value">
+                <span
+                  v-if="detail.priorityLabel"
+                  class="priority-chip"
+                  :style="{ color: getPriorityColor(detail.priority), borderColor: getPriorityColor(detail.priority) }"
+                >{{ detail.priorityLabel }}</span>
+                <span v-else>-</span>
+              </span>
             </div>
             <div class="info-item">
               <span class="info-label">创建人</span>
@@ -162,14 +173,57 @@ onMounted(loadDetail)
           </div>
         </div>
 
-        <!-- 问题描述 -->
+        <!-- 客户信息 -->
+        <div v-if="detail.bugCustomerInfo" class="card customer-card">
+          <h2 class="card-title">客户信息</h2>
+          <div class="info-grid">
+            <div v-if="detail.bugCustomerInfo.merchantNo" class="info-item">
+              <span class="info-label">商户编号</span>
+              <span class="info-value">{{ detail.bugCustomerInfo.merchantNo }}</span>
+            </div>
+            <div v-if="detail.bugCustomerInfo.companyName" class="info-item">
+              <span class="info-label">公司名称</span>
+              <span class="info-value">{{ detail.bugCustomerInfo.companyName }}</span>
+            </div>
+            <div v-if="detail.bugCustomerInfo.merchantAccount" class="info-item">
+              <span class="info-label">商户账号</span>
+              <span class="info-value">{{ detail.bugCustomerInfo.merchantAccount }}</span>
+            </div>
+            <div v-if="detail.bugCustomerInfo.sceneCode" class="info-item">
+              <span class="info-label">场景码</span>
+              <span class="info-value">{{ detail.bugCustomerInfo.sceneCode }}</span>
+            </div>
+          </div>
+          <div v-if="detail.bugCustomerInfo.problemDesc" class="info-block-full">
+            <span class="info-label">问题描述</span>
+            <div class="info-text-block">{{ detail.bugCustomerInfo.problemDesc }}</div>
+          </div>
+          <div v-if="detail.bugCustomerInfo.expectedResult" class="info-block-full">
+            <span class="info-label">预期结果</span>
+            <div class="info-text-block">{{ detail.bugCustomerInfo.expectedResult }}</div>
+          </div>
+          <div v-if="detail.bugCustomerInfo.problemScreenshot" class="info-block-full">
+            <span class="info-label">问题截图</span>
+            <div class="screenshot-wrap">
+              <img
+                v-for="(url, idx) in detail.bugCustomerInfo.problemScreenshot.split(',')"
+                :key="idx"
+                :src="url.trim()"
+                class="screenshot-img"
+                alt="问题截图"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 工单描述 -->
         <div v-if="detail.description" class="card desc-card">
-          <h2 class="card-title">问题描述</h2>
+          <h2 class="card-title">工单描述</h2>
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div class="desc-content" v-html="detail.description" />
         </div>
 
-        <!-- 评论记录 -->
+        <!-- 处理记录 -->
         <div class="card comments-card">
           <h2 class="card-title">处理记录</h2>
           <div v-if="!detail.comments || detail.comments.length === 0" class="empty-comments">
@@ -339,6 +393,57 @@ onMounted(loadDetail)
   color: #303133;
   font-weight: 500;
   word-break: break-all;
+}
+
+/* 分类路径 */
+.category-path {
+  color: #1675d1;
+}
+
+/* 优先级标签 */
+.priority-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 20px;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 客户信息卡片全宽字段 */
+.info-block-full {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-text-block {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+/* 问题截图 */
+.screenshot-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.screenshot-img {
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 6px;
+  border: 1px solid #e5e6eb;
+  object-fit: contain;
 }
 
 /* 问题描述 */

@@ -289,7 +289,7 @@ public class TicketApplicationService {
             TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
             if (category != null) {
                 output.setCategoryName(category.getName());
-                output.setCategoryFullPath(category.getPath());
+                output.setCategoryFullPath(buildCategoryFullPath(category));
             }
         }
 
@@ -299,6 +299,19 @@ public class TicketApplicationService {
         }
         if (ticket.getAssigneeId() != null) {
             userIds.add(ticket.getAssigneeId());
+        }
+
+        TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
+        if (customerInfoOutput != null) {
+            TicketPublicDetailOutput.BugCustomerInfo bugCustomerInfo = new TicketPublicDetailOutput.BugCustomerInfo();
+            bugCustomerInfo.setMerchantNo(customerInfoOutput.getMerchantNo());
+            bugCustomerInfo.setCompanyName(customerInfoOutput.getCompanyName());
+            bugCustomerInfo.setMerchantAccount(customerInfoOutput.getMerchantAccount());
+            bugCustomerInfo.setProblemDesc(customerInfoOutput.getProblemDesc());
+            bugCustomerInfo.setExpectedResult(customerInfoOutput.getExpectedResult());
+            bugCustomerInfo.setSceneCode(customerInfoOutput.getSceneCode());
+            bugCustomerInfo.setProblemScreenshot(customerInfoOutput.getProblemScreenshot());
+            output.setBugCustomerInfo(bugCustomerInfo);
         }
 
         List<TicketCommentPO> comments = commentMapper.selectList(
@@ -497,7 +510,7 @@ public class TicketApplicationService {
             TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
             if (category != null) {
                 output.setCategoryName(category.getName());
-                output.setCategoryFullPath(category.getPath());
+                output.setCategoryFullPath(buildCategoryFullPath(category));
             }
         }
 
@@ -841,5 +854,22 @@ public class TicketApplicationService {
                 || "CLOSED".equalsIgnoreCase(status)
                 || "completed".equals(status)
                 || "closed".equals(status);
+    }
+
+    /**
+     * 根据分类实体构建完整的中文路径（例如：客服问题 > 物流相关 > 入库异常）
+     */
+    private String buildCategoryFullPath(TicketCategoryPO category) {
+        List<String> names = new ArrayList<>();
+        TicketCategoryPO current = category;
+        while (current != null) {
+            names.add(0, current.getName());
+            if (current.getParentId() != null) {
+                current = categoryMapper.selectById(current.getParentId());
+            } else {
+                current = null;
+            }
+        }
+        return String.join(" > ", names);
     }
 }
