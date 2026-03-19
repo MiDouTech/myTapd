@@ -155,6 +155,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'manage/operation-log',
+        name: 'manageOperationLog',
+        component: () => import('@/views/manage/OperationLogView.vue'),
+        meta: {
+          title: '工单日志',
+        },
+      },
+      {
         path: 'design-system',
         name: 'designSystem',
         component: () => import('@/views/demo/DesignSystemView.vue'),

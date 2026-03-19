@@ -33,6 +33,18 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- AOP（操作日志切面编译依赖） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <!-- JSON序列化（操作日志参数序列化） -->
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+        </dependency>
+
         <!-- API 文档 (springdoc 1.x for Spring Boot 2.x) -->
         <dependency>
             <groupId>org.springdoc</groupId>

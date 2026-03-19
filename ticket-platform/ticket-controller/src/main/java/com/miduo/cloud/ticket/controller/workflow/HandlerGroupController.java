@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.workflow;
 
 import com.miduo.cloud.ticket.application.workflow.HandlerGroupAppService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupCreateInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupListOutput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +43,7 @@ public class HandlerGroupController {
      * 接口编号：API000019
      * 产品文档功能：4.5 分派与路由 - 处理组创建
      */
+    @OperationLog(moduleName = "处理组管理", operationItem = "新增处理组")
     @Operation(summary = "新增处理组", description = "接口编号：API000019")
     @PostMapping("/create")
     public ApiResult<Long> createHandlerGroup(@Valid @RequestBody HandlerGroupCreateInput input) {

@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.infrastructure.external.wework;
 
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -167,20 +168,70 @@ public final class WecomXmlParser {
                     result.put("Content", "");
                 }
             } else if ("image".equalsIgnoreCase(msgType)) {
-                // 图片消息：image.media_id / image.pic_url / image.download_url / image.aes_key
+                // 官方文档（/document/path/100719）：图片消息格式
+                //   {"msgtype":"image","image":{"url":"https://ww-aibot-img-...（5分钟有效）"}}
+                // image.url 内容已用回调 callbackAesKey 做 AES-256-CBC 加密，无单独 aes_key 字段
                 result.put("Content", "");
-                JSONObject image = obj.getJSONObject("image");
-                if (image != null) {
-                    result.put("MediaId", nullToEmpty(image.getStr("media_id")));
-                    result.put("PicUrl", nullToEmpty(image.getStr("pic_url")));
-                    // AI bot 图片消息额外携带 download_url 和 aes_key，需 AES-256-CBC 解密后才能获得真实图片数据
-                    result.put("DownloadUrl", nullToEmpty(image.getStr("download_url")));
-                    result.put("AesKey", nullToEmpty(image.getStr("aes_key")));
+                result.put("MediaId", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                JSONObject imageObj = obj.getJSONObject("image");
+                if (imageObj != null) {
+                    String imageUrl = nullToEmpty(imageObj.getStr("url"));
+                    result.put("DownloadUrl", imageUrl);
+                    if (imageUrl.isEmpty()) {
+                        log.warn("企微智能机器人图片消息 image.url 为空，原始JSON: {}",
+                                json.length() > 500 ? json.substring(0, 500) : json);
+                    } else {
+                        log.info("企微智能机器人图片消息解析成功: urlLength={}", imageUrl.length());
+                    }
                 } else {
-                    result.put("MediaId", "");
-                    result.put("PicUrl", "");
                     result.put("DownloadUrl", "");
-                    result.put("AesKey", "");
+                    log.warn("企微智能机器人图片消息 image 子对象缺失，原始JSON: {}",
+                            json.length() > 500 ? json.substring(0, 500) : json);
+                }
+            } else if ("mixed".equalsIgnoreCase(msgType)) {
+                // 群聊中 @机器人 同时附带图片时，msgtype 为 mixed
+                // mixed.msg_item 数组包含若干子消息（image / text），逐项提取
+                result.put("Content", "");
+                result.put("DownloadUrl", "");
+                result.put("MediaId", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                JSONObject mixedObj = obj.getJSONObject("mixed");
+                if (mixedObj != null) {
+                    JSONArray msgItems = mixedObj.getJSONArray("msg_item");
+                    if (msgItems != null) {
+                        for (int i = 0; i < msgItems.size(); i++) {
+                            JSONObject item = msgItems.getJSONObject(i);
+                            if (item == null) {
+                                continue;
+                            }
+                            String itemType = nullToEmpty(item.getStr("msgtype"));
+                            if ("image".equalsIgnoreCase(itemType)) {
+                                JSONObject imageObj = item.getJSONObject("image");
+                                if (imageObj != null) {
+                                    String imageUrl = nullToEmpty(imageObj.getStr("url"));
+                                    result.put("DownloadUrl", imageUrl);
+                                    if (!imageUrl.isEmpty()) {
+                                        log.info("企微混合消息中图片解析成功: urlLength={}", imageUrl.length());
+                                    } else {
+                                        log.warn("企微混合消息中图片 url 为空，原始JSON: {}",
+                                                json.length() > 500 ? json.substring(0, 500) : json);
+                                    }
+                                }
+                            } else if ("text".equalsIgnoreCase(itemType)) {
+                                JSONObject textObj = item.getJSONObject("text");
+                                if (textObj != null) {
+                                    result.put("Content", nullToEmpty(textObj.getStr("content")));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (result.get("DownloadUrl").isEmpty()) {
+                    log.warn("企微混合消息未提取到图片内容，原始JSON: {}",
+                            json.length() > 500 ? json.substring(0, 500) : json);
                 }
             } else {
                 result.put("Content", "");

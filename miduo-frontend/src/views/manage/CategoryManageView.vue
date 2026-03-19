@@ -8,7 +8,13 @@ import {
   getCategoryTree,
   updateCategory,
 } from '@/api/category'
+import { getSlaPolicyList } from '@/api/sla'
+import { getTemplateList } from '@/api/template'
+import { getHandlerGroupList, getWorkflowList } from '@/api/workflow'
 import type { CategoryCreateInput, CategoryTreeOutput, CategoryUpdateInput } from '@/types/category'
+import type { SlaPolicyOutput } from '@/types/sla'
+import type { TemplateListOutput } from '@/types/template'
+import type { HandlerGroupListOutput, WorkflowListOutput } from '@/types/workflow'
 import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const treeLoading = ref(false)
@@ -17,6 +23,24 @@ const submitLoading = ref(false)
 const categoryTree = ref<CategoryTreeOutput[]>([])
 const selectedCategoryId = ref<number>()
 const createDialogVisible = ref(false)
+
+const templateOptions = ref<TemplateListOutput[]>([])
+const workflowOptions = ref<WorkflowListOutput[]>([])
+const slaPolicyOptions = ref<SlaPolicyOutput[]>([])
+const handlerGroupOptions = ref<HandlerGroupListOutput[]>([])
+
+async function loadSelectOptions(): Promise<void> {
+  const [templates, workflows, slaPolicies, handlerGroups] = await Promise.all([
+    getTemplateList(),
+    getWorkflowList(),
+    getSlaPolicyList(),
+    getHandlerGroupList(),
+  ])
+  templateOptions.value = templates
+  workflowOptions.value = workflows
+  slaPolicyOptions.value = slaPolicies
+  handlerGroupOptions.value = handlerGroups
+}
 
 const editForm = reactive<CategoryUpdateInput>({
   name: '',
@@ -176,7 +200,7 @@ async function handleDeleteCategory(): Promise<void> {
 }
 
 onMounted(async () => {
-  await loadCategoryTree()
+  await Promise.all([loadCategoryTree(), loadSelectOptions()])
 })
 </script>
 
@@ -234,17 +258,65 @@ onMounted(async () => {
           <el-form-item label="分类名称">
             <el-input v-model="editForm.name" placeholder="请输入分类名称" />
           </el-form-item>
-          <el-form-item label="模板ID">
-            <el-input-number v-model="editForm.templateId" :min="1" controls-position="right" />
+          <el-form-item label="模板">
+            <el-select
+              v-model="editForm.templateId"
+              clearable
+              placeholder="请选择模板"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in templateOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
-          <el-form-item label="工作流ID">
-            <el-input-number v-model="editForm.workflowId" :min="1" controls-position="right" />
+          <el-form-item label="工作流">
+            <el-select
+              v-model="editForm.workflowId"
+              clearable
+              placeholder="请选择工作流"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in workflowOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
-          <el-form-item label="SLA策略ID">
-            <el-input-number v-model="editForm.slaPolicyId" :min="1" controls-position="right" />
+          <el-form-item label="SLA策略">
+            <el-select
+              v-model="editForm.slaPolicyId"
+              clearable
+              placeholder="请选择SLA策略"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in slaPolicyOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
-          <el-form-item label="默认处理组ID">
-            <el-input-number v-model="editForm.defaultGroupId" :min="1" controls-position="right" />
+          <el-form-item label="默认处理组">
+            <el-select
+              v-model="editForm.defaultGroupId"
+              clearable
+              placeholder="请选择默认处理组"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in handlerGroupOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="排序">
             <el-input-number v-model="editForm.sortOrder" :min="0" controls-position="right" />
@@ -271,7 +343,7 @@ onMounted(async () => {
         <el-input v-model="createForm.name" placeholder="请输入分类名称" />
       </el-form-item>
       <el-form-item label="父级分类">
-        <el-select v-model="createForm.parentId" clearable placeholder="请选择父级分类">
+        <el-select v-model="createForm.parentId" clearable placeholder="请选择父级分类" style="width: 100%">
           <el-option
             v-for="option in flatCategoryOptions"
             :key="option.value"
@@ -282,6 +354,46 @@ onMounted(async () => {
       </el-form-item>
       <el-form-item label="层级" required>
         <el-input-number v-model="createForm.level" :min="1" :max="3" controls-position="right" />
+      </el-form-item>
+      <el-form-item label="模板">
+        <el-select v-model="createForm.templateId" clearable placeholder="请选择模板" style="width: 100%">
+          <el-option
+            v-for="item in templateOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="工作流">
+        <el-select v-model="createForm.workflowId" clearable placeholder="请选择工作流" style="width: 100%">
+          <el-option
+            v-for="item in workflowOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="SLA策略">
+        <el-select v-model="createForm.slaPolicyId" clearable placeholder="请选择SLA策略" style="width: 100%">
+          <el-option
+            v-for="item in slaPolicyOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="默认处理组">
+        <el-select v-model="createForm.defaultGroupId" clearable placeholder="请选择默认处理组" style="width: 100%">
+          <el-option
+            v-for="item in handlerGroupOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="排序">
         <el-input-number v-model="createForm.sortOrder" :min="0" controls-position="right" />

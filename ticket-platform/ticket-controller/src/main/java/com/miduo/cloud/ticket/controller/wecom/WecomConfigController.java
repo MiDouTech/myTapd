@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.wecom;
 
 import com.miduo.cloud.ticket.application.wecom.WecomConfigApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomConfigUpdateInput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomConnectionTestOutput;
@@ -45,6 +46,7 @@ public class WecomConfigController {
      * 接口编号：API000423
      * 产品文档功能：SSO一期-企微配置管理
      */
+    @OperationLog(moduleName = "企业微信配置", operationItem = "保存企业微信配置")
     @Operation(summary = "保存企业微信配置", description = "接口编号：API000423")
     @PostMapping("/save")
     public ApiResult<Long> save(@Valid @RequestBody WecomConfigUpdateInput input) {

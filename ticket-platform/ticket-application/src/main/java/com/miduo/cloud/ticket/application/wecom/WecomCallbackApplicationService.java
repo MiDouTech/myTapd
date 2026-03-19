@@ -79,6 +79,32 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             return;
         }
 
+        // 群聊中 @机器人 附带图片时，msgType 为 mixed，msg_item 中同时含 image 和 text
+        // 当同时含有图片下载地址和文本内容时，需要同时处理两部分：
+        //   1. 图片部分异步下载上传，保存至暂存表，等待与工单关联
+        //   2. 文本部分投递至消息队列，触发工单创建逻辑
+        // 两部分独立处理，通过 Rule A/B 完成图片与工单的最终关联
+        if ("mixed".equalsIgnoreCase(message.getMsgType())) {
+            boolean hasImage = message.getDownloadUrl() != null && !message.getDownloadUrl().isEmpty();
+            boolean hasText = message.getContent() != null && !message.getContent().isEmpty();
+
+            if (!hasImage && !hasText) {
+                saveIgnoredLog(message, "mixed消息无有效内容");
+                log.info("企微混合消息已忽略（无有效内容）: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+                return;
+            }
+
+            if (hasImage) {
+                imageHandlerService.handleImageMessageAsync(message);
+                log.info("企微混合消息（含图片）已投递图片处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            }
+            if (hasText) {
+                messagePublisher.publish(message);
+                log.info("企微混合消息（含文本）已投递文本处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            }
+            return;
+        }
+
         if (!"text".equalsIgnoreCase(message.getMsgType())) {
             saveIgnoredLog(message, "非文本非图片消息已忽略");
             log.info("企微回调消息已忽略: msgId={}, msgType={}, reason=非文本非图片消息", message.getMsgId(), message.getMsgType());

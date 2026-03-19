@@ -146,9 +146,9 @@
             <span
               v-if="detail.bugTestInfo?.severityLevel"
               class="severity-tag"
-              :class="'severity-' + detail.bugTestInfo.severityLevel.toLowerCase()"
+              :class="'severity-' + normalizeSeverity(detail.bugTestInfo.severityLevel).toLowerCase()"
             >
-              {{ SEVERITY_LABEL_MAP[detail.bugTestInfo.severityLevel.toUpperCase()] || detail.bugTestInfo.severityLevel }}
+              {{ SEVERITY_LABEL_MAP[normalizeSeverity(detail.bugTestInfo.severityLevel)] || detail.bugTestInfo.severityLevel }}
             </span>
             <span v-else class="empty-value">-</span>
           </span>
@@ -214,10 +214,11 @@ import { formatDateTime } from '@/utils/formatter'
 import BugStatusBadge from './BugStatusBadge.vue'
 
 const SEVERITY_LABEL_MAP: Record<string, string> = {
-  FATAL: '致命',
-  CRITICAL: '严重',
-  NORMAL: '一般',
-  MINOR: '轻微',
+  P0: '致命',
+  P1: '严重',
+  P2: '一般',
+  P3: '轻微',
+  P4: '建议',
 }
 
 const IMPACT_SCOPE_LABEL_MAP: Record<string, string> = {
@@ -258,6 +259,18 @@ const validReportClass = computed(() => {
   if (v === 'NO') return 'valid-no'
   return ''
 })
+
+function normalizeSeverity(source?: string): string {
+  if (!source) {
+    return ''
+  }
+  const value = source.trim().toUpperCase()
+  if (value === 'FATAL') return 'P0'
+  if (value === 'CRITICAL') return 'P1'
+  if (value === 'NORMAL') return 'P2'
+  if (value === 'MINOR') return 'P3'
+  return value
+}
 
 function startEdit(field: string): void {
   editingField.value = field
@@ -403,28 +416,34 @@ async function saveField(field: string): Promise<void> {
   font-weight: 600;
 }
 
-.severity-fatal {
+.severity-p0 {
   background: #fef0f0;
   color: #f56c6c;
   border: 1px solid #fbc4c4;
 }
 
-.severity-critical {
+.severity-p1 {
   background: #fff0e6;
   color: #e6621c;
   border: 1px solid #f9c3a0;
 }
 
-.severity-normal {
+.severity-p2 {
   background: #fdf6ec;
   color: #e6a23c;
   border: 1px solid #f5dab1;
 }
 
-.severity-minor {
+.severity-p3 {
   background: #f0f9ff;
   color: #1675d1;
   border: 1px solid #b3d4f5;
+}
+
+.severity-p4 {
+  background: #f4f4f5;
+  color: #909399;
+  border: 1px solid #dcdfe6;
 }
 
 .valid-yes {
