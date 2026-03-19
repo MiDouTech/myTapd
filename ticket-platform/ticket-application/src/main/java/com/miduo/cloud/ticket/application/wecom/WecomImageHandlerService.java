@@ -96,9 +96,9 @@ public class WecomImageHandlerService {
             return;
         }
 
-        tryLinkToRecentTicket(pending, config);
+        boolean linked = tryLinkToRecentTicket(pending, config);
 
-        if (config.isNotifyOnPending() && WecomPendingImageStatus.PENDING.getCode().equals(pending.getStatus())) {
+        if (!linked && config.isNotifyOnPending()) {
             sendPendingNotification(message.getChatId(), message.getFromWecomUserid(), message.getResponseUrl());
         }
     }
@@ -154,8 +154,10 @@ public class WecomImageHandlerService {
     /**
      * 规则A：先文后图 — 图片收到时检查是否有近期工单可关联
      * 找到即关联，未找到保持 PENDING 等待后续文字建单
+     *
+     * @return true 表示已成功关联，false 表示未关联（保持 PENDING）
      */
-    private void tryLinkToRecentTicket(WecomPendingImagePO pending, WecomProperties.ImageConfig config) {
+    private boolean tryLinkToRecentTicket(WecomPendingImagePO pending, WecomProperties.ImageConfig config) {
         int windowMinutes = config.getAssociationWindowMinutes();
         Date windowStart = minutesBefore(new Date(), windowMinutes);
 
@@ -168,19 +170,20 @@ public class WecomImageHandlerService {
 
         if (recentTicket == null) {
             log.info("规则A：未找到近期工单，保持PENDING等待: msgId={}, chatId={}", pending.getMsgId(), pending.getChatId());
-            return;
+            return false;
         }
 
         int maxImages = config.getMaxImagesPerTicket();
         int existingCount = countExistingAttachments(recentTicket.getId());
         if (existingCount >= maxImages) {
             log.warn("工单图片数已达上限 {}，规则A不关联: ticketId={}", maxImages, recentTicket.getId());
-            return;
+            return false;
         }
 
         createAttachmentRecord(recentTicket.getId(), pending.getQiniuUrl(), pending.getMsgId());
         updatePendingStatus(pending.getId(), recentTicket.getId(), WecomPendingImageStatus.LINKED);
         log.info("规则A先文后图关联成功: msgId={}, ticketId={}", pending.getMsgId(), recentTicket.getId());
+        return true;
     }
 
     /**
