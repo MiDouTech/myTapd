@@ -84,9 +84,13 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         //   1. 图片部分异步下载上传，保存至暂存表，等待与工单关联
         //   2. 文本部分投递至消息队列，触发工单创建逻辑
         // 两部分独立处理，通过 Rule A/B 完成图片与工单的最终关联
+        //
+        // 注意：群聊中 @机器人 仅发图（无文字）时，content 只含 @提及 token（如 <@botid_xxx>），
+        // 必须先剥离 @提及前缀，才能判断是否存在真实文本内容，避免将"纯图+@"误判为有文本。
         if ("mixed".equalsIgnoreCase(message.getMsgType())) {
             boolean hasImage = message.getDownloadUrl() != null && !message.getDownloadUrl().isEmpty();
-            boolean hasText = message.getContent() != null && !message.getContent().isEmpty();
+            String strippedContent = stripBotMention(message.getContent());
+            boolean hasText = !strippedContent.isEmpty();
 
             if (!hasImage && !hasText) {
                 saveIgnoredLog(message, "mixed消息无有效内容");
@@ -175,6 +179,29 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         logPO.setStatus(WecomBotMessageStatus.IGNORED.getCode());
         logPO.setErrorMsg(reason);
         botMessageLogMapper.insert(logPO);
+    }
+
+    /**
+     * 去除消息中的 @机器人 提及前缀（兼容普通@和 AI Bot 群聊格式）
+     * 用于判断 mixed 消息中是否存在真实文本内容，而非仅含 @提及 token。
+     */
+    private String stripBotMention(String content) {
+        if (content == null) {
+            return "";
+        }
+        String result = content.trim();
+        boolean stripped;
+        do {
+            stripped = false;
+            String before = result;
+            result = result.replaceFirst("^@工单助手[\\s\u00a0]*", "");
+            result = result.replaceFirst("^<@[^>]+>[\\s\u00a0]*", "");
+            if (!result.equals(before)) {
+                stripped = true;
+                result = result.trim();
+            }
+        } while (stripped && !result.isEmpty());
+        return result;
     }
 
     private String safeValue(String value) {
