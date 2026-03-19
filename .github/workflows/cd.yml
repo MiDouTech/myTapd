@@ -35,6 +35,8 @@ jobs:
       frontend_dir:           ${{ steps.config.outputs.frontend_dir }}
       node_version:           ${{ steps.config.outputs.node_version }}
       frontend_artifact_name: ${{ steps.config.outputs.frontend_artifact_name }}
+      static_repo_url:        ${{ steps.config.outputs.static_repo_url }}
+      static_repo_path:       ${{ steps.config.outputs.static_repo_path }}
 
     steps:
       - name: Checkout
@@ -55,6 +57,8 @@ jobs:
           echo "frontend_dir=${FRONTEND_DIR:-}"                     >> "$GITHUB_OUTPUT"
           echo "node_version=${NODE_VERSION:-20}"                   >> "$GITHUB_OUTPUT"
           echo "frontend_artifact_name=${FRONTEND_ARTIFACT_NAME:-}" >> "$GITHUB_OUTPUT"
+          echo "static_repo_url=${STATIC_REPO_URL:-}"               >> "$GITHUB_OUTPUT"
+          echo "static_repo_path=${STATIC_REPO_PATH:-}"             >> "$GITHUB_OUTPUT"
           # 从 services.json 取第一个有 build_output 服务的 context 作为编译工作目录
           COMPILE_DIR=$(jq -r \
             '[.[] | select(.build_output != null and .build_output != "")] | first | .context // "."' \
@@ -143,6 +147,8 @@ jobs:
     if: needs.prepare.outputs.frontend_dir != ''
     permissions:
       contents: write
+    outputs:
+      download_url: ${{ steps.push_static.outputs.download_url }}
 
     steps:
       - name: Checkout
@@ -171,6 +177,52 @@ jobs:
           cd "${{ needs.prepare.outputs.frontend_dir }}/dist"
           zip -r "$GITHUB_WORKSPACE/${ARTIFACT}.zip" .
           echo "ZIP size: $(du -sh "$GITHUB_WORKSPACE/${ARTIFACT}.zip" | cut -f1)"
+
+      # ── 推送 ZIP 到 CNB 静态仓库，输出下载链接 ───────────────────────────────
+      - name: Push ZIP to CNB static repo
+        id: push_static
+        if: needs.prepare.outputs.static_repo_url != ''
+        env:
+          CNB_TOKEN:        ${{ secrets.CNB_TOKEN }}
+          STATIC_REPO_URL:  ${{ needs.prepare.outputs.static_repo_url }}
+          STATIC_REPO_PATH: ${{ needs.prepare.outputs.static_repo_path }}
+          ARTIFACT:         ${{ needs.prepare.outputs.frontend_artifact_name }}
+        run: |
+          # 计算版本号（与 update-version 保持一致）
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="sha-${GITHUB_SHA:0:7}"
+          fi
+
+          # 配置 git 凭证
+          STATIC_HOST="${STATIC_REPO_URL#https://}"
+          STATIC_HOST="${STATIC_HOST%%/*}"
+          git config --global credential.helper store
+          printf 'https://cnb:%s@%s\n' "${CNB_TOKEN}" "${STATIC_HOST}" \
+            >> ~/.git-credentials
+          chmod 600 ~/.git-credentials
+
+          # 克隆静态仓库
+          git clone "${STATIC_REPO_URL}" _static_repo
+
+          # 创建目录并复制 ZIP
+          DEST_DIR="_static_repo/${STATIC_REPO_PATH}/${ARTIFACT}/${VERSION}"
+          mkdir -p "${DEST_DIR}"
+          cp "${ARTIFACT}.zip" "${DEST_DIR}/"
+
+          # 提交并推送
+          cd _static_repo
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add .
+          git commit -m "chore: publish frontend ${VERSION} [skip ci]"
+          git push
+
+          # 输出下载链接
+          DOWNLOAD_URL="${STATIC_REPO_URL}/-/git/raw/main/${STATIC_REPO_PATH}/${ARTIFACT}/${VERSION}/${ARTIFACT}.zip?download=true"
+          echo "download_url=${DOWNLOAD_URL}" >> "$GITHUB_OUTPUT"
+          echo "Frontend ZIP download URL: ${DOWNLOAD_URL}"
 
       - name: Upload ZIP artifact (7-day retention)
         uses: actions/upload-artifact@v4
@@ -313,9 +365,10 @@ jobs:
 
       - name: Clone CNB version repo and update .cnbVersion.yml
         env:
-          CNB_TOKEN:        ${{ secrets.CNB_TOKEN }}
-          CNB_VERSION_REPO: ${{ needs.prepare.outputs.cnb_version_repo }}
-          VERSION:          ${{ steps.version.outputs.value }}
+          CNB_TOKEN:            ${{ secrets.CNB_TOKEN }}
+          CNB_VERSION_REPO:     ${{ needs.prepare.outputs.cnb_version_repo }}
+          VERSION:              ${{ steps.version.outputs.value }}
+          FRONTEND_DOWNLOAD_URL: ${{ needs.build-frontend.outputs.download_url }}
         run: |
           # 配置 git 凭证（避免 token 出现在 URL 明文中）
           CNB_HOST="${CNB_VERSION_REPO#https://}"
@@ -331,7 +384,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
 
-          # 生成 .cnbVersion.yml（使用 printf 避免 heredoc 缩进问题）
+          # 生成 .cnb_version.yml（使用 printf 避免 heredoc 缩进问题）
           {
             printf 'version: "%s"\n'    "${VERSION}"
             printf 'commit: "%s"\n'     "${GITHUB_SHA:0:7}"
@@ -343,6 +396,10 @@ jobs:
               while IFS= read -r svc; do
                 printf '  %s: "%s"\n' "${svc}" "${VERSION}"
               done
+            # 仅当前端 ZIP 推送成功时写入下载链接
+            if [ -n "${FRONTEND_DOWNLOAD_URL}" ]; then
+              printf 'frontendDownloadUrl: "%s"\n' "${FRONTEND_DOWNLOAD_URL}"
+            fi
           } > .cnb_version.yml
 
           sed -i "s|testVersion:.*|testVersion: ${VERSION}|" .cnb/web_trigger.yml
@@ -352,6 +409,6 @@ jobs:
           if git diff --staged --quiet; then
             echo ".cnb_version.yml 无变化，跳过提交。"
           else
-            git commit -m "chore: update version to ${VERSION} [skip ci]"
+            git commit -m "chore: update version to ${VERSION}"
             git push
           fi
