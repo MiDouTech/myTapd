@@ -12,6 +12,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.T
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketAttachmentPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomPendingImageMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomPendingImagePO;
 import org.slf4j.Logger;
@@ -43,6 +45,7 @@ public class WecomImageHandlerService {
     private final WecomProperties wecomProperties;
     private final StringRedisTemplate redisTemplate;
     private final WecomClient wecomClient;
+    private final SysUserMapper sysUserMapper;
 
     public WecomImageHandlerService(WecomImageDownloadService imageDownloadService,
                                     WecomPendingImageMapper pendingImageMapper,
@@ -50,7 +53,8 @@ public class WecomImageHandlerService {
                                     TicketMapper ticketMapper,
                                     WecomProperties wecomProperties,
                                     StringRedisTemplate redisTemplate,
-                                    WecomClient wecomClient) {
+                                    WecomClient wecomClient,
+                                    SysUserMapper sysUserMapper) {
         this.imageDownloadService = imageDownloadService;
         this.pendingImageMapper = pendingImageMapper;
         this.attachmentMapper = attachmentMapper;
@@ -58,6 +62,7 @@ public class WecomImageHandlerService {
         this.wecomProperties = wecomProperties;
         this.redisTemplate = redisTemplate;
         this.wecomClient = wecomClient;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -154,6 +159,8 @@ public class WecomImageHandlerService {
     /**
      * 规则A：先文后图 — 图片收到时检查是否有近期工单可关联
      * 找到即关联，未找到保持 PENDING 等待后续文字建单
+     * 优先按 chatId + creatorId 精确匹配，防止群聊中不同用户的图片互相串联；
+     * 当发送人未关联系统账号时降级为仅按 chatId 匹配。
      *
      * @return true 表示已成功关联，false 表示未关联（保持 PENDING）
      */
@@ -161,11 +168,16 @@ public class WecomImageHandlerService {
         int windowMinutes = config.getAssociationWindowMinutes();
         Date windowStart = minutesBefore(new Date(), windowMinutes);
 
+        Long creatorId = resolveCreatorId(pending.getFromUserId());
+
         LambdaQueryWrapper<TicketPO> wrapper = new LambdaQueryWrapper<TicketPO>()
                 .eq(TicketPO::getSourceChatId, pending.getChatId())
                 .ge(TicketPO::getCreateTime, windowStart)
                 .orderByDesc(TicketPO::getCreateTime)
                 .last("LIMIT 1");
+        if (creatorId != null) {
+            wrapper.eq(TicketPO::getCreatorId, creatorId);
+        }
         TicketPO recentTicket = ticketMapper.selectOne(wrapper);
 
         if (recentTicket == null) {
@@ -271,6 +283,22 @@ public class WecomImageHandlerService {
                 log.warn("企微图片接收提示发送失败: error={}", e.getMessage());
             }
         }
+    }
+
+    /**
+     * 将企微 UserId 解析为系统用户 ID，用于 Rule A 关联时精确过滤创建人。
+     * 若未找到对应系统账号则返回 null，调用方降级为仅按 chatId 匹配。
+     */
+    private Long resolveCreatorId(String wecomUserId) {
+        if (wecomUserId == null || wecomUserId.trim().isEmpty()) {
+            return null;
+        }
+        SysUserPO user = sysUserMapper.selectOne(
+                new LambdaQueryWrapper<SysUserPO>()
+                        .eq(SysUserPO::getWecomUserid, wecomUserId.trim())
+                        .last("LIMIT 1")
+        );
+        return user != null ? user.getId() : null;
     }
 
     private Date minutesAfter(Date base, int minutes) {
