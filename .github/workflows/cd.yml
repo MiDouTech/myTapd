@@ -337,7 +337,7 @@ jobs:
           cache-to:   type=gha,scope=${{ matrix.name }},mode=max
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 5 – 所有产物就绪后，将版本号写入 CNB 版本记录仓库
+  # Job 5 – 所有产物就绪后，将版本号写入 CNB 版本记录仓库 
   # ────────────────────────────────────────────────────────────────────────────
   update-version:
     name: Update CNB Version File
@@ -402,7 +402,7 @@ jobs:
             fi
           } > .cnb_version.yml
 
-          sed -i "s|testVersion:.*|testVersion: ${VERSION}|" .cnb/web_trigger.yml
+          #sed -i "s|testVersion:.*|testVersion: ${VERSION}|" .cnb/web_trigger.yml
 
           git add .cnb/web_trigger.yml
           git add .cnb_version.yml
