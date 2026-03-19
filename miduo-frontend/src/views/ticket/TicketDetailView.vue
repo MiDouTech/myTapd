@@ -329,6 +329,12 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
   })
   customerProblemScreenshots.value = parseScreenshotList(ticketDetail.bugCustomerInfo?.problemScreenshot)
 
+  // Automatically include WeChat bot images — no manual selection needed
+  const wecomImageUrls = (ticketDetail.attachments || [])
+    .filter((a) => a.source === 'WECOM_BOT' && Boolean(a.filePath) && isImageFile(a.fileType))
+    .map((a) => a.filePath as string)
+  mergeProblemScreenshots(wecomImageUrls)
+
   Object.assign(testInfoForm, {
     reproduceEnv: ticketDetail.bugTestInfo?.reproduceEnv || '',
     reproduceSteps: ticketDetail.bugTestInfo?.reproduceSteps || '',
