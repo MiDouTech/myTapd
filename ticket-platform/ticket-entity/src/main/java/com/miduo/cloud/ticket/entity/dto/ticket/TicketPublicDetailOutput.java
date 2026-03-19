@@ -50,7 +50,23 @@ public class TicketPublicDetailOutput implements Serializable {
 
     private Date updateTime;
 
+    /**
+     * 客服信息（商户编号、公司名称、问题描述等）
+     */
+    private BugCustomerInfo bugCustomerInfo;
+
     private List<CommentOutput> comments;
+
+    @Data
+    public static class BugCustomerInfo implements Serializable {
+        private String merchantNo;
+        private String companyName;
+        private String merchantAccount;
+        private String problemDesc;
+        private String expectedResult;
+        private String sceneCode;
+        private String problemScreenshot;
+    }
 
     @Data
     public static class CommentOutput implements Serializable {

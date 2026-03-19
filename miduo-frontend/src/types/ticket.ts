@@ -313,6 +313,16 @@ export interface TicketPublicCommentOutput {
   createTime?: string
 }
 
+export interface TicketPublicBugCustomerInfo {
+  merchantNo?: string
+  companyName?: string
+  merchantAccount?: string
+  problemDesc?: string
+  expectedResult?: string
+  sceneCode?: string
+  problemScreenshot?: string
+}
+
 export interface TicketPublicDetailOutput {
   id: number
   ticketNo: string
@@ -333,5 +343,6 @@ export interface TicketPublicDetailOutput {
   closedAt?: string
   createTime?: string
   updateTime?: string
+  bugCustomerInfo?: TicketPublicBugCustomerInfo
   comments?: TicketPublicCommentOutput[]
 }
