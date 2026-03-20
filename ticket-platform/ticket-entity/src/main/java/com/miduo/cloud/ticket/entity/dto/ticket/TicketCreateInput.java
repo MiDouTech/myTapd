@@ -13,7 +13,7 @@ import java.util.Map;
 public class TicketCreateInput implements Serializable {
 
     @NotBlank(message = "工单标题不能为空")
-    @Size(max = 200, message = "工单标题长度不能超过200个字符")
+    @Size(max = 300, message = "工单标题长度不能超过300个字符")
     private String title;
 
     private String description;
