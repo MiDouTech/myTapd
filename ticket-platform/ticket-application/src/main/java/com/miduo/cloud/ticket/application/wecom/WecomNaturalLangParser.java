@@ -201,8 +201,9 @@ public class WecomNaturalLangParser {
     }
 
     /**
-     * 从分类表的 nl_match_keywords 字段加载分类级别的NLP匹配关键词
-     * 分类关键词比全局关键词拥有更高的默认置信度，体现精确配置的优先权
+     * 从分类表的 nl_match_keywords 字段加载分类级别的NLP匹配关键词。
+     * targetValue 使用名称路径（如"功能缺陷/资产错乱"），与 resolveCategoryId() 的比对逻辑保持一致。
+     * 分类关键词比全局关键词拥有更高的默认置信度，体现精确配置的优先权。
      */
     private List<WecomNlpKeywordPO> loadCategoryKeywords() {
         String cacheKey = RedisKeyConstants.WECOM_NLP_CATEGORY_KEYWORDS_CACHE;
@@ -217,31 +218,39 @@ public class WecomNaturalLangParser {
             }
         }
 
-        List<TicketCategoryPO> categories = categoryMapper.selectList(
+        // 加载全部启用分类，用于构建父子名称路径
+        List<TicketCategoryPO> allCategories = categoryMapper.selectList(
                 new LambdaQueryWrapper<TicketCategoryPO>()
                         .eq(TicketCategoryPO::getIsActive, 1)
-                        .isNotNull(TicketCategoryPO::getNlMatchKeywords)
-                        .ne(TicketCategoryPO::getNlMatchKeywords, "")
         );
 
+        if (allCategories == null) {
+            allCategories = new ArrayList<>();
+        }
+
+        Map<Long, TicketCategoryPO> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(TicketCategoryPO::getId, c -> c));
+
         List<WecomNlpKeywordPO> result = new ArrayList<>();
-        if (categories != null) {
-            for (TicketCategoryPO category : categories) {
-                if (!StringUtils.hasText(category.getNlMatchKeywords()) || !StringUtils.hasText(category.getPath())) {
-                    continue;
-                }
-                String[] keywords = category.getNlMatchKeywords().split(",");
-                for (String kw : keywords) {
-                    String trimmed = kw.trim();
-                    if (!trimmed.isEmpty()) {
-                        WecomNlpKeywordPO entry = new WecomNlpKeywordPO();
-                        entry.setKeyword(trimmed);
-                        entry.setMatchType(MATCH_TYPE_CATEGORY);
-                        entry.setTargetValue(category.getPath());
-                        entry.setConfidence(CATEGORY_KEYWORD_DEFAULT_CONFIDENCE);
-                        entry.setIsActive(1);
-                        result.add(entry);
-                    }
+        for (TicketCategoryPO category : allCategories) {
+            if (!StringUtils.hasText(category.getNlMatchKeywords())) {
+                continue;
+            }
+            String namePath = buildCategoryNamePath(category, categoryMap);
+            if (!StringUtils.hasText(namePath)) {
+                continue;
+            }
+            String[] keywords = category.getNlMatchKeywords().split(",");
+            for (String kw : keywords) {
+                String trimmed = kw.trim();
+                if (!trimmed.isEmpty()) {
+                    WecomNlpKeywordPO entry = new WecomNlpKeywordPO();
+                    entry.setKeyword(trimmed);
+                    entry.setMatchType(MATCH_TYPE_CATEGORY);
+                    entry.setTargetValue(namePath);
+                    entry.setConfidence(CATEGORY_KEYWORD_DEFAULT_CONFIDENCE);
+                    entry.setIsActive(1);
+                    result.add(entry);
                 }
             }
         }
@@ -250,6 +259,24 @@ public class WecomNaturalLangParser {
                 com.alibaba.fastjson2.JSON.toJSONString(result),
                 5, TimeUnit.MINUTES);
         return result;
+    }
+
+    /**
+     * 沿父链向上拼接分类名称路径，例如"功能缺陷/资产错乱"。
+     * 与 WecomInteractiveConfirmService.buildCategoryPathName() 逻辑保持一致。
+     */
+    private String buildCategoryNamePath(TicketCategoryPO category, Map<Long, TicketCategoryPO> categoryMap) {
+        List<String> names = new ArrayList<>();
+        TicketCategoryPO current = category;
+        while (current != null) {
+            if (!StringUtils.hasText(current.getName())) {
+                break;
+            }
+            names.add(0, current.getName().trim());
+            Long parentId = current.getParentId();
+            current = parentId == null ? null : categoryMap.get(parentId);
+        }
+        return String.join("/", names);
     }
 
     /**
