@@ -64,7 +64,7 @@ public class NotificationOrchestrator {
             return;
         }
 
-        if (shouldAggregate(ticketId, type)) {
+        if (shouldAggregate(userId, ticketId, type)) {
             log.info("通知已合并，跳过重复发送: userId={}, ticketId={}, type={}",
                     userId, ticketId, type.getCode());
             return;
@@ -102,10 +102,11 @@ public class NotificationOrchestrator {
     }
 
     /**
-     * 消息合并：同一工单N分钟内的多次变更合并为一条通知
+     * 消息合并：同一用户在N分钟内不重复接收同一工单的同类型通知
+     * Key 维度为 userId:ticketId:type，避免多接收人批量发送时误合并
      */
-    private boolean shouldAggregate(Long ticketId, NotificationType type) {
-        if (ticketId == null) {
+    private boolean shouldAggregate(Long userId, Long ticketId, NotificationType type) {
+        if (ticketId == null || userId == null) {
             return false;
         }
 
@@ -114,7 +115,7 @@ public class NotificationOrchestrator {
             return false;
         }
 
-        String key = RedisKeyConstants.NOTIFY_AGGREGATE_PREFIX + ticketId + ":" + type.getCode();
+        String key = RedisKeyConstants.NOTIFY_AGGREGATE_PREFIX + userId + ":" + ticketId + ":" + type.getCode();
         Boolean exists = redisTemplate.hasKey(key);
         if (Boolean.TRUE.equals(exists)) {
             return true;
@@ -163,7 +164,11 @@ public class NotificationOrchestrator {
                 .collect(Collectors.toMap(NotificationSender::getChannel, s -> s));
         NotificationSender sender = senderMap.get(channel);
         if (sender != null) {
-            sender.send(userId, title, content);
+            try {
+                sender.send(userId, title, content);
+            } catch (Exception e) {
+                log.warn("渠道发送失败，已跳过: channel={}, userId={}, error={}", channel, userId, e.getMessage());
+            }
         }
     }
 }

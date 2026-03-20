@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.application.workflow;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
@@ -63,6 +64,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final WorkflowEngine workflowEngine;
     private final WorkflowAppService workflowAppService;
     private final TicketTimeTrackApplicationService ticketTimeTrackService;
+    private final SlaTimerService slaTimerService;
     private final ApplicationEventPublisher eventPublisher;
 
     public TicketWorkflowAppService(TicketMapper ticketMapper,
@@ -72,6 +74,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      WorkflowEngine workflowEngine,
                                      WorkflowAppService workflowAppService,
                                      TicketTimeTrackApplicationService ticketTimeTrackService,
+                                     SlaTimerService slaTimerService,
                                      ApplicationEventPublisher eventPublisher) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
@@ -80,6 +83,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         this.workflowEngine = workflowEngine;
         this.workflowAppService = workflowAppService;
         this.ticketTimeTrackService = ticketTimeTrackService;
+        this.slaTimerService = slaTimerService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -206,6 +210,11 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String transitionAction = ticketTimeTrackService.resolveTransitionAction(oldStatus, targetStatus);
         ticketTimeTrackService.recordStatusTrack(ticketId, operatorId, transitionAction,
                 oldStatus, targetStatus, oldAssigneeId, ticket.getAssigneeId(), input.getRemark());
+
+        // SLA计时器联动：根据目标状态的slaAction驱动计时器生命周期
+        if (targetState != null) {
+            dispatchSlaAction(ticketId, targetState.getSlaAction());
+        }
 
         // 发布领域事件
         eventPublisher.publishEvent(
@@ -335,6 +344,41 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     // =========================================================================
     // 私有辅助方法
     // =========================================================================
+
+    /**
+     * 根据工作流状态的 slaAction 驱动 SLA 计时器生命周期
+     * START_RESPONSE / START_RESOLVE → 完成响应计时器（已启动则续跑）
+     * PAUSE → 暂停所有 RUNNING 计时器
+     * STOP → 完成所有剩余计时器
+     */
+    private void dispatchSlaAction(Long ticketId, String slaAction) {
+        if (slaAction == null) {
+            return;
+        }
+        try {
+            switch (slaAction) {
+                case "START_RESOLVE":
+                    // 完成响应计时器（首次响应），同时恢复暂停中的解决计时器
+                    slaTimerService.completeResponseTimer(ticketId);
+                    slaTimerService.resumeTimers(ticketId);
+                    break;
+                case "PAUSE":
+                    slaTimerService.pauseTimers(ticketId);
+                    break;
+                case "STOP":
+                    slaTimerService.completeAllTimers(ticketId);
+                    break;
+                case "START_RESPONSE":
+                    slaTimerService.resumeTimers(ticketId);
+                    break;
+                default:
+                    break;
+            }
+        } catch (Exception e) {
+            log.warn("SLA计时器联动异常，不影响工作流流转: ticketId={}, slaAction={}, error={}",
+                    ticketId, slaAction, e.getMessage());
+        }
+    }
 
     /**
      * 解析操作人在此工单中的最高角色
