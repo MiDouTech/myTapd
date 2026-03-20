@@ -10,6 +10,8 @@ export interface CategoryTreeOutput {
   defaultGroupId?: number
   sortOrder?: number
   isActive?: number
+  remark?: string
+  nlMatchKeywords?: string
   children?: CategoryTreeOutput[]
 }
 
@@ -31,6 +33,8 @@ export interface CategoryDetailOutput {
   defaultGroupName?: string
   sortOrder?: number
   isActive?: number
+  remark?: string
+  nlMatchKeywords?: string
   createTime?: string
   updateTime?: string
 }
@@ -44,6 +48,8 @@ export interface CategoryCreateInput {
   slaPolicyId?: number
   defaultGroupId?: number
   sortOrder?: number
+  remark?: string
+  nlMatchKeywords?: string
 }
 
 export interface CategoryUpdateInput {
@@ -54,4 +60,6 @@ export interface CategoryUpdateInput {
   defaultGroupId?: number
   sortOrder?: number
   isActive?: number
+  remark?: string
+  nlMatchKeywords?: string
 }

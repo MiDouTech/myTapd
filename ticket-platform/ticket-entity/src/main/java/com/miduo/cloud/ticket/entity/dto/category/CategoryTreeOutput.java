@@ -30,5 +30,9 @@ public class CategoryTreeOutput implements Serializable {
 
     private Integer isActive;
 
+    private String remark;
+
+    private String nlMatchKeywords;
+
     private List<CategoryTreeOutput> children;
 }

@@ -3,10 +3,13 @@ package com.miduo.cloud.ticket.application.wecom;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
 import com.miduo.cloud.ticket.entity.dto.wecom.NlpAnalyzeResult;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomNlpKeywordMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomNlpKeywordPO;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,15 +33,23 @@ public class WecomNaturalLangParser {
 
     private static final int CONFIDENCE_THRESHOLD = 70;
 
+    /**
+     * 分类级关键词的默认置信度，高于全局关键词默认值，体现直接配置的优先性
+     */
+    private static final int CATEGORY_KEYWORD_DEFAULT_CONFIDENCE = 85;
+
     private static final Pattern MERCHANT_NO_PATTERN = Pattern.compile("\\b(\\d{8,12})\\b");
     private static final Pattern PHONE_PATTERN = Pattern.compile("\\b(1[3-9]\\d{9})\\b");
 
     private final WecomNlpKeywordMapper nlpKeywordMapper;
+    private final TicketCategoryMapper categoryMapper;
     private final StringRedisTemplate redisTemplate;
 
     public WecomNaturalLangParser(WecomNlpKeywordMapper nlpKeywordMapper,
+                                  TicketCategoryMapper categoryMapper,
                                   StringRedisTemplate redisTemplate) {
         this.nlpKeywordMapper = nlpKeywordMapper;
+        this.categoryMapper = categoryMapper;
         this.redisTemplate = redisTemplate;
     }
 
@@ -56,17 +67,20 @@ public class WecomNaturalLangParser {
         String title = text.length() > 50 ? text.substring(0, 50) : text;
         result.setTitle(title);
 
-        List<WecomNlpKeywordPO> keywords = loadKeywords();
+        List<WecomNlpKeywordPO> globalKeywords = loadKeywords();
+        List<WecomNlpKeywordPO> categoryKeywords = loadCategoryKeywords();
 
-        List<WecomNlpKeywordPO> categoryKeywords = keywords.stream()
+        List<WecomNlpKeywordPO> allCategoryKeywords = new ArrayList<>();
+        allCategoryKeywords.addAll(categoryKeywords);
+        allCategoryKeywords.addAll(globalKeywords.stream()
                 .filter(k -> MATCH_TYPE_CATEGORY == k.getMatchType() && k.getIsActive() != null && k.getIsActive() == 1)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
 
-        List<WecomNlpKeywordPO> priorityKeywords = keywords.stream()
+        List<WecomNlpKeywordPO> priorityKeywords = globalKeywords.stream()
                 .filter(k -> MATCH_TYPE_PRIORITY == k.getMatchType() && k.getIsActive() != null && k.getIsActive() == 1)
                 .collect(Collectors.toList());
 
-        String resolvedCategory = matchCategory(text, categoryKeywords, defaultCategoryPath);
+        String resolvedCategory = matchCategory(text, allCategoryKeywords, defaultCategoryPath);
         result.setCategoryPath(resolvedCategory);
 
         String resolvedPriority = matchPriority(text, priorityKeywords);
@@ -75,7 +89,7 @@ public class WecomNaturalLangParser {
         Map<String, String> entities = extractEntities(text);
         result.setEntities(entities);
 
-        int confidence = calculateConfidence(resolvedCategory, resolvedPriority, categoryKeywords, text);
+        int confidence = calculateConfidence(resolvedCategory, resolvedPriority, allCategoryKeywords, text);
         result.setConfidence(confidence);
 
         return result;
@@ -187,9 +201,69 @@ public class WecomNaturalLangParser {
     }
 
     /**
-     * 清除NLP关键词缓存
+     * 从分类表的 nl_match_keywords 字段加载分类级别的NLP匹配关键词
+     * 分类关键词比全局关键词拥有更高的默认置信度，体现精确配置的优先权
+     */
+    private List<WecomNlpKeywordPO> loadCategoryKeywords() {
+        String cacheKey = RedisKeyConstants.WECOM_NLP_CATEGORY_KEYWORDS_CACHE;
+        Boolean hasKey = redisTemplate.hasKey(cacheKey);
+        if (Boolean.TRUE.equals(hasKey)) {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null && !cached.isEmpty()) {
+                try {
+                    return com.alibaba.fastjson2.JSON.parseArray(cached, WecomNlpKeywordPO.class);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        List<TicketCategoryPO> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .eq(TicketCategoryPO::getIsActive, 1)
+                        .isNotNull(TicketCategoryPO::getNlMatchKeywords)
+                        .ne(TicketCategoryPO::getNlMatchKeywords, "")
+        );
+
+        List<WecomNlpKeywordPO> result = new ArrayList<>();
+        if (categories != null) {
+            for (TicketCategoryPO category : categories) {
+                if (!StringUtils.hasText(category.getNlMatchKeywords()) || !StringUtils.hasText(category.getPath())) {
+                    continue;
+                }
+                String[] keywords = category.getNlMatchKeywords().split(",");
+                for (String kw : keywords) {
+                    String trimmed = kw.trim();
+                    if (!trimmed.isEmpty()) {
+                        WecomNlpKeywordPO entry = new WecomNlpKeywordPO();
+                        entry.setKeyword(trimmed);
+                        entry.setMatchType(MATCH_TYPE_CATEGORY);
+                        entry.setTargetValue(category.getPath());
+                        entry.setConfidence(CATEGORY_KEYWORD_DEFAULT_CONFIDENCE);
+                        entry.setIsActive(1);
+                        result.add(entry);
+                    }
+                }
+            }
+        }
+
+        redisTemplate.opsForValue().set(cacheKey,
+                com.alibaba.fastjson2.JSON.toJSONString(result),
+                5, TimeUnit.MINUTES);
+        return result;
+    }
+
+    /**
+     * 清除全局NLP关键词缓存
      */
     public void evictKeywordsCache() {
         redisTemplate.delete(RedisKeyConstants.WECOM_NLP_KEYWORDS_CACHE);
+    }
+
+    /**
+     * 清除分类级别NLP关键词缓存
+     * 在分类新增、修改、删除时调用
+     */
+    public void evictCategoryKeywordsCache() {
+        redisTemplate.delete(RedisKeyConstants.WECOM_NLP_CATEGORY_KEYWORDS_CACHE);
     }
 }

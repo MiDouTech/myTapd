@@ -42,6 +42,10 @@ public class CategoryDetailOutput implements Serializable {
 
     private Integer isActive;
 
+    private String remark;
+
+    private String nlMatchKeywords;
+
     private Date createTime;
 
     private Date updateTime;
