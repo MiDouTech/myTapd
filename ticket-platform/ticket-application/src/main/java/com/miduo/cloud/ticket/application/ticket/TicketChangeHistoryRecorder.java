@@ -29,13 +29,12 @@ import java.util.Objects;
  * 1. record() - 将字段变更列表序列化为 JSON 写入 ticket_log.remark
  * 2. detectXxxChanges() - 对比 PO 旧值和 Input 新值，生成 BugFieldChangeItem 列表
  *
- * 约束：remark JSON 不超过 450 字符；text 类字段截断为前 200 字符
+ * 约束：text 类字段截断为前 200 字符，remark 列已扩展为 TEXT 类型无硬上限
  */
 @Component
 public class TicketChangeHistoryRecorder {
 
     private static final int TEXT_TRUNCATE_LENGTH = 200;
-    private static final int REMARK_MAX_LENGTH = 450;
 
     private final TicketLogMapper ticketLogMapper;
 
@@ -133,17 +132,13 @@ public class TicketChangeHistoryRecorder {
 
     /**
      * 序列化变更批次为 JSON 字符串
-     * 若序列化结果超过 REMARK_MAX_LENGTH，截断 fields 数组到最后一条能放下的位置
+     * 每个字段文本值已通过 truncate() 截断为前 200 字符，整体 JSON 大小受控
      */
     private String buildRemark(BugChangeTypeEnum changeType, List<BugFieldChangeItem> changes) {
         Map<String, Object> remarkMap = new HashMap<>();
         remarkMap.put("changeType", changeType.getCode());
         remarkMap.put("fields", changes);
-        String json = JSON.toJSONString(remarkMap);
-        if (json.length() > REMARK_MAX_LENGTH) {
-            return json.substring(0, REMARK_MAX_LENGTH);
-        }
-        return json;
+        return JSON.toJSONString(remarkMap);
     }
 
     /**
