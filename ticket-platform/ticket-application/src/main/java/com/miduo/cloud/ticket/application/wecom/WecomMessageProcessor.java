@@ -151,12 +151,26 @@ public class WecomMessageProcessor extends BaseApplicationService {
         String chatId = message.getChatId();
         String fromWecomUserId = message.getFromWecomUserid();
 
+        if (!containsProblemDescLabel(rawText)) {
+            String promptMsg = buildMissingProblemDescPrompt();
+            sendReply(binding, promptMsg, fromWecomUserId, message.getResponseUrl());
+            saveLog(message, parseResult, null, WecomBotMessageStatus.FAIL, "消息缺少问题描述字段",
+                    PARSE_TYPE_NATURAL_LANGUAGE, null);
+            log.info("企微消息缺少问题描述字段，已提示用户补充: msgId={}, chatId={}", message.getMsgId(), chatId);
+            return;
+        }
+
         NlpAnalyzeResult nlpResult = naturalLangParser.analyze(rawText, defaultCategoryPath);
+
+        String title = extractProblemDescAsTitle(rawText);
+        if (title == null || title.trim().isEmpty()) {
+            title = nlpResult.getTitle();
+        }
 
         WecomDraftSession draft = new WecomDraftSession();
         draft.setSessionKey(chatId != null ? chatId : fromWecomUserId);
         draft.setWecomUserId(fromWecomUserId);
-        draft.setTitle(nlpResult.getTitle());
+        draft.setTitle(title);
         draft.setCategoryPath(nlpResult.getCategoryPath());
         draft.setPriority(nlpResult.getPriority());
         draft.setDescription(rawText);
@@ -183,6 +197,47 @@ public class WecomMessageProcessor extends BaseApplicationService {
             log.warn("企微自然语言消息处理失败：发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
                     message.getMsgId(), chatId, fromWecomUserId);
         }
+    }
+
+    /**
+     * 检查消息是否包含"问题描述"标签（支持中英文冒号）
+     */
+    private boolean containsProblemDescLabel(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return false;
+        }
+        return text.contains("问题描述：") || text.contains("问题描述:");
+    }
+
+    /**
+     * 从消息中提取"问题描述"字段值作为工单标题，最大截取300字符
+     */
+    private String extractProblemDescAsTitle(String rawText) {
+        if (rawText == null || rawText.trim().isEmpty()) {
+            return null;
+        }
+        WecomMessageParseOutput parseOutput = wecomMessageFieldParser.parse(rawText);
+        if (parseOutput == null || parseOutput.getProblemDesc() == null || parseOutput.getProblemDesc().trim().isEmpty()) {
+            return null;
+        }
+        String problemDesc = parseOutput.getProblemDesc().trim();
+        if (problemDesc.length() > 300) {
+            return problemDesc.substring(0, 300);
+        }
+        return problemDesc;
+    }
+
+    /**
+     * 构建缺少"问题描述"字段时的提示消息
+     */
+    private String buildMissingProblemDescPrompt() {
+        return "如果需要创建工单，请补充问题描述内容。格式如下：\n" +
+                "商户编号：XXX\n" +
+                "公司名称：XXX\n" +
+                "商户账号：XXX\n" +
+                "问题描述：XXX\n" +
+                "预期结果：XXX\n" +
+                "场景码：XXX";
     }
 
     /**
