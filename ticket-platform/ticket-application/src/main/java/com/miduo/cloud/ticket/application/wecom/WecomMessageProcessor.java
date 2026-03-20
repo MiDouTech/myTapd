@@ -235,7 +235,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
                 "商户编号：XXX\n" +
                 "公司名称：XXX\n" +
                 "商户账号：XXX\n" +
-                "问题描述：XXX\n" +
+                "问题描述：XXX（必填）\n" +
                 "预期结果：XXX\n" +
                 "场景码：XXX";
     }
