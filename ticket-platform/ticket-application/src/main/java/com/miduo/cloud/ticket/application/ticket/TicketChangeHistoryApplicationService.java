@@ -4,6 +4,8 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
+import com.miduo.cloud.ticket.common.enums.TicketAction;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.entity.dto.ticket.BugChangeHistoryOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.BugFieldChangeItem;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
@@ -37,7 +39,7 @@ public class TicketChangeHistoryApplicationService extends BaseApplicationServic
     }
 
     /**
-     * 查询缺陷变更历史列表
+     * 查询缺陷变更历史列表（含字段级变更与生命周期事件）
      * 接口编号：API000501
      *
      * @param ticketId   工单 ID
@@ -51,10 +53,19 @@ public class TicketChangeHistoryApplicationService extends BaseApplicationServic
             return Collections.emptyList();
         }
 
-        Set<Long> userIds = logs.stream()
-                .map(TicketLogPO::getUserId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        Set<Long> userIds = new HashSet<>();
+        for (TicketLogPO l : logs) {
+            if (l.getUserId() != null) {
+                userIds.add(l.getUserId());
+            }
+            // ASSIGN 日志的 old_value / new_value 是被分派人的用户 ID，需一并批量查询
+            if ("ASSIGN".equals(l.getAction())) {
+                Long oldId = parseLongSilently(l.getOldValue());
+                Long newId = parseLongSilently(l.getNewValue());
+                if (oldId != null) userIds.add(oldId);
+                if (newId != null) userIds.add(newId);
+            }
+        }
         Map<Long, SysUserPO> userMap = batchQueryUsers(userIds);
 
         List<BugChangeHistoryOutput> result = new ArrayList<>();
@@ -92,8 +103,15 @@ public class TicketChangeHistoryApplicationService extends BaseApplicationServic
 
     private BugChangeHistoryOutput buildOutput(TicketLogPO log, Map<Long, SysUserPO> userMap, int seq) {
         List<BugFieldChangeItem> fields = parseFieldsFromRemark(log.getRemark());
+        boolean isLifecycleEvent = false;
+
         if (fields == null) {
-            return null;
+            // remark 非 JSON 格式，尝试将其作为生命周期事件处理
+            fields = buildLifecycleFields(log, userMap);
+            if (fields == null) {
+                return null;
+            }
+            isLifecycleEvent = true;
         }
 
         BugChangeHistoryOutput output = new BugChangeHistoryOutput();
@@ -106,18 +124,178 @@ public class TicketChangeHistoryApplicationService extends BaseApplicationServic
         output.setChangeByUserName(user != null ? user.getName() : "系统");
         output.setChangeByAvatar(user != null ? user.getAvatarUrl() : null);
 
-        String changeTypeCode = extractChangeTypeFromRemark(log.getRemark());
-        BugChangeTypeEnum type = BugChangeTypeEnum.fromCode(changeTypeCode);
-        if (type != null) {
-            output.setChangeType(type.getCode());
-            output.setChangeTypeLabel(type.getLabel());
-        } else {
+        if (isLifecycleEvent) {
+            String changeTypeCode = mapActionToChangeType(log.getAction());
             output.setChangeType(changeTypeCode);
-            output.setChangeTypeLabel(changeTypeCode);
+            TicketAction ticketAction = TicketAction.fromCode(log.getAction());
+            if (ticketAction != null) {
+                output.setChangeTypeLabel(ticketAction.getLabel());
+            } else {
+                BugChangeTypeEnum type = BugChangeTypeEnum.fromCode(changeTypeCode);
+                output.setChangeTypeLabel(type != null ? type.getLabel() : log.getAction());
+            }
+        } else {
+            String changeTypeCode = extractChangeTypeFromRemark(log.getRemark());
+            BugChangeTypeEnum type = BugChangeTypeEnum.fromCode(changeTypeCode);
+            if (type != null) {
+                output.setChangeType(type.getCode());
+                output.setChangeTypeLabel(type.getLabel());
+            } else {
+                output.setChangeType(changeTypeCode);
+                output.setChangeTypeLabel(changeTypeCode);
+            }
         }
 
         output.setFields(fields);
         return output;
+    }
+
+    /**
+     * 为非 JSON 格式的生命周期日志构建展示字段列表
+     * 返回 null 表示该日志没有有效展示内容，应被跳过
+     */
+    private List<BugFieldChangeItem> buildLifecycleFields(TicketLogPO log,
+                                                           Map<Long, SysUserPO> userMap) {
+        String action = log.getAction();
+        if (action == null) {
+            return null;
+        }
+        List<BugFieldChangeItem> fields = new ArrayList<>();
+        switch (action) {
+            case "CREATE": {
+                if (StringUtils.hasText(log.getRemark())) {
+                    BugFieldChangeItem item = new BugFieldChangeItem();
+                    item.setFieldName("remark");
+                    item.setFieldLabel("操作描述");
+                    item.setNewValue(log.getRemark());
+                    item.setNewLabel(log.getRemark());
+                    fields.add(item);
+                }
+                return fields;
+            }
+            case "ASSIGN": {
+                BugFieldChangeItem item = new BugFieldChangeItem();
+                item.setFieldName("assignee");
+                item.setFieldLabel("处理人");
+                item.setOldValue(log.getOldValue());
+                item.setOldLabel(resolveUserName(parseLongSilently(log.getOldValue()), userMap, log.getOldValue()));
+                item.setNewValue(log.getNewValue());
+                item.setNewLabel(resolveUserName(parseLongSilently(log.getNewValue()), userMap, log.getNewValue()));
+                fields.add(item);
+                if (StringUtils.hasText(log.getRemark())) {
+                    BugFieldChangeItem remarkItem = new BugFieldChangeItem();
+                    remarkItem.setFieldName("remark");
+                    remarkItem.setFieldLabel("备注");
+                    remarkItem.setNewValue(log.getRemark());
+                    remarkItem.setNewLabel(log.getRemark());
+                    fields.add(remarkItem);
+                }
+                return fields;
+            }
+            case "TRANSIT":
+            case "RETURN": {
+                if (StringUtils.hasText(log.getOldValue()) || StringUtils.hasText(log.getNewValue())) {
+                    BugFieldChangeItem item = new BugFieldChangeItem();
+                    item.setFieldName("status");
+                    item.setFieldLabel("状态");
+                    item.setOldValue(log.getOldValue());
+                    item.setOldLabel(resolveStatusLabel(log.getOldValue()));
+                    item.setNewValue(log.getNewValue());
+                    item.setNewLabel(resolveStatusLabel(log.getNewValue()));
+                    fields.add(item);
+                }
+                if (StringUtils.hasText(log.getRemark())) {
+                    BugFieldChangeItem remarkItem = new BugFieldChangeItem();
+                    remarkItem.setFieldName("remark");
+                    remarkItem.setFieldLabel("备注");
+                    remarkItem.setNewValue(log.getRemark());
+                    remarkItem.setNewLabel(log.getRemark());
+                    fields.add(remarkItem);
+                }
+                return fields;
+            }
+            case "TRANSFER": {
+                if (StringUtils.hasText(log.getRemark())) {
+                    BugFieldChangeItem item = new BugFieldChangeItem();
+                    item.setFieldName("remark");
+                    item.setFieldLabel("原因");
+                    item.setNewValue(log.getRemark());
+                    item.setNewLabel(log.getRemark());
+                    fields.add(item);
+                }
+                return fields.isEmpty() ? null : fields;
+            }
+            case "FOLLOW":
+            case "UNFOLLOW":
+                // 关注/取消关注无需额外字段，返回空列表即可显示操作标签
+                return fields;
+            default: {
+                if (StringUtils.hasText(log.getRemark())) {
+                    BugFieldChangeItem item = new BugFieldChangeItem();
+                    item.setFieldName("remark");
+                    item.setFieldLabel("备注");
+                    item.setNewValue(log.getRemark());
+                    item.setNewLabel(log.getRemark());
+                    fields.add(item);
+                    return fields;
+                }
+                return null;
+            }
+        }
+    }
+
+    /**
+     * 将 TicketAction 的 action 码映射到 BugChangeTypeEnum
+     */
+    private String mapActionToChangeType(String action) {
+        if (action == null) {
+            return BugChangeTypeEnum.SYSTEM_AUTO.getCode();
+        }
+        switch (action) {
+            case "CREATE":
+                return BugChangeTypeEnum.CREATE.getCode();
+            case "TRANSIT":
+            case "RETURN":
+                return BugChangeTypeEnum.STATUS_CHANGE.getCode();
+            default:
+                return BugChangeTypeEnum.SYSTEM_AUTO.getCode();
+        }
+    }
+
+    /**
+     * 根据状态码获取状态名称（优先使用 TicketStatus 枚举）
+     */
+    private String resolveStatusLabel(String statusCode) {
+        if (!StringUtils.hasText(statusCode)) {
+            return statusCode;
+        }
+        TicketStatus status = TicketStatus.fromCode(statusCode);
+        return status != null ? status.getLabel() : statusCode;
+    }
+
+    /**
+     * 根据用户 ID 从 userMap 中获取姓名，找不到时降级展示 fallback
+     */
+    private String resolveUserName(Long userId, Map<Long, SysUserPO> userMap, String fallback) {
+        if (userId == null) {
+            return fallback;
+        }
+        SysUserPO user = userMap.get(userId);
+        return user != null ? user.getName() : fallback;
+    }
+
+    /**
+     * 安全地将字符串解析为 Long，解析失败返回 null
+     */
+    private Long parseLongSilently(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

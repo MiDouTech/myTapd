@@ -5,7 +5,7 @@
       <el-select v-model="localFieldName" placeholder="全部" clearable size="small" @change="emitChange" style="width: 130px">
         <el-option label="全部" value="" />
         <el-option label="状态" value="status" />
-        <el-option label="处理人" value="assignee_id" />
+        <el-option label="处理人" value="assignee" />
         <el-option label="缺陷等级" value="severity_level" />
         <el-option label="有效报告" value="is_valid_report" />
         <el-option label="缺陷划分" value="defect_category" />

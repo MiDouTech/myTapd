@@ -3,9 +3,10 @@
 <mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper">
 
     <!--
-        查询指定工单的变更历史
-        - 按 create_time 倒序，最新变更排在最前
-        - changeType 通过 JSON_EXTRACT 匹配 remark 字段中的变更类型
+        查询指定工单的操作日志（包含字段变更历史和生命周期事件）
+        - remark 非空的记录（结构化 JSON 变更 / 创建备注等）
+        - 或 old_value / new_value 非空的记录（分派、状态流转等）
+        - changeType 仅对 remark 为 JSON 格式的记录生效，通过 JSON_EXTRACT 匹配
         - fieldName 过滤在 Service 层内存完成（避免 JSON 函数导致全表扫描）
     -->
     <select id="selectChangeHistoryByTicketId"
@@ -26,12 +27,15 @@
         FROM ticket_log
         WHERE ticket_id = #{ticketId}
           AND deleted = 0
-          AND remark IS NOT NULL
-          AND remark != ''
+          AND (
+              (remark IS NOT NULL AND remark != '')
+              OR old_value IS NOT NULL
+              OR new_value IS NOT NULL
+          )
         <if test="changeType != null and changeType != ''">
             AND JSON_UNQUOTE(JSON_EXTRACT(remark, '$.changeType')) = #{changeType}
         </if>
-        ORDER BY create_time DESC
+        ORDER BY create_time ASC
     </select>
 
 </mapper>
