@@ -29,6 +29,11 @@ const workflowOptions = ref<WorkflowListOutput[]>([])
 const slaPolicyOptions = ref<SlaPolicyOutput[]>([])
 const handlerGroupOptions = ref<HandlerGroupListOutput[]>([])
 
+/** 编辑表单中关键词（数组形式，提交前合并为逗号分隔字符串） */
+const editKeywords = ref<string[]>([])
+/** 新建对话框中关键词（数组形式） */
+const createKeywords = ref<string[]>([])
+
 async function loadSelectOptions(): Promise<void> {
   const [templates, workflows, slaPolicies, handlerGroups] = await Promise.all([
     getTemplateList(),
@@ -56,6 +61,9 @@ function resetEditForm(): void {
   editForm.defaultGroupId = undefined
   editForm.sortOrder = 0
   editForm.isActive = 1
+  editForm.remark = ''
+  editForm.nlMatchKeywords = ''
+  editKeywords.value = []
 }
 
 const createForm = reactive<CategoryCreateInput>({
@@ -118,6 +126,14 @@ async function loadCategoryDetail(categoryId: number): Promise<void> {
     editForm.defaultGroupId = detail.defaultGroupId
     editForm.sortOrder = detail.sortOrder
     editForm.isActive = detail.isActive
+    editForm.remark = detail.remark ?? ''
+    editForm.nlMatchKeywords = detail.nlMatchKeywords ?? ''
+    editKeywords.value = detail.nlMatchKeywords
+      ? detail.nlMatchKeywords
+          .split(',')
+          .map((k) => k.trim())
+          .filter((k) => k !== '')
+      : []
   } finally {
     detailLoading.value = false
   }
@@ -137,6 +153,9 @@ function openCreateDialog(parent?: CategoryTreeOutput): void {
   createForm.slaPolicyId = undefined
   createForm.defaultGroupId = undefined
   createForm.sortOrder = 0
+  createForm.remark = ''
+  createForm.nlMatchKeywords = ''
+  createKeywords.value = []
   if (parent) {
     createForm.parentId = parent.id
     createForm.level = Math.min(parent.level + 1, 3)
@@ -149,6 +168,7 @@ async function handleCreateCategory(): Promise<void> {
     notifyWarning('请输入分类名称')
     return
   }
+  createForm.nlMatchKeywords = createKeywords.value.join(',')
   submitLoading.value = true
   try {
     await createCategory(createForm)
@@ -165,6 +185,7 @@ async function handleUpdateCategory(): Promise<void> {
     notifyWarning('请先选择分类节点')
     return
   }
+  editForm.nlMatchKeywords = editKeywords.value.join(',')
   submitLoading.value = true
   try {
     await updateCategory(selectedCategoryId.value, editForm)
@@ -258,6 +279,16 @@ onMounted(async () => {
           <el-form-item label="分类名称">
             <el-input v-model="editForm.name" placeholder="请输入分类名称" />
           </el-form-item>
+          <el-form-item label="备注描述">
+            <el-input
+              v-model="editForm.remark"
+              type="textarea"
+              :rows="2"
+              placeholder="描述该分类通常涵盖的问题范围，方便用户理解选择"
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
           <el-form-item label="模板">
             <el-select
               v-model="editForm.templateId"
@@ -318,6 +349,21 @@ onMounted(async () => {
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="NL匹配关键词">
+            <el-select
+              v-model="editKeywords"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              placeholder="输入关键词后按 Enter 添加，企微消息含此词时自动归类"
+              style="width: 100%"
+              no-data-text="输入关键词后按 Enter 确认"
+            />
+            <div class="field-tip">
+              企微收到的消息包含以下关键词时，将自动匹配到本分类（默认置信度 85%）
+            </div>
+          </el-form-item>
           <el-form-item label="排序">
             <el-input-number v-model="editForm.sortOrder" :min="0" controls-position="right" />
           </el-form-item>
@@ -342,6 +388,16 @@ onMounted(async () => {
       <el-form-item label="分类名称" required>
         <el-input v-model="createForm.name" placeholder="请输入分类名称" />
       </el-form-item>
+      <el-form-item label="备注描述">
+        <el-input
+          v-model="createForm.remark"
+          type="textarea"
+          :rows="2"
+          placeholder="描述该分类通常涵盖的问题范围"
+          maxlength="500"
+          show-word-limit
+        />
+      </el-form-item>
       <el-form-item label="父级分类">
         <el-select v-model="createForm.parentId" clearable placeholder="请选择父级分类" style="width: 100%">
           <el-option
@@ -354,6 +410,21 @@ onMounted(async () => {
       </el-form-item>
       <el-form-item label="层级" required>
         <el-input-number v-model="createForm.level" :min="1" :max="3" controls-position="right" />
+      </el-form-item>
+      <el-form-item label="NL匹配关键词">
+        <el-select
+          v-model="createKeywords"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          placeholder="输入关键词后按 Enter 添加"
+          style="width: 100%"
+          no-data-text="输入关键词后按 Enter 确认"
+        />
+        <div class="field-tip">
+          企微消息含此词时自动归类到本分类
+        </div>
       </el-form-item>
       <el-form-item label="模板">
         <el-select v-model="createForm.templateId" clearable placeholder="请选择模板" style="width: 100%">
@@ -417,5 +488,12 @@ onMounted(async () => {
 
 .edit-form {
   max-width: 560px;
+}
+
+.field-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 </style>

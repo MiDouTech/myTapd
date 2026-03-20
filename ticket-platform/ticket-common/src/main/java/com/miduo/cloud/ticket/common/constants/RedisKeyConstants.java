@@ -33,6 +33,12 @@ public final class RedisKeyConstants {
     public static final String WECOM_NLP_KEYWORDS_CACHE = "wecom:nlp:keywords";
 
     /**
+     * 分类级别NLP关键词缓存（TTL 5分钟）
+     * 来源：ticket_category.nl_match_keywords 字段配置
+     */
+    public static final String WECOM_NLP_CATEGORY_KEYWORDS_CACHE = "wecom:nlp:category:keywords";
+
+    /**
      * 企微工单草稿会话（群聊），格式：wecom:draft:{chatId}:{wecomUserId}
      */
     public static final String WECOM_DRAFT_SESSION_PREFIX = "wecom:draft:";

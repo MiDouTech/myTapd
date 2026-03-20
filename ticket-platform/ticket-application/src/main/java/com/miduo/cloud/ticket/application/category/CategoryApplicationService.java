@@ -21,6 +21,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaP
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaPolicyPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.WorkflowMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.WorkflowPO;
+import com.miduo.cloud.ticket.application.wecom.WecomNaturalLangParser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +52,9 @@ public class CategoryApplicationService {
 
     @Resource
     private HandlerGroupMapper handlerGroupMapper;
+
+    @Resource
+    private WecomNaturalLangParser naturalLangParser;
 
     public List<CategoryTreeOutput> getCategoryTree() {
         List<TicketCategoryPO> allCategories = categoryMapper.selectList(
@@ -90,12 +94,16 @@ public class CategoryApplicationService {
         po.setDefaultGroupId(input.getDefaultGroupId());
         po.setSortOrder(input.getSortOrder() != null ? input.getSortOrder() : 0);
         po.setIsActive(1);
+        po.setRemark(input.getRemark());
+        po.setNlMatchKeywords(input.getNlMatchKeywords());
 
         categoryMapper.insert(po);
 
         String path = buildCategoryPath(po.getId(), input.getParentId());
         po.setPath(path);
         categoryMapper.updateById(po);
+
+        naturalLangParser.evictCategoryKeywordsCache();
 
         return po.getId();
     }
@@ -128,8 +136,11 @@ public class CategoryApplicationService {
         if (input.getIsActive() != null) {
             existing.setIsActive(input.getIsActive());
         }
+        existing.setRemark(input.getRemark());
+        existing.setNlMatchKeywords(input.getNlMatchKeywords());
 
         categoryMapper.updateById(existing);
+        naturalLangParser.evictCategoryKeywordsCache();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -158,6 +169,7 @@ public class CategoryApplicationService {
         }
 
         categoryMapper.deleteById(id);
+        naturalLangParser.evictCategoryKeywordsCache();
     }
 
     private void validateCategoryLevel(Integer level, Long parentId) {
@@ -206,6 +218,8 @@ public class CategoryApplicationService {
         output.setDefaultGroupId(po.getDefaultGroupId());
         output.setSortOrder(po.getSortOrder());
         output.setIsActive(po.getIsActive());
+        output.setRemark(po.getRemark());
+        output.setNlMatchKeywords(po.getNlMatchKeywords());
         output.setChildren(new ArrayList<>());
         return output;
     }
@@ -241,6 +255,8 @@ public class CategoryApplicationService {
         output.setDefaultGroupId(po.getDefaultGroupId());
         output.setSortOrder(po.getSortOrder());
         output.setIsActive(po.getIsActive());
+        output.setRemark(po.getRemark());
+        output.setNlMatchKeywords(po.getNlMatchKeywords());
         output.setCreateTime(po.getCreateTime());
         output.setUpdateTime(po.getUpdateTime());
 

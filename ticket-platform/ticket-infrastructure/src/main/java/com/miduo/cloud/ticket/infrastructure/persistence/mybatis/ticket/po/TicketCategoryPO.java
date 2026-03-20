@@ -40,4 +40,10 @@ public class TicketCategoryPO extends BaseEntity {
 
     @TableField("is_active")
     private Integer isActive;
+
+    @TableField("remark")
+    private String remark;
+
+    @TableField("nl_match_keywords")
+    private String nlMatchKeywords;
 }

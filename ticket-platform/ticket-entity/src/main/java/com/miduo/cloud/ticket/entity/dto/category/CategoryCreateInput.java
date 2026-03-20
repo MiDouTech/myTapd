@@ -28,4 +28,9 @@ public class CategoryCreateInput implements Serializable {
     private Long defaultGroupId;
 
     private Integer sortOrder;
+
+    @Size(max = 500, message = "备注描述长度不能超过500个字符")
+    private String remark;
+
+    private String nlMatchKeywords;
 }
