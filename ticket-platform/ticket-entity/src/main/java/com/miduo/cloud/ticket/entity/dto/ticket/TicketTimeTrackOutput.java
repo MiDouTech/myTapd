@@ -16,6 +16,11 @@ public class TicketTimeTrackOutput implements Serializable {
 
     private List<TrackItem> tracks;
 
+    /**
+     * 未能关联到时间链节点的字段变更批次（如仅保存客服/测试/开发信息、无对应轨迹点）
+     */
+    private List<BugChangeHistoryOutput> standaloneFieldChanges;
+
     @Data
     public static class TrackItem implements Serializable {
         private Long id;
@@ -33,5 +38,10 @@ public class TicketTimeTrackOutput implements Serializable {
         private String remark;
         private Boolean isFirstRead;
         private Date timestamp;
+
+        /**
+         * 与该轨迹点在时间上关联的字段填写/变更明细（来自 ticket_log 变更历史）
+         */
+        private List<BugFieldChangeItem> fieldChanges;
     }
 }

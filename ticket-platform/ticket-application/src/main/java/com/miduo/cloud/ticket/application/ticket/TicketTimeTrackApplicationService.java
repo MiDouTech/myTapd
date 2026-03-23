@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketAction;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketTimeTrackRecordedEvent;
+import com.miduo.cloud.ticket.entity.dto.ticket.BugChangeHistoryOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketNodeDurationOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketTimeTrackOutput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
@@ -21,7 +22,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -41,19 +47,27 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
     private final SysUserMapper sysUserMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final StringRedisTemplate stringRedisTemplate;
+    private final TicketChangeHistoryApplicationService changeHistoryApplicationService;
+
+    private static final DateTimeFormatter CHANGE_HISTORY_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static final long TRACK_HISTORY_MATCH_WINDOW_MS = 10_000L;
 
     public TicketTimeTrackApplicationService(TicketMapper ticketMapper,
                                              TicketTimeTrackMapper timeTrackMapper,
                                              TicketNodeDurationMapper nodeDurationMapper,
                                              SysUserMapper sysUserMapper,
                                              ApplicationEventPublisher eventPublisher,
-                                             StringRedisTemplate stringRedisTemplate) {
+                                             StringRedisTemplate stringRedisTemplate,
+                                             TicketChangeHistoryApplicationService changeHistoryApplicationService) {
         this.ticketMapper = ticketMapper;
         this.timeTrackMapper = timeTrackMapper;
         this.nodeDurationMapper = nodeDurationMapper;
         this.sysUserMapper = sysUserMapper;
         this.eventPublisher = eventPublisher;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.changeHistoryApplicationService = changeHistoryApplicationService;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -153,10 +167,109 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
                 .map(track -> convertTrackItem(track, userNameMap))
                 .collect(Collectors.toList());
 
+        List<BugChangeHistoryOutput> historyList =
+                changeHistoryApplicationService.listChangeHistory(ticketId, null, null);
+        Set<Long> matchedHistoryIds = enrichTracksWithFieldChanges(items, historyList);
+
         TicketTimeTrackOutput output = new TicketTimeTrackOutput();
         output.setTicketId(ticketId);
         output.setTracks(items);
+        output.setStandaloneFieldChanges(buildStandaloneFieldChanges(historyList, matchedHistoryIds));
         return output;
+    }
+
+    /**
+     * 将变更历史中的字段明细按时间窗、操作人关联到时间链节点；同一节点可合并多条日志中的字段
+     *
+     * @return 已关联到轨迹点的 ticket_log 主键集合
+     */
+    private Set<Long> enrichTracksWithFieldChanges(List<TicketTimeTrackOutput.TrackItem> trackItems,
+                                                   List<BugChangeHistoryOutput> historyList) {
+        Set<Long> matchedLogIds = new HashSet<>();
+        if (CollectionUtils.isEmpty(trackItems) || CollectionUtils.isEmpty(historyList)) {
+            return matchedLogIds;
+        }
+        List<BugChangeHistoryOutput> sortedHistory = historyList.stream()
+                .sorted(Comparator.comparing(h -> {
+                    Long ms = parseChangeHistoryTimeMillis(h.getChangeTime());
+                    return ms != null ? ms : 0L;
+                }))
+                .collect(Collectors.toList());
+
+        for (BugChangeHistoryOutput history : sortedHistory) {
+            if (history.getId() == null || CollectionUtils.isEmpty(history.getFields())) {
+                continue;
+            }
+            Long historyMs = parseChangeHistoryTimeMillis(history.getChangeTime());
+            if (historyMs == null) {
+                continue;
+            }
+            TicketTimeTrackOutput.TrackItem best = null;
+            long bestDiff = Long.MAX_VALUE;
+            for (TicketTimeTrackOutput.TrackItem track : trackItems) {
+                if (track.getTimestamp() == null) {
+                    continue;
+                }
+                if (!usersCompatibleForMatch(track.getUserId(), history.getChangeByUserId())) {
+                    continue;
+                }
+                long trackMs = track.getTimestamp().getTime();
+                long diff = Math.abs(trackMs - historyMs);
+                if (diff > TRACK_HISTORY_MATCH_WINDOW_MS) {
+                    continue;
+                }
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = track;
+                }
+            }
+            if (best != null) {
+                matchedLogIds.add(history.getId());
+                if (best.getFieldChanges() == null) {
+                    best.setFieldChanges(new ArrayList<>());
+                }
+                best.getFieldChanges().addAll(history.getFields());
+            }
+        }
+        return matchedLogIds;
+    }
+
+    private List<BugChangeHistoryOutput> buildStandaloneFieldChanges(
+            List<BugChangeHistoryOutput> historyList,
+            Set<Long> matchedHistoryIds) {
+        if (CollectionUtils.isEmpty(historyList) || matchedHistoryIds == null) {
+            return Collections.emptyList();
+        }
+        return historyList.stream()
+                .filter(h -> h.getId() != null && !matchedHistoryIds.contains(h.getId()))
+                .filter(h -> !CollectionUtils.isEmpty(h.getFields()))
+                .sorted(Comparator.comparing(h -> {
+                    Long ms = parseChangeHistoryTimeMillis(h.getChangeTime());
+                    return ms != null ? ms : 0L;
+                }))
+                .collect(Collectors.toList());
+    }
+
+    private static Long parseChangeHistoryTimeMillis(String changeTime) {
+        if (changeTime == null || changeTime.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            LocalDateTime ldt = LocalDateTime.parse(changeTime.trim(), CHANGE_HISTORY_TIME);
+            return ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
+    }
+
+    private static boolean usersCompatibleForMatch(Long trackUserId, Long changeUserId) {
+        if (trackUserId == null && changeUserId == null) {
+            return true;
+        }
+        if (trackUserId == null || changeUserId == null) {
+            return false;
+        }
+        return trackUserId.equals(changeUserId);
     }
 
     public TicketNodeDurationOutput getNodeDuration(Long ticketId) {

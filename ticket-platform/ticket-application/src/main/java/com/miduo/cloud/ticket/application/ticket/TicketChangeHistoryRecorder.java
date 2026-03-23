@@ -91,6 +91,8 @@ public class TicketChangeHistoryRecorder {
         detectChange(changes, "expected_result", "预期结果",
                 truncate(old.getExpectedResult()), truncate(input.getExpectedResult()));
         detectChange(changes, "scene_code", "场景码", old.getSceneCode(), input.getSceneCode());
+        detectChange(changes, "problem_screenshot", "问题截图",
+                old.getProblemScreenshot(), input.getProblemScreenshot());
         return changes;
     }
 
@@ -111,6 +113,10 @@ public class TicketChangeHistoryRecorder {
                 truncate(old.getReproduceSteps()), truncate(input.getReproduceSteps()));
         detectChange(changes, "actual_result", "实际结果",
                 truncate(old.getActualResult()), truncate(input.getActualResult()));
+        detectChange(changes, "reproduce_screenshot", "复现截图",
+                old.getReproduceScreenshot(), input.getReproduceScreenshot());
+        detectChange(changes, "test_remark", "测试备注",
+                truncate(old.getTestRemark()), truncate(input.getTestRemark()));
         return changes;
     }
 

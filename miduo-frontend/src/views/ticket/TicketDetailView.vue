@@ -40,6 +40,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
+  BugChangeHistoryOutput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
@@ -61,6 +62,7 @@ import { formatDateTime, formatFileSize } from '@/utils/formatter'
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
 import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
 import BugStatusBadge from './components/bug/BugStatusBadge.vue'
+import TicketTimeTrackPanel from './components/TicketTimeTrackPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +74,7 @@ const users = ref<UserListOutput[]>([])
 
 const activeBugTab = ref('customer')
 const timeTrackItems = ref<TicketTimeTrackItem[]>([])
+const timeTrackStandalone = ref<BugChangeHistoryOutput[]>([])
 const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
 const bugSubmitLoading = ref(false)
 
@@ -397,6 +400,7 @@ async function loadAll(): Promise<void> {
     detail.value = ticketDetail
     users.value = userList
     timeTrackItems.value = trackOutput.tracks || []
+    timeTrackStandalone.value = trackOutput.standaloneFieldChanges || []
     nodeDurationItems.value = nodeOutput.nodes || []
     fillBugForms(ticketDetail)
 
@@ -1154,88 +1158,13 @@ watch(
                 </el-tab-pane>
 
                 <el-tab-pane label="时间追踪" name="track">
-                  <div class="track-block">
-                    <div class="block-label">时间链</div>
-                    <EmptyState v-if="!timeTrackItems.length" description="暂无时间追踪记录" />
-                    <el-timeline v-else>
-                      <el-timeline-item
-                        v-for="item in timeTrackItems"
-                        :key="item.id"
-                        :timestamp="formatDateTime(item.timestamp)"
-                        placement="top"
-                      >
-                        <div class="track-item">
-                          <div class="track-title">
-                            {{ item.actionLabel || item.action || '-' }}
-                            <span class="track-user">（{{ item.userName || '-' }}）</span>
-                          </div>
-                          <div class="track-meta">
-                            状态：{{ getStatusLabel(item.fromStatus) }} → {{ getStatusLabel(item.toStatus) }}
-                          </div>
-                          <div class="track-meta" v-if="item.fromUserName || item.toUserName">
-                            处理人：{{ item.fromUserName || '-' }} → {{ item.toUserName || '-' }}
-                          </div>
-                          <div class="track-meta" v-if="item.isFirstRead">首次阅读：是</div>
-                          <div class="track-meta" v-if="item.remark">备注：{{ item.remark }}</div>
-                        </div>
-                      </el-timeline-item>
-                    </el-timeline>
-                  </div>
-
-                  <div class="track-block">
-                    <div class="block-label">节点耗时统计</div>
-                    <EmptyState v-if="!nodeDurationItems.length" description="暂无节点耗时数据" />
-                    <el-table
-                      v-else
-                      :data="nodeDurationItems"
-                      :border="false"
-                      :stripe="true"
-                      :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-                    >
-                      <el-table-column label="节点" align="center" min-width="130">
-                        <template #default="{ row }">
-                          {{ getStatusLabel(row.nodeName) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="assigneeName" label="处理人" align="center" min-width="120" />
-                      <el-table-column prop="assigneeRole" label="角色" align="center" min-width="120" />
-                      <el-table-column label="到达时间" align="center" min-width="170">
-                        <template #default="{ row }">
-                          {{ formatDateTime(row.arriveAt) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="首次阅读" align="center" min-width="170">
-                        <template #default="{ row }">
-                          {{ formatDateTime(row.firstReadAt) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="开始处理" align="center" min-width="170">
-                        <template #default="{ row }">
-                          {{ formatDateTime(row.startProcessAt) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="离开时间" align="center" min-width="170">
-                        <template #default="{ row }">
-                          {{ formatDateTime(row.leaveAt) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="等待耗时" align="center" min-width="110">
-                        <template #default="{ row }">
-                          {{ formatDuration(row.waitDurationSec) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="处理耗时" align="center" min-width="110">
-                        <template #default="{ row }">
-                          {{ formatDuration(row.processDurationSec) }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column label="总耗时" align="center" min-width="110">
-                        <template #default="{ row }">
-                          {{ formatDuration(row.totalDurationSec) }}
-                        </template>
-                      </el-table-column>
-                    </el-table>
-                  </div>
+                  <TicketTimeTrackPanel
+                    :tracks="timeTrackItems"
+                    :standalone-field-changes="timeTrackStandalone"
+                    :node-duration-items="nodeDurationItems"
+                    :status-label-fn="getStatusLabel"
+                    :format-duration="formatDuration"
+                  />
                 </el-tab-pane>
               </el-tabs>
             </el-tab-pane>
@@ -1956,33 +1885,6 @@ watch(
   border-radius: 4px;
   display: block;
   margin-bottom: 6px;
-}
-
-// ===== 时间追踪 =====
-.track-block + .track-block {
-  margin-top: 20px;
-}
-
-.track-item {
-  background: #f8fafc;
-  border-radius: 6px;
-  padding: 8px 12px;
-}
-
-.track-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.track-user {
-  font-weight: 400;
-  color: #606266;
-}
-
-.track-meta {
-  margin-top: 4px;
-  color: #606266;
-  font-size: 12px;
 }
 
 // ===== 流转历史 =====

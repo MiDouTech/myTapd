@@ -215,7 +215,8 @@ public class TicketController {
      * 产品文档功能：4.4.6 全链路时间追踪 - 时间追踪链展示
      */
     @GetMapping("/{id}/time-track")
-    @Operation(summary = "获取工单时间追踪链", description = "接口编号：API000024")
+    @Operation(summary = "获取工单时间追踪链",
+            description = "接口编号：API000024；含轨迹点关联的字段变更明细与未挂轨的独立变更批次")
     public ApiResult<TicketTimeTrackOutput> getTimeTrack(@PathVariable Long id) {
         TicketTimeTrackOutput output = ticketTimeTrackApplicationService.getTimeTrack(id);
         return ApiResult.success(output);

@@ -120,11 +120,15 @@ export interface TicketTimeTrackItem {
   remark?: string
   isFirstRead?: boolean
   timestamp?: string
+  /** 与该轨迹点关联的字段变更（后端按时间窗与操作人匹配） */
+  fieldChanges?: BugFieldChangeItem[]
 }
 
 export interface TicketTimeTrackOutput {
   ticketId: number
   tracks?: TicketTimeTrackItem[]
+  /** 未挂接到轨迹节点的字段变更批次（如仅保存信息、无新轨迹点） */
+  standaloneFieldChanges?: BugChangeHistoryOutput[]
 }
 
 export interface TicketNodeDurationItem {
@@ -254,7 +258,7 @@ export interface BugChangeHistoryOutput {
   id: number
   seq: number
   changeTime: string
-  changeByUserId: number
+  changeByUserId?: number | null
   changeByUserName: string
   changeByAvatar: string | null
   changeType: string
