@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { getKanbanData, moveKanbanTicket } from '@/api/kanban'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -7,10 +8,22 @@ import type { KanbanColumnOutput } from '@/types/kanban'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
 
+const router = useRouter()
 const loading = ref(false)
 const columns = ref<KanbanColumnOutput[]>([])
 const draggingTicketId = ref<number>()
 const draggingFromStatus = ref('')
+
+function openTicketDetailInNewTab(id: number): void {
+  const { href } = router.resolve({
+    name: 'ticketDetail',
+    params: { id: String(id) },
+  })
+  const opened = window.open(href, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    notifyError('无法打开新标签页，请检查浏览器是否拦截了弹窗')
+  }
+}
 
 async function loadKanban(): Promise<void> {
   loading.value = true
@@ -101,7 +114,16 @@ onMounted(() => {
               draggable="true"
               @dragstart="handleDragStart(ticket.id, column.status)"
             >
-              <div class="ticket-no">{{ ticket.ticketNo }}</div>
+              <div
+                class="ticket-no"
+                role="link"
+                tabindex="0"
+                @mousedown.stop
+                @click.stop="openTicketDetailInNewTab(ticket.id)"
+                @keydown.enter.prevent="openTicketDetailInNewTab(ticket.id)"
+              >
+                {{ ticket.ticketNo }}
+              </div>
               <div class="ticket-title">{{ ticket.title }}</div>
               <div class="ticket-meta">
                 <el-tag :type="getPriorityType(ticket.priority)" size="small">
@@ -181,6 +203,13 @@ onMounted(() => {
 .ticket-no {
   color: #1675d1;
   font-size: 12px;
+  cursor: pointer;
+  outline: none;
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px #1675d1;
+    border-radius: 2px;
+  }
 }
 
 .ticket-title {
