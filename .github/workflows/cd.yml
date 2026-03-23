@@ -75,69 +75,6 @@ jobs:
           echo "has_prebuilt=${HAS}" >> "$GITHUB_OUTPUT"
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 2 – 编译后端产物（仅当存在需要预编译的服务时运行）
-  # ────────────────────────────────────────────────────────────────────────────
-  compile:
-    name: Compile – ${{ needs.prepare.outputs.build_type }}
-    runs-on: ubuntu-latest
-    needs: prepare
-    if: needs.prepare.outputs.has_prebuilt == 'true'
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # ── Java ───────────────────────────────────────────────────────────────
-      - name: Set up JDK ${{ needs.prepare.outputs.java_version }} (Temurin)
-        if: needs.prepare.outputs.build_type == 'java'
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ needs.prepare.outputs.java_version }}
-          distribution: temurin
-          cache: maven
-
-      - name: Build JAR (Maven, skip tests)
-        if: needs.prepare.outputs.build_type == 'java'
-        working-directory: ${{ needs.prepare.outputs.compile_dir }}
-        env:
-          BUILD_SUBPROJECT: ${{ needs.prepare.outputs.build_subproject }}
-        run: |
-          if [ -n "$BUILD_SUBPROJECT" ]; then
-            mvn clean package -DskipTests -pl "$BUILD_SUBPROJECT" -am -B
-          else
-            mvn clean package -DskipTests -B
-          fi
-
-      # ── .NET ───────────────────────────────────────────────────────────────
-      - name: Set up .NET ${{ needs.prepare.outputs.dotnet_version }}
-        if: needs.prepare.outputs.build_type == 'dotnet'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ needs.prepare.outputs.dotnet_version }}
-
-      - name: Publish (.NET, skip tests)
-        if: needs.prepare.outputs.build_type == 'dotnet'
-        working-directory: ${{ needs.prepare.outputs.compile_dir }}
-        run: dotnet publish --configuration Release --no-restore
-
-      # ── 打包所有 build_output 目录并上传 ───────────────────────────────────
-      - name: Archive build artifacts
-        run: |
-          jq -r \
-            '[.[] | select(.build_output != null and .build_output != "")] | .[].build_output' \
-            .deploy/services.json | \
-          xargs -d '\n' tar -czf /tmp/build-artifacts.tar.gz --ignore-failed-read
-
-      - name: Upload compiled artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: /tmp/build-artifacts.tar.gz
-          retention-days: 1
-
-  # ────────────────────────────────────────────────────────────────────────────
   # Job 3 – 前端编译并打包为 ZIP（与后端镜像构建并行，FRONTEND_DIR 为空则跳过）
   # ────────────────────────────────────────────────────────────────────────────
   build-frontend:
@@ -224,18 +161,6 @@ jobs:
           echo "download_url=${DOWNLOAD_URL}" >> "$GITHUB_OUTPUT"
           echo "Frontend ZIP download URL: ${DOWNLOAD_URL}"
 
-      - name: Upload ZIP artifact (7-day retention)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ needs.prepare.outputs.frontend_artifact_name }}-${{ github.sha }}
-          path: ${{ needs.prepare.outputs.frontend_artifact_name }}.zip
-          retention-days: 7
-
-      - name: Attach ZIP to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ needs.prepare.outputs.frontend_artifact_name }}.zip
 
   # ────────────────────────────────────────────────────────────────────────────
   # Job 4 – 并行构建所有镜像并同时推送到 GHCR 和 CNB
@@ -243,12 +168,8 @@ jobs:
   build-and-push:
     name: Build & Push – ${{ matrix.name }}
     runs-on: ubuntu-latest
-    needs: [prepare, compile]
-    # compile 可能被跳过（无预编译服务），用 always() 保证矩阵 Job 仍能运行
-    if: |
-      always() &&
-      needs.prepare.result == 'success' &&
-      (needs.compile.result == 'success' || needs.compile.result == 'skipped')
+    needs: prepare
+    if: needs.prepare.result == 'success'
     permissions:
       contents: read
       packages: write
@@ -260,17 +181,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 下载并恢复预编译产物（仅对有 build_output 的服务）─────────────────
-      - name: Download compiled artifacts
-        if: matrix.build_output != ''
-        uses: actions/download-artifact@v4
+      # ── 按需编译后端（build_output 非空时运行）────────────────────────────
+      - name: Set up JDK ${{ needs.prepare.outputs.java_version }} (Temurin)
+        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'java'
+        uses: actions/setup-java@v4
         with:
-          name: build-artifacts
-          path: /tmp
+          java-version: ${{ needs.prepare.outputs.java_version }}
+          distribution: temurin
+          cache: maven
 
-      - name: Restore build artifacts into workspace
-        if: matrix.build_output != ''
-        run: tar -xzf /tmp/build-artifacts.tar.gz -C "$GITHUB_WORKSPACE"
+      - name: Build JAR (Maven, skip tests)
+        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'java'
+        working-directory: ${{ needs.prepare.outputs.compile_dir }}
+        env:
+          BUILD_SUBPROJECT: ${{ needs.prepare.outputs.build_subproject }}
+        run: |
+          if [ -n "$BUILD_SUBPROJECT" ]; then
+            mvn clean package -DskipTests -pl "$BUILD_SUBPROJECT" -am -B
+          else
+            mvn clean package -DskipTests -B
+          fi
+
+      - name: Set up .NET ${{ needs.prepare.outputs.dotnet_version }}
+        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'dotnet'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ needs.prepare.outputs.dotnet_version }}
+
+      - name: Publish (.NET, skip tests)
+        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'dotnet'
+        working-directory: ${{ needs.prepare.outputs.compile_dir }}
+        run: dotnet publish --configuration Release --no-restore
 
       # ── Docker 准备 ────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
