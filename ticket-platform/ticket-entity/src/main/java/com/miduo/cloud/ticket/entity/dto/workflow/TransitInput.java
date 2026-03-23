@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.entity.dto.workflow;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 状态流转请求
@@ -35,4 +36,9 @@ public class TransitInput implements Serializable {
      * 流转时同步指定新的处理人（allowTransfer=true 的流转可选填）
      */
     private Long newAssigneeId;
+
+    /**
+     * 流转时同步指定多名处理人（首位为主处理人）；非空时优先于 newAssigneeId
+     */
+    private List<Long> newAssigneeIds;
 }

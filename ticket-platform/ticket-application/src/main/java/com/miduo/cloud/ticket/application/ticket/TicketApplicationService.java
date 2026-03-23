@@ -22,7 +22,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mappe
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
@@ -95,6 +96,9 @@ public class TicketApplicationService {
     @Resource
     private ApplicationEventPublisher eventPublisher;
 
+    @Resource
+    private TicketAssigneeSyncService ticketAssigneeSyncService;
+
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
         TicketCategoryPO category = categoryMapper.selectById(input.getCategoryId());
@@ -126,6 +130,11 @@ public class TicketApplicationService {
         }
 
         ticketMapper.insert(ticket);
+
+        if (ticket.getAssigneeId() != null) {
+            ticketAssigneeSyncService.applyAssigneesToTicket(
+                    ticket, Collections.singletonList(ticket.getAssigneeId()));
+        }
 
         if (input.getCustomFields() != null && !input.getCustomFields().isEmpty()) {
             List<TicketCustomFieldPO> customFields = new ArrayList<>();
@@ -381,33 +390,33 @@ public class TicketApplicationService {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
 
-        SysUserPO assignee = userMapper.selectById(input.getAssigneeId());
-        if (assignee == null) {
-            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "处理人不存在");
+        List<Long> assigneeIds = resolveAssigneeIdsFromAssignInput(input);
+        if (assigneeIds.isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "请至少指定一名处理人");
         }
 
         if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
             ticketWorkflowAppService.assignFromPendingDispatch(
-                    ticketId, input.getAssigneeId(), input.getRemark(), currentUserId);
-            log.info("工单分派(待分派→下一节点): ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
+                    ticketId, assigneeIds, input.getRemark(), currentUserId);
+            log.info("工单分派(待分派→下一节点): ticketId={}, assigneeIds={}", ticketId, assigneeIds);
             return;
         }
 
         Long oldAssigneeId = ticket.getAssigneeId();
-        ticket.setAssigneeId(input.getAssigneeId());
+        ticketAssigneeSyncService.applyAssigneesToTicket(ticket, assigneeIds);
         ticketMapper.updateById(ticket);
 
         String oldValue = oldAssigneeId != null ? String.valueOf(oldAssigneeId) : "";
-        String newValue = String.valueOf(input.getAssigneeId());
+        String newValue = ticket.getAssigneeId() != null ? String.valueOf(ticket.getAssigneeId()) : "";
         recordLog(ticketId, currentUserId, TicketAction.ASSIGN.getCode(),
                 oldValue, newValue, input.getRemark());
-        ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, input.getAssigneeId(),
+        ticketTimeTrackService.recordAssign(ticketId, currentUserId, oldAssigneeId, ticket.getAssigneeId(),
                 ticket.getStatus(), ticket.getStatus(), input.getRemark());
 
-        safePublishEvent(new TicketAssignedEvent(ticketId, input.getAssigneeId(),
+        safePublishEvent(new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
                 oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
 
-        log.info("工单分派: ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
+        log.info("工单分派: ticketId={}, assigneeIds={}", ticketId, assigneeIds);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -524,7 +533,15 @@ public class TicketApplicationService {
 
         Set<Long> userIds = new HashSet<>();
         if (ticket.getCreatorId() != null) userIds.add(ticket.getCreatorId());
-        if (ticket.getAssigneeId() != null) userIds.add(ticket.getAssigneeId());
+
+        List<Long> assigneeIdList = ticketAssigneeSyncService.listActiveUserIds(ticket.getId());
+        if (assigneeIdList.isEmpty() && ticket.getAssigneeId() != null) {
+            assigneeIdList = new ArrayList<>(Collections.singletonList(ticket.getAssigneeId()));
+        }
+        output.setAssigneeIds(assigneeIdList);
+        for (Long aid : assigneeIdList) {
+            userIds.add(aid);
+        }
 
         if (ticket.getCategoryId() != null) {
             TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
@@ -598,9 +615,15 @@ public class TicketApplicationService {
         if (creator != null) {
             output.setCreatorName(creator.getName());
         }
-        SysUserPO assignee = userMap.get(ticket.getAssigneeId());
-        if (assignee != null) {
-            output.setAssigneeName(assignee.getName());
+        List<String> assigneeNames = new ArrayList<>();
+        for (Long aid : assigneeIdList) {
+            SysUserPO u = userMap.get(aid);
+            if (u != null && u.getName() != null) {
+                assigneeNames.add(u.getName());
+            }
+        }
+        if (!assigneeNames.isEmpty()) {
+            output.setAssigneeName(String.join("、", assigneeNames));
         }
 
         if (attachments != null) {
@@ -750,6 +773,25 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    private List<Long> resolveAssigneeIdsFromAssignInput(TicketAssignInput input) {
+        List<Long> raw = new ArrayList<>();
+        if (input.getAssigneeIds() != null) {
+            for (Long id : input.getAssigneeIds()) {
+                if (id != null) {
+                    raw.add(id);
+                }
+            }
+        }
+        LinkedHashSet<Long> deduped = new LinkedHashSet<>(raw);
+        if (!deduped.isEmpty()) {
+            return new ArrayList<>(deduped);
+        }
+        if (input.getAssigneeId() != null) {
+            return Collections.singletonList(input.getAssigneeId());
+        }
+        return Collections.emptyList();
     }
 
     private void recordLog(Long ticketId, Long userId, String action,

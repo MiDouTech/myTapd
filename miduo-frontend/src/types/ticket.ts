@@ -51,7 +51,8 @@ export interface TicketCreateInput {
 }
 
 export interface TicketAssignInput {
-  assigneeId: number
+  assigneeId?: number
+  assigneeIds?: number[]
   remark?: string
 }
 
@@ -217,6 +218,7 @@ export interface TicketDetailOutput {
   creatorName?: string
   assigneeId?: number
   assigneeName?: string
+  assigneeIds?: number[]
   source?: string
   sourceLabel?: string
   expectedTime?: string

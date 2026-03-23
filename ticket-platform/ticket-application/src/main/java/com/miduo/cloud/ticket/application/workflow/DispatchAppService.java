@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
@@ -53,6 +54,7 @@ public class DispatchAppService extends BaseApplicationService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ApplicationEventPublisher eventPublisher;
     private final TicketWorkflowAppService ticketWorkflowAppService;
+    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
     public DispatchAppService(TicketMapper ticketMapper,
                                TicketCategoryMapper ticketCategoryMapper,
@@ -60,7 +62,8 @@ public class DispatchAppService extends BaseApplicationService {
                                HandlerGroupMemberMapper handlerGroupMemberMapper,
                                StringRedisTemplate stringRedisTemplate,
                                ApplicationEventPublisher eventPublisher,
-                               TicketWorkflowAppService ticketWorkflowAppService) {
+                               TicketWorkflowAppService ticketWorkflowAppService,
+                               TicketAssigneeSyncService ticketAssigneeSyncService) {
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.dispatchRuleMapper = dispatchRuleMapper;
@@ -68,6 +71,7 @@ public class DispatchAppService extends BaseApplicationService {
         this.stringRedisTemplate = stringRedisTemplate;
         this.eventPublisher = eventPublisher;
         this.ticketWorkflowAppService = ticketWorkflowAppService;
+        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     /**
@@ -302,7 +306,7 @@ public class DispatchAppService extends BaseApplicationService {
         }
 
         Long previousAssigneeId = ticket.getAssigneeId();
-        ticket.setAssigneeId(assigneeId);
+        ticketAssigneeSyncService.syncSingleAssigneeRow(ticket, assigneeId);
         ticketMapper.updateById(ticket);
 
         log.info("工单[{}]分派给用户[{}]，策略: {}", ticket.getId(), assigneeId, assignType);

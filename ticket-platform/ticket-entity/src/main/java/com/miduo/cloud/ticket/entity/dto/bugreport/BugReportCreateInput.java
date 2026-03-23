@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.entity.dto.bugreport;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import javax.validation.constraints.NotEmpty;
@@ -25,10 +26,13 @@ public class BugReportCreateInput implements Serializable {
 
     private String introducedProject;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date startDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date resolveDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date tempResolveDate;
 
     private String solution;

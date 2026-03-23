@@ -46,6 +46,11 @@ public class TicketDetailOutput implements Serializable {
 
     private String assigneeName;
 
+    /**
+     * 多人处理时全部处理人 ID（含主处理人，顺序与分工一致）
+     */
+    private List<Long> assigneeIds;
+
     private String source;
 
     private String sourceLabel;

@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.notification;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
@@ -12,14 +13,17 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.Ticke
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -28,24 +32,25 @@ import java.util.stream.Collectors;
 @Component
 public class TicketEventNotificationListener {
 
-    private static final Logger log = LoggerFactory.getLogger(TicketEventNotificationListener.class);
-
     private final NotificationOrchestrator notificationOrchestrator;
     private final WecomGroupPushService wecomGroupPushService;
     private final TicketMapper ticketMapper;
     private final TicketFollowerMapper ticketFollowerMapper;
     private final SysUserMapper sysUserMapper;
+    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
     public TicketEventNotificationListener(NotificationOrchestrator notificationOrchestrator,
                                            WecomGroupPushService wecomGroupPushService,
                                            TicketMapper ticketMapper,
                                            TicketFollowerMapper ticketFollowerMapper,
-                                           SysUserMapper sysUserMapper) {
+                                           SysUserMapper sysUserMapper,
+                                           TicketAssigneeSyncService ticketAssigneeSyncService) {
         this.notificationOrchestrator = notificationOrchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.ticketMapper = ticketMapper;
         this.ticketFollowerMapper = ticketFollowerMapper;
         this.sysUserMapper = sysUserMapper;
+        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     @Async
@@ -61,18 +66,32 @@ public class TicketEventNotificationListener {
                 "\n标题：" + safe(ticket.getTitle()) +
                 "\n优先级：" + safe(ticket.getPriority());
 
-        if (ticket.getAssigneeId() != null) {
-            notificationOrchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
+        List<Long> assignees = collectAssigneeUserIds(ticket);
+        for (Long uid : assignees) {
+            notificationOrchestrator.dispatch(uid, ticket.getId(), null,
                     NotificationType.TICKET_CREATED, title, content);
         }
-        wecomGroupPushService.pushByTicket(ticket.getId(), title, content);
+
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(assignees);
+        if (ticket.getCreatorId() != null) {
+            mentionUserIds.add(ticket.getCreatorId());
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
     }
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
-        if (ticket == null || event.getAssigneeId() == null) {
+        if (ticket == null) {
+            return;
+        }
+
+        List<Long> assignees = collectAssigneeUserIds(ticket);
+        if (assignees.isEmpty() && event.getAssigneeId() != null) {
+            assignees = Collections.singletonList(event.getAssigneeId());
+        }
+        if (assignees.isEmpty()) {
             return;
         }
 
@@ -83,9 +102,19 @@ public class TicketEventNotificationListener {
                 "\n分派人：" + safe(operatorName) +
                 "\n优先级：" + safe(ticket.getPriority());
 
-        notificationOrchestrator.dispatch(event.getAssigneeId(), ticket.getId(), null,
-                NotificationType.ASSIGNED, title, content);
-        wecomGroupPushService.pushByTicket(ticket.getId(), title, content);
+        for (Long uid : assignees) {
+            notificationOrchestrator.dispatch(uid, ticket.getId(), null,
+                    NotificationType.ASSIGNED, title, content);
+        }
+
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(assignees);
+        if (event.getPreviousAssigneeId() != null) {
+            mentionUserIds.add(event.getPreviousAssigneeId());
+        }
+        if (event.getOperatorId() != null) {
+            mentionUserIds.add(event.getOperatorId());
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
     }
 
     @Async
@@ -109,6 +138,8 @@ public class TicketEventNotificationListener {
         if (ticket.getCreatorId() != null) {
             receiverIds.add(ticket.getCreatorId());
         }
+        receiverIds.addAll(collectAssigneeUserIds(ticket));
+
         List<TicketFollowerPO> followers = ticketFollowerMapper.selectList(
                 new LambdaQueryWrapper<TicketFollowerPO>()
                         .eq(TicketFollowerPO::getTicketId, ticket.getId())
@@ -123,7 +154,23 @@ public class TicketEventNotificationListener {
             notificationOrchestrator.dispatchToUsers(new ArrayList<>(receiverIds), ticket.getId(), null,
                     NotificationType.STATUS_CHANGED, title, content);
         }
-        wecomGroupPushService.pushByTicket(ticket.getId(), title, content);
+
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(receiverIds);
+        if (event.getOperatorId() != null) {
+            mentionUserIds.add(event.getOperatorId());
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
+    }
+
+    private List<Long> collectAssigneeUserIds(TicketPO ticket) {
+        List<Long> fromTable = ticketAssigneeSyncService.listActiveUserIds(ticket.getId());
+        if (fromTable != null && !fromTable.isEmpty()) {
+            return fromTable;
+        }
+        if (ticket.getAssigneeId() != null) {
+            return Collections.singletonList(ticket.getAssigneeId());
+        }
+        return Collections.emptyList();
     }
 
     private String resolveUserName(Long userId) {

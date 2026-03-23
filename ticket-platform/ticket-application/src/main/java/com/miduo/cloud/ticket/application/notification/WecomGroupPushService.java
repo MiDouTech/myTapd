@@ -36,7 +36,7 @@ public class WecomGroupPushService extends BaseApplicationService {
     }
 
     /**
-     * 按工单关联关系推送群消息
+     * 按工单关联关系推送群消息（默认 @ 创建人）
      */
     public void pushByTicket(Long ticketId, String title, String content) {
         if (ticketId == null) {
@@ -48,6 +48,33 @@ public class WecomGroupPushService extends BaseApplicationService {
             log.warn("企微群推送跳过：工单不存在, ticketId={}", ticketId);
             return;
         }
+        String creatorWecomUserid = resolveCreatorWecomUserid(ticket.getCreatorId());
+        List<String> mention = creatorWecomUserid != null
+                ? Collections.singletonList(creatorWecomUserid) : null;
+        pushByTicketInternal(ticket, title, content, mention);
+    }
+
+    /**
+     * 按工单推送群消息并 @ 指定系统用户（有企微 userid 的才会出现在 @ 列表）
+     */
+    public void pushByTicketWithUserMentions(Long ticketId, String title, String content,
+                                             Collection<Long> userIdsToMention) {
+        if (ticketId == null) {
+            log.debug("企微群推送跳过：ticketId为空");
+            return;
+        }
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null) {
+            log.warn("企微群推送跳过：工单不存在, ticketId={}", ticketId);
+            return;
+        }
+        List<String> wecomIds = resolveWecomUserids(userIdsToMention);
+        pushByTicketInternal(ticket, title, content, wecomIds.isEmpty() ? null : wecomIds);
+    }
+
+    private void pushByTicketInternal(TicketPO ticket, String title, String content,
+                                      List<String> mentionedWecomUserIds) {
+        Long ticketId = ticket.getId();
         log.debug("开始企微群推送: ticketId={}, sourceChatId={}, categoryId={}",
                 ticketId, ticket.getSourceChatId(), ticket.getCategoryId());
         List<WecomGroupBindingPO> bindings = findRelatedBindings(ticket.getSourceChatId(), ticket.getCategoryId());
@@ -56,8 +83,6 @@ public class WecomGroupPushService extends BaseApplicationService {
                     ticketId, ticket.getSourceChatId(), ticket.getCategoryId());
             return;
         }
-
-        String creatorWecomUserid = resolveCreatorWecomUserid(ticket.getCreatorId());
 
         Set<String> pushedWebhookUrls = new HashSet<>();
         for (WecomGroupBindingPO binding : bindings) {
@@ -75,13 +100,42 @@ public class WecomGroupPushService extends BaseApplicationService {
             try {
                 log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
-                groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content,
-                        creatorWecomUserid != null ? Collections.singletonList(creatorWecomUserid) : null);
+                groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content, mentionedWecomUserIds);
             } catch (Exception ex) {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);
             }
         }
+    }
+
+    private List<String> resolveWecomUserids(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        for (Long id : userIds) {
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        if (ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<SysUserPO> users = sysUserMapper.selectBatchIds(new ArrayList<>(ids));
+        if (users == null || users.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>();
+        for (SysUserPO u : users) {
+            if (u == null || u.getWecomUserid() == null) {
+                continue;
+            }
+            String w = u.getWecomUserid().trim();
+            if (!w.isEmpty()) {
+                out.add(w);
+            }
+        }
+        return out;
     }
 
     /**

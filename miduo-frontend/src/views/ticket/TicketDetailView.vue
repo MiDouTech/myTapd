@@ -32,6 +32,7 @@ import {
 import {
   getAvailableActions,
   transitTicket,
+  transferTicket,
   getFlowHistory,
 } from '@/api/workflow'
 import { getUserList } from '@/api/user'
@@ -78,6 +79,7 @@ const activeMainTab = ref('detail')
 const changeHistoryCount = ref(0)
 
 const assignDialogVisible = ref(false)
+const pendingPoolTransferVisible = ref(false)
 const processDialogVisible = ref(false)
 const closeDialogVisible = ref(false)
 const submitLoading = ref(false)
@@ -93,6 +95,7 @@ const transitForm = reactive({
   targetStatus: '',
   remark: '',
   newAssigneeId: undefined as number | undefined,
+  newAssigneeIds: [] as number[],
 })
 
 const imageUploadLoading = ref(false)
@@ -104,9 +107,13 @@ const customerProblemScreenshots = ref<string[]>([])
 const ticketModules = ref<TicketModuleOutput[]>([])
 
 const assignForm = reactive({
-  assigneeId: undefined as number | undefined,
+  assigneeIds: [] as number[],
   remark: '',
-  newAssigneeId: undefined as number | undefined,
+})
+
+const pendingPoolTransferForm = reactive({
+  targetUserId: undefined as number | undefined,
+  reason: '',
 })
 
 const closeForm = reactive({
@@ -243,6 +250,18 @@ const roleCodes = computed(() =>
 const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
 
+const isCurrentUserAmongAssignees = computed(() => {
+  const uid = currentUserId.value
+  if (!uid || !detail.value) {
+    return false
+  }
+  const ids = detail.value.assigneeIds
+  if (ids && ids.length > 0) {
+    return ids.includes(uid)
+  }
+  return uid === detail.value.assigneeId
+})
+
 const customFieldEntries = computed(() => {
   if (!detail.value?.customFields) {
     return []
@@ -276,7 +295,7 @@ const canEditTestInfo = computed(() => {
   if (hasRole('HANDLER')) {
     return true
   }
-  return Boolean(currentUserId.value && currentUserId.value === detail.value?.assigneeId)
+  return Boolean(currentUserId.value && isCurrentUserAmongAssignees.value)
 })
 
 const canEditDevInfo = computed(() => {
@@ -292,7 +311,7 @@ const canEditDevInfo = computed(() => {
   if (hasRole('HANDLER')) {
     return true
   }
-  return Boolean(currentUserId.value && currentUserId.value === detail.value?.assigneeId)
+  return Boolean(currentUserId.value && isCurrentUserAmongAssignees.value)
 })
 
 function hasRole(...targets: string[]): boolean {
@@ -420,18 +439,65 @@ async function trackReadSilently(): Promise<void> {
   }
 }
 
+function openAssignDialog(): void {
+  assignForm.assigneeIds = []
+  assignForm.remark = ''
+  assignDialogVisible.value = true
+}
+
 async function handleAssign(): Promise<void> {
-  if (!assignForm.assigneeId) {
+  if (!assignForm.assigneeIds.length) {
+    notifyError('请至少选择一名处理人')
     return
   }
   submitLoading.value = true
   try {
     await assignTicket(ticketId.value, {
-      assigneeId: assignForm.assigneeId,
+      assigneeIds: [...assignForm.assigneeIds],
       remark: assignForm.remark,
     })
     notifySuccess('工单分派成功')
     assignDialogVisible.value = false
+    await loadAll()
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+async function claimPendingTicket(): Promise<void> {
+  const uid = currentUserId.value
+  if (!uid) {
+    notifyError('请先登录')
+    return
+  }
+  submitLoading.value = true
+  try {
+    await assignTicket(ticketId.value, {
+      assigneeIds: [uid],
+      remark: '测试认领',
+    })
+    notifySuccess('认领成功')
+    await loadAll()
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+async function handlePendingPoolTransfer(): Promise<void> {
+  if (!pendingPoolTransferForm.targetUserId) {
+    notifyError('请选择对接人')
+    return
+  }
+  submitLoading.value = true
+  try {
+    await transferTicket(ticketId.value, {
+      targetUserId: pendingPoolTransferForm.targetUserId,
+      reason: pendingPoolTransferForm.reason?.trim() || '待分派对接转派',
+    })
+    notifySuccess('对接人已更新')
+    pendingPoolTransferVisible.value = false
+    pendingPoolTransferForm.targetUserId = undefined
+    pendingPoolTransferForm.reason = ''
     await loadAll()
   } finally {
     submitLoading.value = false
@@ -444,6 +510,7 @@ function openTransitDialog(action: TicketActionItem): void {
   transitForm.targetStatus = action.targetStatus
   transitForm.remark = ''
   transitForm.newAssigneeId = undefined
+  transitForm.newAssigneeIds = []
   processDialogVisible.value = true
 }
 
@@ -458,12 +525,23 @@ async function handleProcess(): Promise<void> {
       notifyError('该操作需要填写备注')
       return
     }
-    await transitTicket(ticketId.value, {
+    const transitPayload: {
+      transitionId: string
+      targetStatus: string
+      remark: string
+      newAssigneeId?: number
+      newAssigneeIds?: number[]
+    } = {
       transitionId: transitForm.transitionId,
       targetStatus: transitForm.targetStatus,
       remark: transitForm.remark,
-      newAssigneeId: transitForm.newAssigneeId,
-    })
+    }
+    if (transitForm.newAssigneeIds.length > 0) {
+      transitPayload.newAssigneeIds = [...transitForm.newAssigneeIds]
+    } else if (transitForm.newAssigneeId != null) {
+      transitPayload.newAssigneeId = transitForm.newAssigneeId
+    }
+    await transitTicket(ticketId.value, transitPayload)
     notifySuccess('操作成功')
     processDialogVisible.value = false
     selectedAction.value = null
@@ -782,7 +860,24 @@ watch(
               {{ action.actionName }}
             </el-button>
           </template>
-          <el-button size="small" type="warning" plain @click="assignDialogVisible = true">
+          <template v-if="currentStatus === 'pending_assign'">
+            <el-button size="small" type="primary" plain @click="openAssignDialog">
+              分派处理人
+            </el-button>
+            <el-button
+              v-if="hasRole('TESTER', 'ADMIN', 'TICKET_ADMIN')"
+              size="small"
+              type="success"
+              plain
+              @click="claimPendingTicket"
+            >
+              认领
+            </el-button>
+            <el-button size="small" type="warning" plain @click="pendingPoolTransferVisible = true">
+              对接转派
+            </el-button>
+          </template>
+          <el-button v-else size="small" type="warning" plain @click="openAssignDialog">
             转派
           </el-button>
         </div>
@@ -1534,11 +1629,22 @@ watch(
     </template>
   </el-dialog>
 
-  <!-- 分派工单弹窗 -->
-  <el-dialog v-model="assignDialogVisible" title="分派工单" width="480px">
-    <el-form label-width="90px">
+  <!-- 分派工单弹窗（支持多人，首位为主处理人） -->
+  <el-dialog
+    v-model="assignDialogVisible"
+    :title="currentStatus === 'pending_assign' ? '分派 / 认领（进入下一环节）' : '转派工单'"
+    width="520px"
+  >
+    <el-form label-width="100px">
       <el-form-item label="处理人" required>
-        <el-select v-model="assignForm.assigneeId" placeholder="请选择处理人" style="width: 100%">
+        <el-select
+          v-model="assignForm.assigneeIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="可选择多名处理人，第一位为主负责人"
+          style="width: 100%"
+        >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
@@ -1548,7 +1654,25 @@ watch(
     </el-form>
     <template #footer>
       <el-button @click="assignDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleAssign">确认分派</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handleAssign">确认</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 待分派：仅更换对接人（不改变流程状态） -->
+  <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="480px">
+    <el-form label-width="90px">
+      <el-form-item label="对接人" required>
+        <el-select v-model="pendingPoolTransferForm.targetUserId" placeholder="选择新的测试对接人" style="width: 100%">
+          <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="说明">
+        <el-input v-model="pendingPoolTransferForm.reason" type="textarea" placeholder="可选" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="pendingPoolTransferVisible = false">取消</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handlePendingPoolTransfer">确认</el-button>
     </template>
   </el-dialog>
 
@@ -1566,7 +1690,15 @@ watch(
         <el-tag v-if="selectedAction?.isReturn" type="warning" style="margin-left:8px;">退回</el-tag>
       </el-form-item>
       <el-form-item v-if="selectedAction?.allowTransfer" label="指定处理人">
-        <el-select v-model="transitForm.newAssigneeId" clearable placeholder="可选，不选则保持当前" style="width: 100%">
+        <el-select
+          v-model="transitForm.newAssigneeIds"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          clearable
+          placeholder="可选多名，第一位为主处理人；不选则保持当前"
+          style="width: 100%"
+        >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>

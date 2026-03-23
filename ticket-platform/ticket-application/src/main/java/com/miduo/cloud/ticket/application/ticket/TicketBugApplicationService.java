@@ -32,6 +32,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
     ));
 
     private static final Set<String> TEST_EDIT_STATUSES = new HashSet<>(Arrays.asList(
+            TicketStatus.PENDING_ASSIGN.getCode(),
             TicketStatus.PENDING_TEST_ACCEPT.getCode(),
             TicketStatus.TESTING.getCode(),
             TicketStatus.INVESTIGATING.getCode(),
@@ -52,19 +53,22 @@ public class TicketBugApplicationService extends BaseApplicationService {
     private final TicketBugDevInfoMapper bugDevInfoMapper;
     private final SysUserMapper sysUserMapper;
     private final TicketChangeHistoryRecorder changeHistoryRecorder;
+    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
     public TicketBugApplicationService(TicketMapper ticketMapper,
                                        TicketBugInfoMapper bugInfoMapper,
                                        TicketBugTestInfoMapper bugTestInfoMapper,
                                        TicketBugDevInfoMapper bugDevInfoMapper,
                                        SysUserMapper sysUserMapper,
-                                       TicketChangeHistoryRecorder changeHistoryRecorder) {
+                                       TicketChangeHistoryRecorder changeHistoryRecorder,
+                                       TicketAssigneeSyncService ticketAssigneeSyncService) {
         this.ticketMapper = ticketMapper;
         this.bugInfoMapper = bugInfoMapper;
         this.bugTestInfoMapper = bugTestInfoMapper;
         this.bugDevInfoMapper = bugDevInfoMapper;
         this.sysUserMapper = sysUserMapper;
         this.changeHistoryRecorder = changeHistoryRecorder;
+        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     /**
@@ -281,13 +285,21 @@ public class TicketBugApplicationService extends BaseApplicationService {
         if (!TEST_EDIT_STATUSES.contains(status)) {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "当前状态不允许编辑测试信息");
         }
+        if (TicketStatus.PENDING_ASSIGN.getCode().equals(status)
+                && currentUserId != null
+                && ticket.getId() != null
+                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)) {
+            return;
+        }
         if (hasAnyRole(roleCodes, "TESTER")) {
             return;
         }
         if (hasAnyRole(roleCodes, "HANDLER") && isTestStage(status)) {
             return;
         }
-        if (currentUserId != null && currentUserId.equals(ticket.getAssigneeId()) && isTestStage(status)) {
+        if (currentUserId != null && ticket.getId() != null
+                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)
+                && isTestStage(status)) {
             return;
         }
         throw BusinessException.of(ErrorCode.FORBIDDEN, "无权限编辑测试信息");
@@ -307,7 +319,9 @@ public class TicketBugApplicationService extends BaseApplicationService {
         if (hasAnyRole(roleCodes, "HANDLER") && isDevStage(status)) {
             return;
         }
-        if (currentUserId != null && currentUserId.equals(ticket.getAssigneeId()) && isDevStage(status)) {
+        if (currentUserId != null && ticket.getId() != null
+                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)
+                && isDevStage(status)) {
             return;
         }
         throw BusinessException.of(ErrorCode.FORBIDDEN, "无权限编辑开发信息");

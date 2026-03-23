@@ -113,6 +113,7 @@ export interface TransitInput {
   targetStatus?: string
   remark?: string
   newAssigneeId?: number
+  newAssigneeIds?: number[]
 }
 
 /** 转派请求 */

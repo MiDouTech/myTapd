@@ -1,7 +1,7 @@
 package com.miduo.cloud.ticket.application.workflow;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -33,9 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -66,6 +68,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final TicketTimeTrackApplicationService ticketTimeTrackService;
     private final SlaTimerService slaTimerService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
     public TicketWorkflowAppService(TicketMapper ticketMapper,
                                      TicketLogMapper ticketLogMapper,
@@ -75,7 +78,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      WorkflowAppService workflowAppService,
                                      TicketTimeTrackApplicationService ticketTimeTrackService,
                                      SlaTimerService slaTimerService,
-                                     ApplicationEventPublisher eventPublisher) {
+                                     ApplicationEventPublisher eventPublisher,
+                                     TicketAssigneeSyncService ticketAssigneeSyncService) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.flowRecordMapper = flowRecordMapper;
@@ -85,6 +89,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         this.ticketTimeTrackService = ticketTimeTrackService;
         this.slaTimerService = slaTimerService;
         this.eventPublisher = eventPublisher;
+        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     /**
@@ -158,6 +163,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String userRole = resolveUserRole(operatorId, ticket);
         String oldStatus = ticket.getStatus();
         Long oldAssigneeId = ticket.getAssigneeId();
+        List<Long> beforeAssigneeSnapshot = new ArrayList<>(
+                ticketAssigneeSyncService.listActiveUserIds(ticketId));
 
         WorkflowTransition matchedTransition = resolveTransition(
                 workflow.getTransitions(), input, oldStatus, userRole);
@@ -174,14 +181,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         // 更新工单状态
         ticket.setStatus(targetStatus);
 
-        // allowTransfer 且传入了新处理人
-        if (matchedTransition.isAllowTransfer()
-                && input.getNewAssigneeId() != null) {
-            SysUserPO newAssignee = sysUserMapper.selectById(input.getNewAssigneeId());
-            if (newAssignee == null) {
-                throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "目标处理人不存在");
-            }
-            ticket.setAssigneeId(input.getNewAssigneeId());
+        List<Long> newAssigneeIds = resolveNewAssigneeIdsFromTransit(input);
+        boolean willApplyAssignees = matchedTransition.isAllowTransfer() && !newAssigneeIds.isEmpty();
+        if (willApplyAssignees) {
+            ticketAssigneeSyncService.applyAssigneesToTicket(ticket, newAssigneeIds);
         }
 
         // 终态时记录关闭/完成时间
@@ -225,11 +228,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                     new TicketCompletedEvent(ticketId, targetStatus, operatorId, new Date()));
         }
 
-        // 处理人变更事件
-        if (input.getNewAssigneeId() != null
-                && !input.getNewAssigneeId().equals(oldAssigneeId)) {
+        // 处理人变更事件（主处理人或协同处理人列表变化时通知）
+        if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, newAssigneeIds)) {
             eventPublisher.publishEvent(
-                    new TicketAssignedEvent(ticketId, input.getNewAssigneeId(),
+                    new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
                             oldAssigneeId, operatorId, "TRANSFER_ON_TRANSIT"));
         }
     }
@@ -241,10 +243,24 @@ public class TicketWorkflowAppService extends BaseApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void assignFromPendingDispatch(Long ticketId, Long newAssigneeId, String remark, Long operatorId) {
+        if (newAssigneeId == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "处理人不能为空");
+        }
+        assignFromPendingDispatch(ticketId, Collections.singletonList(newAssigneeId), remark, operatorId);
+    }
+
+    /**
+     * 待分派状态下指定一名或多名处理人并流转到下一节点
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void assignFromPendingDispatch(Long ticketId, List<Long> newAssigneeIds, String remark, Long operatorId) {
         TicketPO ticket = requireTicket(ticketId);
         if (TicketStatus.fromCode(ticket.getStatus()) != TicketStatus.PENDING_ASSIGN) {
             throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
                     "当前状态不是待分派，不能使用待分派分派流转");
+        }
+        if (newAssigneeIds == null || newAssigneeIds.isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "请至少指定一名处理人");
         }
 
         String rawStatus = ticket.getStatus();
@@ -264,7 +280,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         TransitInput input = new TransitInput();
         input.setTransitionId(chosen.getId());
-        input.setNewAssigneeId(newAssigneeId);
+        input.setNewAssigneeIds(newAssigneeIds);
         input.setRemark(remark);
         transit(ticketId, input, operatorId);
     }
@@ -280,6 +296,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                 continue;
             }
             if (!t.isAllowTransfer()) {
+                continue;
+            }
+            if (t.getFrom() != null && t.getTo() != null
+                    && t.getFrom().trim().equalsIgnoreCase(t.getTo().trim())) {
                 continue;
             }
             if (!isRoleAllowedForTransition(t, userRole)) {
@@ -314,16 +334,30 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         String userRole = resolveUserRole(operatorId, ticket);
 
-        // 权限校验：当前处理人、ADMIN、TICKET_ADMIN 可以转派
-        boolean canTransfer = "HANDLER".equals(userRole)
-                || "ADMIN".equals(userRole)
-                || "TICKET_ADMIN".equals(userRole);
-        if (!canTransfer) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "只有处理人或管理员才能执行转派操作");
+        boolean pendingAssign = TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN;
+        boolean adminLike = "ADMIN".equals(userRole) || "TICKET_ADMIN".equals(userRole);
+        boolean handlerLike = "HANDLER".equals(userRole);
+
+        if (pendingAssign) {
+            boolean tester = "TESTER".equals(userRole);
+            if (!adminLike && !tester) {
+                throw BusinessException.of(ErrorCode.FORBIDDEN, "待分派阶段仅测试人员或管理员可转派处理对接人");
+            }
+            if (tester && !adminLike) {
+                Long curPrimary = ticket.getAssigneeId();
+                if (curPrimary != null && !curPrimary.equals(operatorId)) {
+                    throw BusinessException.of(ErrorCode.FORBIDDEN, "仅当前待分派对接人或管理员可转派");
+                }
+            }
+        } else {
+            boolean canTransfer = handlerLike || adminLike;
+            if (!canTransfer) {
+                throw BusinessException.of(ErrorCode.FORBIDDEN, "只有处理人或管理员才能执行转派操作");
+            }
         }
 
         Long previousAssigneeId = ticket.getAssigneeId();
-        ticket.setAssigneeId(input.getTargetUserId());
+        ticketAssigneeSyncService.syncSingleAssigneeRow(ticket, input.getTargetUserId());
         ticketMapper.updateById(ticket);
 
         saveTicketLog(ticketId, operatorId, "TRANSFER", null, null, input.getReason());
@@ -405,6 +439,31 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     // 私有辅助方法
     // =========================================================================
 
+    private List<Long> resolveNewAssigneeIdsFromTransit(TransitInput input) {
+        List<Long> out = new ArrayList<>();
+        if (input.getNewAssigneeIds() != null) {
+            for (Long id : input.getNewAssigneeIds()) {
+                if (id != null) {
+                    out.add(id);
+                }
+            }
+        }
+        LinkedHashSet<Long> deduped = new LinkedHashSet<>(out);
+        if (!deduped.isEmpty()) {
+            return new ArrayList<>(deduped);
+        }
+        if (input.getNewAssigneeId() != null) {
+            return Collections.singletonList(input.getNewAssigneeId());
+        }
+        return Collections.emptyList();
+    }
+
+    private boolean assigneeUserSetChanged(List<Long> before, List<Long> after) {
+        Set<Long> b = new HashSet<>(before != null ? before : Collections.emptyList());
+        Set<Long> a = new HashSet<>(after != null ? after : Collections.emptyList());
+        return !b.equals(a);
+    }
+
     /**
      * 根据工作流状态的 slaAction 驱动 SLA 计时器生命周期
      * START_RESPONSE / START_RESOLVE → 完成响应计时器（已启动则续跑）
@@ -462,12 +521,16 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             }
         }
 
-        // 工单内身份判断
-        if (operatorId.equals(ticket.getAssigneeId())) {
+        // 工单内身份：主处理人或协同处理人
+        if (ticket.getId() != null && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), operatorId)) {
             return "HANDLER";
         }
         if (operatorId.equals(ticket.getCreatorId())) {
             return "SUBMITTER";
+        }
+        if (systemRoles != null
+                && (systemRoles.contains("TESTER") || systemRoles.contains("tester"))) {
+            return "TESTER";
         }
 
         return "SUBMITTER";
