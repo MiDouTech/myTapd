@@ -235,6 +235,66 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     }
 
     /**
+     * 待分派状态下指定处理人：执行工作流中带 allowTransfer 的「分派」流转，同步进入下一状态。
+     * 解决仅更新 assigneeId 导致界面仍显示「待分派」的问题。
+     * operatorId 为空时按 TICKET_ADMIN 校验流转（自动分派场景）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void assignFromPendingDispatch(Long ticketId, Long newAssigneeId, String remark, Long operatorId) {
+        TicketPO ticket = requireTicket(ticketId);
+        if (TicketStatus.fromCode(ticket.getStatus()) != TicketStatus.PENDING_ASSIGN) {
+            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
+                    "当前状态不是待分派，不能使用待分派分派流转");
+        }
+
+        String rawStatus = ticket.getStatus();
+        if (rawStatus != null && "pending_dispatch".equalsIgnoreCase(rawStatus.trim())) {
+            ticket.setStatus(TicketStatus.PENDING_ASSIGN.getCode());
+            ticketMapper.updateById(ticket);
+        }
+
+        WorkflowPO workflow = workflowAppService.getWorkflowById(ticket.getWorkflowId());
+        String userRole = operatorId == null ? "TICKET_ADMIN" : resolveUserRole(operatorId, ticket);
+
+        WorkflowTransition chosen = findPendingAssignWithTransferTransition(workflow, userRole);
+        if (chosen == null) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_TRANSITION_INVALID,
+                    "工作流未配置从待分派携带处理人进入下一节点的流转，请联系管理员");
+        }
+
+        TransitInput input = new TransitInput();
+        input.setTransitionId(chosen.getId());
+        input.setNewAssigneeId(newAssigneeId);
+        input.setRemark(remark);
+        transit(ticketId, input, operatorId);
+    }
+
+    /**
+     * 从 pending_assign 出发、允许带处理人、且目标非终态的第一条流转（与默认「分派受理/分派测试」一致）
+     */
+    private WorkflowTransition findPendingAssignWithTransferTransition(WorkflowPO workflow, String userRole) {
+        String fromCode = TicketStatus.PENDING_ASSIGN.getCode();
+        List<WorkflowTransition> transitions = workflowEngine.parseTransitions(workflow.getTransitions());
+        for (WorkflowTransition t : transitions) {
+            if (t.getFrom() == null || !fromCode.equalsIgnoreCase(t.getFrom())) {
+                continue;
+            }
+            if (!t.isAllowTransfer()) {
+                continue;
+            }
+            if (!isRoleAllowedForTransition(t, userRole)) {
+                continue;
+            }
+            WorkflowState toState = workflowEngine.findState(workflow.getStates(), t.getTo());
+            if (toState != null && toState.isTerminal()) {
+                continue;
+            }
+            return t;
+        }
+        return null;
+    }
+
+    /**
      * 同角色转派（处理人变更，状态不变）
      * 支持：当前处理人、管理员（ADMIN/TICKET_ADMIN）均可操作
      * 接口编号：API000016

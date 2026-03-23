@@ -52,19 +52,22 @@ public class DispatchAppService extends BaseApplicationService {
     private final HandlerGroupMemberMapper handlerGroupMemberMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final TicketWorkflowAppService ticketWorkflowAppService;
 
     public DispatchAppService(TicketMapper ticketMapper,
                                TicketCategoryMapper ticketCategoryMapper,
                                DispatchRuleMapper dispatchRuleMapper,
                                HandlerGroupMemberMapper handlerGroupMemberMapper,
                                StringRedisTemplate stringRedisTemplate,
-                               ApplicationEventPublisher eventPublisher) {
+                               ApplicationEventPublisher eventPublisher,
+                               TicketWorkflowAppService ticketWorkflowAppService) {
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.dispatchRuleMapper = dispatchRuleMapper;
         this.handlerGroupMemberMapper = handlerGroupMemberMapper;
         this.stringRedisTemplate = stringRedisTemplate;
         this.eventPublisher = eventPublisher;
+        this.ticketWorkflowAppService = ticketWorkflowAppService;
     }
 
     /**
@@ -292,6 +295,12 @@ public class DispatchAppService extends BaseApplicationService {
     }
 
     private void assignTicket(TicketPO ticket, Long assigneeId, String assignType) {
+        if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
+            ticketWorkflowAppService.assignFromPendingDispatch(ticket.getId(), assigneeId, null, null);
+            log.info("工单[{}]分派给用户[{}]，策略: {}（含状态流转）", ticket.getId(), assigneeId, assignType);
+            return;
+        }
+
         Long previousAssigneeId = ticket.getAssigneeId();
         ticket.setAssigneeId(assigneeId);
         ticketMapper.updateById(ticket);

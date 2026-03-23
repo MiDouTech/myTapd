@@ -386,6 +386,13 @@ public class TicketApplicationService {
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "处理人不存在");
         }
 
+        if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
+            ticketWorkflowAppService.assignFromPendingDispatch(
+                    ticketId, input.getAssigneeId(), input.getRemark(), currentUserId);
+            log.info("工单分派(待分派→下一节点): ticketId={}, assigneeId={}", ticketId, input.getAssigneeId());
+            return;
+        }
+
         Long oldAssigneeId = ticket.getAssigneeId();
         ticket.setAssigneeId(input.getAssigneeId());
         ticketMapper.updateById(ticket);

@@ -39,7 +39,6 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import RichTextEditor from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
-  TicketAttachmentOutput,
   TicketBugCustomerInfoInput,
   TicketBugDevInfoInput,
   TicketBugTestInfoInput,
@@ -144,12 +143,6 @@ function mergeProblemScreenshots(urls: string[]): void {
 function removeProblemScreenshot(url: string): void {
   customerProblemScreenshots.value = customerProblemScreenshots.value.filter((item) => item !== url)
 }
-
-const ticketImageAttachments = computed<TicketAttachmentOutput[]>(() =>
-  (detail.value?.attachments || []).filter((attachment) => {
-    return Boolean(attachment.filePath) && isImageFile(attachment.fileType)
-  }),
-)
 
 // ---- 企微消息解析 ----
 const wecomParseDialogVisible = ref(false)
@@ -921,46 +914,6 @@ watch(
                               </el-button>
                             </div>
                           </div>
-                        </div>
-
-                        <div class="candidate-screenshot-wrap">
-                          <div class="selected-screenshot-title">可选附件图片</div>
-                          <EmptyState
-                            v-if="!ticketImageAttachments.length"
-                            description="暂无图片附件，请先上传图片或等待企微消息同步"
-                          />
-                          <el-checkbox-group
-                            v-else
-                            v-model="customerProblemScreenshots"
-                            :disabled="!canEditCustomerInfo"
-                            class="candidate-screenshot-list"
-                          >
-                            <el-checkbox
-                              v-for="attachment in ticketImageAttachments"
-                              :key="attachment.id"
-                              :label="attachment.filePath || ''"
-                              class="candidate-screenshot-item"
-                            >
-                              <div class="candidate-screenshot-body">
-                                <el-image
-                                  :src="attachment.filePath"
-                                  :preview-src-list="ticketImageAttachments.map(item => item.filePath || '')"
-                                  fit="cover"
-                                  class="candidate-screenshot-image"
-                                />
-                                <div class="candidate-screenshot-meta">
-                                  <div class="candidate-screenshot-name">{{ attachment.fileName }}</div>
-                                  <el-tag
-                                    size="small"
-                                    :type="attachment.source === 'WECOM_BOT' ? 'success' : 'info'"
-                                    effect="plain"
-                                  >
-                                    {{ attachment.source === 'WECOM_BOT' ? '企微图片' : '手动上传' }}
-                                  </el-tag>
-                                </div>
-                              </div>
-                            </el-checkbox>
-                          </el-checkbox-group>
                         </div>
                       </div>
                     </el-form-item>
@@ -1846,11 +1799,6 @@ watch(
   color: #909399;
 }
 
-.selected-screenshot-wrap + .candidate-screenshot-wrap,
-.screenshot-tip + .candidate-screenshot-wrap {
-  margin-top: 10px;
-}
-
 .selected-screenshot-title {
   font-size: 13px;
   color: #606266;
@@ -1876,52 +1824,6 @@ watch(
   border-radius: 4px;
   display: block;
   margin-bottom: 6px;
-}
-
-.candidate-screenshot-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.candidate-screenshot-item {
-  margin-right: 0;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  padding: 8px;
-  background: #fff;
-
-  :deep(.el-checkbox__label) {
-    padding-left: 8px;
-    width: calc(100% - 24px);
-  }
-}
-
-.candidate-screenshot-body {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.candidate-screenshot-image {
-  width: 68px;
-  height: 68px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.candidate-screenshot-meta {
-  min-width: 0;
-}
-
-.candidate-screenshot-name {
-  font-size: 12px;
-  color: #303133;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 // ===== 时间追踪 =====
