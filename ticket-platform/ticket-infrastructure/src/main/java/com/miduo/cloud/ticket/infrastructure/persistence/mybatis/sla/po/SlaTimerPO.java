@@ -34,6 +34,9 @@ public class SlaTimerPO implements Serializable {
     @TableField("elapsed_minutes")
     private Integer elapsedMinutes;
 
+    @TableField("base_elapsed_minutes")
+    private Integer baseElapsedMinutes;
+
     @TableField("start_at")
     private Date startAt;
 

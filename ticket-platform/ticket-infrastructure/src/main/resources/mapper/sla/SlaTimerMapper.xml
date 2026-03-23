@@ -4,7 +4,7 @@
 
     <select id="selectRunningTimers" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO">
         SELECT id, ticket_id, sla_policy_id, timer_type, status,
-               threshold_minutes, elapsed_minutes, start_at, pause_at,
+               threshold_minutes, elapsed_minutes, base_elapsed_minutes, start_at, pause_at,
                deadline, breached_at, completed_at, is_warned, is_breached,
                create_time, update_time, create_by, update_by, deleted
         FROM sla_timer

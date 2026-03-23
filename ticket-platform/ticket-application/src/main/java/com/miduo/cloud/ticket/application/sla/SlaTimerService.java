@@ -74,9 +74,11 @@ public class SlaTimerService extends BaseApplicationService {
     public void pauseTimers(Long ticketId) {
         List<SlaTimerPO> runningTimers = getRunningTimersByTicketId(ticketId);
         Date now = new Date();
+        LocalDateTime nowLdt = LocalDateTime.now();
         for (SlaTimerPO timer : runningTimers) {
             LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
-            int elapsed = workingTimeCalculator.calculateElapsedWorkingMinutes(startAt);
+            int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : 0;
+            int elapsed = baseElapsed + workingTimeCalculator.calculateWorkingMinutes(startAt, nowLdt);
             timer.setStatus(SlaTimerStatus.PAUSED.getCode());
             timer.setElapsedMinutes(elapsed);
             timer.setPauseAt(now);
@@ -94,6 +96,7 @@ public class SlaTimerService extends BaseApplicationService {
         Date now = new Date();
         for (SlaTimerPO timer : pausedTimers) {
             timer.setStatus(SlaTimerStatus.RUNNING.getCode());
+            timer.setBaseElapsedMinutes(timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0);
             timer.setStartAt(now);
             timer.setPauseAt(null);
             int remainingMinutes = timer.getThresholdMinutes() - timer.getElapsedMinutes();
@@ -159,7 +162,9 @@ public class SlaTimerService extends BaseApplicationService {
 
     private void checkSingleTimer(SlaTimerPO timer) {
         LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
-        int elapsed = workingTimeCalculator.calculateElapsedWorkingMinutes(startAt);
+        LocalDateTime now = LocalDateTime.now();
+        int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : 0;
+        int elapsed = baseElapsed + workingTimeCalculator.calculateWorkingMinutes(startAt, now);
         timer.setElapsedMinutes(elapsed);
 
         int threshold = timer.getThresholdMinutes();
@@ -209,6 +214,7 @@ public class SlaTimerService extends BaseApplicationService {
         timer.setStatus(SlaTimerStatus.RUNNING.getCode());
         timer.setThresholdMinutes(thresholdMinutes);
         timer.setElapsedMinutes(0);
+        timer.setBaseElapsedMinutes(0);
         timer.setStartAt(toDate(startTime));
         timer.setIsWarned(0);
         timer.setIsBreached(0);
