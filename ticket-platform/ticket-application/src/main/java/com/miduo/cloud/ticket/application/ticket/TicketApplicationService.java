@@ -90,6 +90,9 @@ public class TicketApplicationService {
     private TicketWorkflowAppService ticketWorkflowAppService;
 
     @Resource
+    private com.miduo.cloud.ticket.application.sla.SlaTimerService slaTimerService;
+
+    @Resource
     private ApplicationEventPublisher eventPublisher;
 
     @Transactional(rollbackFor = Exception.class)
@@ -146,6 +149,16 @@ public class TicketApplicationService {
         if (ticket.getAssigneeId() != null) {
             safePublishEvent(new TicketAssignedEvent(
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
+        }
+
+        // 启动SLA计时器（若分类绑定了SLA策略）
+        if (category.getSlaPolicyId() != null) {
+            try {
+                slaTimerService.startTimers(ticket.getId(), category.getSlaPolicyId());
+            } catch (Exception e) {
+                log.warn("SLA计时器启动失败，不影响工单创建: ticketId={}, policyId={}, error={}",
+                        ticket.getId(), category.getSlaPolicyId(), e.getMessage());
+            }
         }
 
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
