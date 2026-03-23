@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.notification.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,6 +47,7 @@ public class NotificationController {
      * 接口编号：API000005
      * 产品文档功能：4.8 通知中心 - 标记通知已读
      */
+    @OperationLog(moduleName = "通知中心", operationItem = "标记通知已读", recordParams = false)
     @Operation(summary = "标记通知为已读", description = "接口编号：API000005")
     @PutMapping("/read/{id}")
     public ApiResult<Void> markAsRead(@PathVariable("id") Long id) {
@@ -59,6 +61,7 @@ public class NotificationController {
      * 接口编号：API000006
      * 产品文档功能：4.8 通知中心 - 全部标记已读
      */
+    @OperationLog(moduleName = "通知中心", operationItem = "全部标记通知已读", recordParams = false)
     @Operation(summary = "全部标记已读", description = "接口编号：API000006")
     @PutMapping("/read/all")
     public ApiResult<Void> markAllAsRead() {
@@ -98,6 +101,7 @@ public class NotificationController {
      * 接口编号：API000009
      * 产品文档功能：4.8 通知中心 - 更新通知偏好
      */
+    @OperationLog(moduleName = "通知中心", operationItem = "更新通知偏好")
     @Operation(summary = "更新用户通知偏好", description = "接口编号：API000009")
     @PutMapping("/preference/update")
     public ApiResult<Void> updatePreferences(@Valid @RequestBody NotificationPreferenceUpdateInput input) {

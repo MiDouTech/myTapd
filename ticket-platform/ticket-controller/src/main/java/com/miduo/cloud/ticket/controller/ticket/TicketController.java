@@ -127,6 +127,7 @@ public class TicketController {
      * 接口编号：API000012
      * 产品文档功能：4.2.3 核心操作 - 关注工单动态
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "关注工单")
     @PostMapping("/follow/{id}")
     @Operation(summary = "关注工单", description = "接口编号：API000012")
     public ApiResult<Void> followTicket(@PathVariable Long id) {
@@ -140,6 +141,7 @@ public class TicketController {
      * 接口编号：API000013
      * 产品文档功能：4.2.3 核心操作 - 取消关注工单
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "取消关注工单")
     @DeleteMapping("/follow/{id}")
     @Operation(summary = "取消关注工单", description = "接口编号：API000013")
     public ApiResult<Void> unfollowTicket(@PathVariable Long id) {
@@ -153,6 +155,7 @@ public class TicketController {
      * 接口编号：API000020
      * 产品文档功能：4.4.6 全链路时间追踪 - 首次阅读时间记录
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "记录阅读轨迹", recordParams = false)
     @PostMapping("/{id}/track/read")
     @Operation(summary = "记录工单阅读轨迹", description = "接口编号：API000020")
     public ApiResult<Void> trackRead(@PathVariable Long id) {
@@ -235,6 +238,7 @@ public class TicketController {
      * 接口编号：API000504
      * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "企微消息解析客服信息", recordParams = false)
     @PostMapping("/wecom/parse-customer-info")
     @Operation(summary = "企微消息解析为客服信息字段", description = "接口编号：API000504")
     public ApiResult<WecomMessageParseOutput> parseWecomCustomerInfo(

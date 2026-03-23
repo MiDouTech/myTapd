@@ -30,6 +30,10 @@ public class AuthApplicationService extends BaseApplicationService {
     private static final String DEV_PASSWORD = "admin2026";
     private static final String PHONE_LOGIN_PASSWORD = "admin123";
 
+    private static final String PATH_WECOM_LOGIN = "/api/auth/wecom/login";
+    private static final String PATH_DEV_LOGIN = "/api/auth/dev/login";
+    private static final String PATH_REFRESH = "/api/auth/refresh";
+
     @Value("${dev-login.enabled:false}")
     private boolean devLoginEnabled;
 
@@ -59,7 +63,8 @@ public class AuthApplicationService extends BaseApplicationService {
         try {
             WecomClient.WecomUserIdentity identity = wecomClient.getUserInfoByCode(input.getCode());
             if (identity == null || identity.getUserId() == null || identity.getUserId().isEmpty()) {
-                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "企微扫码登录", false, "无法获取企微用户身份");
+                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_WECOM_LOGIN, "POST",
+                        "企微扫码登录", false, "无法获取企微用户身份");
                 throw BusinessException.of(ErrorCode.WECOM_AUTH_FAILED, "无法获取企微用户身份");
             }
 
@@ -73,7 +78,8 @@ public class AuthApplicationService extends BaseApplicationService {
             }
 
             if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
-                operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, "企微扫码登录", false, "账号已被禁用");
+                operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_WECOM_LOGIN, "POST",
+                        "企微扫码登录", false, "账号已被禁用");
                 throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
             }
 
@@ -81,12 +87,14 @@ public class AuthApplicationService extends BaseApplicationService {
             user.setRoleCodes(roleCodes);
 
             LoginOutput output = buildLoginOutput(user);
-            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, "企微扫码登录", true, null);
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_WECOM_LOGIN, "POST",
+                    "企微扫码登录", true, null);
             return output;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "企微扫码登录", false, e.getMessage());
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_WECOM_LOGIN, "POST",
+                    "企微扫码登录", false, e.getMessage());
             throw e;
         }
     }
@@ -94,24 +102,33 @@ public class AuthApplicationService extends BaseApplicationService {
     /**
      * 刷新Token
      */
-    public LoginOutput refreshToken(RefreshTokenInput input) {
+    public LoginOutput refreshToken(RefreshTokenInput input, String operatorIp, String userAgent) {
         Long userId = tokenService.validateRefreshToken(input.getRefreshToken());
         if (userId == null) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_REFRESH, "POST",
+                    "刷新访问令牌", false, "RefreshToken无效或已过期");
             throw BusinessException.of(ErrorCode.UNAUTHORIZED, "RefreshToken无效或已过期");
         }
 
         User user = userRepository.findById(userId);
         if (user == null) {
+            operationLogService.saveLoginLog(userId, "", operatorIp, userAgent, PATH_REFRESH, "POST",
+                    "刷新访问令牌", false, "用户不存在");
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "用户不存在");
         }
         if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_REFRESH, "POST",
+                    "刷新访问令牌", false, "账号已被禁用");
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 
         List<String> roleCodes = userRepository.findRoleCodes(user.getId());
         user.setRoleCodes(roleCodes);
 
-        return buildLoginOutput(user);
+        LoginOutput output = buildLoginOutput(user);
+        operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_REFRESH, "POST",
+                "刷新访问令牌", true, null);
+        return output;
     }
 
     /**
@@ -122,7 +139,8 @@ public class AuthApplicationService extends BaseApplicationService {
     @Transactional
     public LoginOutput devLogin(DevLoginInput input, String operatorIp, String userAgent) {
         if (!devLoginEnabled) {
-            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "当前环境不允许使用测试登录");
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", false, "当前环境不允许使用测试登录");
             throw BusinessException.of(ErrorCode.FORBIDDEN, "当前环境不允许使用测试登录");
         }
 
@@ -130,14 +148,16 @@ public class AuthApplicationService extends BaseApplicationService {
             LoginOutput output;
             if (DEV_USERNAME.equals(input.getUsername())) {
                 if (!DEV_PASSWORD.equals(input.getPassword())) {
-                    operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "账号或密码错误");
+                    operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                            "测试账号登录", false, "账号或密码错误");
                     throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
                 }
-                output = loginAsDevAdmin();
+                output = loginAsDevAdmin(operatorIp, userAgent);
             } else if (PHONE_LOGIN_PASSWORD.equals(input.getPassword())) {
-                output = loginByPhone(input.getUsername());
+                output = loginByPhone(input.getUsername(), operatorIp, userAgent);
             } else {
-                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, "账号或密码错误");
+                operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                        "测试账号登录", false, "账号或密码错误");
                 throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
             }
 
@@ -145,12 +165,14 @@ public class AuthApplicationService extends BaseApplicationService {
             operationLogService.saveLoginLog(
                     userInfo != null ? userInfo.getId() : null,
                     userInfo != null ? userInfo.getName() : "",
-                    operatorIp, userAgent, "测试账号登录", true, null);
+                    operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", true, null);
             return output;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, "测试账号登录", false, e.getMessage());
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", false, e.getMessage());
             throw e;
         }
     }
@@ -158,7 +180,7 @@ public class AuthApplicationService extends BaseApplicationService {
     /**
      * admin测试账号登录
      */
-    private LoginOutput loginAsDevAdmin() {
+    private LoginOutput loginAsDevAdmin(String operatorIp, String userAgent) {
         User user = userRepository.findByWecomUserid("DEV_ADMIN");
         if (user == null) {
             user = new User();
@@ -171,6 +193,8 @@ public class AuthApplicationService extends BaseApplicationService {
         }
 
         if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", false, "账号已被禁用");
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 
@@ -188,13 +212,17 @@ public class AuthApplicationService extends BaseApplicationService {
     /**
      * 手机号临时登录
      */
-    private LoginOutput loginByPhone(String phone) {
+    private LoginOutput loginByPhone(String phone, String operatorIp, String userAgent) {
         User user = userRepository.findByPhone(phone);
         if (user == null) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", false, "手机号未注册，请先在系统中创建账号");
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "手机号未注册，请先在系统中创建账号");
         }
 
         if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
+                    "测试账号登录", false, "账号已被禁用");
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 

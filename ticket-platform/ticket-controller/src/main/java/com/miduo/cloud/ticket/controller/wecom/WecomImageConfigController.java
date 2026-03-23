@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.controller.wecom;
 
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomImageConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomImageConfigUpdateInput;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
@@ -60,6 +61,7 @@ public class WecomImageConfigController {
      * 接口编号：API000438
      * 产品文档功能：Task024 企微图片配置更新（P2预留）
      */
+    @OperationLog(moduleName = "企微图片配置", operationItem = "更新企微图片处理配置")
     @Operation(summary = "更新企微图片处理配置", description = "接口编号：API000438")
     @PutMapping("/update")
     public ApiResult<Void> update(@Valid @RequestBody WecomImageConfigUpdateInput input) {

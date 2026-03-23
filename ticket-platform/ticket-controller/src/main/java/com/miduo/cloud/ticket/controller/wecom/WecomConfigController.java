@@ -58,6 +58,7 @@ public class WecomConfigController {
      * 接口编号：API000424
      * 产品文档功能：SSO一期-连接测试
      */
+    @OperationLog(moduleName = "企业微信配置", operationItem = "企业微信连接测试", recordParams = false)
     @Operation(summary = "企业微信连接测试", description = "接口编号：API000424")
     @PostMapping("/test-connect")
     public ApiResult<WecomConnectionTestOutput> testConnect() {

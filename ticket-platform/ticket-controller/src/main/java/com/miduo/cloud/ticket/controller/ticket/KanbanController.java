@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.ticket.KanbanColumnOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.KanbanMoveInput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +45,7 @@ public class KanbanController {
      * 接口编号：API000412
      * 产品文档功能：5.3 看板视图 - 拖拽卡片变更状态
      */
+    @OperationLog(moduleName = "工单看板", operationItem = "看板拖拽变更状态")
     @Operation(summary = "看板拖拽变更状态", description = "接口编号：API000412")
     @PutMapping("/move")
     public ApiResult<Void> move(@Valid @RequestBody KanbanMoveInput input) {

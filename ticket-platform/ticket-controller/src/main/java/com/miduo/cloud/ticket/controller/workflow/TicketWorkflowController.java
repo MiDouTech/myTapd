@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.workflow.AvailableActionOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.ReturnInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TicketFlowRecordOutput;
@@ -49,6 +50,7 @@ public class TicketWorkflowController {
      * 接口编号：API000015
      * 产品文档功能：4.4 工作流引擎 - 状态流转
      */
+    @OperationLog(moduleName = "工单工作流", operationItem = "状态流转")
     @Operation(summary = "执行状态流转", description = "接口编号：API000015")
     @PutMapping("/transit/{id}")
     public ApiResult<Void> transit(@PathVariable Long id, @Valid @RequestBody TransitInput input) {
@@ -62,6 +64,7 @@ public class TicketWorkflowController {
      * 接口编号：API000016
      * 产品文档功能：4.5 分派与路由 - 同角色转派
      */
+    @OperationLog(moduleName = "工单工作流", operationItem = "转派工单")
     @Operation(summary = "转派工单", description = "接口编号：API000016")
     @PutMapping("/transfer/{id}")
     public ApiResult<Void> transfer(@PathVariable Long id, @Valid @RequestBody TransferInput input) {
@@ -75,6 +78,7 @@ public class TicketWorkflowController {
      * 接口编号：API000017
      * 产品文档功能：4.5 分派与路由 - 退回上一节点
      */
+    @OperationLog(moduleName = "工单工作流", operationItem = "退回工单")
     @Operation(summary = "退回工单", description = "接口编号：API000017")
     @PutMapping("/return/{id}")
     public ApiResult<Void> returnTicket(@PathVariable Long id, @Valid @RequestBody ReturnInput input) {

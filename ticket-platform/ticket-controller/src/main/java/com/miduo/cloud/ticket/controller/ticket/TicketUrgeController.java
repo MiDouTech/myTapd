@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +32,7 @@ public class TicketUrgeController {
      * 接口编号：API000010
      * 产品文档功能：4.8 通知中心 - 催办功能
      */
+    @OperationLog(moduleName = "工单管理", operationItem = "催办工单", recordParams = false)
     @Operation(summary = "催办工单", description = "接口编号：API000010")
     @PostMapping("/urge/{id}")
     public ApiResult<Void> urgeTicket(@PathVariable("id") Long ticketId) {

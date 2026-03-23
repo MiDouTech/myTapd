@@ -8,6 +8,7 @@ import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.dashboard.DashboardOverviewOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketDetailOutput;
@@ -41,6 +42,7 @@ public class OpenTicketV1Controller {
      * 接口编号：API000413
      * 产品文档功能：4.11 开放能力 - 对外创建工单
      */
+    @OperationLog(moduleName = "开放API", operationItem = "开放API创建工单")
     @Operation(summary = "开放API-创建工单", description = "接口编号：API000413")
     @PostMapping("/tickets")
     public ApiResult<Long> createTicket(@Valid @RequestBody TicketCreateInput input) {

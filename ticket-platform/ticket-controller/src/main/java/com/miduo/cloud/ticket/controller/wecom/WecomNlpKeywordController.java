@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.controller.wecom;
 import com.miduo.cloud.ticket.application.wecom.WecomNlpKeywordService;
 import com.miduo.cloud.ticket.application.wecom.WecomNlpLogService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.entity.dto.wecom.NlpKeywordCreateInput;
 import com.miduo.cloud.ticket.entity.dto.wecom.NlpKeywordListOutput;
@@ -51,6 +52,7 @@ public class WecomNlpKeywordController {
      * 接口编号：API000433
      * 产品文档功能：企微自然语言建单 - 新增关键词
      */
+    @OperationLog(moduleName = "企微NLP关键词", operationItem = "创建NLP关键词配置")
     @Operation(summary = "创建NLP关键词配置", description = "接口编号：API000433")
     @PostMapping("/nlp-keyword/create")
     public ApiResult<Long> createKeyword(@Valid @RequestBody NlpKeywordCreateInput input) {
@@ -63,6 +65,7 @@ public class WecomNlpKeywordController {
      * 接口编号：API000434
      * 产品文档功能：企微自然语言建单 - 修改关键词
      */
+    @OperationLog(moduleName = "企微NLP关键词", operationItem = "更新NLP关键词配置")
     @Operation(summary = "更新NLP关键词配置", description = "接口编号：API000434")
     @PutMapping("/nlp-keyword/update/{id}")
     public ApiResult<Void> updateKeyword(@PathVariable("id") Long id,
@@ -76,6 +79,7 @@ public class WecomNlpKeywordController {
      * 接口编号：API000435
      * 产品文档功能：企微自然语言建单 - 删除关键词
      */
+    @OperationLog(moduleName = "企微NLP关键词", operationItem = "删除NLP关键词配置", recordParams = false)
     @Operation(summary = "删除NLP关键词配置", description = "接口编号：API000435")
     @DeleteMapping("/nlp-keyword/delete/{id}")
     public ApiResult<Void> deleteKeyword(@PathVariable("id") Long id) {

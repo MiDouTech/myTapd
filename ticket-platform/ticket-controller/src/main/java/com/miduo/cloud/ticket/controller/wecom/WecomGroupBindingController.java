@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.wecom;
 
 import com.miduo.cloud.ticket.application.wecom.WecomGroupBindingApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomGroupBindingCreateInput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomGroupBindingListOutput;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomGroupBindingUpdateInput;
@@ -42,6 +43,7 @@ public class WecomGroupBindingController {
      * 接口编号：API000022
      * 产品文档功能：4.6.4 企微群机器人工单 - 群绑定配置新增
      */
+    @OperationLog(moduleName = "企微群绑定", operationItem = "新增群绑定配置")
     @Operation(summary = "新增群绑定配置", description = "接口编号：API000022")
     @PostMapping("/create")
     public ApiResult<Long> createBinding(@Valid @RequestBody WecomGroupBindingCreateInput input) {
@@ -54,6 +56,7 @@ public class WecomGroupBindingController {
      * 接口编号：API000023
      * 产品文档功能：4.6.4 企微群机器人工单 - 群绑定配置修改
      */
+    @OperationLog(moduleName = "企微群绑定", operationItem = "修改群绑定配置")
     @Operation(summary = "修改群绑定配置", description = "接口编号：API000023")
     @PutMapping("/update/{id}")
     public ApiResult<Void> updateBinding(@PathVariable("id") Long id,

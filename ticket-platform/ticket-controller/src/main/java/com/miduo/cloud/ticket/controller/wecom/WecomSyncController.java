@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.wecom;
 
 import com.miduo.cloud.ticket.application.wecom.WecomSyncApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.wecom.SyncLogPageInput;
@@ -35,6 +36,7 @@ public class WecomSyncController {
      * 接口编号：API000425
      * 产品文档功能：SSO一期-手动同步
      */
+    @OperationLog(moduleName = "企业微信同步", operationItem = "手动触发组织架构同步", recordParams = false)
     @Operation(summary = "手动触发企业微信同步", description = "接口编号：API000425")
     @PostMapping("/manual")
     public ApiResult<SyncManualOutput> manualSync() {

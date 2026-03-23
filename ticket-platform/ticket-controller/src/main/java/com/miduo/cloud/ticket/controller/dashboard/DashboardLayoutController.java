@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.dashboard.DashboardLayoutItemOutput;
 import com.miduo.cloud.ticket.entity.dto.dashboard.DashboardLayoutSaveInput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +50,7 @@ public class DashboardLayoutController {
      * 接口编号：API000412
      * 产品文档功能：仪表盘个性化布局 §3.4
      */
+    @OperationLog(moduleName = "仪表盘个人布局", operationItem = "保存个人仪表盘布局")
     @Operation(summary = "保存个人仪表盘布局", description = "接口编号：API000412")
     @PutMapping("/layout")
     public ApiResult<Void> saveLayout(@RequestBody @Valid DashboardLayoutSaveInput input) {
@@ -65,6 +67,7 @@ public class DashboardLayoutController {
      * 接口编号：API000413
      * 产品文档功能：仪表盘个性化布局 §3.6
      */
+    @OperationLog(moduleName = "仪表盘个人布局", operationItem = "恢复默认仪表盘布局", recordParams = false)
     @Operation(summary = "恢复默认仪表盘布局", description = "接口编号：API000413")
     @DeleteMapping("/layout")
     public ApiResult<Void> resetLayout() {

@@ -2,6 +2,8 @@ package com.miduo.cloud.ticket.controller.auth;
 
 import com.miduo.cloud.ticket.application.auth.TokenService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.domain.user.model.User;
 import com.miduo.cloud.ticket.domain.user.repository.UserRepository;
 import com.miduo.cloud.ticket.entity.dto.auth.LoginOutput;
@@ -54,6 +56,7 @@ public class TestAuthController {
      * 直接为指定用户生成 Token（跳过企微授权）
      * 接口编号：API000403
      */
+    @OperationLog(moduleName = "测试认证", operationItem = "测试环境直接生成Token", logLevel = LogLevelEnum.SECURITY, recordParams = false)
     @Operation(summary = "[TEST] 直接生成Token", description = "仅测试环境可用，传入userId直接获取Token")
     @PostMapping("/token/{userId}")
     public ApiResult<LoginOutput> generateToken(@PathVariable Long userId) {

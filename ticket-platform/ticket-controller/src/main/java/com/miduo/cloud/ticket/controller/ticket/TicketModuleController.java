@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.controller.ticket;
 
 import com.miduo.cloud.ticket.application.ticket.TicketModuleApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketModuleInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketModuleOutput;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,7 @@ public class TicketModuleController {
      * 接口编号：API000506
      * 产品文档功能：测试信息 - 新增所属模块选项
      */
+    @OperationLog(moduleName = "工单模块管理", operationItem = "创建工单模块")
     @PostMapping("/create")
     @Operation(summary = "创建工单模块", description = "接口编号：API000506")
     public ApiResult<Long> createModule(@Valid @RequestBody TicketModuleInput input) {
@@ -50,6 +52,7 @@ public class TicketModuleController {
      * 接口编号：API000507
      * 产品文档功能：测试信息 - 删除所属模块选项
      */
+    @OperationLog(moduleName = "工单模块管理", operationItem = "删除工单模块", recordParams = false)
     @DeleteMapping("/delete/{id}")
     @Operation(summary = "删除工单模块", description = "接口编号：API000507")
     public ApiResult<Void> deleteModule(@PathVariable Long id) {

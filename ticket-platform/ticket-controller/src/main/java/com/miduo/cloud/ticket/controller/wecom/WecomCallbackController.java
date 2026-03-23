@@ -1,6 +1,8 @@
 package com.miduo.cloud.ticket.controller.wecom;
 
 import com.miduo.cloud.ticket.application.wecom.WecomCallbackApplicationService;
+import com.miduo.cloud.ticket.common.enums.LogLevelEnum;
+import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -52,6 +54,7 @@ public class WecomCallbackController {
      * 接口编号：API000020
      * 产品文档功能：4.6.4 企微群机器人工单 - 消息接收与异步处理
      */
+    @OperationLog(moduleName = "企业微信回调", operationItem = "接收企微回调消息", logLevel = LogLevelEnum.SYSTEM, recordParams = false)
     @Operation(summary = "企微回调消息接收", description = "接口编号：API000020")
     @PostMapping(
             value = "/callback",

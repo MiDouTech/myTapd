@@ -50,8 +50,9 @@ public class AuthController {
      */
     @Operation(summary = "刷新Token", description = "接口编号：API000401。用RefreshToken换取新的AccessToken")
     @PostMapping("/refresh")
-    public ApiResult<LoginOutput> refreshToken(@Valid @RequestBody RefreshTokenInput input) {
-        LoginOutput output = authApplicationService.refreshToken(input);
+    public ApiResult<LoginOutput> refreshToken(@Valid @RequestBody RefreshTokenInput input,
+                                               HttpServletRequest request) {
+        LoginOutput output = authApplicationService.refreshToken(input, getClientIp(request), getUserAgent(request));
         return ApiResult.success(output);
     }
 

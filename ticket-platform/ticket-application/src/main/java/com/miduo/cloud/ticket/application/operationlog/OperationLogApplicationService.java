@@ -41,17 +41,20 @@ public class OperationLogApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 记录登录日志（安全级别，由认证服务在登录成功/失败后调用）
+     * 记录登录与安全审计日志（由认证服务等调用）
      *
-     * @param userId        登录用户ID，登录失败时传 null
-     * @param userName      登录用户姓名，登录失败时传空串
-     * @param operatorIp    客户端IP
-     * @param userAgent     客户端User-Agent
-     * @param operationItem 操作项描述（如"企微扫码登录"、"测试账号登录"）
-     * @param success       是否成功
-     * @param errorMessage  失败原因（成功时传 null）
+     * @param userId         登录用户ID，失败且未知用户时传 null
+     * @param userName       操作人姓名，失败时可为空串
+     * @param operatorIp     客户端IP
+     * @param userAgent      客户端User-Agent
+     * @param requestPath    实际请求路径（如 /api/auth/wecom/login）
+     * @param requestMethod  HTTP 方法（如 POST）
+     * @param operationItem  操作项描述（如"企微扫码登录"、"刷新访问令牌"）
+     * @param success        是否成功
+     * @param errorMessage   失败原因（成功时传 null）
      */
     public void saveLoginLog(Long userId, String userName, String operatorIp, String userAgent,
+                             String requestPath, String requestMethod,
                              String operationItem, boolean success, String errorMessage) {
         OperationLogPO logPO = new OperationLogPO();
         logPO.setOperateTime(new Date());
@@ -62,8 +65,8 @@ public class OperationLogApplicationService extends BaseApplicationService {
         logPO.setLogLevel(LogLevelEnum.SECURITY.getCode());
         logPO.setModuleName("认证管理");
         logPO.setOperationItem(operationItem);
-        logPO.setRequestPath("/api/auth/login");
-        logPO.setRequestMethod("POST");
+        logPO.setRequestPath(requestPath != null ? requestPath : "");
+        logPO.setRequestMethod(requestMethod != null ? requestMethod : "POST");
         logPO.setExecuteResult(success ? ExecuteResultEnum.SUCCESS.getCode() : ExecuteResultEnum.FAILURE.getCode());
         if (!success && errorMessage != null) {
             logPO.setErrorMessage(errorMessage);
