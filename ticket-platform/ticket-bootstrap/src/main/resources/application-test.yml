@@ -51,7 +51,7 @@ wecom:
 
 jwt:
   secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
-  access-token-expire: 1800
+  access-token-expire: 7200
   refresh-token-expire: 604800
   token-prefix: "Bearer "
   header-name: Authorization

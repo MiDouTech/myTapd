@@ -18,9 +18,9 @@ public class JwtProperties {
     private String secret = "miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough";
 
     /**
-     * Access Token有效时间（秒），默认30分钟
+     * Access Token有效时间（秒），默认2小时
      */
-    private long accessTokenExpire = 1800;
+    private long accessTokenExpire = 7200;
 
     /**
      * Refresh Token有效时间（秒），默认7天

@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * JWT Token签发与校验
- * 双Token机制：AccessToken(30min) + RefreshToken(7d)
+ * 双Token机制：AccessToken(2h) + RefreshToken(7d)
  */
 @Component
 public class JwtTokenProvider {
