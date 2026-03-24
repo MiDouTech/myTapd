@@ -123,7 +123,7 @@ public class DispatchAppService extends BaseApplicationService {
     }
 
     /**
-     * 分类默认分派：取分类绑定默认处理组的第一个成员（组长）
+     * 分类默认分派：对分类绑定的默认处理组成员按 Redis 轮询序号轮流分配（与 ROUND_ROBIN 策略同一套计数器，保证组内公平）
      */
     private void dispatchByCategoryDefault(TicketPO ticket, Long categoryId) {
         TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
@@ -132,28 +132,39 @@ public class DispatchAppService extends BaseApplicationService {
             return;
         }
 
-        List<Long> memberIds = getGroupMemberIds(category.getDefaultGroupId());
-        if (memberIds.isEmpty()) {
+        Long chosen = pickRoundRobinAssignee(category.getDefaultGroupId());
+        if (chosen == null) {
             log.warn("处理组[{}]没有成员，跳过自动分派", category.getDefaultGroupId());
             return;
         }
 
-        assignTicket(ticket, memberIds.get(0), DispatchStrategy.CATEGORY_DEFAULT.getCode());
+        assignTicket(ticket, chosen, DispatchStrategy.CATEGORY_DEFAULT.getCode());
     }
 
     /**
      * 轮询分派：通过 Redis 计数器在处理组内轮流分配
      */
     private void dispatchByRoundRobin(TicketPO ticket, Long groupId) {
+        Long chosen = pickRoundRobinAssignee(groupId);
+        if (chosen == null) {
+            return;
+        }
+        assignTicket(ticket, chosen, DispatchStrategy.ROUND_ROBIN.getCode());
+    }
+
+    /**
+     * 在处理组内按 Redis 自增序号轮询选出下一处理人；成员列表按主键升序保证稳定
+     */
+    private Long pickRoundRobinAssignee(Long groupId) {
         if (groupId == null) {
             log.warn("轮询分派未配置目标处理组，跳过分派");
-            return;
+            return null;
         }
 
         List<Long> memberIds = getGroupMemberIds(groupId);
         if (memberIds.isEmpty()) {
             log.warn("处理组[{}]没有成员，跳过分派", groupId);
-            return;
+            return null;
         }
 
         String redisKey = ROUND_ROBIN_INDEX_KEY + groupId;
@@ -162,7 +173,7 @@ public class DispatchAppService extends BaseApplicationService {
             index = 0L;
         }
         int idx = (int) ((index - 1) % memberIds.size());
-        assignTicket(ticket, memberIds.get(idx), DispatchStrategy.ROUND_ROBIN.getCode());
+        return memberIds.get(idx);
     }
 
     /**
@@ -292,7 +303,8 @@ public class DispatchAppService extends BaseApplicationService {
 
     private List<Long> getGroupMemberIds(Long groupId) {
         LambdaQueryWrapper<HandlerGroupMemberPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(HandlerGroupMemberPO::getGroupId, groupId);
+        wrapper.eq(HandlerGroupMemberPO::getGroupId, groupId)
+                .orderByAsc(HandlerGroupMemberPO::getId);
         return handlerGroupMemberMapper.selectList(wrapper).stream()
                 .map(HandlerGroupMemberPO::getUserId)
                 .collect(Collectors.toList());

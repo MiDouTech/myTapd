@@ -110,6 +110,20 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
                 fromUserId, toUserId, remark, null, new Date()));
     }
 
+    /**
+     * 记录工单字段/区块编辑（不改变状态），用于时间链展示与变更明细关联
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void recordFieldEditTrack(Long ticketId, Long userId, String remark) {
+        if (remark == null || remark.trim().isEmpty()) {
+            return;
+        }
+        TicketPO ticket = requireTicket(ticketId);
+        String status = normalizeStatus(ticket.getStatus());
+        saveTrack(buildTrack(ticket, userId, TicketAction.UPDATE.getCode(),
+                status, status, null, null, remark, null, new Date()));
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public boolean recordReadTrack(Long ticketId, Long userId) {
         TicketPO ticket = requireTicket(ticketId);

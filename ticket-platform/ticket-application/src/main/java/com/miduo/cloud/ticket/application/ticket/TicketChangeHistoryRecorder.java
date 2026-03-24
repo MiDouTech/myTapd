@@ -13,6 +13,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.Ticke
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugDevInfoInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugTestInfoInput;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -37,9 +38,12 @@ public class TicketChangeHistoryRecorder {
     private static final int TEXT_TRUNCATE_LENGTH = 200;
 
     private final TicketLogMapper ticketLogMapper;
+    private final TicketTimeTrackApplicationService ticketTimeTrackApplicationService;
 
-    public TicketChangeHistoryRecorder(TicketLogMapper ticketLogMapper) {
+    public TicketChangeHistoryRecorder(TicketLogMapper ticketLogMapper,
+                                       @Lazy TicketTimeTrackApplicationService ticketTimeTrackApplicationService) {
         this.ticketLogMapper = ticketLogMapper;
+        this.ticketTimeTrackApplicationService = ticketTimeTrackApplicationService;
     }
 
     /**
@@ -58,6 +62,24 @@ public class TicketChangeHistoryRecorder {
         log.setAction(TicketAction.UPDATE.getCode());
         log.setRemark(remark);
         ticketLogMapper.insert(log);
+    }
+
+    /**
+     * 写入 ticket_log 并同步一条时间链轨迹，便于「时间链」与字段变更 JSON 在时间窗内自动关联
+     */
+    public void recordWithTimeTrack(Long ticketId, Long userId, BugChangeTypeEnum changeType,
+                                    List<BugFieldChangeItem> changes) {
+        if (CollectionUtils.isEmpty(changes)) {
+            return;
+        }
+        String remark = buildRemark(changeType, changes);
+        TicketLogPO log = new TicketLogPO();
+        log.setTicketId(ticketId);
+        log.setUserId(userId);
+        log.setAction(TicketAction.UPDATE.getCode());
+        log.setRemark(remark);
+        ticketLogMapper.insert(log);
+        ticketTimeTrackApplicationService.recordFieldEditTrack(ticketId, userId, remark);
     }
 
     /**
