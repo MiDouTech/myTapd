@@ -24,3 +24,21 @@ export function formatFileSize(size?: number): string {
   }
   return `${(size / 1024 / 1024).toFixed(2)} MB`
 }
+
+/** 将秒数格式化为可读耗时（工单节点耗时、时间追踪等） */
+export function formatDurationSec(seconds?: number | null): string {
+  if (seconds === undefined || seconds === null) {
+    return '-'
+  }
+  const total = Math.max(0, Math.floor(seconds))
+  const hour = Math.floor(total / 3600)
+  const minute = Math.floor((total % 3600) / 60)
+  const second = total % 60
+  if (hour > 0) {
+    return `${hour}h ${minute}m ${second}s`
+  }
+  if (minute > 0) {
+    return `${minute}m ${second}s`
+  }
+  return `${second}s`
+}
