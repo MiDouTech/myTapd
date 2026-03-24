@@ -57,7 +57,7 @@ import type {
 } from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyError } from '@/utils/feedback'
-import { formatDateTime, formatFileSize } from '@/utils/formatter'
+import { formatDateTime, formatDurationSec, formatFileSize } from '@/utils/formatter'
 
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
 import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
@@ -660,23 +660,6 @@ async function submitComment(): Promise<void> {
   }
 }
 
-function formatDuration(seconds?: number): string {
-  if (seconds === undefined || seconds === null) {
-    return '-'
-  }
-  const total = Math.max(0, Math.floor(seconds))
-  const hour = Math.floor(total / 3600)
-  const minute = Math.floor((total % 3600) / 60)
-  const second = total % 60
-  if (hour > 0) {
-    return `${hour}h ${minute}m ${second}s`
-  }
-  if (minute > 0) {
-    return `${minute}m ${second}s`
-  }
-  return `${second}s`
-}
-
 async function refreshTicketAttachmentsOnly(): Promise<void> {
   if (!ticketId.value) {
     return
@@ -1163,7 +1146,7 @@ watch(
                     :standalone-field-changes="timeTrackStandalone"
                     :node-duration-items="nodeDurationItems"
                     :status-label-fn="getStatusLabel"
-                    :format-duration="formatDuration"
+                    :format-duration="formatDurationSec"
                   />
                 </el-tab-pane>
               </el-tabs>
