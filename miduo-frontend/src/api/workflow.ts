@@ -1,8 +1,10 @@
 import type {
   HandlerGroupCreateInput,
   HandlerGroupListOutput,
+  HandlerGroupUpdateInput,
   WorkflowDetailOutput,
   WorkflowListOutput,
+  WorkflowUpdateInput,
   AvailableActionOutput,
   TransitInput,
   TransferInput,
@@ -65,7 +67,7 @@ function normalizeWorkflowListItem(item: WorkflowListRawOutput): WorkflowListOut
     stateCount: item.stateCount ?? 0,
     transitionCount: item.transitionCount ?? 0,
     createTime: item.createTime,
-    updateTime: item.updateTime || item.createTime,
+    updateTime: item.updateTime ?? item.createTime,
   }
 }
 
@@ -103,7 +105,7 @@ function normalizeHandlerGroup(item: HandlerGroupRawOutput): HandlerGroupListOut
 
 /**
  * 查询工作流列表
- * 接口编号：API000012
+ * 接口编号：API000200
  * 产品文档功能：4.4 工作流引擎 - 工作流列表
  */
 export async function getWorkflowList(): Promise<WorkflowListOutput[]> {
@@ -113,7 +115,7 @@ export async function getWorkflowList(): Promise<WorkflowListOutput[]> {
 
 /**
  * 查询工作流详情
- * 接口编号：API000013
+ * 接口编号：API000201
  * 产品文档功能：4.4 工作流引擎 - 工作流详情
  */
 export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
@@ -122,8 +124,17 @@ export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutpu
 }
 
 /**
+ * 更新工作流（非内置）
+ * 接口编号：API000202
+ * 产品文档功能：4.4 工作流引擎 - 工作流编辑
+ */
+export function updateWorkflow(id: number, data: WorkflowUpdateInput): Promise<void> {
+  return request.put<void>(`/workflow/update/${id}`, data)
+}
+
+/**
  * 查询处理组列表
- * 接口编号：API000018
+ * 接口编号：API000203
  * 产品文档功能：4.5 分派与路由 - 处理组管理
  */
 export async function getHandlerGroupList(): Promise<HandlerGroupListOutput[]> {
@@ -133,11 +144,20 @@ export async function getHandlerGroupList(): Promise<HandlerGroupListOutput[]> {
 
 /**
  * 创建处理组
- * 接口编号：API000019
+ * 接口编号：API000204
  * 产品文档功能：4.5 分派与路由 - 处理组创建
  */
 export function createHandlerGroup(data: HandlerGroupCreateInput): Promise<number> {
   return request.post<number>('/handler-group/create', data)
+}
+
+/**
+ * 更新处理组
+ * 接口编号：API000205
+ * 产品文档功能：4.5 分派与路由 - 处理组编辑
+ */
+export function updateHandlerGroup(id: number, data: HandlerGroupUpdateInput): Promise<void> {
+  return request.put<void>(`/handler-group/update/${id}`, data)
 }
 
 // ============================================================
@@ -182,7 +202,7 @@ export function returnTicket(ticketId: number, data: ReturnInput): Promise<void>
 
 /**
  * 查询工单流转历史
- * 接口编号：API000018
+ * 接口编号：API000018（工单流转历史，路径 /api/ticket/{id}/flow-history）
  * 产品文档功能：4.4 工作流引擎 - 流转历史
  */
 export function getFlowHistory(ticketId: number): Promise<TicketFlowRecordOutput[]> {

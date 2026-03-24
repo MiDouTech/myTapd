@@ -74,6 +74,36 @@ export interface HandlerGroupCreateInput {
   memberIds: number[]
 }
 
+export type HandlerGroupUpdateInput = HandlerGroupCreateInput
+
+export interface WorkflowUpdateStateItem {
+  code: string
+  name: string
+  type: string
+  slaAction?: string
+  order?: number
+}
+
+export interface WorkflowUpdateTransitionItem {
+  id?: string
+  from: string
+  to: string
+  name: string
+  allowedRoles?: string[]
+  requireRemark?: boolean
+  allowTransfer?: boolean
+  isReturn?: boolean
+}
+
+export interface WorkflowUpdateInput {
+  name: string
+  mode: string
+  description?: string
+  isActive: number
+  states: WorkflowUpdateStateItem[]
+  transitions: WorkflowUpdateTransitionItem[]
+}
+
 // ---- 工单流转相关类型 ----
 
 /** 可用操作条目（getAvailableActions 返回） */
