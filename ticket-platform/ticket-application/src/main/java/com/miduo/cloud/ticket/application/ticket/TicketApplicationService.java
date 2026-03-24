@@ -99,6 +99,9 @@ public class TicketApplicationService {
     @Resource
     private TicketAssigneeSyncService ticketAssigneeSyncService;
 
+    @Resource
+    private TicketBugInfoMapper ticketBugInfoMapper;
+
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
         TicketCategoryPO category = categoryMapper.selectById(input.getCategoryId());
@@ -220,10 +223,26 @@ public class TicketApplicationService {
                     .collect(Collectors.toMap(TicketCategoryPO::getId, TicketCategoryPO::getName));
         }
 
+        List<Long> ticketIds = records.stream()
+                .map(TicketPO::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        Map<Long, String> companyNameByTicketId = Collections.emptyMap();
+        if (!ticketIds.isEmpty()) {
+            List<TicketBugInfoPO> bugInfos = ticketBugInfoMapper.selectList(
+                    new LambdaQueryWrapper<TicketBugInfoPO>().in(TicketBugInfoPO::getTicketId, ticketIds));
+            companyNameByTicketId = bugInfos.stream()
+                    .filter(b -> b.getTicketId() != null && b.getCompanyName() != null
+                            && !b.getCompanyName().trim().isEmpty())
+                    .collect(Collectors.toMap(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName,
+                            (a, b) -> a));
+        }
+
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalCategoryNameMap = categoryNameMap;
+        Map<Long, String> finalCompanyNameMap = companyNameByTicketId;
         List<TicketListOutput> outputs = records.stream()
-                .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap))
+                .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -739,11 +758,15 @@ public class TicketApplicationService {
 
     private TicketListOutput convertToListOutput(TicketPO po,
                                                   Map<Long, String> userNameMap,
-                                                  Map<Long, String> categoryNameMap) {
+                                                  Map<Long, String> categoryNameMap,
+                                                  Map<Long, String> companyNameByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
         output.setTicketNo(po.getTicketNo());
         output.setTitle(po.getTitle());
+        if (po.getId() != null && companyNameByTicketId != null) {
+            output.setCompanyName(companyNameByTicketId.get(po.getId()));
+        }
         output.setCategoryId(po.getCategoryId());
         output.setCategoryName(categoryNameMap.get(po.getCategoryId()));
         output.setPriority(po.getPriority());

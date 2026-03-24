@@ -19,6 +19,8 @@ export interface TicketListOutput {
   id: number
   ticketNo: string
   title: string
+  /** 缺陷工单客服信息中的公司名称 */
+  companyName?: string
   categoryId?: number
   categoryName?: string
   priority?: string

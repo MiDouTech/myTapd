@@ -2,13 +2,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { Edit } from '@element-plus/icons-vue'
+
 import { getCategoryTree } from '@/api/category'
-import { getTicketPage } from '@/api/ticket'
+import { getTicketDetail, getTicketPage } from '@/api/ticket'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { CategoryTreeOutput } from '@/types/category'
-import type { TicketListOutput, TicketPageInput, TicketView } from '@/types/ticket'
+import type { TicketDetailOutput, TicketListOutput, TicketPageInput, TicketView } from '@/types/ticket'
 import { formatDateTime } from '@/utils/formatter'
 
 const route = useRoute()
@@ -18,6 +20,11 @@ const loading = ref(false)
 const categoryTree = ref<CategoryTreeOutput[]>([])
 const tableData = ref<TicketListOutput[]>([])
 const total = ref(0)
+
+const previewDrawerVisible = ref(false)
+const previewLoading = ref(false)
+const previewDetail = ref<TicketDetailOutput | null>(null)
+const previewTicketId = ref<number | null>(null)
 
 const query = reactive<TicketPageInput>({
   pageNum: 1,
@@ -144,6 +151,34 @@ function handlePaginationChange(payload: { pageNum: number; pageSize: number }):
 
 function openDetail(row: TicketListOutput): void {
   router.push(`/ticket/detail/${row.id}`)
+}
+
+function reproduceEnvLabel(code?: string): string {
+  if (code === 'PRODUCTION') return '生产环境'
+  if (code === 'TEST') return '测试环境'
+  if (code === 'BOTH') return '均可复现'
+  return code || '-'
+}
+
+async function openTitlePreview(row: TicketListOutput): Promise<void> {
+  previewTicketId.value = row.id
+  previewDetail.value = null
+  previewDrawerVisible.value = true
+  previewLoading.value = true
+  try {
+    previewDetail.value = await getTicketDetail(row.id)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function goPreviewEdit(): void {
+  const id = previewDetail.value?.id ?? previewTicketId.value
+  if (id == null) {
+    return
+  }
+  previewDrawerVisible.value = false
+  router.push(`/ticket/detail/${id}`)
 }
 
 function getStatusType(status?: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
@@ -285,11 +320,22 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column
-            prop="title"
-            label="标题"
-            min-width="220"
+            prop="companyName"
+            label="公司名称"
+            min-width="140"
             :show-overflow-tooltip="true"
-          />
+          >
+            <template #default="{ row }">
+              {{ row.companyName || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="标题" min-width="220" :show-overflow-tooltip="true">
+            <template #default="{ row }">
+              <el-button type="primary" link class="cell-link title-link" @click="openTitlePreview(row)">
+                {{ row.title }}
+              </el-button>
+            </template>
+          </el-table-column>
           <el-table-column prop="categoryName" label="分类" min-width="140" />
           <el-table-column label="优先级" width="100" sortable="custom" prop="priority">
             <template #default="{ row }">
@@ -329,6 +375,165 @@ onMounted(() => {
         />
       </template>
     </el-card>
+
+    <el-drawer
+      v-model="previewDrawerVisible"
+      direction="rtl"
+      size="min(720px, 92vw)"
+      destroy-on-close
+      class="ticket-preview-drawer"
+      :show-close="true"
+    >
+      <template #header>
+        <div class="preview-drawer-header">
+          <div class="preview-drawer-header-main">
+            <div class="preview-drawer-meta">
+              <el-tag v-if="previewDetail?.status" :type="getStatusType(previewDetail.status)" size="small">
+                {{ previewDetail.statusLabel || previewDetail.status }}
+              </el-tag>
+              <span class="preview-ticket-no">{{ previewDetail?.ticketNo || '—' }}</span>
+            </div>
+            <h3 class="preview-title">{{ previewDetail?.title || '加载中…' }}</h3>
+          </div>
+          <el-button type="primary" :disabled="!previewDetail" @click="goPreviewEdit">
+            <el-icon class="preview-edit-icon"><Edit /></el-icon>
+            编辑
+          </el-button>
+        </div>
+      </template>
+
+      <div v-loading="previewLoading" class="preview-drawer-body">
+        <template v-if="previewDetail">
+          <div class="preview-layout">
+            <div class="preview-main">
+              <div v-if="previewDetail.description" class="preview-block">
+                <div class="preview-block-label">描述</div>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div class="preview-html" v-html="previewDetail.description" />
+              </div>
+
+              <el-tabs class="preview-tabs">
+                <el-tab-pane label="详细信息" name="detail">
+                  <el-tabs class="preview-inner-tabs">
+                    <el-tab-pane label="客服信息" name="customer">
+                      <el-descriptions :column="1" border size="small" class="preview-desc">
+                        <el-descriptions-item label="商户编号">
+                          {{ previewDetail.bugCustomerInfo?.merchantNo || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="公司名称">
+                          {{ previewDetail.bugCustomerInfo?.companyName || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="商户账号">
+                          {{ previewDetail.bugCustomerInfo?.merchantAccount || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="场景码">
+                          {{ previewDetail.bugCustomerInfo?.sceneCode || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="问题描述">
+                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.problemDesc || '-' }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="预期结果">
+                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.expectedResult || '-' }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="问题截图">
+                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.problemScreenshot || '-' }}</span>
+                        </el-descriptions-item>
+                      </el-descriptions>
+                    </el-tab-pane>
+                    <el-tab-pane label="测试信息" name="test">
+                      <!-- eslint-disable vue/no-v-html — 与工单详情页一致，展示后端富文本字段 -->
+                      <el-descriptions :column="1" border size="small" class="preview-desc">
+                        <el-descriptions-item label="复现环境">
+                          {{ reproduceEnvLabel(previewDetail.bugTestInfo?.reproduceEnv) }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="复现步骤">
+                          <div
+                            v-if="previewDetail.bugTestInfo?.reproduceSteps"
+                            class="preview-html preview-html--compact"
+                            v-html="previewDetail.bugTestInfo.reproduceSteps"
+                          />
+                          <span v-else>-</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="实际结果">
+                          <div
+                            v-if="previewDetail.bugTestInfo?.actualResult"
+                            class="preview-html preview-html--compact"
+                            v-html="previewDetail.bugTestInfo.actualResult"
+                          />
+                          <span v-else>-</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="影响范围">
+                          {{ previewDetail.bugTestInfo?.impactScope || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="严重级别">
+                          {{ previewDetail.bugTestInfo?.severityLevel || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="模块名称">
+                          {{ previewDetail.bugTestInfo?.moduleName || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="测试备注">
+                          <span class="preview-plain">{{ previewDetail.bugTestInfo?.testRemark || '-' }}</span>
+                        </el-descriptions-item>
+                      </el-descriptions>
+                      <!-- eslint-enable vue/no-v-html -->
+                    </el-tab-pane>
+                    <el-tab-pane label="开发信息" name="dev">
+                      <el-descriptions :column="1" border size="small" class="preview-desc">
+                        <el-descriptions-item label="根因分析">
+                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.rootCause || '-' }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="修复方案">
+                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.fixSolution || '-' }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="Git 分支">
+                          {{ previewDetail.bugDevInfo?.gitBranch || '-' }}
+                        </el-descriptions-item>
+                        <el-descriptions-item label="影响评估">
+                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.impactAssessment || '-' }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item label="开发备注">
+                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.devRemark || '-' }}</span>
+                        </el-descriptions-item>
+                      </el-descriptions>
+                    </el-tab-pane>
+                  </el-tabs>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+
+            <aside class="preview-side">
+              <div class="preview-side-title">基础信息</div>
+              <el-descriptions :column="1" border size="small" class="preview-desc preview-side-desc">
+                <el-descriptions-item label="分类">
+                  {{ previewDetail.categoryFullPath || previewDetail.categoryName || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="优先级">
+                  <el-tag v-if="previewDetail.priority" :type="getPriorityType(previewDetail.priority)" size="small">
+                    {{ previewDetail.priorityLabel || previewDetail.priority }}
+                  </el-tag>
+                  <span v-else>-</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="创建人">
+                  {{ previewDetail.creatorName || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="处理人">
+                  {{ previewDetail.assigneeName || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="创建时间">
+                  {{ formatDateTime(previewDetail.createTime) || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="更新时间">
+                  {{ formatDateTime(previewDetail.updateTime) || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item v-if="previewDetail.expectedTime" label="预计结束">
+                  {{ formatDateTime(previewDetail.expectedTime) }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </aside>
+          </div>
+        </template>
+      </div>
+    </el-drawer>
   </el-space>
 </template>
 
@@ -341,5 +546,137 @@ onMounted(() => {
 .cell-link {
   padding: 0;
   font-weight: 500;
+}
+
+.title-link {
+  text-align: left;
+  white-space: normal;
+  height: auto;
+  line-height: 1.4;
+}
+
+.preview-drawer-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+
+.preview-drawer-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.preview-ticket-no {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--el-text-color-primary);
+}
+
+.preview-edit-icon {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.preview-drawer-body {
+  min-height: 200px;
+}
+
+.preview-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.preview-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-side {
+  flex: 0 0 240px;
+  position: sticky;
+  top: 0;
+}
+
+.preview-side-title {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.preview-block {
+  margin-bottom: 16px;
+}
+
+.preview-block-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+
+.preview-html {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.preview-html--compact {
+  max-height: 280px;
+  padding: 8px;
+  overflow: auto;
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+}
+
+.preview-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.preview-tabs {
+  margin-top: 4px;
+}
+
+.preview-inner-tabs {
+  margin-top: 8px;
+}
+
+.preview-desc {
+  margin-top: 8px;
+}
+
+.preview-side-desc :deep(.el-descriptions__label) {
+  width: 88px;
+}
+
+@media (max-width: 900px) {
+  .preview-layout {
+    flex-direction: column;
+  }
+
+  .preview-side {
+    flex: none;
+    width: 100%;
+    position: static;
+  }
 }
 </style>

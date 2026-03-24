@@ -14,6 +14,11 @@ public class TicketListOutput implements Serializable {
 
     private String title;
 
+    /**
+     * 公司名称（缺陷工单客服信息，无则 null）
+     */
+    private String companyName;
+
     private Long categoryId;
 
     private String categoryName;
