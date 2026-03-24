@@ -129,7 +129,8 @@ public class HandlerGroupAppService extends BaseApplicationService {
         groupPO.setIsActive(1);
         handlerGroupMapper.insert(groupPO);
 
-        for (Long memberId : input.getMemberIds()) {
+        List<Long> distinctMemberIds = distinctPreserveOrder(input.getMemberIds());
+        for (Long memberId : distinctMemberIds) {
             HandlerGroupMemberPO memberPO = new HandlerGroupMemberPO();
             memberPO.setGroupId(groupPO.getId());
             memberPO.setUserId(memberId);
@@ -162,15 +163,27 @@ public class HandlerGroupAppService extends BaseApplicationService {
         existing.setLeaderId(input.getLeaderId());
         handlerGroupMapper.updateById(existing);
 
-        LambdaQueryWrapper<HandlerGroupMemberPO> delWrapper = new LambdaQueryWrapper<>();
-        delWrapper.eq(HandlerGroupMemberPO::getGroupId, groupId);
-        handlerGroupMemberMapper.delete(delWrapper);
+        handlerGroupMemberMapper.physicalDeleteByGroupId(groupId);
 
-        for (Long memberId : input.getMemberIds()) {
+        List<Long> distinctMemberIds = distinctPreserveOrder(input.getMemberIds());
+        for (Long memberId : distinctMemberIds) {
             HandlerGroupMemberPO memberPO = new HandlerGroupMemberPO();
             memberPO.setGroupId(groupId);
             memberPO.setUserId(memberId);
             handlerGroupMemberMapper.insert(memberPO);
         }
+    }
+
+    private static List<Long> distinctPreserveOrder(List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Long> seen = new LinkedHashSet<>();
+        for (Long id : memberIds) {
+            if (id != null) {
+                seen.add(id);
+            }
+        }
+        return new ArrayList<>(seen);
     }
 }
