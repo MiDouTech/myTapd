@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupCreateInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupListOutput;
+import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupUpdateInput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.HandlerGroupMapper;
@@ -136,5 +137,40 @@ public class HandlerGroupAppService extends BaseApplicationService {
         }
 
         return groupPO.getId();
+    }
+
+    /**
+     * 更新处理组
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateHandlerGroup(Long groupId, HandlerGroupUpdateInput input) {
+        HandlerGroupPO existing = handlerGroupMapper.selectById(groupId);
+        if (existing == null) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "处理组不存在");
+        }
+
+        LambdaQueryWrapper<HandlerGroupPO> checkWrapper = new LambdaQueryWrapper<>();
+        checkWrapper.eq(HandlerGroupPO::getName, input.getName())
+                .ne(HandlerGroupPO::getId, groupId);
+        if (handlerGroupMapper.selectCount(checkWrapper) > 0) {
+            throw BusinessException.of(ErrorCode.DATA_ALREADY_EXISTS, "处理组名称已存在");
+        }
+
+        existing.setName(input.getName());
+        existing.setDescription(input.getDescription());
+        existing.setSkillTags(input.getSkillTags());
+        existing.setLeaderId(input.getLeaderId());
+        handlerGroupMapper.updateById(existing);
+
+        LambdaQueryWrapper<HandlerGroupMemberPO> delWrapper = new LambdaQueryWrapper<>();
+        delWrapper.eq(HandlerGroupMemberPO::getGroupId, groupId);
+        handlerGroupMemberMapper.delete(delWrapper);
+
+        for (Long memberId : input.getMemberIds()) {
+            HandlerGroupMemberPO memberPO = new HandlerGroupMemberPO();
+            memberPO.setGroupId(groupId);
+            memberPO.setUserId(memberId);
+            handlerGroupMemberMapper.insert(memberPO);
+        }
     }
 }

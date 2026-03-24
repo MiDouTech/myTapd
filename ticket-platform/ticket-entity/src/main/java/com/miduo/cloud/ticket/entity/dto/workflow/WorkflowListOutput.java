@@ -21,4 +21,5 @@ public class WorkflowListOutput implements Serializable {
     private Integer stateCount;
     private Integer transitionCount;
     private Date createTime;
+    private Date updateTime;
 }

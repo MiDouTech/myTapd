@@ -7,6 +7,8 @@ import {
   getHandlerGroupList,
   getWorkflowDetail,
   getWorkflowList,
+  updateHandlerGroup,
+  updateWorkflow,
 } from '@/api/workflow'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
@@ -17,6 +19,7 @@ import type {
   HandlerGroupListOutput,
   WorkflowDetailOutput,
   WorkflowListOutput,
+  WorkflowUpdateInput,
 } from '@/types/workflow'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -34,7 +37,12 @@ const workflowDetailLoading = ref(false)
 const handlerGroupLoading = ref(false)
 const handlerGroupSubmitLoading = ref(false)
 const workflowDetailVisible = ref(false)
+const workflowEditVisible = ref(false)
+const workflowEditLoading = ref(false)
+const workflowEditSubmitLoading = ref(false)
+const workflowEditingId = ref<number | null>(null)
 const createHandlerGroupVisible = ref(false)
+const editingHandlerGroupId = ref<number | null>(null)
 
 const workflowList = ref<WorkflowListOutput[]>([])
 const workflowDetail = ref<WorkflowDetailOutput>()
@@ -70,6 +78,41 @@ const createHandlerGroupForm = reactive<HandlerGroupCreateInput>({
   skillTags: '',
   leaderId: undefined,
   memberIds: [],
+})
+
+const workflowEditForm = reactive<WorkflowUpdateInput>({
+  name: '',
+  mode: 'SIMPLE',
+  description: '',
+  isActive: 1,
+  states: [],
+  transitions: [],
+})
+
+const WORKFLOW_ROLE_OPTIONS = [
+  { label: 'SUBMITTER（提交人）', value: 'SUBMITTER' },
+  { label: 'HANDLER（处理人）', value: 'HANDLER' },
+  { label: 'ADMIN（系统管理员）', value: 'ADMIN' },
+  { label: 'TICKET_ADMIN（工单管理员）', value: 'TICKET_ADMIN' },
+  { label: 'OBSERVER（观察者）', value: 'OBSERVER' },
+  { label: 'CUSTOMER_SERVICE（客服）', value: 'CUSTOMER_SERVICE' },
+  { label: 'TESTER（测试）', value: 'TESTER' },
+  { label: 'DEVELOPER（开发）', value: 'DEVELOPER' },
+] as const
+
+const STATE_TYPE_OPTIONS = [
+  { label: '初始 INITIAL', value: 'INITIAL' },
+  { label: '中间 INTERMEDIATE', value: 'INTERMEDIATE' },
+  { label: '终态 TERMINAL', value: 'TERMINAL' },
+] as const
+
+const workflowStateCodeOptions = computed(() => {
+  return workflowEditForm.states
+    .filter((s) => s.code.trim().length > 0)
+    .map((s) => ({
+      label: `${s.name || s.code}（${s.code}）`,
+      value: s.code.trim(),
+    }))
 })
 
 const filteredWorkflowList = computed(() => {
@@ -164,6 +207,10 @@ const userSelectOptions = computed(() => {
     value: item.id,
   }))
 })
+
+const handlerGroupDialogTitle = computed(() =>
+  editingHandlerGroupId.value === null ? '新建处理组' : '编辑处理组',
+)
 
 function resetCreateHandlerGroupForm(): void {
   createHandlerGroupForm.name = ''
@@ -286,7 +333,18 @@ function handleLeaderChange(): void {
 }
 
 function openCreateHandlerGroupDialog(): void {
+  editingHandlerGroupId.value = null
   resetCreateHandlerGroupForm()
+  createHandlerGroupVisible.value = true
+}
+
+function openEditHandlerGroupDialog(row: HandlerGroupListOutput): void {
+  editingHandlerGroupId.value = row.id
+  createHandlerGroupForm.name = row.name
+  createHandlerGroupForm.description = row.description || ''
+  createHandlerGroupForm.skillTags = row.skillTags || ''
+  createHandlerGroupForm.leaderId = row.leaderId
+  createHandlerGroupForm.memberIds = (row.members || []).map((m) => m.userId)
   createHandlerGroupVisible.value = true
 }
 
@@ -299,6 +357,143 @@ async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
     workflowDetail.value = undefined
   } finally {
     workflowDetailLoading.value = false
+  }
+}
+
+function resetWorkflowEditForm(): void {
+  workflowEditingId.value = null
+  workflowEditForm.name = ''
+  workflowEditForm.mode = 'SIMPLE'
+  workflowEditForm.description = ''
+  workflowEditForm.isActive = 1
+  workflowEditForm.states = []
+  workflowEditForm.transitions = []
+}
+
+async function openWorkflowEdit(row: WorkflowListOutput): Promise<void> {
+  if (row.isBuiltin === 1) {
+    notifyWarning('内置工作流不可编辑')
+    return
+  }
+  workflowEditVisible.value = true
+  workflowEditLoading.value = true
+  workflowEditingId.value = row.id
+  try {
+    const detail = await getWorkflowDetail(row.id)
+    workflowEditForm.name = detail.name
+    workflowEditForm.mode = detail.mode
+    workflowEditForm.description = detail.description || ''
+    workflowEditForm.isActive = detail.isActive
+    workflowEditForm.states = (detail.states || []).map((s, idx) => ({
+      code: s.code,
+      name: s.name,
+      type: s.type || 'INTERMEDIATE',
+      slaAction: s.slaAction || '',
+      order: s.order ?? idx,
+    }))
+    workflowEditForm.transitions = (detail.transitions || []).map((t) => ({
+      id: t.id || '',
+      from: t.from,
+      to: t.to,
+      name: t.name || '',
+      allowedRoles: t.allowedRoles ? [...t.allowedRoles] : [],
+      requireRemark: Boolean(t.requireRemark),
+      allowTransfer: Boolean(t.allowTransfer),
+      isReturn: Boolean(t.isReturn),
+    }))
+  } catch {
+    resetWorkflowEditForm()
+    workflowEditVisible.value = false
+  } finally {
+    workflowEditLoading.value = false
+  }
+}
+
+function addWorkflowStateRow(): void {
+  workflowEditForm.states.push({
+    code: '',
+    name: '',
+    type: 'INTERMEDIATE',
+    slaAction: '',
+    order: workflowEditForm.states.length,
+  })
+}
+
+function removeWorkflowStateRow(index: number): void {
+  workflowEditForm.states.splice(index, 1)
+}
+
+function addWorkflowTransitionRow(): void {
+  workflowEditForm.transitions.push({
+    id: '',
+    from: '',
+    to: '',
+    name: '',
+    allowedRoles: [],
+    requireRemark: false,
+    allowTransfer: false,
+    isReturn: false,
+  })
+}
+
+function removeWorkflowTransitionRow(index: number): void {
+  workflowEditForm.transitions.splice(index, 1)
+}
+
+async function handleWorkflowEditSubmit(): Promise<void> {
+  const name = workflowEditForm.name.trim()
+  if (!name) {
+    notifyWarning('请输入工作流名称')
+    return
+  }
+  if (workflowEditForm.states.length === 0) {
+    notifyWarning('请至少配置一条状态')
+    return
+  }
+  if (workflowEditForm.transitions.length === 0) {
+    notifyWarning('请至少配置一条流转规则')
+    return
+  }
+  const wid = workflowEditingId.value
+  if (wid === null) {
+    return
+  }
+
+  const payload: WorkflowUpdateInput = {
+    name,
+    mode: workflowEditForm.mode,
+    description: workflowEditForm.description?.trim() || undefined,
+    isActive: workflowEditForm.isActive,
+    states: workflowEditForm.states.map((s, i) => ({
+      code: s.code.trim(),
+      name: s.name.trim(),
+      type: s.type.trim(),
+      slaAction: s.slaAction?.trim() || undefined,
+      order: s.order ?? i,
+    })),
+    transitions: workflowEditForm.transitions.map((t) => ({
+      id: t.id?.trim() || undefined,
+      from: t.from.trim(),
+      to: t.to.trim(),
+      name: t.name.trim(),
+      allowedRoles: t.allowedRoles && t.allowedRoles.length > 0 ? [...t.allowedRoles] : [],
+      requireRemark: t.requireRemark || undefined,
+      allowTransfer: t.allowTransfer || undefined,
+      isReturn: t.isReturn || undefined,
+    })),
+  }
+
+  workflowEditSubmitLoading.value = true
+  try {
+    await updateWorkflow(wid, payload)
+    notifySuccess('工作流已保存')
+    workflowEditVisible.value = false
+    resetWorkflowEditForm()
+    await loadWorkflows()
+  } catch {
+    // 保留表单
+  } finally {
+    workflowEditSubmitLoading.value = false
   }
 }
 
@@ -327,9 +522,15 @@ async function handleCreateHandlerGroup(): Promise<void> {
 
   handlerGroupSubmitLoading.value = true
   try {
-    await createHandlerGroup(payload)
-    notifySuccess('处理组创建成功')
+    if (editingHandlerGroupId.value === null) {
+      await createHandlerGroup(payload)
+      notifySuccess('处理组创建成功')
+    } else {
+      await updateHandlerGroup(editingHandlerGroupId.value, payload)
+      notifySuccess('处理组已保存')
+    }
     createHandlerGroupVisible.value = false
+    editingHandlerGroupId.value = null
     await loadHandlerGroups()
   } catch {
     // 失败时不关闭弹窗，保留用户输入
@@ -361,6 +562,9 @@ function getStateTypeLabel(type?: string): string {
     PROCESS: '处理中',
     END: '结束',
     NORMAL: '普通',
+    INITIAL: '初始',
+    INTERMEDIATE: '中间',
+    TERMINAL: '终态',
   }
   return map[type] || type
 }
@@ -449,9 +653,17 @@ onMounted(async () => {
               {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link @click="openWorkflowDetail(row)">详情</el-button>
+              <el-button
+                v-if="row.isBuiltin !== 1"
+                type="primary"
+                link
+                @click="openWorkflowEdit(row)"
+              >
+                编辑
+              </el-button>
             </template>
           </el-table-column>
         </BaseTable>
@@ -525,6 +737,11 @@ onMounted(async () => {
           <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
             <template #default="{ row }">
               {{ formatDateTime(row.updateTime || row.createTime) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link @click="openEditHandlerGroupDialog(row)">编辑</el-button>
             </template>
           </el-table-column>
         </BaseTable>
@@ -605,7 +822,197 @@ onMounted(async () => {
     </div>
   </el-drawer>
 
-  <el-dialog v-model="createHandlerGroupVisible" title="新建处理组" width="560px">
+  <el-drawer
+    v-model="workflowEditVisible"
+    title="编辑工作流"
+    size="90%"
+    destroy-on-close
+    @closed="resetWorkflowEditForm"
+  >
+    <div v-loading="workflowEditLoading" class="workflow-edit-body">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="workflow-edit-tip"
+        title="修改状态与流转将影响后续工单操作，请谨慎保存。流转中的角色须使用大写枚举：SUBMITTER、HANDLER、ADMIN、TICKET_ADMIN 等。"
+      />
+      <el-form label-width="100px" class="workflow-edit-form">
+        <el-form-item label="名称" required>
+          <el-input v-model="workflowEditForm.name" maxlength="100" show-word-limit />
+        </el-form-item>
+        <el-form-item label="模式" required>
+          <el-select v-model="workflowEditForm.mode" style="width: 200px">
+            <el-option label="简单模式" value="SIMPLE" />
+            <el-option label="高级模式" value="ADVANCED" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-radio-group v-model="workflowEditForm.isActive">
+            <el-radio :label="1">启用</el-radio>
+            <el-radio :label="0">停用</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input
+            v-model="workflowEditForm.description"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+
+      <el-card shadow="never" class="edit-section-card">
+        <template #header>
+          <div class="section-header-row">
+            <span class="section-title">状态定义</span>
+            <el-button type="primary" link @click="addWorkflowStateRow">添加状态</el-button>
+          </div>
+        </template>
+        <el-table
+          :data="workflowEditForm.states"
+          :border="false"
+          :stripe="true"
+          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+        >
+          <el-table-column label="编码" min-width="140">
+            <template #default="{ row }">
+              <el-input v-model="row.code" placeholder="如 PENDING" />
+            </template>
+          </el-table-column>
+          <el-table-column label="名称" min-width="120">
+            <template #default="{ row }">
+              <el-input v-model="row.name" />
+            </template>
+          </el-table-column>
+          <el-table-column label="类型" width="200">
+            <template #default="{ row }">
+              <el-select v-model="row.type" style="width: 100%">
+                <el-option
+                  v-for="opt in STATE_TYPE_OPTIONS"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="SLA动作" min-width="160">
+            <template #default="{ row }">
+              <el-input v-model="row.slaAction" placeholder="如 START_RESPONSE" />
+            </template>
+          </el-table-column>
+          <el-table-column label="排序" width="90">
+            <template #default="{ row }">
+              <el-input-number v-model="row.order" :min="0" :controls="false" style="width: 100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="{ $index }">
+              <el-button type="danger" link @click="removeWorkflowStateRow($index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <el-card shadow="never" class="edit-section-card">
+        <template #header>
+          <div class="section-header-row">
+            <span class="section-title">流转规则</span>
+            <el-button type="primary" link @click="addWorkflowTransitionRow">添加流转</el-button>
+          </div>
+        </template>
+        <el-table
+          :data="workflowEditForm.transitions"
+          :border="false"
+          :stripe="true"
+          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+        >
+          <el-table-column label="ID" width="100">
+            <template #default="{ row }">
+              <el-input v-model="row.id" placeholder="可空自动生成" />
+            </template>
+          </el-table-column>
+          <el-table-column label="起始" min-width="160">
+            <template #default="{ row }">
+              <el-select v-model="row.from" filterable allow-create style="width: 100%">
+                <el-option
+                  v-for="opt in workflowStateCodeOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="目标" min-width="160">
+            <template #default="{ row }">
+              <el-select v-model="row.to" filterable allow-create style="width: 100%">
+                <el-option
+                  v-for="opt in workflowStateCodeOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="名称" min-width="120">
+            <template #default="{ row }">
+              <el-input v-model="row.name" />
+            </template>
+          </el-table-column>
+          <el-table-column label="角色" min-width="200">
+            <template #default="{ row }">
+              <el-select v-model="row.allowedRoles" multiple collapse-tags style="width: 100%">
+                <el-option
+                  v-for="opt in WORKFLOW_ROLE_OPTIONS"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="备注必填" width="90" align="center">
+            <template #default="{ row }">
+              <el-checkbox v-model="row.requireRemark" />
+            </template>
+          </el-table-column>
+          <el-table-column label="可转派" width="90" align="center">
+            <template #default="{ row }">
+              <el-checkbox v-model="row.allowTransfer" />
+            </template>
+          </el-table-column>
+          <el-table-column label="退回" width="70" align="center">
+            <template #default="{ row }">
+              <el-checkbox v-model="row.isReturn" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="{ $index }">
+              <el-button type="danger" link @click="removeWorkflowTransitionRow($index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+    <template #footer>
+      <el-button @click="workflowEditVisible = false">取消</el-button>
+      <el-button type="primary" :loading="workflowEditSubmitLoading" @click="handleWorkflowEditSubmit">
+        保存
+      </el-button>
+    </template>
+  </el-drawer>
+
+  <el-dialog
+    v-model="createHandlerGroupVisible"
+    :title="handlerGroupDialogTitle"
+    width="560px"
+    @closed="editingHandlerGroupId = null"
+  >
     <el-form label-width="100px">
       <el-form-item label="处理组名称" required>
         <el-input v-model="createHandlerGroupForm.name" maxlength="50" show-word-limit />
@@ -664,7 +1071,7 @@ onMounted(async () => {
     <template #footer>
       <el-button @click="createHandlerGroupVisible = false">取消</el-button>
       <el-button type="primary" :loading="handlerGroupSubmitLoading" @click="handleCreateHandlerGroup">
-        确认创建
+        {{ editingHandlerGroupId === null ? '确认创建' : '保存修改' }}
       </el-button>
     </template>
   </el-dialog>
@@ -693,5 +1100,28 @@ onMounted(async () => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
+}
+
+.workflow-edit-body {
+  min-height: 200px;
+  padding-bottom: 16px;
+}
+
+.workflow-edit-tip {
+  margin-bottom: 16px;
+}
+
+.workflow-edit-form {
+  max-width: 720px;
+}
+
+.edit-section-card {
+  margin-top: 16px;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>
