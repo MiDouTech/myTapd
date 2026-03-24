@@ -23,6 +23,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.Han
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
@@ -76,8 +77,10 @@ public class DispatchAppService extends BaseApplicationService {
 
     /**
      * 自动分派工单（按分派规则执行对应策略）
+     * <p>使用独立事务，避免分派失败（如处理人 ID 在成员表中存在但 sys_user 已删除）将外层
+     * {@code createTicket} 事务标记为 rollback-only，从而导致企微建单等场景整单回滚。</p>
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void autoDispatch(Long ticketId) {
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
