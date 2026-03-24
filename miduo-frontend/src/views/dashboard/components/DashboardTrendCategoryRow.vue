@@ -46,6 +46,9 @@ const draggableCards = computed({
   },
 })
 
+/** 接口按日期升序返回（便于积压累计）；列表展示为最新日期在前 */
+const trendNewestFirst = computed(() => [...props.trend].reverse())
+
 const trendMax = computed(() => {
   if (props.trend.length === 0) {
     return 1
@@ -100,7 +103,7 @@ function toProgress(value: number): number {
           <template v-if="element.key === 'trend'">
             <EmptyState v-if="trend.length === 0" description="暂无趋势数据" />
             <div v-else class="trend-list">
-              <div v-for="item in trend" :key="item.day" class="trend-item">
+              <div v-for="item in trendNewestFirst" :key="item.day" class="trend-item">
                 <div class="trend-day">{{ item.day }}</div>
                 <div class="trend-bars">
                   <div class="trend-bar">
@@ -170,8 +173,8 @@ function toProgress(value: number): number {
         </template>
         <template v-if="key === 'trend'">
           <EmptyState v-if="trend.length === 0" description="暂无趋势数据" />
-          <div v-else class="trend-list">
-            <div v-for="item in trend" :key="item.day" class="trend-item">
+            <div v-else class="trend-list">
+              <div v-for="item in trendNewestFirst" :key="item.day" class="trend-item">
               <div class="trend-day">{{ item.day }}</div>
               <div class="trend-bars">
                 <div class="trend-bar">
