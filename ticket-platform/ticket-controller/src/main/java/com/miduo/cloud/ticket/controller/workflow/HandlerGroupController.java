@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupCreateInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupListOutput;
+import com.miduo.cloud.ticket.entity.dto.workflow.HandlerGroupUpdateInput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
@@ -28,10 +29,10 @@ public class HandlerGroupController {
 
     /**
      * 处理组列表
-     * 接口编号：API000018
+     * 接口编号：API000203
      * 产品文档功能：4.5 分派与路由 - 处理组管理
      */
-    @Operation(summary = "处理组列表", description = "接口编号：API000018")
+    @Operation(summary = "处理组列表", description = "接口编号：API000203")
     @GetMapping("/list")
     public ApiResult<List<HandlerGroupListOutput>> listHandlerGroups() {
         List<HandlerGroupListOutput> result = handlerGroupAppService.listHandlerGroups();
@@ -40,14 +41,28 @@ public class HandlerGroupController {
 
     /**
      * 新增处理组
-     * 接口编号：API000019
+     * 接口编号：API000204
      * 产品文档功能：4.5 分派与路由 - 处理组创建
      */
     @OperationLog(moduleName = "处理组管理", operationItem = "新增处理组")
-    @Operation(summary = "新增处理组", description = "接口编号：API000019")
+    @Operation(summary = "新增处理组", description = "接口编号：API000204")
     @PostMapping("/create")
     public ApiResult<Long> createHandlerGroup(@Valid @RequestBody HandlerGroupCreateInput input) {
         Long groupId = handlerGroupAppService.createHandlerGroup(input);
         return ApiResult.success(groupId);
+    }
+
+    /**
+     * 更新处理组
+     * 接口编号：API000205
+     * 产品文档功能：4.5 分派与路由 - 处理组编辑
+     */
+    @OperationLog(moduleName = "处理组管理", operationItem = "修改处理组")
+    @Operation(summary = "更新处理组", description = "接口编号：API000205")
+    @PutMapping("/update/{id}")
+    public ApiResult<Void> updateHandlerGroup(@PathVariable Long id,
+                                              @Valid @RequestBody HandlerGroupUpdateInput input) {
+        handlerGroupAppService.updateHandlerGroup(id, input);
+        return ApiResult.success();
     }
 }
