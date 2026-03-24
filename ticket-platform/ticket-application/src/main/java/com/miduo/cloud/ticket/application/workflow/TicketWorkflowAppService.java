@@ -315,8 +315,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     }
 
     /**
-     * 同角色转派（处理人变更，状态不变）
-     * 支持：当前处理人、管理员（ADMIN/TICKET_ADMIN）均可操作
+     * 转派（处理人变更，状态不变）
+     * 任意已登录用户可操作；流转历史与时间链记录原因
      * 接口编号：API000016
      */
     @Transactional(rollbackFor = Exception.class)
@@ -333,28 +333,6 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         }
 
         String userRole = resolveUserRole(operatorId, ticket);
-
-        boolean pendingAssign = TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN;
-        boolean adminLike = "ADMIN".equals(userRole) || "TICKET_ADMIN".equals(userRole);
-        boolean handlerLike = "HANDLER".equals(userRole);
-
-        if (pendingAssign) {
-            boolean tester = "TESTER".equals(userRole);
-            if (!adminLike && !tester) {
-                throw BusinessException.of(ErrorCode.FORBIDDEN, "待分派阶段仅测试人员或管理员可转派处理对接人");
-            }
-            if (tester && !adminLike) {
-                Long curPrimary = ticket.getAssigneeId();
-                if (curPrimary != null && !curPrimary.equals(operatorId)) {
-                    throw BusinessException.of(ErrorCode.FORBIDDEN, "仅当前待分派对接人或管理员可转派");
-                }
-            }
-        } else {
-            boolean canTransfer = handlerLike || adminLike;
-            if (!canTransfer) {
-                throw BusinessException.of(ErrorCode.FORBIDDEN, "只有处理人或管理员才能执行转派操作");
-            }
-        }
 
         Long previousAssigneeId = ticket.getAssigneeId();
         ticketAssigneeSyncService.syncSingleAssigneeRow(ticket, input.getTargetUserId());
@@ -533,7 +511,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             return "TESTER";
         }
 
-        return "SUBMITTER";
+        // 其他已登录用户按处理人角色参与流转（环节对全员开放时引擎侧 HANDLER 可匹配）
+        return "HANDLER";
     }
 
     /**

@@ -5,18 +5,15 @@ import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.SeverityLevel;
-import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Locale;
 
 /**
  * 缺陷工单扩展信息应用服务
@@ -24,51 +21,22 @@ import java.util.stream.Collectors;
 @Service
 public class TicketBugApplicationService extends BaseApplicationService {
 
-    private static final Set<String> CUSTOMER_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            TicketStatus.PENDING_ASSIGN.getCode(),
-            TicketStatus.PENDING_TEST_ACCEPT.getCode(),
-            TicketStatus.INVESTIGATING.getCode(),
-            TicketStatus.PENDING_CS_CONFIRM.getCode()
-    ));
-
-    private static final Set<String> TEST_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            TicketStatus.PENDING_ASSIGN.getCode(),
-            TicketStatus.PENDING_TEST_ACCEPT.getCode(),
-            TicketStatus.TESTING.getCode(),
-            TicketStatus.INVESTIGATING.getCode(),
-            TicketStatus.PENDING_VERIFY.getCode()
-    ));
-
-    private static final Set<String> DEV_EDIT_STATUSES = new HashSet<>(Arrays.asList(
-            TicketStatus.PENDING_DEV_ACCEPT.getCode(),
-            TicketStatus.DEVELOPING.getCode(),
-            TicketStatus.PROCESSING.getCode(),
-            TicketStatus.TEMP_RESOLVED.getCode(),
-            TicketStatus.PENDING_VERIFY.getCode()
-    ));
-
     private final TicketMapper ticketMapper;
     private final TicketBugInfoMapper bugInfoMapper;
     private final TicketBugTestInfoMapper bugTestInfoMapper;
     private final TicketBugDevInfoMapper bugDevInfoMapper;
-    private final SysUserMapper sysUserMapper;
     private final TicketChangeHistoryRecorder changeHistoryRecorder;
-    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
     public TicketBugApplicationService(TicketMapper ticketMapper,
                                        TicketBugInfoMapper bugInfoMapper,
                                        TicketBugTestInfoMapper bugTestInfoMapper,
                                        TicketBugDevInfoMapper bugDevInfoMapper,
-                                       SysUserMapper sysUserMapper,
-                                       TicketChangeHistoryRecorder changeHistoryRecorder,
-                                       TicketAssigneeSyncService ticketAssigneeSyncService) {
+                                       TicketChangeHistoryRecorder changeHistoryRecorder) {
         this.ticketMapper = ticketMapper;
         this.bugInfoMapper = bugInfoMapper;
         this.bugTestInfoMapper = bugTestInfoMapper;
         this.bugDevInfoMapper = bugDevInfoMapper;
-        this.sysUserMapper = sysUserMapper;
         this.changeHistoryRecorder = changeHistoryRecorder;
-        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     /**
@@ -96,9 +64,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateCustomerInfo(Long ticketId, TicketBugCustomerInfoInput input, Long currentUserId) {
-        TicketPO ticket = requireTicket(ticketId);
-        List<String> roleCodes = getRoleCodes(currentUserId);
-        assertCanEditCustomerInfo(ticket, currentUserId, roleCodes);
+        requireTicket(ticketId);
 
         TicketBugInfoPO infoPO = getOrCreateBugInfo(ticketId);
         List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, input);
@@ -106,7 +72,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         applyCustomerInfoChanges(infoPO, input);
         saveBugInfo(infoPO);
 
-        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
+        changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     /**
@@ -114,9 +80,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateTestInfo(Long ticketId, TicketBugTestInfoInput input, Long currentUserId) {
-        TicketPO ticket = requireTicket(ticketId);
-        List<String> roleCodes = getRoleCodes(currentUserId);
-        assertCanEditTestInfo(ticket, currentUserId, roleCodes);
+        requireTicket(ticketId);
 
         TicketBugTestInfoInput normalizedInput = normalizeTestInfoInput(input);
         TicketBugTestInfoPO testInfoPO = getOrCreateBugTestInfo(ticketId);
@@ -125,7 +89,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         applyTestInfoChanges(testInfoPO, normalizedInput);
         saveBugTestInfo(testInfoPO);
 
-        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
+        changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     /**
@@ -133,9 +97,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateDevInfo(Long ticketId, TicketBugDevInfoInput input, Long currentUserId) {
-        TicketPO ticket = requireTicket(ticketId);
-        List<String> roleCodes = getRoleCodes(currentUserId);
-        assertCanEditDevInfo(ticket, currentUserId, roleCodes);
+        requireTicket(ticketId);
 
         TicketBugDevInfoPO devInfoPO = getOrCreateBugDevInfo(ticketId);
         List<BugFieldChangeItem> changes = changeHistoryRecorder.detectDevInfoChanges(devInfoPO, input);
@@ -143,7 +105,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         applyDevInfoChanges(devInfoPO, input);
         saveBugDevInfo(devInfoPO);
 
-        changeHistoryRecorder.record(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
+        changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
 
     public TicketBugCustomerInfoOutput getCustomerInfo(Long ticketId) {
@@ -244,127 +206,6 @@ public class TicketBugApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
         return ticket;
-    }
-
-    private List<String> getRoleCodes(Long userId) {
-        if (userId == null) {
-            return Collections.emptyList();
-        }
-        List<String> roleCodes = sysUserMapper.selectRoleCodesByUserId(userId);
-        if (roleCodes == null || roleCodes.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return roleCodes.stream()
-                .filter(Objects::nonNull)
-                .map(code -> code.trim().toUpperCase(Locale.ROOT))
-                .collect(Collectors.toList());
-    }
-
-    private void assertCanEditCustomerInfo(TicketPO ticket, Long currentUserId, List<String> roleCodes) {
-        String status = normalizeStatus(ticket.getStatus());
-        if (isAdmin(roleCodes)) {
-            return;
-        }
-        if (!CUSTOMER_EDIT_STATUSES.contains(status)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "当前状态不允许编辑客服信息");
-        }
-        if (hasAnyRole(roleCodes, "CUSTOMER_SERVICE", "SUBMITTER")) {
-            return;
-        }
-        if (currentUserId != null && currentUserId.equals(ticket.getCreatorId())) {
-            return;
-        }
-        throw BusinessException.of(ErrorCode.FORBIDDEN, "无权限编辑客服信息");
-    }
-
-    private void assertCanEditTestInfo(TicketPO ticket, Long currentUserId, List<String> roleCodes) {
-        String status = normalizeStatus(ticket.getStatus());
-        if (isAdmin(roleCodes)) {
-            return;
-        }
-        if (!TEST_EDIT_STATUSES.contains(status)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "当前状态不允许编辑测试信息");
-        }
-        if (TicketStatus.PENDING_ASSIGN.getCode().equals(status)
-                && currentUserId != null
-                && ticket.getId() != null
-                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)) {
-            return;
-        }
-        if (hasAnyRole(roleCodes, "TESTER")) {
-            return;
-        }
-        if (hasAnyRole(roleCodes, "HANDLER") && isTestStage(status)) {
-            return;
-        }
-        if (currentUserId != null && ticket.getId() != null
-                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)
-                && isTestStage(status)) {
-            return;
-        }
-        throw BusinessException.of(ErrorCode.FORBIDDEN, "无权限编辑测试信息");
-    }
-
-    private void assertCanEditDevInfo(TicketPO ticket, Long currentUserId, List<String> roleCodes) {
-        String status = normalizeStatus(ticket.getStatus());
-        if (isAdmin(roleCodes)) {
-            return;
-        }
-        if (!DEV_EDIT_STATUSES.contains(status)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "当前状态不允许编辑开发信息");
-        }
-        if (hasAnyRole(roleCodes, "DEVELOPER")) {
-            return;
-        }
-        if (hasAnyRole(roleCodes, "HANDLER") && isDevStage(status)) {
-            return;
-        }
-        if (currentUserId != null && ticket.getId() != null
-                && ticketAssigneeSyncService.isAmongAssignees(ticket.getId(), currentUserId)
-                && isDevStage(status)) {
-            return;
-        }
-        throw BusinessException.of(ErrorCode.FORBIDDEN, "无权限编辑开发信息");
-    }
-
-    private boolean isAdmin(List<String> roleCodes) {
-        return hasAnyRole(roleCodes, "ADMIN", "TICKET_ADMIN");
-    }
-
-    private boolean hasAnyRole(List<String> roleCodes, String... targets) {
-        if (roleCodes == null || roleCodes.isEmpty() || targets == null || targets.length == 0) {
-            return false;
-        }
-        Set<String> targetSet = new HashSet<>(Arrays.asList(targets));
-        for (String roleCode : roleCodes) {
-            if (targetSet.contains(roleCode)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isTestStage(String status) {
-        return TicketStatus.PENDING_TEST_ACCEPT.getCode().equals(status)
-                || TicketStatus.TESTING.getCode().equals(status)
-                || TicketStatus.INVESTIGATING.getCode().equals(status)
-                || TicketStatus.PENDING_VERIFY.getCode().equals(status);
-    }
-
-    private boolean isDevStage(String status) {
-        return TicketStatus.PENDING_DEV_ACCEPT.getCode().equals(status)
-                || TicketStatus.DEVELOPING.getCode().equals(status)
-                || TicketStatus.PROCESSING.getCode().equals(status)
-                || TicketStatus.TEMP_RESOLVED.getCode().equals(status)
-                || TicketStatus.PENDING_VERIFY.getCode().equals(status);
-    }
-
-    private String normalizeStatus(String status) {
-        TicketStatus normalized = TicketStatus.fromCode(status);
-        if (normalized != null) {
-            return normalized.getCode();
-        }
-        return status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeSeverityLevel(String source) {

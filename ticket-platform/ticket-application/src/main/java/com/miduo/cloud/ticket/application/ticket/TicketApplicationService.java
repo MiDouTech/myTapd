@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.miduo.cloud.ticket.application.workflow.DispatchAppService;
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
@@ -102,6 +103,9 @@ public class TicketApplicationService {
     @Resource
     private TicketBugInfoMapper ticketBugInfoMapper;
 
+    @Resource
+    private DispatchAppService dispatchAppService;
+
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
         TicketCategoryPO category = categoryMapper.selectById(input.getCategoryId());
@@ -170,6 +174,16 @@ public class TicketApplicationService {
             } catch (Exception e) {
                 log.warn("SLA计时器启动失败，不影响工单创建: ticketId={}, policyId={}, error={}",
                         ticket.getId(), category.getSlaPolicyId(), e.getMessage());
+            }
+        }
+
+        // 未指定处理人时：按分类分派规则自动分派（分类默认处理组为组内轮询）
+        if (ticket.getAssigneeId() == null && input.getAssigneeId() == null) {
+            try {
+                dispatchAppService.autoDispatch(ticket.getId());
+            } catch (Exception e) {
+                log.warn("工单创建后自动分派失败，不影响创建: ticketId={}, error={}",
+                        ticket.getId(), e.getMessage());
             }
         }
 

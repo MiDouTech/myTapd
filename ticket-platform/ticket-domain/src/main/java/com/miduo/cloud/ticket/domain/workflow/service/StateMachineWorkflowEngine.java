@@ -147,10 +147,12 @@ public class StateMachineWorkflowEngine implements WorkflowEngine {
         return code.trim().toLowerCase();
     }
 
+    /**
+     * 流转角色校验：工单各环节对任意已登录操作人开放，具体权限由接口层认证与业务规则保证；
+     * allowedRoles 仅作展示/配置保留，不再阻断流转。
+     */
+    @SuppressWarnings("unused")
     private boolean isRoleAllowed(WorkflowTransition transition, String userRole) {
-        if (transition.getAllowedRoles() == null || transition.getAllowedRoles().isEmpty()) {
-            return true;
-        }
-        return transition.getAllowedRoles().contains(userRole);
+        return true;
     }
 }
