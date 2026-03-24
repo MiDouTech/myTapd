@@ -529,7 +529,7 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="creatorName" label="创建人" width="120" />
-          <el-table-column prop="assigneeName" label="处理人" width="120" />
+          <el-table-column prop="assigneeName" label="处理人" min-width="160" :show-overflow-tooltip="true" />
           <el-table-column prop="createTime" label="创建时间" width="180" sortable="custom">
             <template #default="{ row }">
               {{ formatDateTime(row.createTime) }}

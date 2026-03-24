@@ -33,6 +33,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -102,6 +104,9 @@ public class TicketApplicationService {
 
     @Resource
     private TicketBugInfoMapper ticketBugInfoMapper;
+
+    @Resource
+    private TicketAssigneeMapper ticketAssigneeMapper;
 
     @Resource
     private DispatchAppService dispatchAppService;
@@ -177,13 +182,28 @@ public class TicketApplicationService {
             }
         }
 
-        // 未指定处理人时：按分类分派规则自动分派（分类默认处理组为组内轮询）
+        // 未指定处理人时：提交后再自动分派。autoDispatch 使用 REQUIRES_NEW，若在本事务内调用则读不到未提交的工单行，企微建单等场景会静默跳过。
         if (ticket.getAssigneeId() == null && input.getAssigneeId() == null) {
-            try {
-                dispatchAppService.autoDispatch(ticket.getId());
-            } catch (Exception e) {
-                log.warn("工单创建后自动分派失败，不影响创建: ticketId={}, error={}",
-                        ticket.getId(), e.getMessage());
+            final Long tid = ticket.getId();
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            dispatchAppService.autoDispatch(tid);
+                        } catch (Exception e) {
+                            log.warn("工单创建提交后自动分派失败，不影响创建: ticketId={}, error={}",
+                                    tid, e.getMessage());
+                        }
+                    }
+                });
+            } else {
+                try {
+                    dispatchAppService.autoDispatch(tid);
+                } catch (Exception e) {
+                    log.warn("工单创建后自动分派失败，不影响创建: ticketId={}, error={}",
+                            tid, e.getMessage());
+                }
             }
         }
 
@@ -216,12 +236,34 @@ public class TicketApplicationService {
             return PageOutput.empty(input.getPageNum(), input.getPageSize());
         }
 
+        List<Long> ticketIds = records.stream()
+                .map(TicketPO::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        Map<Long, List<Long>> assigneeUserIdsByTicketId = loadAssigneeUserIdsByTicketId(ticketIds);
+
         Set<Long> userIds = new HashSet<>();
         Set<Long> categoryIds = new HashSet<>();
         for (TicketPO t : records) {
-            if (t.getCreatorId() != null) userIds.add(t.getCreatorId());
-            if (t.getAssigneeId() != null) userIds.add(t.getAssigneeId());
-            if (t.getCategoryId() != null) categoryIds.add(t.getCategoryId());
+            if (t.getCreatorId() != null) {
+                userIds.add(t.getCreatorId());
+            }
+            if (t.getAssigneeId() != null) {
+                userIds.add(t.getAssigneeId());
+            }
+            if (t.getCategoryId() != null) {
+                categoryIds.add(t.getCategoryId());
+            }
+        }
+        for (List<Long> assigneeList : assigneeUserIdsByTicketId.values()) {
+            if (assigneeList != null) {
+                for (Long uid : assigneeList) {
+                    if (uid != null) {
+                        userIds.add(uid);
+                    }
+                }
+            }
         }
 
         Map<Long, String> userNameMap = Collections.emptyMap();
@@ -237,10 +279,8 @@ public class TicketApplicationService {
                     .collect(Collectors.toMap(TicketCategoryPO::getId, TicketCategoryPO::getName));
         }
 
-        List<Long> ticketIds = records.stream()
-                .map(TicketPO::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        Map<Long, String> multiAssigneeNameByTicketId =
+                buildMultiAssigneeDisplayNames(assigneeUserIdsByTicketId, userNameMap);
         Map<Long, String> companyNameByTicketId = Collections.emptyMap();
         if (!ticketIds.isEmpty()) {
             List<TicketBugInfoPO> bugInfos = ticketBugInfoMapper.selectList(
@@ -255,8 +295,10 @@ public class TicketApplicationService {
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalCategoryNameMap = categoryNameMap;
         Map<Long, String> finalCompanyNameMap = companyNameByTicketId;
+        Map<Long, String> finalMultiAssigneeNameMap = multiAssigneeNameByTicketId;
         List<TicketListOutput> outputs = records.stream()
-                .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap))
+                .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap,
+                        finalMultiAssigneeNameMap))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -770,10 +812,65 @@ public class TicketApplicationService {
         return output;
     }
 
+    /**
+     * 批量加载工单处理人明细（多人时列表展示用），按 sort_order、id 排序；无明细表数据时返回空映射。
+     */
+    private Map<Long, List<Long>> loadAssigneeUserIdsByTicketId(List<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        LambdaQueryWrapper<TicketAssigneePO> q = new LambdaQueryWrapper<>();
+        q.in(TicketAssigneePO::getTicketId, ticketIds)
+                .orderByAsc(TicketAssigneePO::getSortOrder)
+                .orderByAsc(TicketAssigneePO::getId);
+        List<TicketAssigneePO> rows = ticketAssigneeMapper.selectList(q);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, List<Long>> map = new LinkedHashMap<>();
+        for (TicketAssigneePO row : rows) {
+            if (row == null || row.getTicketId() == null || row.getUserId() == null) {
+                continue;
+            }
+            map.computeIfAbsent(row.getTicketId(), k -> new ArrayList<>()).add(row.getUserId());
+        }
+        return map;
+    }
+
+    private static Map<Long, String> buildMultiAssigneeDisplayNames(
+            Map<Long, List<Long>> assigneeUserIdsByTicketId,
+            Map<Long, String> userNameMap) {
+        if (assigneeUserIdsByTicketId == null || assigneeUserIdsByTicketId.isEmpty()
+                || userNameMap == null || userNameMap.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> out = new HashMap<>();
+        for (Map.Entry<Long, List<Long>> e : assigneeUserIdsByTicketId.entrySet()) {
+            if (e.getKey() == null || e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            List<String> names = new ArrayList<>();
+            for (Long uid : e.getValue()) {
+                if (uid == null) {
+                    continue;
+                }
+                String name = userNameMap.get(uid);
+                if (name != null && !name.trim().isEmpty()) {
+                    names.add(name.trim());
+                }
+            }
+            if (!names.isEmpty()) {
+                out.put(e.getKey(), String.join("、", names));
+            }
+        }
+        return out;
+    }
+
     private TicketListOutput convertToListOutput(TicketPO po,
                                                   Map<Long, String> userNameMap,
                                                   Map<Long, String> categoryNameMap,
-                                                  Map<Long, String> companyNameByTicketId) {
+                                                  Map<Long, String> companyNameByTicketId,
+                                                  Map<Long, String> multiAssigneeNameByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
         output.setTicketNo(po.getTicketNo());
@@ -788,7 +885,13 @@ public class TicketApplicationService {
         output.setCreatorId(po.getCreatorId());
         output.setCreatorName(userNameMap.get(po.getCreatorId()));
         output.setAssigneeId(po.getAssigneeId());
-        output.setAssigneeName(userNameMap.get(po.getAssigneeId()));
+        String multiAssignee = po.getId() != null && multiAssigneeNameByTicketId != null
+                ? multiAssigneeNameByTicketId.get(po.getId()) : null;
+        if (multiAssignee != null && !multiAssignee.isEmpty()) {
+            output.setAssigneeName(multiAssignee);
+        } else {
+            output.setAssigneeName(userNameMap.get(po.getAssigneeId()));
+        }
         output.setSource(po.getSource());
         output.setExpectedTime(po.getExpectedTime());
         output.setCreateTime(po.getCreateTime());
