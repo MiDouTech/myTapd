@@ -34,6 +34,8 @@ public class OperationLogAspect {
 
     private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
     private static final int ERROR_STACK_MAX_LENGTH = 500;
+    /** 与 sys_operation_log.error_message varchar(512) 一致，避免异步写日志再失败 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 512;
 
     private final OperationLogApplicationService operationLogService;
     private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(4);
@@ -55,7 +57,7 @@ public class OperationLogAspect {
         } catch (Throwable t) {
             throwable = t;
             logPO.setExecuteResult(ExecuteResultEnum.FAILURE.getCode());
-            logPO.setErrorMessage(t.getMessage());
+            logPO.setErrorMessage(truncateForDb(t.getMessage(), ERROR_MESSAGE_MAX_LENGTH));
             logPO.setErrorStack(buildErrorStack(t));
         } finally {
             long costMillis = System.currentTimeMillis() - startTime;
@@ -148,6 +150,16 @@ public class OperationLogAspect {
             log.warn("操作日志序列化请求参数失败", e);
             return null;
         }
+    }
+
+    private static String truncateForDb(String text, int maxLen) {
+        if (text == null) {
+            return null;
+        }
+        if (text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, maxLen);
     }
 
     private String buildErrorStack(Throwable t) {
