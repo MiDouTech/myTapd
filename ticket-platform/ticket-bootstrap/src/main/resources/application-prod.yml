@@ -1,21 +1,16 @@
 spring:
   datasource:
-    type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://192.168.1.100:3306/ticket_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: your_mysql_password
-    druid:
-      initial-size: 10
-      min-idle: 10
-      max-active: 50
-      max-wait: 60000
-      time-between-eviction-runs-millis: 60000
-      min-evictable-idle-time-millis: 300000
-      validation-query: SELECT 1
-      test-while-idle: true
-      test-on-borrow: false
-      test-on-return: false
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 50
+      connection-timeout: 60000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-test-query: SELECT 1
 
   flyway:
     enabled: true

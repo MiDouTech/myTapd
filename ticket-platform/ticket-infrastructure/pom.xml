@@ -42,12 +42,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Druid 连接池 (Spring Boot 2.x) -->
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>druid-spring-boot-starter</artifactId>
-        </dependency>
-
         <!-- Redis -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
