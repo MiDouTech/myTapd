@@ -2,16 +2,34 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { Edit } from '@element-plus/icons-vue'
+import { ArrowRight, Document as DocumentOutlined, Edit } from '@element-plus/icons-vue'
 
 import { getCategoryTree } from '@/api/category'
-import { getTicketDetail, getTicketPage } from '@/api/ticket'
+import {
+  getTicketDetail,
+  getTicketNodeDuration,
+  getTicketPage,
+  getTicketTimeTrack,
+} from '@/api/ticket'
+import { getFlowHistory } from '@/api/workflow'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import BugChangeHistory from '@/views/ticket/components/bug/BugChangeHistory.vue'
+import BugDetailInfoPanel from '@/views/ticket/components/bug/BugDetailInfoPanel.vue'
+import TicketTimeTrackPanel from '@/views/ticket/components/TicketTimeTrackPanel.vue'
 import type { CategoryTreeOutput } from '@/types/category'
-import type { TicketDetailOutput, TicketListOutput, TicketPageInput, TicketView } from '@/types/ticket'
-import { formatDateTime } from '@/utils/formatter'
+import type {
+  BugChangeHistoryOutput,
+  TicketDetailOutput,
+  TicketListOutput,
+  TicketNodeDurationItem,
+  TicketPageInput,
+  TicketTimeTrackItem,
+  TicketView,
+} from '@/types/ticket'
+import type { TicketFlowRecordOutput } from '@/types/workflow'
+import { formatDateTime, formatDurationSec, formatFileSize } from '@/utils/formatter'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +43,51 @@ const previewDrawerVisible = ref(false)
 const previewLoading = ref(false)
 const previewDetail = ref<TicketDetailOutput | null>(null)
 const previewTicketId = ref<number | null>(null)
+
+const previewTimeTrackItems = ref<TicketTimeTrackItem[]>([])
+const previewTimeTrackStandalone = ref<BugChangeHistoryOutput[]>([])
+const previewNodeDurationItems = ref<TicketNodeDurationItem[]>([])
+const previewFlowHistory = ref<TicketFlowRecordOutput[]>([])
+
+const previewChangeHistoryCount = ref(0)
+const previewActiveMainTab = ref('detail')
+const previewActiveBugTab = ref('customer')
+
+const IMPACT_SCOPE_LABEL_MAP: Record<string, string> = {
+  SINGLE: '单一商户',
+  PARTIAL: '部分商户',
+  ALL: '全部商户',
+}
+
+const SEVERITY_LABEL_MAP: Record<string, string> = {
+  P0: '致命',
+  P1: '严重',
+  P2: '一般',
+  P3: '轻微',
+  P4: '建议',
+}
+
+const STATUS_LABEL_MAP: Record<string, string> = {
+  pending: '待处理',
+  pending_assign: '待分派',
+  pending_accept: '待受理',
+  processing: '处理中',
+  suspended: '已挂起',
+  pending_verify: '待验收',
+  completed: '已完成',
+  closed: '已关闭',
+  pending_test_accept: '待测试受理',
+  testing: '测试中',
+  investigating: '排查中',
+  pending_dev_accept: '待开发受理',
+  developing: '开发中',
+  temp_resolved: '临时解决',
+  pending_cs_confirm: '待客服确认',
+  submitted: '已提交',
+  dept_approval: '部门审批',
+  executing: '执行中',
+  rejected: '已驳回',
+}
 
 const query = reactive<TicketPageInput>({
   pageNum: 1,
@@ -160,13 +223,127 @@ function reproduceEnvLabel(code?: string): string {
   return code || '-'
 }
 
+function normalizeStatus(status?: string): string {
+  if (!status) {
+    return ''
+  }
+  const code = status.trim().toLowerCase()
+  if (code === 'pending_dispatch') return 'pending_assign'
+  if (code === 'pending_test') return 'pending_test_accept'
+  if (code === 'pending_dev') return 'pending_dev_accept'
+  return code
+}
+
+function getStatusLabel(status?: string): string {
+  if (!status) return '-'
+  const normalized = normalizeStatus(status)
+  return STATUS_LABEL_MAP[normalized] || status
+}
+
+function impactScopeLabel(code?: string): string {
+  if (!code) return '-'
+  return IMPACT_SCOPE_LABEL_MAP[code.toUpperCase()] || code
+}
+
+function severityLabel(code?: string): string {
+  if (!code) return '-'
+  const u = code.trim().toUpperCase()
+  return SEVERITY_LABEL_MAP[u] || code
+}
+
+function isImageFile(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.startsWith('image/')
+}
+
+function uniqStringList(values: string[]): string[] {
+  return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
+}
+
+/** 问题截图字段可能为逗号/分号分隔的 URL 列表 */
+function problemScreenshotUrls(raw?: string): string[] {
+  if (!raw) {
+    return []
+  }
+  return uniqStringList(
+    raw
+      .split(/[,，;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )
+}
+
+async function refreshPreviewDetail(): Promise<void> {
+  const id = previewDetail.value?.id
+  if (id == null) {
+    return
+  }
+  previewLoading.value = true
+  try {
+    previewDetail.value = await getTicketDetail(id)
+    await loadPreviewExtra(id)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function resetPreviewExtra(): void {
+  previewTimeTrackItems.value = []
+  previewTimeTrackStandalone.value = []
+  previewNodeDurationItems.value = []
+  previewFlowHistory.value = []
+  previewChangeHistoryCount.value = 0
+  previewActiveMainTab.value = 'detail'
+  previewActiveBugTab.value = 'customer'
+}
+
+async function loadPreviewExtra(ticketId: number): Promise<void> {
+  try {
+    const [trackOutput, nodeOutput, flow] = await Promise.all([
+      getTicketTimeTrack(ticketId),
+      getTicketNodeDuration(ticketId),
+      getFlowHistory(ticketId),
+    ])
+    previewTimeTrackItems.value = trackOutput.tracks || []
+    previewTimeTrackStandalone.value = trackOutput.standaloneFieldChanges || []
+    previewNodeDurationItems.value = nodeOutput.nodes || []
+    previewFlowHistory.value = flow || []
+  } catch {
+    previewTimeTrackItems.value = []
+    previewTimeTrackStandalone.value = []
+    previewNodeDurationItems.value = []
+    previewFlowHistory.value = []
+  }
+}
+
+const previewCustomFieldEntries = computed(() => {
+  if (!previewDetail.value?.customFields) {
+    return []
+  }
+  return Object.entries(previewDetail.value.customFields).map(([key, value]) => ({ key, value }))
+})
+
+const previewProblemScreenshotUrls = computed(() =>
+  problemScreenshotUrls(previewDetail.value?.bugCustomerInfo?.problemScreenshot),
+)
+
+const previewProblemScreenshotImageUrls = computed(() =>
+  previewProblemScreenshotUrls.value.filter((u) => u.startsWith('http')),
+)
+
+function openBugReportDetail(reportId: number): void {
+  router.push(`/bug-report/detail/${reportId}`)
+}
+
 async function openTitlePreview(row: TicketListOutput): Promise<void> {
   previewTicketId.value = row.id
   previewDetail.value = null
+  resetPreviewExtra()
   previewDrawerVisible.value = true
   previewLoading.value = true
   try {
     previewDetail.value = await getTicketDetail(row.id)
+    await loadPreviewExtra(row.id)
   } finally {
     previewLoading.value = false
   }
@@ -331,9 +508,11 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="220" :show-overflow-tooltip="true">
             <template #default="{ row }">
-              <el-button type="primary" link class="cell-link title-link" @click="openTitlePreview(row)">
-                {{ row.title }}
-              </el-button>
+              <el-tooltip :content="row.title" placement="top" :disabled="!row.title">
+                <el-button type="primary" link class="cell-link title-cell-btn" @click="openTitlePreview(row)">
+                  <span class="title-cell-text">{{ row.title }}</span>
+                </el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column prop="categoryName" label="分类" min-width="140" />
@@ -379,7 +558,7 @@ onMounted(() => {
     <el-drawer
       v-model="previewDrawerVisible"
       direction="rtl"
-      size="min(720px, 92vw)"
+      size="min(960px, 96vw)"
       destroy-on-close
       class="ticket-preview-drawer"
       :show-close="true"
@@ -393,7 +572,7 @@ onMounted(() => {
               </el-tag>
               <span class="preview-ticket-no">{{ previewDetail?.ticketNo || '—' }}</span>
             </div>
-            <h3 class="preview-title">{{ previewDetail?.title || '加载中…' }}</h3>
+            <h3 class="preview-title" :title="previewDetail?.title">{{ previewDetail?.title || '加载中…' }}</h3>
           </div>
           <el-button type="primary" :disabled="!previewDetail" @click="goPreviewEdit">
             <el-icon class="preview-edit-icon"><Edit /></el-icon>
@@ -412,9 +591,9 @@ onMounted(() => {
                 <div class="preview-html" v-html="previewDetail.description" />
               </div>
 
-              <el-tabs class="preview-tabs">
+              <el-tabs v-model="previewActiveMainTab" class="preview-tabs">
                 <el-tab-pane label="详细信息" name="detail">
-                  <el-tabs class="preview-inner-tabs">
+                  <el-tabs v-model="previewActiveBugTab" class="preview-inner-tabs">
                     <el-tab-pane label="客服信息" name="customer">
                       <el-descriptions :column="1" border size="small" class="preview-desc">
                         <el-descriptions-item label="商户编号">
@@ -436,7 +615,26 @@ onMounted(() => {
                           <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.expectedResult || '-' }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="问题截图">
-                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.problemScreenshot || '-' }}</span>
+                          <div v-if="previewProblemScreenshotUrls.length" class="preview-screenshot-block">
+                            <div v-for="url in previewProblemScreenshotUrls" :key="url" class="preview-screenshot-row">
+                              <a
+                                v-if="url.startsWith('http')"
+                                :href="url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="preview-screenshot-link"
+                              >{{ url }}</a>
+                              <span v-else class="preview-plain">{{ url }}</span>
+                              <el-image
+                                v-if="url.startsWith('http')"
+                                :src="url"
+                                :preview-src-list="previewProblemScreenshotImageUrls"
+                                fit="cover"
+                                class="preview-screenshot-thumb"
+                              />
+                            </div>
+                          </div>
+                          <span v-else>-</span>
                         </el-descriptions-item>
                       </el-descriptions>
                     </el-tab-pane>
@@ -463,74 +661,247 @@ onMounted(() => {
                           <span v-else>-</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="影响范围">
-                          {{ previewDetail.bugTestInfo?.impactScope || '-' }}
+                          {{ impactScopeLabel(previewDetail.bugTestInfo?.impactScope) }}
                         </el-descriptions-item>
-                        <el-descriptions-item label="严重级别">
-                          {{ previewDetail.bugTestInfo?.severityLevel || '-' }}
+                        <el-descriptions-item label="缺陷等级">
+                          {{ severityLabel(previewDetail.bugTestInfo?.severityLevel) }}
                         </el-descriptions-item>
-                        <el-descriptions-item label="模块名称">
+                        <el-descriptions-item label="所属模块">
                           {{ previewDetail.bugTestInfo?.moduleName || '-' }}
                         </el-descriptions-item>
                         <el-descriptions-item label="测试备注">
-                          <span class="preview-plain">{{ previewDetail.bugTestInfo?.testRemark || '-' }}</span>
+                          <div
+                            v-if="previewDetail.bugTestInfo?.testRemark"
+                            class="preview-html preview-html--compact"
+                            v-html="previewDetail.bugTestInfo.testRemark"
+                          />
+                          <span v-else>-</span>
                         </el-descriptions-item>
                       </el-descriptions>
                       <!-- eslint-enable vue/no-v-html -->
                     </el-tab-pane>
+                    <!-- eslint-disable vue/no-v-html — 与工单详情页一致，开发备注为富文本 -->
                     <el-tab-pane label="开发信息" name="dev">
                       <el-descriptions :column="1" border size="small" class="preview-desc">
-                        <el-descriptions-item label="根因分析">
+                        <el-descriptions-item label="缺陷原因">
                           <span class="preview-plain">{{ previewDetail.bugDevInfo?.rootCause || '-' }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="修复方案">
                           <span class="preview-plain">{{ previewDetail.bugDevInfo?.fixSolution || '-' }}</span>
                         </el-descriptions-item>
-                        <el-descriptions-item label="Git 分支">
+                        <el-descriptions-item label="关联分支">
                           {{ previewDetail.bugDevInfo?.gitBranch || '-' }}
                         </el-descriptions-item>
                         <el-descriptions-item label="影响评估">
                           <span class="preview-plain">{{ previewDetail.bugDevInfo?.impactAssessment || '-' }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="开发备注">
-                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.devRemark || '-' }}</span>
+                          <div
+                            v-if="previewDetail.bugDevInfo?.devRemark"
+                            class="preview-html preview-html--compact"
+                            v-html="previewDetail.bugDevInfo.devRemark"
+                          />
+                          <span v-else>-</span>
                         </el-descriptions-item>
                       </el-descriptions>
                     </el-tab-pane>
+                    <!-- eslint-enable vue/no-v-html -->
+                    <el-tab-pane label="时间追踪" name="track">
+                      <TicketTimeTrackPanel
+                        :tracks="previewTimeTrackItems"
+                        :standalone-field-changes="previewTimeTrackStandalone"
+                        :node-duration-items="previewNodeDurationItems"
+                        :status-label-fn="getStatusLabel"
+                        :format-duration="formatDurationSec"
+                      />
+                    </el-tab-pane>
                   </el-tabs>
+                </el-tab-pane>
+                <el-tab-pane :label="`变更历史(${previewChangeHistoryCount})`" name="history">
+                  <BugChangeHistory
+                    v-if="previewDetail.id"
+                    :ticket-id="previewDetail.id"
+                    @count-update="previewChangeHistoryCount = $event"
+                  />
+                </el-tab-pane>
+                <el-tab-pane label="流转历史" name="flow-history">
+                  <div class="preview-flow-history">
+                    <el-empty v-if="!previewFlowHistory.length" description="暂无流转记录" />
+                    <el-timeline v-else>
+                      <el-timeline-item
+                        v-for="record in previewFlowHistory"
+                        :key="record.id"
+                        :timestamp="record.createTime"
+                        placement="top"
+                      >
+                        <div class="preview-flow-record">
+                          <div class="preview-flow-record-main">
+                            <el-tag size="small" :type="record.flowType === 'RETURN' ? 'warning' : 'primary'">
+                              {{ record.flowTypeLabel || record.flowType }}
+                            </el-tag>
+                            <span v-if="record.fromStatusName" class="preview-flow-status">{{ record.fromStatusName }}</span>
+                            <el-icon v-if="record.toStatus !== record.fromStatus" class="preview-flow-arrow">
+                              <ArrowRight />
+                            </el-icon>
+                            <span v-if="record.toStatus !== record.fromStatus" class="preview-flow-status preview-flow-status-to">
+                              {{ record.toStatusName }}
+                            </span>
+                            <el-divider direction="vertical" />
+                            <span class="preview-flow-operator">
+                              操作人：{{ record.operatorName || record.operatorId }}（{{ record.operatorRole }}）
+                            </span>
+                            <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
+                              <el-divider direction="vertical" />
+                              <span class="preview-flow-operator">
+                                处理人：{{ record.fromAssigneeName || '-' }} → {{ record.toAssigneeName }}
+                              </span>
+                            </template>
+                          </div>
+                          <div v-if="record.remark" class="preview-flow-remark">{{ record.remark }}</div>
+                        </div>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </div>
                 </el-tab-pane>
               </el-tabs>
             </div>
 
             <aside class="preview-side">
-              <div class="preview-side-title">基础信息</div>
-              <el-descriptions :column="1" border size="small" class="preview-desc preview-side-desc">
-                <el-descriptions-item label="分类">
-                  {{ previewDetail.categoryFullPath || previewDetail.categoryName || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="优先级">
-                  <el-tag v-if="previewDetail.priority" :type="getPriorityType(previewDetail.priority)" size="small">
-                    {{ previewDetail.priorityLabel || previewDetail.priority }}
-                  </el-tag>
-                  <span v-else>-</span>
-                </el-descriptions-item>
-                <el-descriptions-item label="创建人">
-                  {{ previewDetail.creatorName || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="处理人">
-                  {{ previewDetail.assigneeName || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="创建时间">
-                  {{ formatDateTime(previewDetail.createTime) || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="更新时间">
-                  {{ formatDateTime(previewDetail.updateTime) || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item v-if="previewDetail.expectedTime" label="预计结束">
-                  {{ formatDateTime(previewDetail.expectedTime) }}
-                </el-descriptions-item>
-              </el-descriptions>
+              <BugDetailInfoPanel
+                :detail="previewDetail"
+                :ticket-id="previewDetail.id"
+                @refresh="refreshPreviewDetail"
+              />
             </aside>
           </div>
+
+          <el-card v-if="previewCustomFieldEntries.length > 0" shadow="never" class="preview-section-card">
+            <template #header>
+              <span class="preview-section-title">自定义字段</span>
+            </template>
+            <el-table
+              :data="previewCustomFieldEntries"
+              :border="false"
+              :stripe="true"
+              :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+            >
+              <el-table-column prop="key" label="字段名" align="center" />
+              <el-table-column prop="value" label="字段值" align="center" />
+            </el-table>
+          </el-card>
+
+          <el-card shadow="never" class="preview-section-card">
+            <template #header>
+              <span class="preview-section-title">附件</span>
+            </template>
+            <EmptyState v-if="!previewDetail.attachments?.length" description="暂无附件" />
+            <div v-else class="preview-attachment-list">
+              <div
+                v-for="attachment in previewDetail.attachments"
+                :key="attachment.id"
+                class="preview-attachment-item"
+              >
+                <div class="preview-attachment-preview">
+                  <el-image
+                    v-if="isImageFile(attachment.fileType)"
+                    :src="attachment.filePath"
+                    :preview-src-list="previewDetail.attachments?.filter((a) => isImageFile(a.fileType)).map((a) => a.filePath || '')"
+                    fit="cover"
+                    class="preview-attachment-thumb"
+                    lazy
+                  />
+                  <el-icon v-else class="preview-attachment-icon"><DocumentOutlined /></el-icon>
+                </div>
+                <div class="preview-attachment-info">
+                  <div class="preview-attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+                  <div class="preview-attachment-meta">
+                    <el-tag v-if="attachment.source === 'WECOM_BOT'" type="success" size="small" effect="plain">企微</el-tag>
+                    <el-tag v-else type="info" size="small" effect="plain">Web</el-tag>
+                    <span>{{ formatFileSize(attachment.fileSize) }}</span>
+                    <span class="preview-meta-dot">·</span>
+                    <span>{{ attachment.uploadedByName || '-' }}</span>
+                    <span class="preview-meta-dot">·</span>
+                    <span>{{ formatDateTime(attachment.createTime) }}</span>
+                  </div>
+                </div>
+                <el-link
+                  v-if="isImageFile(attachment.fileType) && attachment.filePath"
+                  type="primary"
+                  :href="attachment.filePath"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >查看</el-link>
+              </div>
+            </div>
+          </el-card>
+
+          <el-card v-if="previewDetail.bugReports?.length" shadow="never" class="preview-section-card">
+            <template #header>
+              <span class="preview-section-title">关联Bug简报</span>
+            </template>
+            <el-table
+              :data="previewDetail.bugReports"
+              :border="false"
+              :stripe="true"
+              :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+            >
+              <el-table-column prop="reportNo" label="简报编号" min-width="160" align="center" />
+              <el-table-column label="状态" width="120" align="center">
+                <template #default="{ row }">
+                  {{ row.statusLabel || row.status || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="关联方式" width="100" align="center">
+                <template #default="{ row }">
+                  {{ row.isAutoCreated === 1 ? '自动' : '手动' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="关联时间" width="170" align="center">
+                <template #default="{ row }">
+                  {{ formatDateTime(row.createTime) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" align="center" fixed="right">
+                <template #default="{ row }">
+                  <el-button type="primary" link @click="openBugReportDetail(row.id)">查看简报</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
+          <el-card shadow="never" class="preview-section-card">
+            <template #header>
+              <div class="preview-section-header">
+                <span class="preview-section-title">评论与处理记录</span>
+                <span class="preview-section-count">{{ previewDetail.comments?.length || 0 }} 条</span>
+              </div>
+            </template>
+            <EmptyState v-if="!previewDetail.comments?.length" description="暂无评论" />
+            <div v-else class="preview-comment-list">
+              <div
+                v-for="comment in previewDetail.comments"
+                :key="comment.id"
+                class="preview-comment-item"
+                :class="{ 'preview-comment-operation': comment.type === 'OPERATION' }"
+              >
+                <el-avatar :size="32" class="preview-comment-avatar">
+                  {{ comment.userName?.charAt(0) || '?' }}
+                </el-avatar>
+                <div class="preview-comment-body">
+                  <div class="preview-comment-head">
+                    <span class="preview-comment-user">{{ comment.userName || '-' }}</span>
+                    <el-tag v-if="comment.type === 'OPERATION'" type="info" size="small" effect="plain">操作记录</el-tag>
+                    <span class="preview-comment-time">{{ formatDateTime(comment.createTime) }}</span>
+                  </div>
+                  <div v-if="comment.type === 'OPERATION'" class="preview-comment-text preview-comment-text-plain">
+                    {{ comment.content || '-' }}
+                  </div>
+                  <!-- eslint-disable-next-line vue/no-v-html — 与工单详情页一致，评论为富文本 -->
+                  <div v-else class="preview-comment-text" v-html="comment.content || '-'" />
+                </div>
+              </div>
+            </div>
+          </el-card>
         </template>
       </div>
     </el-drawer>
@@ -548,11 +919,21 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.title-link {
-  text-align: left;
-  white-space: normal;
+.title-cell-btn {
+  display: block;
+  max-width: 100%;
   height: auto;
+  min-height: 0;
+  padding: 0;
   line-height: 1.4;
+  text-align: left;
+}
+
+.title-cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview-drawer-header {
@@ -587,6 +968,12 @@ onMounted(() => {
   font-weight: 600;
   line-height: 1.4;
   color: var(--el-text-color-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .preview-edit-icon {
@@ -610,16 +997,19 @@ onMounted(() => {
 }
 
 .preview-side {
-  flex: 0 0 240px;
+  flex: 0 0 260px;
   position: sticky;
   top: 0;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  padding: 0 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
 }
 
-.preview-side-title {
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
+.preview-side :deep(.bug-detail-info-panel) {
+  padding: 4px 0 0;
 }
 
 .preview-block {
@@ -664,8 +1054,223 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-.preview-side-desc :deep(.el-descriptions__label) {
-  width: 88px;
+.preview-section-card {
+  margin-top: 16px;
+}
+
+.preview-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preview-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.preview-section-count {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.preview-screenshot-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.preview-screenshot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.preview-screenshot-link {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  word-break: break-all;
+  color: var(--el-color-primary);
+}
+
+.preview-screenshot-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.preview-flow-history {
+  padding: 8px 0;
+}
+
+.preview-flow-record {
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.preview-flow-record-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.preview-flow-status {
+  color: var(--el-text-color-regular);
+}
+
+.preview-flow-status-to {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.preview-flow-arrow {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+.preview-flow-operator {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.preview-flow-remark {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.preview-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.preview-attachment-item:last-child {
+  border-bottom: none;
+}
+
+.preview-attachment-preview {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--el-fill-color-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-attachment-thumb {
+  width: 56px;
+  height: 56px;
+}
+
+.preview-attachment-icon {
+  font-size: 28px;
+  color: var(--el-text-color-secondary);
+}
+
+.preview-attachment-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-attachment-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-attachment-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-meta-dot {
+  opacity: 0.5;
+}
+
+.preview-comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preview-comment-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.preview-comment-operation {
+  opacity: 0.95;
+}
+
+.preview-comment-avatar {
+  flex-shrink: 0;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.preview-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.preview-comment-user {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.preview-comment-time {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-left: auto;
+}
+
+.preview-comment-text {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.preview-comment-text-plain {
+  white-space: pre-wrap;
+  color: var(--el-text-color-regular);
 }
 
 @media (max-width: 900px) {
@@ -676,6 +1281,7 @@ onMounted(() => {
   .preview-side {
     flex: none;
     width: 100%;
+    max-height: none;
     position: static;
   }
 }
