@@ -119,22 +119,28 @@ public class DispatchAppService extends BaseApplicationService {
             case CATEGORY_DEFAULT:
                 dispatchByCategoryDefault(ticket, categoryId);
                 break;
-            case ROUND_ROBIN:
-                if (rule.getTargetGroupId() == null) {
-                    log.info("工单[{}]轮询分派规则未配置 target_group_id，回退分类默认分派", ticketId);
-                    dispatchByCategoryDefault(ticket, categoryId);
+            case ROUND_ROBIN: {
+                Long effectiveGroupId = resolveEffectiveTargetGroupId(categoryId, rule.getTargetGroupId());
+                if (effectiveGroupId == null) {
+                    log.info("工单[{}]轮询分派：规则 target_group_id 与分类默认处理组均为空，跳过自动分派", ticketId);
                 } else {
-                    dispatchByRoundRobin(ticket, rule.getTargetGroupId());
+                    log.info("工单[{}]轮询分派：effectiveGroupId={}（规则 targetGroupId={}，不足时沿用分类默认组）",
+                            ticketId, effectiveGroupId, rule.getTargetGroupId());
+                    dispatchByRoundRobin(ticket, effectiveGroupId);
                 }
                 break;
-            case LOAD_BALANCE:
-                if (rule.getTargetGroupId() == null) {
-                    log.info("工单[{}]负载均衡分派规则未配置 target_group_id，回退分类默认分派", ticketId);
-                    dispatchByCategoryDefault(ticket, categoryId);
+            }
+            case LOAD_BALANCE: {
+                Long effectiveGroupId = resolveEffectiveTargetGroupId(categoryId, rule.getTargetGroupId());
+                if (effectiveGroupId == null) {
+                    log.info("工单[{}]负载均衡分派：规则 target_group_id 与分类默认处理组均为空，跳过自动分派", ticketId);
                 } else {
-                    dispatchByLoadBalance(ticket, rule.getTargetGroupId());
+                    log.info("工单[{}]负载均衡分派：effectiveGroupId={}（规则 targetGroupId={}，不足时沿用分类默认组）",
+                            ticketId, effectiveGroupId, rule.getTargetGroupId());
+                    dispatchByLoadBalance(ticket, effectiveGroupId);
                 }
                 break;
+            }
             case MATRIX:
                 dispatchByMatrix(ticket, rule);
                 break;
@@ -197,10 +203,12 @@ public class DispatchAppService extends BaseApplicationService {
 
         String redisKey = ROUND_ROBIN_INDEX_KEY + groupId;
         Long index = stringRedisTemplate.opsForValue().increment(redisKey);
-        if (index == null) {
-            index = 0L;
+        if (index == null || index <= 0) {
+            log.warn("处理组[{}] Redis 轮询计数异常 index={}，本次从首位成员开始", groupId, index);
+            index = 1L;
         }
-        int idx = (int) ((index - 1) % memberIds.size());
+        int size = memberIds.size();
+        int idx = (int) ((index - 1 + size) % size);
         return memberIds.get(idx);
     }
 
@@ -289,12 +297,12 @@ public class DispatchAppService extends BaseApplicationService {
             return;
         }
 
-        // 指定了处理组，取组内第一个成员（可扩展为轮询）
+        // 指定了处理组：与轮询策略一致，按组维度 Redis 轮询，避免总落在第一个成员上
         Long groupId = targetGroupId != null ? targetGroupId : fallbackGroupId;
         if (groupId != null) {
-            List<Long> memberIds = getGroupMemberIds(groupId);
-            if (!memberIds.isEmpty()) {
-                assignTicket(ticket, memberIds.get(0), DispatchStrategy.MATRIX.getCode());
+            Long chosen = pickRoundRobinAssignee(groupId);
+            if (chosen != null) {
+                assignTicket(ticket, chosen, DispatchStrategy.MATRIX.getCode());
                 return;
             }
         }
@@ -320,13 +328,48 @@ public class DispatchAppService extends BaseApplicationService {
         }
     }
 
+    /**
+     * 匹配分派规则：本分类专属规则优先，其次 category_id 为空的「全局」规则。
+     */
     private DispatchRulePO findMatchingRule(Long categoryId) {
-        LambdaQueryWrapper<DispatchRulePO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DispatchRulePO::getCategoryId, categoryId)
+        LambdaQueryWrapper<DispatchRulePO> byCategory = new LambdaQueryWrapper<>();
+        byCategory.eq(DispatchRulePO::getCategoryId, categoryId)
                 .eq(DispatchRulePO::getIsActive, 1)
                 .orderByAsc(DispatchRulePO::getPriorityOrder)
+                .orderByAsc(DispatchRulePO::getId)
                 .last("LIMIT 1");
-        return dispatchRuleMapper.selectOne(wrapper);
+        DispatchRulePO rule = dispatchRuleMapper.selectOne(byCategory);
+        if (rule == null) {
+            LambdaQueryWrapper<DispatchRulePO> global = new LambdaQueryWrapper<>();
+            global.isNull(DispatchRulePO::getCategoryId)
+                    .eq(DispatchRulePO::getIsActive, 1)
+                    .orderByAsc(DispatchRulePO::getPriorityOrder)
+                    .orderByAsc(DispatchRulePO::getId)
+                    .last("LIMIT 1");
+            rule = dispatchRuleMapper.selectOne(global);
+        }
+        if (rule != null) {
+            log.info("分派规则命中: ticketCategoryId={}, ruleId={}, ruleCategoryId={}, strategy={}, targetGroupId={}, priorityOrder={}",
+                    categoryId, rule.getId(), rule.getCategoryId(), rule.getStrategy(),
+                    rule.getTargetGroupId(), rule.getPriorityOrder());
+        } else {
+            log.info("分派规则未命中: categoryId={}（无本分类及全局启用规则）", categoryId);
+        }
+        return rule;
+    }
+
+    /**
+     * 轮询/负载等策略的目标组：规则显式 target_group_id 优先，否则用工单分类绑定的默认处理组。
+     */
+    private Long resolveEffectiveTargetGroupId(Long categoryId, Long ruleTargetGroupId) {
+        if (ruleTargetGroupId != null) {
+            return ruleTargetGroupId;
+        }
+        if (categoryId == null) {
+            return null;
+        }
+        TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
+        return category != null ? category.getDefaultGroupId() : null;
     }
 
     private List<Long> getGroupMemberIds(Long groupId) {
