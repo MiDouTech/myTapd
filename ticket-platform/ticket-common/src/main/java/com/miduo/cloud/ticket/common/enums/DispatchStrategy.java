@@ -23,8 +23,13 @@ public enum DispatchStrategy {
         if (code == null) {
             return null;
         }
+        String normalized = code.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        normalized = normalized.toUpperCase();
         for (DispatchStrategy strategy : values()) {
-            if (strategy.code.equals(code)) {
+            if (strategy.code.equals(normalized)) {
                 return strategy;
             }
         }

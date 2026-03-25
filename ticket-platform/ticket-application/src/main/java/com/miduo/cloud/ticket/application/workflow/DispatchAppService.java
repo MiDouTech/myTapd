@@ -102,26 +102,51 @@ public class DispatchAppService extends BaseApplicationService {
 
         DispatchStrategy strategy = DispatchStrategy.fromCode(rule.getStrategy());
         if (strategy == null) {
-            log.warn("未知的分派策略: {}", rule.getStrategy());
+            log.warn("未知的分派策略: {}，回退分类默认分派", rule.getStrategy());
+            dispatchByCategoryDefault(ticket, categoryId);
             return;
         }
 
+        log.debug("工单[{}]自动分派: categoryId={}, ruleId={}, strategy={}, targetGroupId={}",
+                ticketId, categoryId, rule.getId(), strategy.getCode(), rule.getTargetGroupId());
+
         switch (strategy) {
+            case MANUAL:
+                // 分类上已绑定默认处理组时，新建工单仍应按组自动分派；MANUAL 表示不启用规则表中的轮询/矩阵等扩展策略
+                log.debug("工单[{}]分派规则策略为 MANUAL，使用分类默认处理组分派", ticketId);
+                dispatchByCategoryDefault(ticket, categoryId);
+                break;
             case CATEGORY_DEFAULT:
                 dispatchByCategoryDefault(ticket, categoryId);
                 break;
             case ROUND_ROBIN:
-                dispatchByRoundRobin(ticket, rule.getTargetGroupId());
+                if (rule.getTargetGroupId() == null) {
+                    log.info("工单[{}]轮询分派规则未配置 target_group_id，回退分类默认分派", ticketId);
+                    dispatchByCategoryDefault(ticket, categoryId);
+                } else {
+                    dispatchByRoundRobin(ticket, rule.getTargetGroupId());
+                }
                 break;
             case LOAD_BALANCE:
-                dispatchByLoadBalance(ticket, rule.getTargetGroupId());
+                if (rule.getTargetGroupId() == null) {
+                    log.info("工单[{}]负载均衡分派规则未配置 target_group_id，回退分类默认分派", ticketId);
+                    dispatchByCategoryDefault(ticket, categoryId);
+                } else {
+                    dispatchByLoadBalance(ticket, rule.getTargetGroupId());
+                }
                 break;
             case MATRIX:
                 dispatchByMatrix(ticket, rule);
                 break;
-            default:
-                log.info("分派策略[{}]为手动分派，不执行自动分配", strategy.getLabel());
-                break;
+        }
+
+        // 矩阵未命中、目标组无成员等场景：仍在待分派且无处理人时，用分类默认组再试一次
+        TicketPO afterRule = ticketMapper.selectById(ticketId);
+        if (afterRule != null
+                && TicketStatus.fromCode(afterRule.getStatus()) == TicketStatus.PENDING_ASSIGN
+                && afterRule.getAssigneeId() == null) {
+            log.info("工单[{}]按分派规则未产生处理人（strategy={}），回退分类默认处理组", ticketId, strategy.getCode());
+            dispatchByCategoryDefault(afterRule, categoryId);
         }
     }
 
