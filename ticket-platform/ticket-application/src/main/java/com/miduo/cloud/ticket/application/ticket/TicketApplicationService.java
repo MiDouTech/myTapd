@@ -4,7 +4,6 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.miduo.cloud.ticket.application.workflow.DispatchAppService;
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
@@ -12,6 +11,7 @@ import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
@@ -33,8 +33,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -108,9 +106,6 @@ public class TicketApplicationService {
     @Resource
     private TicketAssigneeMapper ticketAssigneeMapper;
 
-    @Resource
-    private DispatchAppService dispatchAppService;
-
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
         TicketCategoryPO category = categoryMapper.selectById(input.getCategoryId());
@@ -182,29 +177,9 @@ public class TicketApplicationService {
             }
         }
 
-        // 未指定处理人时：提交后再自动分派。autoDispatch 使用 REQUIRES_NEW，若在本事务内调用则读不到未提交的工单行，企微建单等场景会静默跳过。
+        // 未指定处理人时：事务提交后再自动分派（TicketAutoDispatchListener，AFTER_COMMIT + fallbackExecution，与 Webhook 一致；避免仅依赖 TransactionSynchronization 在 @Async 企微链路下未触发）
         if (ticket.getAssigneeId() == null && input.getAssigneeId() == null) {
-            final Long tid = ticket.getId();
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        try {
-                            dispatchAppService.autoDispatch(tid);
-                        } catch (Exception e) {
-                            log.warn("工单创建提交后自动分派失败，不影响创建: ticketId={}, error={}",
-                                    tid, e.getMessage());
-                        }
-                    }
-                });
-            } else {
-                try {
-                    dispatchAppService.autoDispatch(tid);
-                } catch (Exception e) {
-                    log.warn("工单创建后自动分派失败，不影响创建: ticketId={}, error={}",
-                            tid, e.getMessage());
-                }
-            }
+            safePublishEvent(new TicketAutoDispatchEvent(ticket.getId()));
         }
 
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
