@@ -31,11 +31,12 @@ public class TicketAutoDispatchListener {
         }
         Long ticketId = event.getTicketId();
         try {
-            log.info("工单创建事务已提交，开始自动分派: ticketId={}", ticketId);
+            log.info("[自动分派监听] 工单创建事务已提交，开始自动分派: ticketId={}", ticketId);
             dispatchAppService.autoDispatch(ticketId);
+            log.info("[自动分派监听] 自动分派完成: ticketId={}", ticketId);
         } catch (Exception e) {
-            log.warn("工单创建提交后自动分派失败，不影响创建: ticketId={}, error={}",
-                    ticketId, e.getMessage());
+            log.error("[自动分派监听] 自动分派失败，不影响工单创建: ticketId={}, errorClass={}, error={}",
+                    ticketId, e.getClass().getSimpleName(), e.getMessage(), e);
         }
     }
 }

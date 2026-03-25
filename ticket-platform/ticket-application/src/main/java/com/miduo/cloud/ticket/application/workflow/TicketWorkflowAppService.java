@@ -53,6 +53,9 @@ import java.util.stream.Collectors;
 @Service
 public class TicketWorkflowAppService extends BaseApplicationService {
 
+    /** 系统自动操作时使用的操作人ID（用于 ticket_log.user_id / ticket_flow_record.operator_id NOT NULL 约束） */
+    private static final Long SYSTEM_OPERATOR_ID = 0L;
+
     /** 流转类型常量 */
     private static final String FLOW_TYPE_TRANSIT  = "TRANSIT";
     private static final String FLOW_TYPE_TRANSFER = "TRANSFER";
@@ -160,7 +163,13 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         TicketPO ticket = requireTicket(ticketId);
         WorkflowPO workflow = workflowAppService.getWorkflowById(ticket.getWorkflowId());
 
-        String userRole = resolveUserRole(operatorId, ticket);
+        boolean isSystemOperation = (operatorId == null);
+        String userRole = isSystemOperation ? "TICKET_ADMIN" : resolveUserRole(operatorId, ticket);
+        Long safeOperatorId = isSystemOperation ? SYSTEM_OPERATOR_ID : operatorId;
+        if (isSystemOperation) {
+            log.info("系统自动流转: ticketId={}, 使用 TICKET_ADMIN 角色, safeOperatorId={}", ticketId, safeOperatorId);
+        }
+
         String oldStatus = ticket.getStatus();
         Long oldAssigneeId = ticket.getAssigneeId();
         List<Long> beforeAssigneeSnapshot = new ArrayList<>(
@@ -199,7 +208,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         ticketMapper.updateById(ticket);
 
         // 写流转日志（ticket_log 旧格式，保持兼容）
-        saveTicketLog(ticketId, operatorId,
+        saveTicketLog(ticketId, safeOperatorId,
                 matchedTransition.isReturnTransition() ? "RETURN" : "TRANSIT",
                 oldStatus, targetStatus, input.getRemark());
 
@@ -207,11 +216,11 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         saveFlowRecord(ticket, matchedTransition,
                 matchedTransition.isReturnTransition() ? FLOW_TYPE_RETURN : FLOW_TYPE_TRANSIT,
                 oldStatus, targetStatus, oldAssigneeId, ticket.getAssigneeId(),
-                operatorId, userRole, input.getRemark());
+                safeOperatorId, userRole, input.getRemark());
 
         // 记录时间追踪
         String transitionAction = ticketTimeTrackService.resolveTransitionAction(oldStatus, targetStatus);
-        ticketTimeTrackService.recordStatusTrack(ticketId, operatorId, transitionAction,
+        ticketTimeTrackService.recordStatusTrack(ticketId, safeOperatorId, transitionAction,
                 oldStatus, targetStatus, oldAssigneeId, ticket.getAssigneeId(), input.getRemark());
 
         // SLA计时器联动：根据目标状态的slaAction驱动计时器生命周期
@@ -221,18 +230,18 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         // 发布领域事件
         eventPublisher.publishEvent(
-                new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
+                new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, safeOperatorId));
 
         if (targetState != null && targetState.isTerminal()) {
             eventPublisher.publishEvent(
-                    new TicketCompletedEvent(ticketId, targetStatus, operatorId, new Date()));
+                    new TicketCompletedEvent(ticketId, targetStatus, safeOperatorId, new Date()));
         }
 
         // 处理人变更事件（主处理人或协同处理人列表变化时通知）
         if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, newAssigneeIds)) {
             eventPublisher.publishEvent(
                     new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
-                            oldAssigneeId, operatorId, "TRANSFER_ON_TRANSIT"));
+                            oldAssigneeId, safeOperatorId, "TRANSFER_ON_TRANSIT"));
         }
     }
 
