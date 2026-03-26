@@ -48,6 +48,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResult<Void> handleException(Exception ex) {
         log.error("系统异常", ex);
-        return ApiResult.fail(ErrorCode.INTERNAL_ERROR);
+        String detail = ex.getClass().getSimpleName();
+        if (ex.getMessage() != null && !ex.getMessage().isEmpty()) {
+            String msg = ex.getMessage();
+            if (msg.length() > 200) {
+                msg = msg.substring(0, 200) + "...";
+            }
+            detail = detail + ": " + msg;
+        }
+        return ApiResult.fail(ErrorCode.INTERNAL_ERROR.getCode(),
+                ErrorCode.INTERNAL_ERROR.getMessage() + " - " + detail);
     }
 }
