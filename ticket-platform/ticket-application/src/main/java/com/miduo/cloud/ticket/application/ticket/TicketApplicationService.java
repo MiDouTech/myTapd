@@ -913,7 +913,7 @@ public class TicketApplicationService {
                            String oldValue, String newValue, String remark) {
         TicketLogPO logPO = new TicketLogPO();
         logPO.setTicketId(ticketId);
-        logPO.setUserId(userId);
+        logPO.setUserId(userId != null ? userId : 0L);
         logPO.setAction(action);
         logPO.setOldValue(oldValue);
         logPO.setNewValue(newValue);

@@ -586,7 +586,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                String oldValue, String newValue, String remark) {
         TicketLogPO logPO = new TicketLogPO();
         logPO.setTicketId(ticketId);
-        logPO.setUserId(operatorId);
+        logPO.setUserId(operatorId != null ? operatorId : SYSTEM_OPERATOR_ID);
         logPO.setAction(action);
         logPO.setOldValue(oldValue);
         logPO.setNewValue(newValue);
