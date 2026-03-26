@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.common.BaseEntity;
@@ -14,8 +15,8 @@ public class TicketLogPO extends BaseEntity {
     @TableField("ticket_id")
     private Long ticketId;
 
-    @TableField("user_id")
-    private Long userId;
+    @TableField(value = "user_id", insertStrategy = FieldStrategy.IGNORED)
+    private Long userId = 0L;
 
     @TableField("action")
     private String action;

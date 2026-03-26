@@ -58,7 +58,7 @@ public class TicketChangeHistoryRecorder {
         String remark = buildRemark(changeType, changes);
         TicketLogPO log = new TicketLogPO();
         log.setTicketId(ticketId);
-        log.setUserId(userId);
+        log.setUserId(userId != null ? userId : 0L);
         log.setAction(TicketAction.UPDATE.getCode());
         log.setRemark(remark);
         ticketLogMapper.insert(log);
@@ -75,7 +75,7 @@ public class TicketChangeHistoryRecorder {
         String remark = buildRemark(changeType, changes);
         TicketLogPO log = new TicketLogPO();
         log.setTicketId(ticketId);
-        log.setUserId(userId);
+        log.setUserId(userId != null ? userId : 0L);
         log.setAction(TicketAction.UPDATE.getCode());
         log.setRemark(remark);
         ticketLogMapper.insert(log);
@@ -92,7 +92,7 @@ public class TicketChangeHistoryRecorder {
         String remark = buildRemark(BugChangeTypeEnum.CREATE, fields);
         TicketLogPO log = new TicketLogPO();
         log.setTicketId(ticketId);
-        log.setUserId(userId);
+        log.setUserId(userId != null ? userId : 0L);
         log.setAction(TicketAction.CREATE.getCode());
         log.setRemark(remark);
         ticketLogMapper.insert(log);

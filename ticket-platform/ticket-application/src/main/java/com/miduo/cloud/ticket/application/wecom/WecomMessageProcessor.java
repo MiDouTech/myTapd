@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookS
 import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.wecom.model.WecomBotParseResult;
 import com.miduo.cloud.ticket.application.wecom.model.WecomDraftSession;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WecomBotCommandType;
 import com.miduo.cloud.ticket.common.enums.WecomBotMessageStatus;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
@@ -177,6 +178,18 @@ public class WecomMessageProcessor extends BaseApplicationService {
         draft.setNlpConfidence(nlpResult.getConfidence());
         draft.setChatId(chatId);
 
+        TicketPO existingTicket = findExistingTicketByDescription(rawText);
+        if (existingTicket != null) {
+            String duplicateReply = buildDuplicateTicketReply(existingTicket);
+            sendReply(binding, duplicateReply, fromWecomUserId, message.getResponseUrl());
+            saveLog(message, parseResult, existingTicket.getId(), WecomBotMessageStatus.SUCCESS,
+                    "描述内容重复，已存在工单: " + existingTicket.getTicketNo(),
+                    PARSE_TYPE_NATURAL_LANGUAGE, nlpResult.getConfidence() != null ? nlpResult.getConfidence().byteValue() : null);
+            log.info("企微消息描述内容与已有工单重复，跳过创建: msgId={}, chatId={}, existingTicketNo={}",
+                    message.getMsgId(), chatId, existingTicket.getTicketNo());
+            return;
+        }
+
         Long ticketId = interactiveConfirmService.createTicketDirectly(draft, chatId, fromWecomUserId);
         if (ticketId != null) {
             autoFillCustomerInfoFromMessage(ticketId, rawText);
@@ -268,6 +281,38 @@ public class WecomMessageProcessor extends BaseApplicationService {
         } catch (Exception e) {
             log.warn("企微消息客服信息自动填充失败，已降级跳过: ticketId={}, error={}", ticketId, e.getMessage());
         }
+    }
+
+    /**
+     * 根据描述内容查找已存在的未关闭工单（精确匹配 description 全文）
+     * 仅匹配非终态工单，终态工单允许重复提交
+     */
+    private TicketPO findExistingTicketByDescription(String description) {
+        if (description == null || description.trim().isEmpty()) {
+            return null;
+        }
+        List<String> terminalStatuses = Arrays.asList(
+                TicketStatus.COMPLETED.getCode(),
+                TicketStatus.CLOSED.getCode(),
+                TicketStatus.REJECTED.getCode()
+        );
+        LambdaQueryWrapper<TicketPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TicketPO::getDescription, description.trim())
+                .notIn(TicketPO::getStatus, terminalStatuses)
+                .orderByDesc(TicketPO::getCreateTime)
+                .last("LIMIT 1");
+        return ticketMapper.selectOne(wrapper);
+    }
+
+    private String buildDuplicateTicketReply(TicketPO ticket) {
+        String ticketNo = ticket.getTicketNo();
+        TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
+        String statusLabel = status != null ? status.getLabel() : ticket.getStatus();
+        String publicLink = buildPublicTicketLink(ticketNo);
+        return "【此问题已创建过工单，如需再创建，请修改描述内容】\n" +
+                "工单编号：" + safeValue(ticketNo) + "\n" +
+                "工单状态：" + statusLabel + "\n" +
+                "查看详情：" + publicLink;
     }
 
     private String buildTicketCreatedReply(String ticketNo, String title, String categoryPath, String priority, int linkedImages) {
