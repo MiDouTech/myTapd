@@ -21,6 +21,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUser
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
@@ -112,8 +113,9 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
 
     /**
      * 记录工单字段/区块编辑（不改变状态），用于时间链展示与变更明细关联
+     * REQUIRES_NEW：独立事务，写入失败不影响调用方主事务
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
     public void recordFieldEditTrack(Long ticketId, Long userId, String remark) {
         if (remark == null || remark.trim().isEmpty()) {
             return;
