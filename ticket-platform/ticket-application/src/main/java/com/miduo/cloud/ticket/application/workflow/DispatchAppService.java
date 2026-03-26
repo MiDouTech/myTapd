@@ -82,38 +82,43 @@ public class DispatchAppService extends BaseApplicationService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void autoDispatch(Long ticketId) {
+        log.info("[自动分派] 开始: ticketId={}", ticketId);
+
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
+            log.error("[自动分派] 工单不存在: ticketId={}", ticketId);
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
 
+        log.info("[自动分派] 工单信息: ticketId={}, ticketNo={}, status={}, categoryId={}, assigneeId={}",
+                ticketId, ticket.getTicketNo(), ticket.getStatus(), ticket.getCategoryId(), ticket.getAssigneeId());
+
         Long categoryId = ticket.getCategoryId();
         if (categoryId == null) {
-            log.warn("工单[{}]未关联分类，跳过自动分派", ticketId);
+            log.warn("[自动分派] 工单[{}]未关联分类，跳过自动分派", ticketId);
             return;
         }
 
         DispatchRulePO rule = findMatchingRule(categoryId);
         if (rule == null) {
-            log.info("工单[{}]未找到匹配的分派规则，使用分类默认分派", ticketId);
+            log.info("[自动分派] 工单[{}]未找到匹配的分派规则，使用分类默认分派", ticketId);
             dispatchByCategoryDefault(ticket, categoryId);
             return;
         }
 
         DispatchStrategy strategy = DispatchStrategy.fromCode(rule.getStrategy());
         if (strategy == null) {
-            log.warn("未知的分派策略: {}，回退分类默认分派", rule.getStrategy());
+            log.warn("[自动分派] 未知的分派策略: {}，回退分类默认分派", rule.getStrategy());
             dispatchByCategoryDefault(ticket, categoryId);
             return;
         }
 
-        log.debug("工单[{}]自动分派: categoryId={}, ruleId={}, strategy={}, targetGroupId={}",
+        log.info("[自动分派] 工单[{}]自动分派: categoryId={}, ruleId={}, strategy={}, targetGroupId={}",
                 ticketId, categoryId, rule.getId(), strategy.getCode(), rule.getTargetGroupId());
 
         switch (strategy) {
             case MANUAL:
-                // 分类上已绑定默认处理组时，新建工单仍应按组自动分派；MANUAL 表示不启用规则表中的轮询/矩阵等扩展策略
-                log.debug("工单[{}]分派规则策略为 MANUAL，使用分类默认处理组分派", ticketId);
+                log.info("[自动分派] 工单[{}]分派规则策略为 MANUAL，使用分类默认处理组分派", ticketId);
                 dispatchByCategoryDefault(ticket, categoryId);
                 break;
             case CATEGORY_DEFAULT:
@@ -151,27 +156,45 @@ public class DispatchAppService extends BaseApplicationService {
         if (afterRule != null
                 && TicketStatus.fromCode(afterRule.getStatus()) == TicketStatus.PENDING_ASSIGN
                 && afterRule.getAssigneeId() == null) {
-            log.info("工单[{}]按分派规则未产生处理人（strategy={}），回退分类默认处理组", ticketId, strategy.getCode());
+            log.info("[自动分派] 工单[{}]按分派规则未产生处理人（strategy={}），回退分类默认处理组",
+                    ticketId, strategy.getCode());
             dispatchByCategoryDefault(afterRule, categoryId);
         }
+
+        TicketPO finalTicket = ticketMapper.selectById(ticketId);
+        log.info("[自动分派] 结束: ticketId={}, 最终状态={}, 最终处理人={}",
+                ticketId,
+                finalTicket != null ? finalTicket.getStatus() : "N/A",
+                finalTicket != null ? finalTicket.getAssigneeId() : "N/A");
     }
 
     /**
      * 分类默认分派：对分类绑定的默认处理组成员按 Redis 轮询序号轮流分配（与 ROUND_ROBIN 策略同一套计数器，保证组内公平）
      */
     private void dispatchByCategoryDefault(TicketPO ticket, Long categoryId) {
+        log.info("[自动分派-分类默认] 工单[{}]: 查询分类categoryId={}", ticket.getId(), categoryId);
         TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
-        if (category == null || category.getDefaultGroupId() == null) {
-            log.info("分类[{}]未配置默认处理组，跳过自动分派", categoryId);
+        if (category == null) {
+            log.warn("[自动分派-分类默认] 分类[{}]不存在，跳过自动分派", categoryId);
             return;
         }
+        if (category.getDefaultGroupId() == null) {
+            log.warn("[自动分派-分类默认] 分类[{}](name={})未配置默认处理组(defaultGroupId=null)，跳过自动分派",
+                    categoryId, category.getName());
+            return;
+        }
+
+        log.info("[自动分派-分类默认] 分类[{}](name={})绑定默认处理组: defaultGroupId={}",
+                categoryId, category.getName(), category.getDefaultGroupId());
 
         Long chosen = pickRoundRobinAssignee(category.getDefaultGroupId());
         if (chosen == null) {
-            log.warn("处理组[{}]没有成员，跳过自动分派", category.getDefaultGroupId());
+            log.warn("[自动分派-分类默认] 处理组[{}]没有成员，跳过自动分派", category.getDefaultGroupId());
             return;
         }
 
+        log.info("[自动分派-分类默认] 工单[{}]轮询选中处理人: userId={}, groupId={}",
+                ticket.getId(), chosen, category.getDefaultGroupId());
         assignTicket(ticket, chosen, DispatchStrategy.CATEGORY_DEFAULT.getCode());
     }
 
@@ -191,25 +214,30 @@ public class DispatchAppService extends BaseApplicationService {
      */
     private Long pickRoundRobinAssignee(Long groupId) {
         if (groupId == null) {
-            log.warn("轮询分派未配置目标处理组，跳过分派");
+            log.warn("[轮询选人] 未配置目标处理组(groupId=null)，跳过分派");
             return null;
         }
 
         List<Long> memberIds = getGroupMemberIds(groupId);
         if (memberIds.isEmpty()) {
-            log.warn("处理组[{}]没有成员，跳过分派", groupId);
+            log.warn("[轮询选人] 处理组[{}]没有成员，跳过分派", groupId);
             return null;
         }
+
+        log.info("[轮询选人] 处理组[{}]成员列表(共{}人): {}", groupId, memberIds.size(), memberIds);
 
         String redisKey = ROUND_ROBIN_INDEX_KEY + groupId;
         Long index = stringRedisTemplate.opsForValue().increment(redisKey);
         if (index == null || index <= 0) {
-            log.warn("处理组[{}] Redis 轮询计数异常 index={}，本次从首位成员开始", groupId, index);
+            log.warn("[轮询选人] 处理组[{}] Redis 轮询计数异常 index={}，本次从首位成员开始", groupId, index);
             index = 1L;
         }
         int size = memberIds.size();
         int idx = (int) ((index - 1 + size) % size);
-        return memberIds.get(idx);
+        Long chosen = memberIds.get(idx);
+        log.info("[轮询选人] 处理组[{}] Redis index={}, size={}, idx={}, 选中用户: {}",
+                groupId, index, size, idx, chosen);
+        return chosen;
     }
 
     /**
@@ -332,6 +360,7 @@ public class DispatchAppService extends BaseApplicationService {
      * 匹配分派规则：本分类专属规则优先，其次 category_id 为空的「全局」规则。
      */
     private DispatchRulePO findMatchingRule(Long categoryId) {
+        log.info("[自动分派-规则匹配] 查找分类专属规则: categoryId={}", categoryId);
         LambdaQueryWrapper<DispatchRulePO> byCategory = new LambdaQueryWrapper<>();
         byCategory.eq(DispatchRulePO::getCategoryId, categoryId)
                 .eq(DispatchRulePO::getIsActive, 1)
@@ -340,6 +369,7 @@ public class DispatchAppService extends BaseApplicationService {
                 .last("LIMIT 1");
         DispatchRulePO rule = dispatchRuleMapper.selectOne(byCategory);
         if (rule == null) {
+            log.info("[自动分派-规则匹配] 未找到分类专属规则(categoryId={})，查找全局规则", categoryId);
             LambdaQueryWrapper<DispatchRulePO> global = new LambdaQueryWrapper<>();
             global.isNull(DispatchRulePO::getCategoryId)
                     .eq(DispatchRulePO::getIsActive, 1)
@@ -349,11 +379,12 @@ public class DispatchAppService extends BaseApplicationService {
             rule = dispatchRuleMapper.selectOne(global);
         }
         if (rule != null) {
-            log.info("分派规则命中: ticketCategoryId={}, ruleId={}, ruleCategoryId={}, strategy={}, targetGroupId={}, priorityOrder={}",
-                    categoryId, rule.getId(), rule.getCategoryId(), rule.getStrategy(),
+            log.info("[自动分派-规则匹配] 命中规则: ticketCategoryId={}, ruleId={}, ruleName={}, ruleCategoryId={}, " +
+                            "strategy={}, targetGroupId={}, priorityOrder={}",
+                    categoryId, rule.getId(), rule.getName(), rule.getCategoryId(), rule.getStrategy(),
                     rule.getTargetGroupId(), rule.getPriorityOrder());
         } else {
-            log.info("分派规则未命中: categoryId={}（无本分类及全局启用规则）", categoryId);
+            log.info("[自动分派-规则匹配] 未命中任何规则: categoryId={}（无本分类及全局启用规则）", categoryId);
         }
         return rule;
     }
@@ -363,13 +394,18 @@ public class DispatchAppService extends BaseApplicationService {
      */
     private Long resolveEffectiveTargetGroupId(Long categoryId, Long ruleTargetGroupId) {
         if (ruleTargetGroupId != null) {
+            log.info("[自动分派-目标组] 使用规则显式指定的 targetGroupId={}", ruleTargetGroupId);
             return ruleTargetGroupId;
         }
         if (categoryId == null) {
+            log.warn("[自动分派-目标组] categoryId 为空且规则未指定 targetGroupId，无法确定目标组");
             return null;
         }
         TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
-        return category != null ? category.getDefaultGroupId() : null;
+        Long defaultGroupId = category != null ? category.getDefaultGroupId() : null;
+        log.info("[自动分派-目标组] 规则未指定 targetGroupId，回退分类默认处理组: categoryId={}, defaultGroupId={}",
+                categoryId, defaultGroupId);
+        return defaultGroupId;
     }
 
     private List<Long> getGroupMemberIds(Long groupId) {
@@ -382,9 +418,15 @@ public class DispatchAppService extends BaseApplicationService {
     }
 
     private void assignTicket(TicketPO ticket, Long assigneeId, String assignType) {
+        log.info("[自动分派-assignTicket] 工单[{}]当前状态={}, 目标处理人={}, 策略={}",
+                ticket.getId(), ticket.getStatus(), assigneeId, assignType);
+
         if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
+            log.info("[自动分派-assignTicket] 工单[{}]处于待分派状态，走工作流 assignFromPendingDispatch 流转",
+                    ticket.getId());
             ticketWorkflowAppService.assignFromPendingDispatch(ticket.getId(), assigneeId, null, null);
-            log.info("工单[{}]分派给用户[{}]，策略: {}（含状态流转）", ticket.getId(), assigneeId, assignType);
+            log.info("[自动分派-assignTicket] 工单[{}]分派给用户[{}]成功，策略: {}（含状态流转）",
+                    ticket.getId(), assigneeId, assignType);
             return;
         }
 
@@ -392,7 +434,8 @@ public class DispatchAppService extends BaseApplicationService {
         ticketAssigneeSyncService.syncSingleAssigneeRow(ticket, assigneeId);
         ticketMapper.updateById(ticket);
 
-        log.info("工单[{}]分派给用户[{}]，策略: {}", ticket.getId(), assigneeId, assignType);
+        log.info("[自动分派-assignTicket] 工单[{}]分派给用户[{}]成功，策略: {}（直接更新，非待分派状态）",
+                ticket.getId(), assigneeId, assignType);
 
         eventPublisher.publishEvent(
                 new TicketAssignedEvent(ticket.getId(), assigneeId,
