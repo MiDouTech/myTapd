@@ -179,6 +179,7 @@ public class TicketChangeHistoryRecorder {
 
     /**
      * 比较两个普通字符串值，不同则加入变更列表
+     * 非枚举字段 label 省略（前端 fallback 到 value），减少 JSON 冗余
      */
     private void detectChange(List<BugFieldChangeItem> list, String fieldName, String fieldLabel,
                                String oldVal, String newVal) {
@@ -189,9 +190,7 @@ public class TicketChangeHistoryRecorder {
             item.setFieldName(fieldName);
             item.setFieldLabel(fieldLabel);
             item.setOldValue(emptyToNull(oldVal));
-            item.setOldLabel(emptyToNull(oldVal));
             item.setNewValue(emptyToNull(newVal));
-            item.setNewLabel(emptyToNull(newVal));
             list.add(item);
         }
     }
