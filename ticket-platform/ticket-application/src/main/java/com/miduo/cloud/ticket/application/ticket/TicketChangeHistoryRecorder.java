@@ -13,6 +13,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.Ticke
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugDevInfoInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugTestInfoInput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -35,6 +37,7 @@ import java.util.Objects;
 @Component
 public class TicketChangeHistoryRecorder {
 
+    private static final Logger log = LoggerFactory.getLogger(TicketChangeHistoryRecorder.class);
     private static final int TEXT_TRUNCATE_LENGTH = 200;
 
     private final TicketLogMapper ticketLogMapper;
@@ -66,6 +69,7 @@ public class TicketChangeHistoryRecorder {
 
     /**
      * 写入 ticket_log 并同步一条时间链轨迹，便于「时间链」与字段变更 JSON 在时间窗内自动关联
+     * 时间链写入失败不影响主业务（变更日志已落盘，仅降级丢失时间链节点）
      */
     public void recordWithTimeTrack(Long ticketId, Long userId, BugChangeTypeEnum changeType,
                                     List<BugFieldChangeItem> changes) {
@@ -73,13 +77,17 @@ public class TicketChangeHistoryRecorder {
             return;
         }
         String remark = buildRemark(changeType, changes);
-        TicketLogPO log = new TicketLogPO();
-        log.setTicketId(ticketId);
-        log.setUserId(userId != null ? userId : 0L);
-        log.setAction(TicketAction.UPDATE.getCode());
-        log.setRemark(remark);
-        ticketLogMapper.insert(log);
-        ticketTimeTrackApplicationService.recordFieldEditTrack(ticketId, userId, remark);
+        TicketLogPO logPO = new TicketLogPO();
+        logPO.setTicketId(ticketId);
+        logPO.setUserId(userId != null ? userId : 0L);
+        logPO.setAction(TicketAction.UPDATE.getCode());
+        logPO.setRemark(remark);
+        ticketLogMapper.insert(logPO);
+        try {
+            ticketTimeTrackApplicationService.recordFieldEditTrack(ticketId, userId, remark);
+        } catch (Exception e) {
+            log.error("写入时间链轨迹失败，已降级跳过: ticketId={}", ticketId, e);
+        }
     }
 
     /**
