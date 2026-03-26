@@ -36,6 +36,15 @@ spring:
         max-idle: 8
         min-idle: 0
 
+miduo:
+  sso:
+    enabled: ${MIDUO_SSO_ENABLED:false}
+    base-url: ${MIDUO_SSO_BASE_URL:}
+    app-code: ${MIDUO_SSO_APP_CODE:}
+    app-secret: ${MIDUO_SSO_APP_SECRET:}
+    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:}
+    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:}
+
 wecom:
   corp-id: 
   agent-id: 
