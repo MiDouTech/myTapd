@@ -74,7 +74,14 @@ public class SlaEventListener {
             orchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
                     NotificationType.SLA_WARNING, title, content);
         }
-        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
+        if (ticket.getCreatorId() != null) {
+            mentionUserIds.add(ticket.getCreatorId());
+        }
+        if (ticket.getAssigneeId() != null) {
+            mentionUserIds.add(ticket.getAssigneeId());
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
     }
 
     @Async
@@ -109,7 +116,17 @@ public class SlaEventListener {
             orchestrator.dispatchToUsers(new ArrayList<>(receivers), ticket.getId(), null,
                     NotificationType.SLA_BREACHED, title, content);
         }
-        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
+        if (ticket.getCreatorId() != null) {
+            mentionUserIds.add(ticket.getCreatorId());
+        }
+        if (ticket.getAssigneeId() != null) {
+            mentionUserIds.add(ticket.getAssigneeId());
+        }
+        if (groupLeaderId != null) {
+            mentionUserIds.add(groupLeaderId);
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
     }
 
     @Async
@@ -132,7 +149,17 @@ public class SlaEventListener {
 
         orchestrator.dispatch(event.getHandlerId(), event.getTicketId(), null,
                 NotificationType.URGE, title, content);
-        wecomGroupPushService.pushByTicket(event.getTicketId(), title, content);
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
+        if (ticket != null && ticket.getCreatorId() != null) {
+            mentionUserIds.add(ticket.getCreatorId());
+        }
+        if (event.getHandlerId() != null) {
+            mentionUserIds.add(event.getHandlerId());
+        }
+        if (event.getUrgerId() != null) {
+            mentionUserIds.add(event.getUrgerId());
+        }
+        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
     }
 
     private TicketPO getTicket(Long ticketId) {

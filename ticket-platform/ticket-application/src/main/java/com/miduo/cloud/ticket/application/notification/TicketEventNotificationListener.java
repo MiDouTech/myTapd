@@ -61,10 +61,12 @@ public class TicketEventNotificationListener {
             return;
         }
 
+        String creatorName = resolveUserName(ticket.getCreatorId());
         String title = "新工单待处理 - " + safe(ticket.getTicketNo());
         String content = "工单编号：" + safe(ticket.getTicketNo()) +
                 "\n标题：" + safe(ticket.getTitle()) +
-                "\n优先级：" + safe(ticket.getPriority());
+                "\n优先级：" + safe(ticket.getPriority()) +
+                "\n创建人：" + safe(creatorName);
 
         List<Long> assignees = collectAssigneeUserIds(ticket);
         for (Long uid : assignees) {
@@ -96,10 +98,14 @@ public class TicketEventNotificationListener {
         }
 
         String operatorName = resolveUserName(event.getOperatorId());
+        String creatorName = resolveUserName(ticket.getCreatorId());
+        String assigneeNames = resolveAssigneeNames(assignees);
         String title = "您有新的工单分派 - " + safe(ticket.getTicketNo());
         String content = "工单编号：" + safe(ticket.getTicketNo()) +
                 "\n标题：" + safe(ticket.getTitle()) +
                 "\n分派人：" + safe(operatorName) +
+                "\n处理人：" + safe(assigneeNames) +
+                "\n创建人：" + safe(creatorName) +
                 "\n优先级：" + safe(ticket.getPriority());
 
         for (Long uid : assignees) {
@@ -108,6 +114,9 @@ public class TicketEventNotificationListener {
         }
 
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(assignees);
+        if (ticket.getCreatorId() != null) {
+            mentionUserIds.add(ticket.getCreatorId());
+        }
         if (event.getPreviousAssigneeId() != null) {
             mentionUserIds.add(event.getPreviousAssigneeId());
         }
@@ -128,17 +137,22 @@ public class TicketEventNotificationListener {
         String oldStatus = resolveStatusLabel(event.getOldStatus());
         String newStatus = resolveStatusLabel(event.getNewStatus());
         String operatorName = resolveUserName(event.getOperatorId());
+        String creatorName = resolveUserName(ticket.getCreatorId());
+        List<Long> assigneeUserIds = collectAssigneeUserIds(ticket);
+        String assigneeNames = resolveAssigneeNames(assigneeUserIds);
         String title = "工单状态更新 - " + safe(ticket.getTicketNo());
         String content = "工单编号：" + safe(ticket.getTicketNo()) +
                 "\n标题：" + safe(ticket.getTitle()) +
                 "\n状态：" + oldStatus + " → " + newStatus +
-                "\n操作人：" + safe(operatorName);
+                "\n操作人：" + safe(operatorName) +
+                "\n创建人：" + safe(creatorName) +
+                "\n处理人：" + safe(assigneeNames);
 
         Set<Long> receiverIds = new LinkedHashSet<>();
         if (ticket.getCreatorId() != null) {
             receiverIds.add(ticket.getCreatorId());
         }
-        receiverIds.addAll(collectAssigneeUserIds(ticket));
+        receiverIds.addAll(assigneeUserIds);
 
         List<TicketFollowerPO> followers = ticketFollowerMapper.selectList(
                 new LambdaQueryWrapper<TicketFollowerPO>()
@@ -182,6 +196,26 @@ public class TicketEventNotificationListener {
             return "-";
         }
         return user.getName();
+    }
+
+    private String resolveAssigneeNames(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return "-";
+        }
+        List<SysUserPO> users = sysUserMapper.selectBatchIds(userIds);
+        if (users == null || users.isEmpty()) {
+            return "-";
+        }
+        StringBuilder names = new StringBuilder();
+        for (SysUserPO user : users) {
+            if (user != null && user.getName() != null) {
+                if (names.length() > 0) {
+                    names.append("、");
+                }
+                names.append(user.getName());
+            }
+        }
+        return names.length() > 0 ? names.toString() : "-";
     }
 
     private String resolveStatusLabel(String code) {
