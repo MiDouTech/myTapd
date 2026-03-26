@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { devLogin } from '@/api/auth'
+import { getSsoStatus } from '@/api/sso'
 import { useAuthStore } from '@/stores/auth'
+import type { SsoStatusOutput } from '@/types/sso'
 import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const route = useRoute()
@@ -15,6 +17,17 @@ const devForm = reactive({
   password: '',
 })
 const devLoginLoading = ref(false)
+
+const ssoStatus = ref<SsoStatusOutput | null>(null)
+const ssoLoading = ref(false)
+
+onMounted(async () => {
+  try {
+    ssoStatus.value = await getSsoStatus()
+  } catch {
+    // SSO 状态查询失败时静默处理，仅显示密码登录
+  }
+})
 
 async function handleDevLogin(): Promise<void> {
   if (!devForm.username || !devForm.password) {
@@ -38,6 +51,16 @@ async function handleDevLogin(): Promise<void> {
     devLoginLoading.value = false
   }
 }
+
+function handleSsoLogin(): void {
+  if (!ssoStatus.value?.enabled) {
+    notifyWarning('SSO 登录未启用')
+    return
+  }
+  ssoLoading.value = true
+  notifyWarning('请从米多星球工作台进入本系统，SSO 登录由米多发起跳转')
+  ssoLoading.value = false
+}
 </script>
 
 <template>
@@ -47,13 +70,42 @@ async function handleDevLogin(): Promise<void> {
         <div class="header-title">米多工单平台</div>
       </template>
 
-      <div class="dev-login-section">
+      <!-- SSO 入口提示 -->
+      <div v-if="ssoStatus?.enabled" class="sso-section">
         <div class="section-label">
+          <el-tag type="success" size="small">推荐</el-tag>
+          <span class="section-title">米多星球 SSO 登录</span>
+        </div>
+
+        <el-alert class="sso-notice" type="success" :closable="false" show-icon>
+          <template #default>
+            已对接米多星球 SSO 单点登录。请从
+            <strong>米多星球工作台</strong>
+            快捷入口进入本系统，系统将自动完成身份验证。
+          </template>
+        </el-alert>
+
+        <el-button
+          type="primary"
+          style="width: 100%; margin-bottom: 20px"
+          :loading="ssoLoading"
+          @click="handleSsoLogin"
+        >
+          了解 SSO 登录方式
+        </el-button>
+
+        <el-divider>或使用账号密码登录</el-divider>
+      </div>
+
+      <!-- 账号密码登录 -->
+      <div class="dev-login-section">
+        <div v-if="!ssoStatus?.enabled" class="section-label">
           <el-tag type="warning" size="small">过渡阶段</el-tag>
           <span class="section-title">账号密码登录</span>
         </div>
 
         <el-alert
+          v-if="!ssoStatus?.enabled"
           class="transition-notice"
           type="info"
           :closable="false"
@@ -117,6 +169,16 @@ async function handleDevLogin(): Promise<void> {
   font-weight: 600;
   color: #1675d1;
   text-align: center;
+}
+
+.sso-section {
+  margin-bottom: 8px;
+}
+
+.sso-notice {
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .dev-login-section {

@@ -13,6 +13,18 @@ router.beforeEach(async (to) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.every((record) => record.meta.requiresAuth !== false)
 
+  if (to.path === '/dashboard' && typeof to.query.token === 'string' && to.query.token) {
+    return {
+      path: '/sso/callback',
+      query: {
+        token: to.query.token,
+        state: (to.query.state as string) || undefined,
+        app_code: (to.query.app_code as string) || undefined,
+        source: (to.query.source as string) || undefined,
+      },
+    }
+  }
+
   if (requiresAuth && !authStore.isLoggedIn) {
     return {
       path: '/login',
