@@ -187,10 +187,11 @@ public class SsoApplicationService extends BaseApplicationService {
         }
 
         if (user == null) {
-            log.info("SSO登录自动创建用户: miduoUserId={}, name={}, mobile={}",
-                    validateResult.getUserId(), validateResult.getUserName(), validateResult.getMobile());
+            String displayName = resolveSsoDisplayName(validateResult);
+            log.info("SSO登录自动创建用户: miduoUserId={}, displayName={}, mobile={}",
+                    validateResult.getUserId(), displayName, validateResult.getMobile());
             user = new User();
-            user.setName(validateResult.getUserName() != null ? validateResult.getUserName() : "SSO用户");
+            user.setName(displayName);
             user.setPhone(validateResult.getMobile());
             user.setEmail(validateResult.getEmail());
             user.setEmployeeNo(validateResult.getEmployeeNo());
@@ -206,6 +207,27 @@ public class SsoApplicationService extends BaseApplicationService {
         }
 
         return user;
+    }
+
+    /**
+     * 从 SSO 返回字段中推导用户显示名称。
+     * 允许返回字段为 userId/employeeNo/mobile/email，不含 userName，
+     * 因此按 userName → employeeNo → mobile → userId → 固定兜底 的优先级取值。
+     */
+    private String resolveSsoDisplayName(MiduoSsoClient.ValidateResult result) {
+        if (result.getUserName() != null && !result.getUserName().isEmpty()) {
+            return result.getUserName();
+        }
+        if (result.getEmployeeNo() != null && !result.getEmployeeNo().isEmpty()) {
+            return result.getEmployeeNo();
+        }
+        if (result.getMobile() != null && !result.getMobile().isEmpty()) {
+            return result.getMobile();
+        }
+        if (result.getUserId() != null && !result.getUserId().isEmpty()) {
+            return "SSO_" + result.getUserId();
+        }
+        return "SSO用户";
     }
 
     private void saveSsoSession(Long userId, MiduoSsoClient.ValidateResult validateResult) {

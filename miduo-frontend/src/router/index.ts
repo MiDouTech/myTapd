@@ -13,7 +13,8 @@ router.beforeEach(async (to) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.every((record) => record.meta.requiresAuth !== false)
 
-  if (to.path === '/dashboard' && typeof to.query.token === 'string' && to.query.token) {
+  const ssoLandingPaths = ['/', '/dashboard']
+  if (ssoLandingPaths.includes(to.path) && typeof to.query.token === 'string' && to.query.token) {
     return {
       path: '/sso/callback',
       query: {
