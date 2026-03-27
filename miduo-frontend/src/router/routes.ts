@@ -172,6 +172,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'manage/daily-report',
+        name: 'manageDailyReport',
+        component: () => import('@/views/manage/DailyReportView.vue'),
+        meta: {
+          title: '日报管理',
+        },
+      },
+      {
         path: 'design-system',
         name: 'designSystem',
         component: () => import('@/views/demo/DesignSystemView.vue'),
