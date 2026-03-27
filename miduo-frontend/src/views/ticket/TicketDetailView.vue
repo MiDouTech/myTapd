@@ -1649,27 +1649,32 @@ watch(
 .ticket-detail-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+  padding-bottom: 24px;
 }
 
 // ===== 头部卡片 =====
 .header-card {
   :deep(.el-card__header) {
-    padding: 16px 20px 12px;
+    padding: 18px 24px 14px;
     border-bottom: 1px solid #f0f0f0;
+  }
+
+  :deep(.el-card__body) {
+    padding: 16px 24px 24px;
   }
 }
 
 .detail-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .header-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -1711,11 +1716,11 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 0 14px;
+  padding: 12px 0 16px;
   border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .action-bar-left {
@@ -1734,7 +1739,7 @@ watch(
 // ===== 主布局 =====
 .detail-layout {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: flex-start;
 }
 
@@ -1744,30 +1749,30 @@ watch(
 }
 
 .detail-sidebar {
-  width: 280px;
+  width: 320px;
   flex-shrink: 0;
   position: sticky;
   top: 60px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   border-left: 1px solid #f0f0f0;
-  padding-left: 4px;
+  padding-left: 16px;
 }
 
 // ===== 描述区块 =====
 .description-block {
-  margin-bottom: 16px;
-  padding: 14px 16px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
   background: #fafbfc;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid #ebedf0;
 }
 
 .block-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #606266;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .description-content {
@@ -1785,26 +1790,34 @@ watch(
 // ===== Tabs =====
 .main-tabs {
   :deep(.el-tabs__header) {
-    margin-bottom: 16px;
+    margin-bottom: 18px;
   }
 }
 
 .inner-tabs {
   :deep(.el-tabs__header) {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
 }
 
 .info-form {
   :deep(.el-form-item) {
-    margin-bottom: 14px;
+    margin-bottom: 18px;
+  }
+
+  :deep(.el-form-item__label) {
+    font-size: 14px;
+    color: #606266;
+    font-weight: 500;
   }
 }
 
 .tab-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .upload-drag-content {
@@ -1878,8 +1891,8 @@ watch(
 .flow-record-card {
   background: #fafafa;
   border: 1px solid #ebedf0;
-  border-radius: 6px;
-  padding: 10px 14px;
+  border-radius: 8px;
+  padding: 12px 16px;
   transition: box-shadow 0.15s;
 
   &:hover {
@@ -1924,7 +1937,11 @@ watch(
 // ===== 分区卡片 =====
 .section-card {
   :deep(.el-card__header) {
-    padding: 12px 16px;
+    padding: 14px 20px;
+  }
+
+  :deep(.el-card__body) {
+    padding: 16px 20px;
   }
 }
 
@@ -1932,7 +1949,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 
 .section-title {
@@ -1958,16 +1975,16 @@ watch(
 .attachment-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .attachment-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 14px;
+  padding: 12px 16px;
   border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fafafa;
   transition: background 0.2s;
 
@@ -2037,9 +2054,9 @@ watch(
 // ===== 评论区 =====
 .comment-input-area {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
-  margin-bottom: 0;
+  margin-bottom: 4px;
 }
 
 .comment-input-avatar {
@@ -2080,19 +2097,19 @@ watch(
 
 .comment-divider {
   height: 1px;
-  background: #f0f0f0;
-  margin: 16px 0;
+  background: #ebedf0;
+  margin: 20px 0;
 }
 
 .comment-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .comment-item {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
 
   &.comment-operation {
@@ -2118,14 +2135,14 @@ watch(
   min-width: 0;
   background: #f5f7fa;
   border-radius: 0 8px 8px 8px;
-  padding: 10px 14px;
+  padding: 12px 16px;
 }
 
 .comment-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 

@@ -310,65 +310,70 @@ async function saveField(field: string): Promise<void> {
 
 <style scoped>
 .bug-detail-info-panel {
-  padding: 0 8px 8px;
+  padding: 0 4px 12px;
 }
 
 .panel-group {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .panel-group + .panel-group {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 4px;
+  border-top: 1px solid #ebedf0;
+  padding-top: 10px;
 }
 
 .panel-group-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #909399;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 10px 4px 4px;
+  padding: 8px 4px 6px;
 }
 
 .info-list {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .info-row {
   display: flex;
-  align-items: center;
-  padding: 6px 4px;
-  border-bottom: 1px solid #f8f8f8;
-  min-height: 30px;
+  align-items: flex-start;
+  padding: 8px 6px;
+  border-radius: 4px;
+  min-height: 34px;
+  transition: background 0.15s;
 }
 
-.info-row:last-child {
-  border-bottom: none;
+.info-row:hover {
+  background: #f9fafb;
 }
 
 .info-label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 82px;
+  gap: 5px;
+  width: 90px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: #909399;
-  line-height: 1;
+  line-height: 22px;
+  padding-top: 1px;
 }
 
 .info-label .el-icon {
-  font-size: 12px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .info-value {
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;
   color: #303133;
   min-width: 0;
   word-break: break-all;
+  line-height: 22px;
 }
 
 .empty-value {
@@ -382,17 +387,17 @@ async function saveField(field: string): Promise<void> {
 .editable-value {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
 }
 
 .value-text {
   flex: 1;
   cursor: pointer;
-  border-radius: 3px;
-  padding: 1px 3px;
+  border-radius: 4px;
+  padding: 2px 4px;
   transition: background 0.15s;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .value-text:hover {
@@ -403,17 +408,18 @@ async function saveField(field: string): Promise<void> {
   opacity: 0;
   cursor: pointer;
   color: #1675d1;
-  font-size: 12px;
+  font-size: 13px;
   transition: opacity 0.15s;
 }
 
 /* 缺陷等级标签 */
 .severity-tag {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 2px 10px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 18px;
 }
 
 .severity-p0 {
