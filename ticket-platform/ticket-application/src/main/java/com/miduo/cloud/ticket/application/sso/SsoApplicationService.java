@@ -177,13 +177,7 @@ public class SsoApplicationService extends BaseApplicationService {
         }
 
         if (user == null && validateResult.getEmployeeNo() != null && !validateResult.getEmployeeNo().isEmpty()) {
-            List<User> allUsers = userRepository.findAllActive();
-            for (User u : allUsers) {
-                if (validateResult.getEmployeeNo().equals(u.getEmployeeNo())) {
-                    user = u;
-                    break;
-                }
-            }
+            user = userRepository.findByEmployeeNo(validateResult.getEmployeeNo());
         }
 
         if (user == null) {

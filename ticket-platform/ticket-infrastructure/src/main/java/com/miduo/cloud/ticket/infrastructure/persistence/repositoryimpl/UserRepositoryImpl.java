@@ -79,6 +79,22 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public User findByEmployeeNo(String employeeNo) {
+        if (employeeNo == null || employeeNo.isEmpty()) {
+            return null;
+        }
+        LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUserPO::getEmployeeNo, employeeNo);
+        SysUserPO po = sysUserMapper.selectOne(wrapper);
+        if (po == null) {
+            return null;
+        }
+        User user = convertToModel(po);
+        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
+        return user;
+    }
+
+    @Override
     public List<User> findAllActive() {
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getAccountStatus, 1);

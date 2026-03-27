@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { ssoCallback } from '@/api/sso'
 import { useAuthStore } from '@/stores/auth'
-import { notifyError, notifySuccess } from '@/utils/feedback'
+import { notifySuccess } from '@/utils/feedback'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +16,9 @@ const errorMsg = ref('')
 onMounted(async () => {
   const token = route.query.token as string | undefined
   const state = route.query.state as string | undefined
+  const storedRedirect = sessionStorage.getItem('sso_redirect')
+  const redirect = (route.query.redirect as string) || storedRedirect || '/dashboard'
+  sessionStorage.removeItem('sso_redirect')
 
   if (!token) {
     errorMsg.value = '缺少 SSO token 参数'
@@ -28,11 +31,9 @@ onMounted(async () => {
     authStore.setLoginState(loginOutput)
     await authStore.loadCurrentUser(true)
     notifySuccess('SSO 登录成功')
-    await router.replace('/dashboard')
+    await router.replace(redirect)
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'SSO 登录失败'
-    errorMsg.value = msg
-    notifyError(msg)
+    errorMsg.value = e instanceof Error ? e.message : 'SSO 登录失败'
   } finally {
     loading.value = false
   }
