@@ -30,13 +30,18 @@ onMounted(async () => {
   try {
     ssoStatus.value = await getSsoStatus()
   } catch {
-    // SSO 状态查询失败时静默降级，显示密码登录
     return
   }
 
   if (ssoStatus.value?.enabled && !isTestMode.value) {
     ssoRedirecting.value = true
     try {
+      const pendingRedirect =
+        typeof route.query.redirect === 'string' && route.query.redirect
+          ? route.query.redirect
+          : '/dashboard'
+      sessionStorage.setItem('sso_redirect', pendingRedirect)
+
       const { bridgeUrl } = await getSsoBridgeUrl()
       if (bridgeUrl) {
         window.location.href = bridgeUrl

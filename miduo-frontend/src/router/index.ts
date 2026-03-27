@@ -22,6 +22,7 @@ router.beforeEach(async (to) => {
         state: (to.query.state as string) || undefined,
         app_code: (to.query.app_code as string) || undefined,
         source: (to.query.source as string) || undefined,
+        redirect: (to.query.redirect as string) || undefined,
       },
     }
   }
