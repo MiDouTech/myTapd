@@ -297,51 +297,52 @@ async function saveField(field: string): Promise<void> {
 
 <style scoped>
 .bug-detail-info-panel {
-  padding: 0 4px 12px;
+  padding: 2px 0 8px;
 }
 
 .panel-group {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .panel-group + .panel-group {
   border-top: 1px solid #ebedf0;
-  padding-top: 10px;
+  padding-top: 8px;
+  margin-top: 4px;
 }
 
 .panel-group-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #909399;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 8px 4px 6px;
+  letter-spacing: 1px;
+  padding: 6px 4px 8px;
 }
 
 .info-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .info-row {
   display: flex;
   align-items: flex-start;
-  padding: 8px 6px;
-  border-radius: 4px;
-  min-height: 34px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  min-height: 32px;
   transition: background 0.15s;
 }
 
 .info-row:hover {
-  background: #f9fafb;
+  background: #f0f7ff;
 }
 
 .info-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  width: 90px;
+  gap: 6px;
+  width: 88px;
   flex-shrink: 0;
   font-size: 13px;
   color: #909399;
@@ -350,8 +351,9 @@ async function saveField(field: string): Promise<void> {
 }
 
 .info-label .el-icon {
-  font-size: 13px;
+  font-size: 14px;
   flex-shrink: 0;
+  color: #c0c4cc;
 }
 
 .info-value {
@@ -364,7 +366,7 @@ async function saveField(field: string): Promise<void> {
 }
 
 .empty-value {
-  color: #c0c4cc;
+  color: #dcdfe6;
 }
 
 .editable-row:hover .edit-icon {
@@ -388,7 +390,7 @@ async function saveField(field: string): Promise<void> {
 }
 
 .value-text:hover {
-  background: #f0f9ff;
+  background: #e8f4ff;
 }
 
 .edit-icon {
@@ -399,7 +401,7 @@ async function saveField(field: string): Promise<void> {
   transition: opacity 0.15s;
 }
 
-/* 缺陷等级标签 */
+/* severity tags */
 .severity-tag {
   display: inline-block;
   padding: 2px 10px;
