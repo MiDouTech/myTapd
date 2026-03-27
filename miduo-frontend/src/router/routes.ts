@@ -11,6 +11,15 @@ export const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/sso/callback',
+    name: 'ssoCallback',
+    component: () => import('@/views/auth/SsoCallbackView.vue'),
+    meta: {
+      title: 'SSO 登录',
+      requiresAuth: false,
+    },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/dashboard',

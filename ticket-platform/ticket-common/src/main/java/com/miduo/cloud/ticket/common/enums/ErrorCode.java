@@ -44,6 +44,13 @@ public enum ErrorCode {
     WECOM_CALLBACK_VERIFY_FAILED(5003, "企业微信回调验证失败"),
     WECOM_MSG_PARSE_FAILED(5004, "企业微信消息解析失败"),
 
+    SSO_DISABLED(5100, "SSO登录未启用"),
+    SSO_VALIDATE_FAILED(5101, "SSO交换Token校验失败"),
+    SSO_SESSION_EXPIRED(5102, "SSO会话已过期"),
+    SSO_REFRESH_FAILED(5103, "SSO会话续期失败"),
+    SSO_API_ERROR(5104, "SSO接口调用异常"),
+    SSO_STATE_INVALID(5105, "SSO状态参数校验失败"),
+
     BUG_REPORT_NOT_FOUND(6001, "Bug简报不存在"),
     BUG_REPORT_STATUS_INVALID(6002, "Bug简报状态不允许此操作"),
 

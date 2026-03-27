@@ -49,7 +49,10 @@ public class SecurityConfig {
                         "/wecom/callback/**",
                         "/api/wecom/callback/**",
                         "/api/open/ticket/**",
-                        "/ws/**"
+                        "/ws/**",
+                        "/api/auth/sso/status",
+                        "/api/auth/sso/callback",
+                        "/api/auth/sso/state"
                 ).permitAll()
                 .anyRequest().authenticated()
                 .and()

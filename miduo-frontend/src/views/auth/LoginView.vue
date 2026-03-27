@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { devLogin } from '@/api/auth'
+import { getSsoStatus } from '@/api/sso'
 import { useAuthStore } from '@/stores/auth'
+import type { SsoStatusOutput } from '@/types/sso'
 import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
 
 const route = useRoute()
@@ -15,6 +17,21 @@ const devForm = reactive({
   password: '',
 })
 const devLoginLoading = ref(false)
+
+const ssoStatus = ref<SsoStatusOutput | null>(null)
+
+const isTestMode = computed(() => route.query.test === 'test')
+const showPasswordLogin = computed(
+  () => !ssoStatus.value?.enabled || isTestMode.value,
+)
+
+onMounted(async () => {
+  try {
+    ssoStatus.value = await getSsoStatus()
+  } catch {
+    // SSO 状态查询失败时静默降级，显示密码登录
+  }
+})
 
 async function handleDevLogin(): Promise<void> {
   if (!devForm.username || !devForm.password) {
@@ -47,22 +64,47 @@ async function handleDevLogin(): Promise<void> {
         <div class="header-title">米多工单平台</div>
       </template>
 
-      <div class="dev-login-section">
+      <!-- SSO 登录引导（SSO 启用时始终显示） -->
+      <div v-if="ssoStatus?.enabled" class="sso-section">
         <div class="section-label">
-          <el-tag type="warning" size="small">过渡阶段</el-tag>
-          <span class="section-title">账号密码登录</span>
+          <el-tag type="success" size="small">统一登录</el-tag>
+          <span class="section-title">米多星球 SSO 登录</span>
         </div>
 
+        <el-alert class="sso-notice" type="success" :closable="false" show-icon>
+          <template #default>
+            本系统已接入米多星球 SSO 单点登录。请从
+            <strong>米多星球工作台</strong>
+            快捷入口进入，系统将自动完成身份验证。
+          </template>
+        </el-alert>
+
+        <!-- 非 test 模式下的纯 SSO 提示 -->
         <el-alert
-          class="transition-notice"
-          type="info"
+          v-if="!isTestMode"
+          class="sso-only-notice"
+          type="warning"
           :closable="false"
           show-icon
         >
           <template #default>
-            当前为过渡阶段，可使用账号密码登录。待 SSO 授权接入后，将不再支持账号密码登录。
+            账号密码登录已停用，请统一使用米多星球 SSO 方式登录。
           </template>
         </el-alert>
+
+        <el-divider v-if="showPasswordLogin" />
+      </div>
+
+      <!-- 账号密码登录（仅在 SSO 未启用 或 test 模式下显示） -->
+      <div v-if="showPasswordLogin" class="dev-login-section">
+        <div v-if="isTestMode && ssoStatus?.enabled" class="section-label">
+          <el-tag type="warning" size="small">调试模式</el-tag>
+          <span class="section-title">账号密码登录</span>
+        </div>
+        <div v-else-if="!ssoStatus?.enabled" class="section-label">
+          <el-tag type="warning" size="small">过渡阶段</el-tag>
+          <span class="section-title">账号密码登录</span>
+        </div>
 
         <el-form @submit.prevent="handleDevLogin" label-width="70px">
           <el-form-item label="用户名">
@@ -119,6 +161,22 @@ async function handleDevLogin(): Promise<void> {
   text-align: center;
 }
 
+.sso-section {
+  margin-bottom: 8px;
+}
+
+.sso-notice {
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sso-only-notice {
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .dev-login-section {
   margin-bottom: 8px;
 }
@@ -134,11 +192,5 @@ async function handleDevLogin(): Promise<void> {
   font-size: 14px;
   font-weight: 500;
   color: #606266;
-}
-
-.transition-notice {
-  margin-bottom: 20px;
-  font-size: 13px;
-  line-height: 1.6;
 }
 </style>

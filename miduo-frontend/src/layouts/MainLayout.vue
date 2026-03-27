@@ -153,6 +153,12 @@ function handleVisibilityChange(): void {
 }
 
 async function handleLogout(): Promise<void> {
+  try {
+    const { ssoLogout } = await import('@/api/sso')
+    await ssoLogout()
+  } catch {
+    // SSO 登出失败不影响本地登出流程
+  }
   notificationStore.teardown()
   authStore.clearLoginState()
   await router.push('/login')
