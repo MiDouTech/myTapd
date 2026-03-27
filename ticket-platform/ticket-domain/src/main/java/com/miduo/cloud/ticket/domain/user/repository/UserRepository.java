@@ -26,6 +26,11 @@ public interface UserRepository {
     User findByPhone(String phone);
 
     /**
+     * 根据工号查询用户
+     */
+    User findByEmployeeNo(String employeeNo);
+
+    /**
      * 查询所有用户
      */
     List<User> findAll();
