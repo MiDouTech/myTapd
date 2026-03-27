@@ -27,10 +27,12 @@ router.beforeEach(async (to) => {
   }
 
   if (requiresAuth && !authStore.isLoggedIn) {
+    const hasTestParam = to.query.test === 'test'
     return {
       path: '/login',
       query: {
         redirect: to.fullPath,
+        ...(hasTestParam ? { test: 'test' } : {}),
       },
     }
   }
