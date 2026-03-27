@@ -206,6 +206,12 @@ public class SsoApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
 
+        if (user.getAccountStatus() != null && user.getAccountStatus() == 4) {
+            log.info("SSO登录自动激活未激活用户: userId={}, name={}", user.getId(), user.getName());
+            user.setAccountStatus(1);
+            userRepository.updateAccountStatus(user.getId(), 1);
+        }
+
         return user;
     }
 
