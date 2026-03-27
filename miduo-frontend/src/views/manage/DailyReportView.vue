@@ -21,12 +21,13 @@ const saveLoading = ref(false)
 
 const configForm = reactive<DailyReportConfigUpdateInput>({
   enabled: false,
-  cron: '0 0 18 * * ?',
+  cronList: ['0 0 18 * * ?'],
   webhookUrls: [],
   includeDefectDetail: true,
   includeSuspended: true,
 })
 
+const cronInput = ref('')
 const webhookInput = ref('')
 const previewData = ref<DailyReportOutput | null>(null)
 const activeTab = ref('config')
@@ -36,7 +37,7 @@ async function loadConfig() {
   try {
     const data: DailyReportConfigOutput = await getDailyReportConfig()
     configForm.enabled = data.enabled
-    configForm.cron = data.cron
+    configForm.cronList = data.cronList && data.cronList.length > 0 ? [...data.cronList] : ['0 0 18 * * ?']
     configForm.webhookUrls = data.webhookUrls || []
     configForm.includeDefectDetail = data.includeDefectDetail
     configForm.includeSuspended = data.includeSuspended
@@ -120,6 +121,48 @@ const cronPresets = [
   { label: '工作日 18:00', value: '0 0 18 * * MON-FRI' },
 ]
 
+function isCronSelected(cronValue: string): boolean {
+  return configForm.cronList?.includes(cronValue) ?? false
+}
+
+function toggleCronPreset(cronValue: string) {
+  if (!configForm.cronList) {
+    configForm.cronList = []
+  }
+  const index = configForm.cronList.indexOf(cronValue)
+  if (index >= 0) {
+    configForm.cronList.splice(index, 1)
+  } else {
+    configForm.cronList.push(cronValue)
+  }
+}
+
+function addCustomCron() {
+  const cron = cronInput.value.trim()
+  if (!cron) {
+    notifyWarning('请输入 Cron 表达式')
+    return
+  }
+  if (!configForm.cronList) {
+    configForm.cronList = []
+  }
+  if (configForm.cronList.includes(cron)) {
+    notifyWarning('该推送时间已存在')
+    return
+  }
+  configForm.cronList.push(cron)
+  cronInput.value = ''
+}
+
+function removeCron(index: number) {
+  configForm.cronList?.splice(index, 1)
+}
+
+function getCronLabel(cron: string): string {
+  const preset = cronPresets.find((p) => p.value === cron)
+  return preset ? preset.label : cron
+}
+
 onMounted(() => {
   loadConfig()
 })
@@ -146,20 +189,42 @@ onMounted(() => {
 
             <el-form-item label="推送时间">
               <div class="cron-section">
-                <el-input v-model="configForm.cron" placeholder="Cron 表达式" style="width: 260px">
-                  <template #prepend>Cron</template>
-                </el-input>
+                <div class="cron-add">
+                  <el-input
+                    v-model="cronInput"
+                    placeholder="输入自定义 Cron 表达式"
+                    style="width: 300px"
+                    @keyup.enter="addCustomCron"
+                  >
+                    <template #prepend>Cron</template>
+                  </el-input>
+                  <el-button type="primary" @click="addCustomCron">添加</el-button>
+                </div>
                 <div class="cron-presets">
                   <el-tag
                     v-for="preset in cronPresets"
                     :key="preset.value"
-                    :type="configForm.cron === preset.value ? '' : 'info'"
+                    :type="isCronSelected(preset.value) ? '' : 'info'"
                     class="cron-tag"
-                    effect="plain"
-                    @click="configForm.cron = preset.value"
+                    :effect="isCronSelected(preset.value) ? 'dark' : 'plain'"
+                    @click="toggleCronPreset(preset.value)"
                   >
                     {{ preset.label }}
                   </el-tag>
+                </div>
+                <div v-if="configForm.cronList && configForm.cronList.length > 0" class="cron-list">
+                  <el-tag
+                    v-for="(cron, index) in configForm.cronList"
+                    :key="cron"
+                    closable
+                    class="cron-item-tag"
+                    @close="removeCron(index)"
+                  >
+                    {{ getCronLabel(cron) }}
+                  </el-tag>
+                </div>
+                <div v-else class="cron-empty">
+                  <el-text type="info" size="small">请选择或添加至少一个推送时间</el-text>
                 </div>
               </div>
             </el-form-item>
@@ -439,6 +504,12 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
 .cron-section {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.cron-add {
+  display: flex;
   gap: 8px;
 }
 
@@ -455,6 +526,25 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
   &:hover {
     opacity: 0.8;
   }
+}
+
+.cron-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid #ebeef5;
+}
+
+.cron-item-tag {
+  :deep(.el-tag) {
+    height: auto;
+    padding: 4px 8px;
+  }
+}
+
+.cron-empty {
+  padding: 4px 0;
 }
 
 .webhook-section {

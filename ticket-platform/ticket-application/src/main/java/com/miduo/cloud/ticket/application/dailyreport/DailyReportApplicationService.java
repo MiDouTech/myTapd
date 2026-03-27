@@ -34,6 +34,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
     private static final String CONFIG_KEY_INCLUDE_DEFECT_DETAIL = "daily_report_include_defect_detail";
     private static final String CONFIG_KEY_INCLUDE_SUSPENDED = "daily_report_include_suspended";
     private static final String CONFIG_GROUP = "DAILY_REPORT";
+    private static final String CRON_SEPARATOR = ";";
 
     private final DailyReportMapper dailyReportMapper;
     private final SystemConfigMapper systemConfigMapper;
@@ -152,7 +153,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
         DailyReportConfigOutput output = new DailyReportConfigOutput();
         output.setEnabled("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false")));
-        output.setCron(configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?"));
+        output.setCronList(parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?")));
         output.setIncludeDefectDetail("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_DEFECT_DETAIL, "true")));
         output.setIncludeSuspended("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true")));
 
@@ -178,8 +179,14 @@ public class DailyReportApplicationService extends BaseApplicationService {
         if (input.getEnabled() != null) {
             upsertConfig(CONFIG_KEY_ENABLED, String.valueOf(input.getEnabled()));
         }
-        if (input.getCron() != null && !input.getCron().trim().isEmpty()) {
-            upsertConfig(CONFIG_KEY_CRON, input.getCron().trim());
+        if (input.getCronList() != null) {
+            String joined = input.getCronList().stream()
+                    .filter(c -> c != null && !c.trim().isEmpty())
+                    .map(String::trim)
+                    .collect(Collectors.joining(CRON_SEPARATOR));
+            if (!joined.isEmpty()) {
+                upsertConfig(CONFIG_KEY_CRON, joined);
+            }
         }
         if (input.getWebhookUrls() != null) {
             String joined = input.getWebhookUrls().stream()
@@ -197,11 +204,11 @@ public class DailyReportApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 获取推送 Cron 表达式
+     * 获取推送 Cron 表达式列表
      */
-    public String getPushCron() {
+    public List<String> getPushCronList() {
         Map<String, String> configMap = loadConfigMap();
-        return configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?");
+        return parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?"));
     }
 
     /**
@@ -213,6 +220,19 @@ public class DailyReportApplicationService extends BaseApplicationService {
     }
 
     // ==================== 私有方法 ====================
+
+    private List<String> parseCronList(String cronValue) {
+        if (cronValue == null || cronValue.trim().isEmpty()) {
+            return Collections.singletonList("0 0 18 * * ?");
+        }
+        List<String> result = new ArrayList<>();
+        for (String cron : cronValue.split(CRON_SEPARATOR)) {
+            if (!cron.trim().isEmpty()) {
+                result.add(cron.trim());
+            }
+        }
+        return result.isEmpty() ? Collections.singletonList("0 0 18 * * ?") : result;
+    }
 
     private DailyReportSection buildPendingSection(List<DailyReportTicketRow> investigating,
                                                     List<DailyReportTicketRow> processing,

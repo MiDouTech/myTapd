@@ -42,7 +42,7 @@ export interface DailyReportOutput {
 
 export interface DailyReportConfigOutput {
   enabled: boolean
-  cron: string
+  cronList: string[]
   webhookUrls: string[]
   includeDefectDetail: boolean
   includeSuspended: boolean
@@ -50,7 +50,7 @@ export interface DailyReportConfigOutput {
 
 export interface DailyReportConfigUpdateInput {
   enabled?: boolean
-  cron?: string
+  cronList?: string[]
   webhookUrls?: string[]
   includeDefectDetail?: boolean
   includeSuspended?: boolean

@@ -17,9 +17,9 @@ public class DailyReportConfigOutput implements Serializable {
     private boolean enabled;
 
     /**
-     * Cron 表达式
+     * Cron 表达式列表（支持多个推送时间点）
      */
-    private String cron;
+    private List<String> cronList;
 
     /**
      * 企微群 Webhook 地址列表
