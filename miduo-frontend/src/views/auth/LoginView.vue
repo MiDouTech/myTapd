@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { devLogin } from '@/api/auth'
-import { getSsoStatus } from '@/api/sso'
+import { getSsoBridgeUrl, getSsoStatus } from '@/api/sso'
 import { useAuthStore } from '@/stores/auth'
 import type { SsoStatusOutput } from '@/types/sso'
 import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
@@ -19,6 +19,7 @@ const devForm = reactive({
 const devLoginLoading = ref(false)
 
 const ssoStatus = ref<SsoStatusOutput | null>(null)
+const ssoRedirecting = ref(false)
 
 const isTestMode = computed(() => route.query.test === 'test')
 const showPasswordLogin = computed(
@@ -30,6 +31,21 @@ onMounted(async () => {
     ssoStatus.value = await getSsoStatus()
   } catch {
     // SSO 状态查询失败时静默降级，显示密码登录
+    return
+  }
+
+  if (ssoStatus.value?.enabled && !isTestMode.value) {
+    ssoRedirecting.value = true
+    try {
+      const { bridgeUrl } = await getSsoBridgeUrl()
+      if (bridgeUrl) {
+        window.location.href = bridgeUrl
+        return
+      }
+    } catch {
+      // 获取 SSO 跳转地址失败时降级显示登录页
+    }
+    ssoRedirecting.value = false
   }
 })
 
@@ -59,7 +75,27 @@ async function handleDevLogin(): Promise<void> {
 
 <template>
   <div class="login-page">
-    <el-card class="login-card">
+    <!-- SSO 自动跳转中 -->
+    <el-card v-if="ssoRedirecting" class="login-card">
+      <div class="sso-redirecting">
+        <el-icon class="is-loading" :size="48" color="#1675d1">
+          <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M512 64a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V96a32 32 0 0 1 32-32z"
+              fill="currentColor"
+            />
+            <path
+              d="M512 736a32 32 0 0 1 32 32v192a32 32 0 1 1-64 0V768a32 32 0 0 1 32-32z"
+              fill="currentColor"
+              opacity="0.3"
+            />
+          </svg>
+        </el-icon>
+        <p class="redirecting-text">正在跳转至米多星球登录...</p>
+      </div>
+    </el-card>
+
+    <el-card v-else class="login-card">
       <template #header>
         <div class="header-title">米多工单平台</div>
       </template>
@@ -141,6 +177,7 @@ async function handleDevLogin(): Promise<void> {
   </div>
 </template>
 
+
 <style scoped lang="scss">
 .login-page {
   min-height: 100vh;
@@ -191,6 +228,17 @@ async function handleDevLogin(): Promise<void> {
 .section-title {
   font-size: 14px;
   font-weight: 500;
+  color: #606266;
+}
+
+.sso-redirecting {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.redirecting-text {
+  margin-top: 16px;
+  font-size: 16px;
   color: #606266;
 }
 </style>
