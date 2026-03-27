@@ -5,11 +5,14 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
+import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
@@ -54,15 +57,18 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final WebhookDispatchLogMapper webhookDispatchLogMapper;
     private final TicketMapper ticketMapper;
     private final SysUserMapper sysUserMapper;
+    private final TicketCategoryMapper ticketCategoryMapper;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper,
-                                  SysUserMapper sysUserMapper) {
+                                  SysUserMapper sysUserMapper,
+                                  TicketCategoryMapper ticketCategoryMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
+        this.ticketCategoryMapper = ticketCategoryMapper;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -350,8 +356,8 @@ public class WebhookDispatchService extends BaseApplicationService {
         StringBuilder content = new StringBuilder();
         content.append("【工单事件通知】\n");
         content.append("事件：")
-                .append(eventName == null || eventName.isEmpty() ? eventType.getCode() : eventName)
-                .append(" (").append(eventType.getCode()).append(")\n");
+                .append(eventName == null || eventName.isEmpty() ? eventType.getLabel() : eventName)
+                .append("\n");
         if (eventTime != null && !eventTime.isEmpty()) {
             content.append("时间：").append(eventTime).append("\n");
         }
@@ -375,14 +381,14 @@ public class WebhookDispatchService extends BaseApplicationService {
             content.append("详情：").append(baseUrl).append("/").append(ticketNo);
         }
 
-        String creatorWecomUserid = ticket != null ? safeJsonString(ticket, "creatorWecomUserid", null) : null;
+        List<String> mentionWecomUserids = collectMentionWecomUserids(ticket, data);
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
         text.put("content", normalizedContent);
-        if (creatorWecomUserid != null && !creatorWecomUserid.isEmpty()) {
+        if (!mentionWecomUserids.isEmpty()) {
             JSONArray mentionedList = new JSONArray();
-            mentionedList.add(creatorWecomUserid);
+            mentionedList.addAll(mentionWecomUserids);
             text.put("mentioned_list", mentionedList);
         }
 
@@ -390,6 +396,69 @@ public class WebhookDispatchService extends BaseApplicationService {
         payload.put("msgtype", "text");
         payload.put("text", text);
         return JSON.toJSONString(payload);
+    }
+
+    /**
+     * 收集需要@的企微用户ID列表：包含创建人、指派处理人
+     */
+    private List<String> collectMentionWecomUserids(JSONObject ticket, Object data) {
+        Set<String> wecomIds = new LinkedHashSet<>();
+        if (ticket != null) {
+            String creatorWecomUserid = safeJsonString(ticket, "creatorWecomUserid", null);
+            if (creatorWecomUserid != null && !creatorWecomUserid.isEmpty()) {
+                wecomIds.add(creatorWecomUserid);
+            }
+            Long assigneeId = ticket.getLong("assigneeId");
+            if (assigneeId != null) {
+                String wecomId = resolveWecomUserid(assigneeId);
+                if (wecomId != null) {
+                    wecomIds.add(wecomId);
+                }
+            }
+        }
+        if (data != null) {
+            try {
+                JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+                if (json != null) {
+                    Long assigneeId = json.getLong("assigneeId");
+                    if (assigneeId != null) {
+                        String wecomId = resolveWecomUserid(assigneeId);
+                        if (wecomId != null) {
+                            wecomIds.add(wecomId);
+                        }
+                    }
+                    Long previousAssigneeId = json.getLong("previousAssigneeId");
+                    if (previousAssigneeId != null) {
+                        String wecomId = resolveWecomUserid(previousAssigneeId);
+                        if (wecomId != null) {
+                            wecomIds.add(wecomId);
+                        }
+                    }
+                    Long operatorId = json.getLong("operatorId");
+                    if (operatorId != null) {
+                        String wecomId = resolveWecomUserid(operatorId);
+                        if (wecomId != null) {
+                            wecomIds.add(wecomId);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("收集@mention用户失败: {}", ex.getMessage());
+            }
+        }
+        return new ArrayList<>(wecomIds);
+    }
+
+    private String resolveWecomUserid(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        SysUserPO user = sysUserMapper.selectById(userId);
+        if (user == null || user.getWecomUserid() == null) {
+            return null;
+        }
+        String wecomId = user.getWecomUserid().trim();
+        return wecomId.isEmpty() ? null : wecomId;
     }
 
     private String resolveStatusLabel(String code) {
@@ -419,7 +488,9 @@ public class WebhookDispatchService extends BaseApplicationService {
             }
             StringBuilder sb = new StringBuilder();
             if (json.containsKey("categoryId")) {
-                sb.append("分类ID: ").append(json.get("categoryId"));
+                Long categoryId = json.getLong("categoryId");
+                String categoryName = resolveCategoryName(categoryId);
+                sb.append("分类: ").append(categoryName);
             }
             if (json.containsKey("priority")) {
                 if (sb.length() > 0) {
@@ -443,18 +514,79 @@ public class WebhookDispatchService extends BaseApplicationService {
                 if (sb.length() > 0) {
                     sb.append(", ");
                 }
-                sb.append("指派给: ").append(json.get("assigneeId"));
+                Long assigneeId = json.getLong("assigneeId");
+                sb.append("指派给: ").append(resolveUserNameById(assigneeId));
             }
             if (json.containsKey("assignType")) {
                 if (sb.length() > 0) {
                     sb.append(", ");
                 }
-                sb.append("分派类型: ").append(json.getString("assignType"));
+                sb.append("分派类型: ").append(resolveAssignTypeLabel(json.getString("assignType")));
+            }
+            if (json.containsKey("operatorId")) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                Long operatorId = json.getLong("operatorId");
+                sb.append("操作人: ").append(resolveUserNameById(operatorId));
+            }
+            if (json.containsKey("previousAssigneeId")) {
+                Long prevId = json.getLong("previousAssigneeId");
+                if (prevId != null) {
+                    if (sb.length() > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append("原处理人: ").append(resolveUserNameById(prevId));
+                }
             }
             return sb.length() > 0 ? sb.toString() : null;
         } catch (Exception ex) {
             log.warn("解析变更数据失败: {}", ex.getMessage());
             return null;
+        }
+    }
+
+    private String resolveUserNameById(Long userId) {
+        if (userId == null) {
+            return "-";
+        }
+        SysUserPO user = sysUserMapper.selectById(userId);
+        if (user == null || user.getName() == null) {
+            return "-";
+        }
+        return user.getName();
+    }
+
+    private String resolveCategoryName(Long categoryId) {
+        if (categoryId == null) {
+            return "-";
+        }
+        TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
+        if (category == null || category.getName() == null) {
+            return "-";
+        }
+        return category.getName();
+    }
+
+    private String resolveAssignTypeLabel(String assignType) {
+        if (assignType == null || assignType.trim().isEmpty()) {
+            return "-";
+        }
+        DispatchStrategy strategy = DispatchStrategy.fromCode(assignType);
+        if (strategy != null) {
+            return strategy.getLabel();
+        }
+        switch (assignType.toUpperCase(Locale.ROOT)) {
+            case "CREATE_ASSIGN":
+                return "创建时指派";
+            case "MANUAL_ASSIGN":
+                return "手动指派";
+            case "TRANSFER_ON_TRANSIT":
+                return "流转时转派";
+            case "TRANSFER":
+                return "转派";
+            default:
+                return assignType;
         }
     }
 
