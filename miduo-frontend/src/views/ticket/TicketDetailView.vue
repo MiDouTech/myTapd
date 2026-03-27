@@ -253,18 +253,6 @@ const roleCodes = computed(() =>
 const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
 
-const isCurrentUserAmongAssignees = computed(() => {
-  const uid = currentUserId.value
-  if (!uid || !detail.value) {
-    return false
-  }
-  const ids = detail.value.assigneeIds
-  if (ids && ids.length > 0) {
-    return ids.includes(uid)
-  }
-  return uid === detail.value.assigneeId
-})
-
 const customFieldEntries = computed(() => {
   if (!detail.value?.customFields) {
     return []
@@ -272,50 +260,11 @@ const customFieldEntries = computed(() => {
   return Object.entries(detail.value.customFields).map(([key, value]) => ({ key, value }))
 })
 
-const canEditCustomerInfo = computed(() => {
-  if (hasRole('ADMIN', 'TICKET_ADMIN')) {
-    return true
-  }
-  if (!['pending_assign', 'pending_test_accept', 'investigating', 'pending_cs_confirm'].includes(currentStatus.value)) {
-    return false
-  }
-  if (hasRole('CUSTOMER_SERVICE', 'SUBMITTER')) {
-    return true
-  }
-  return Boolean(currentUserId.value && currentUserId.value === detail.value?.creatorId)
-})
+const canEditCustomerInfo = computed(() => true)
 
-const canEditTestInfo = computed(() => {
-  if (hasRole('ADMIN', 'TICKET_ADMIN')) {
-    return true
-  }
-  if (!['pending_test_accept', 'testing', 'investigating', 'pending_verify'].includes(currentStatus.value)) {
-    return false
-  }
-  if (hasRole('TESTER')) {
-    return true
-  }
-  if (hasRole('HANDLER')) {
-    return true
-  }
-  return Boolean(currentUserId.value && isCurrentUserAmongAssignees.value)
-})
+const canEditTestInfo = computed(() => true)
 
-const canEditDevInfo = computed(() => {
-  if (hasRole('ADMIN', 'TICKET_ADMIN')) {
-    return true
-  }
-  if (!['pending_dev_accept', 'developing', 'processing', 'temp_resolved', 'pending_verify'].includes(currentStatus.value)) {
-    return false
-  }
-  if (hasRole('DEVELOPER')) {
-    return true
-  }
-  if (hasRole('HANDLER')) {
-    return true
-  }
-  return Boolean(currentUserId.value && isCurrentUserAmongAssignees.value)
-})
+const canEditDevInfo = computed(() => true)
 
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))

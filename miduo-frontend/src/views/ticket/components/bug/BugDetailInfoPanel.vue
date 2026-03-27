@@ -206,7 +206,6 @@ import {
 import { computed, reactive, ref } from 'vue'
 
 import { updateBugCustomerInfo } from '@/api/ticket'
-import { useAuthStore } from '@/stores/auth'
 import type { TicketDetailOutput } from '@/types/ticket'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -236,22 +235,10 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const authStore = useAuthStore()
-
 const editingField = ref<string | null>(null)
 const editValues = reactive<Record<string, string>>({})
 
-const roleCodes = computed(() =>
-  (authStore.userInfo?.roleCodes ?? []).map((c: string) => String(c).toUpperCase()),
-)
-
-const isAdmin = computed(() =>
-  roleCodes.value.includes('ADMIN') || roleCodes.value.includes('TICKET_ADMIN'),
-)
-
-const canEditCustomerInfo = computed(
-  () => isAdmin.value || roleCodes.value.includes('CUSTOMER_SERVICE'),
-)
+const canEditCustomerInfo = computed(() => true)
 
 const validReportClass = computed(() => {
   const v = props.detail.bugSummaryInfo?.isValidReport
