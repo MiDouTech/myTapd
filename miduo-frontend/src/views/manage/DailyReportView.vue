@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 import {
   getDailyReportConfig,
@@ -162,6 +162,12 @@ function getCronLabel(cron: string): string {
   const preset = cronPresets.find((p) => p.value === cron)
   return preset ? preset.label : cron
 }
+
+watch(activeTab, (tab) => {
+  if (tab === 'preview' && !previewData.value) {
+    handlePreview()
+  }
+})
 
 onMounted(() => {
   loadConfig()
@@ -449,7 +455,7 @@ onMounted(() => {
         </div>
 
         <div v-else-if="!previewLoading" class="preview-placeholder">
-          <el-empty description="点击「刷新预览」查看今日日报" />
+          <el-empty description="暂无日报数据" />
         </div>
       </el-tab-pane>
     </el-tabs>
