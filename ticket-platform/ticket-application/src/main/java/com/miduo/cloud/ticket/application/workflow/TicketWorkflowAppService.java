@@ -191,9 +191,16 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         ticket.setStatus(targetStatus);
 
         List<Long> newAssigneeIds = resolveNewAssigneeIdsFromTransit(input);
-        boolean willApplyAssignees = matchedTransition.isAllowTransfer() && !newAssigneeIds.isEmpty();
+        List<Long> nextAssigneeIds = Collections.emptyList();
+        if (matchedTransition.isAllowTransfer() && !newAssigneeIds.isEmpty()) {
+            nextAssigneeIds = newAssigneeIds;
+        } else if (shouldAutoClaimOnAccept(matchedTransition, oldStatus, operatorId)) {
+            // “受理”动作默认由点击人认领，避免状态已推进但处理人仍停留在旧值
+            nextAssigneeIds = Collections.singletonList(operatorId);
+        }
+        boolean willApplyAssignees = !nextAssigneeIds.isEmpty();
         if (willApplyAssignees) {
-            ticketAssigneeSyncService.applyAssigneesToTicket(ticket, newAssigneeIds);
+            ticketAssigneeSyncService.applyAssigneesToTicket(ticket, nextAssigneeIds);
         }
 
         // 终态时记录关闭/完成时间
@@ -238,10 +245,13 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         }
 
         // 处理人变更事件（主处理人或协同处理人列表变化时通知）
-        if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, newAssigneeIds)) {
+        if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds)) {
+            String assignmentReason = matchedTransition.isAllowTransfer()
+                    ? "TRANSFER_ON_TRANSIT"
+                    : "ACCEPT_CLAIM";
             eventPublisher.publishEvent(
                     new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
-                            oldAssigneeId, safeOperatorId, "TRANSFER_ON_TRANSIT"));
+                            oldAssigneeId, safeOperatorId, assignmentReason));
         }
     }
 
@@ -449,6 +459,29 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         Set<Long> b = new HashSet<>(before != null ? before : Collections.emptyList());
         Set<Long> a = new HashSet<>(after != null ? after : Collections.emptyList());
         return !b.equals(a);
+    }
+
+    /**
+     * 受理动作默认自动认领：
+     * - 优先按动作名包含“受理”判断
+     * - 兼容历史配置中动作名非“受理”的场景（按 from/to 状态对识别）
+     */
+    private boolean shouldAutoClaimOnAccept(WorkflowTransition transition, String fromStatus, Long operatorId) {
+        if (operatorId == null) {
+            return false;
+        }
+        if (transition != null && StringUtils.hasText(transition.getName())
+                && transition.getName().contains("受理")) {
+            return true;
+        }
+        if (!StringUtils.hasText(fromStatus) || transition == null || !StringUtils.hasText(transition.getTo())) {
+            return false;
+        }
+        String normalizedFromStatus = fromStatus.trim().toLowerCase();
+        String normalizedToStatus = transition.getTo().trim().toLowerCase();
+        return ("pending_accept".equals(normalizedFromStatus) && "processing".equals(normalizedToStatus))
+                || ("pending_test_accept".equals(normalizedFromStatus) && "testing".equals(normalizedToStatus))
+                || ("pending_dev_accept".equals(normalizedFromStatus) && "developing".equals(normalizedToStatus));
     }
 
     /**
