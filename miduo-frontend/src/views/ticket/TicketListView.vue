@@ -256,6 +256,18 @@ function isImageFile(fileType?: string): boolean {
   return fileType.startsWith('image/')
 }
 
+const previewAttachmentImageUrls = computed(() => {
+  return (previewDetail.value?.attachments ?? [])
+    .filter((a) => isImageFile(a.fileType))
+    .map((a) => a.filePath || '')
+})
+
+function getPreviewAttachmentImageIndex(filePath?: string): number {
+  if (!filePath) return 0
+  const idx = previewAttachmentImageUrls.value.indexOf(filePath)
+  return idx >= 0 ? idx : 0
+}
+
 function uniqStringList(values: string[]): string[] {
   return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
 }
@@ -635,8 +647,10 @@ onMounted(() => {
                                 v-if="url.startsWith('http')"
                                 :src="url"
                                 :preview-src-list="previewProblemScreenshotImageUrls"
+                                :initial-index="previewProblemScreenshotImageUrls.indexOf(url) >= 0 ? previewProblemScreenshotImageUrls.indexOf(url) : 0"
                                 fit="cover"
                                 class="preview-screenshot-thumb"
+                                preview-teleported
                               />
                             </div>
                           </div>
@@ -811,9 +825,11 @@ onMounted(() => {
                   <el-image
                     v-if="isImageFile(attachment.fileType)"
                     :src="attachment.filePath"
-                    :preview-src-list="previewDetail.attachments?.filter((a) => isImageFile(a.fileType)).map((a) => a.filePath || '')"
+                    :preview-src-list="previewAttachmentImageUrls"
+                    :initial-index="getPreviewAttachmentImageIndex(attachment.filePath)"
                     fit="cover"
                     class="preview-attachment-thumb"
+                    preview-teleported
                     lazy
                   />
                   <el-icon v-else class="preview-attachment-icon"><DocumentOutlined /></el-icon>

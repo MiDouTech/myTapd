@@ -676,6 +676,18 @@ function isImageFile(fileType?: string): boolean {
   return fileType.startsWith('image/')
 }
 
+const attachmentImageUrls = computed(() => {
+  return (detail.value?.attachments ?? [])
+    .filter((a) => isImageFile(a.fileType))
+    .map((a) => a.filePath || '')
+})
+
+function getAttachmentImageIndex(filePath?: string): number {
+  if (!filePath) return 0
+  const idx = attachmentImageUrls.value.indexOf(filePath)
+  return idx >= 0 ? idx : 0
+}
+
 const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
@@ -924,15 +936,17 @@ watch(
                           </div>
                           <div class="selected-screenshot-grid">
                             <div
-                              v-for="url in customerProblemScreenshots"
+                              v-for="(url, urlIndex) in customerProblemScreenshots"
                               :key="url"
                               class="selected-screenshot-item"
                             >
                               <el-image
                                 :src="url"
                                 :preview-src-list="customerProblemScreenshots"
+                                :initial-index="urlIndex"
                                 fit="cover"
                                 class="selected-screenshot-image"
+                                preview-teleported
                               />
                               <el-button
                                 type="danger"
@@ -1227,9 +1241,11 @@ watch(
             <el-image
               v-if="isImageFile(attachment.fileType)"
               :src="attachment.filePath"
-              :preview-src-list="detail.attachments?.filter(a => isImageFile(a.fileType)).map(a => a.filePath || '')"
+              :preview-src-list="attachmentImageUrls"
+              :initial-index="getAttachmentImageIndex(attachment.filePath)"
               fit="cover"
               class="attachment-thumbnail"
+              preview-teleported
               lazy
             />
             <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
