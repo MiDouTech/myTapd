@@ -42,3 +42,32 @@ export function formatDurationSec(seconds?: number | null): string {
   }
   return `${second}s`
 }
+
+const ROLE_LABEL_MAP: Record<string, string> = {
+  SUBMITTER: '提交人',
+  HANDLER: '处理人',
+  ADMIN: '系统管理员',
+  TICKET_ADMIN: '工单管理员',
+  CUSTOMER_SERVICE: '客服',
+  TESTER: '测试',
+  DEVELOPER: '开发',
+  QA_MANAGER: '测试经理',
+  QA_LEAD: '测试负责人',
+  REPORT_REVIEWER: '简报审核人',
+  USER: '普通用户',
+}
+
+/** 角色编码转中文，支持多角色拼接（如 A,B） */
+export function formatRoleLabel(role?: string): string {
+  if (!role) return '-'
+  const normalized = role
+    .replace(/[\[\]'"`]/g, '')
+    .trim()
+  if (!normalized) return '-'
+  const tokens = normalized.split(/[，,|/]+/).map((item) => item.trim()).filter(Boolean)
+  if (tokens.length <= 1) {
+    const token = tokens[0] || normalized
+    return ROLE_LABEL_MAP[token.toUpperCase()] || token
+  }
+  return tokens.map((item) => ROLE_LABEL_MAP[item.toUpperCase()] || item).join(' / ')
+}

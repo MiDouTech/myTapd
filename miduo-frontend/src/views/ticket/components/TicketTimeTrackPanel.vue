@@ -52,7 +52,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="assigneeName" label="处理人" align="center" min-width="120" />
-        <el-table-column prop="assigneeRole" label="角色" align="center" min-width="120" />
+        <el-table-column label="角色" align="center" min-width="120">
+          <template #default="{ row }">
+            {{ roleLabelFn(row.assigneeRole) }}
+          </template>
+        </el-table-column>
         <el-table-column label="到达时间" align="center" min-width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.arriveAt) }}
@@ -107,6 +111,7 @@ const props = defineProps<{
   standaloneFieldChanges: BugChangeHistoryOutput[]
   nodeDurationItems: TicketNodeDurationItem[]
   statusLabelFn: (status?: string) => string
+  roleLabelFn: (role?: string) => string
   formatDuration: (sec?: number) => string
 }>()
 

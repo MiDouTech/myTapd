@@ -29,7 +29,7 @@ import type {
   TicketView,
 } from '@/types/ticket'
 import type { TicketFlowRecordOutput } from '@/types/workflow'
-import { formatDateTime, formatDurationSec, formatFileSize } from '@/utils/formatter'
+import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
 
 const route = useRoute()
 const router = useRouter()
@@ -778,6 +778,7 @@ onUnmounted(() => {
                         :standalone-field-changes="previewTimeTrackStandalone"
                         :node-duration-items="previewNodeDurationItems"
                         :status-label-fn="getStatusLabel"
+                        :role-label-fn="formatRoleLabel"
                         :format-duration="formatDurationSec"
                       />
                     </el-tab-pane>
@@ -814,7 +815,7 @@ onUnmounted(() => {
                             </span>
                             <el-divider direction="vertical" />
                             <span class="preview-flow-operator">
-                              操作人：{{ record.operatorName || record.operatorId }}（{{ record.operatorRole }}）
+                              操作人：{{ record.operatorName || record.operatorId }}（{{ formatRoleLabel(record.operatorRole) }}）
                             </span>
                             <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
                               <el-divider direction="vertical" />

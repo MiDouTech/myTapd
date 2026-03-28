@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -57,7 +57,7 @@ import type {
 } from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyError } from '@/utils/feedback'
-import { formatDateTime, formatDurationSec, formatFileSize } from '@/utils/formatter'
+import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
 
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
 import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
@@ -77,6 +77,11 @@ const timeTrackItems = ref<TicketTimeTrackItem[]>([])
 const timeTrackStandalone = ref<BugChangeHistoryOutput[]>([])
 const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
 const bugSubmitLoading = ref(false)
+const attachmentPreviewVisible = ref(false)
+const attachmentPreviewUrl = ref('')
+
+const MOBILE_BREAKPOINT = 768
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 
 const activeMainTab = ref('detail')
 const changeHistoryCount = ref(0)
@@ -252,6 +257,7 @@ const roleCodes = computed(() =>
 )
 const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
+const isCompactLayout = computed(() => viewportWidth.value <= MOBILE_BREAKPOINT)
 
 const customFieldEntries = computed(() => {
   if (!detail.value?.customFields) {
@@ -279,6 +285,13 @@ function normalizeStatus(status?: string): string {
   if (code === 'pending_test') return 'pending_test_accept'
   if (code === 'pending_dev') return 'pending_dev_accept'
   return code
+}
+
+function updateViewportWidth(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  viewportWidth.value = window.innerWidth
 }
 
 function fillBugForms(ticketDetail: TicketDetailOutput): void {
@@ -688,6 +701,14 @@ function getAttachmentImageIndex(filePath?: string): number {
   return idx >= 0 ? idx : 0
 }
 
+function openAttachmentPreview(filePath?: string): void {
+  if (!filePath) {
+    return
+  }
+  attachmentPreviewUrl.value = filePath
+  attachmentPreviewVisible.value = true
+}
+
 const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
@@ -768,7 +789,17 @@ function getAvatarColor(name: string): AvatarColor {
 }
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth, { passive: true })
+  }
   await Promise.all([loadAll(), trackReadSilently(), loadModules()])
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', updateViewportWidth)
+  }
 })
 
 watch(
@@ -881,7 +912,7 @@ watch(
           <!-- 主 Tab -->
           <el-tabs v-model="activeMainTab" class="main-tabs">
             <el-tab-pane label="详细信息" name="detail">
-              <el-tabs v-model="activeBugTab" class="inner-tabs">
+              <el-tabs v-model="activeBugTab" class="inner-tabs bug-info-tabs" :stretch="!isCompactLayout">
                 <el-tab-pane label="客服信息" name="customer">
                   <!-- 企微消息一键解析入口 -->
                   <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
@@ -897,7 +928,11 @@ watch(
                     </el-button>
                     <span class="wecom-parse-hint">粘贴企微收到的客服消息，自动识别并填入下方字段</span>
                   </div>
-                  <el-form label-width="120px" class="info-form">
+                  <el-form
+                    :label-width="isCompactLayout ? 'auto' : '120px'"
+                    :label-position="isCompactLayout ? 'top' : 'right'"
+                    class="info-form"
+                  >
                     <el-form-item label="商户编号">
                       <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
                     </el-form-item>
@@ -996,7 +1031,11 @@ watch(
                 </el-tab-pane>
 
                 <el-tab-pane label="测试信息" name="test">
-                  <el-form label-width="120px" class="info-form">
+                  <el-form
+                    :label-width="isCompactLayout ? 'auto' : '120px'"
+                    :label-position="isCompactLayout ? 'top' : 'right'"
+                    class="info-form"
+                  >
                     <el-form-item label="复现环境">
                       <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo" placeholder="请选择">
                         <el-option label="生产环境" value="PRODUCTION" />
@@ -1077,7 +1116,11 @@ watch(
                 </el-tab-pane>
 
                 <el-tab-pane label="开发信息" name="dev">
-                  <el-form label-width="120px" class="info-form">
+                  <el-form
+                    :label-width="isCompactLayout ? 'auto' : '120px'"
+                    :label-position="isCompactLayout ? 'top' : 'right'"
+                    class="info-form"
+                  >
                     <el-form-item label="缺陷原因">
                       <el-input
                         v-model="devInfoForm.rootCause"
@@ -1131,6 +1174,7 @@ watch(
                     :standalone-field-changes="timeTrackStandalone"
                     :node-duration-items="nodeDurationItems"
                     :status-label-fn="getStatusLabel"
+                    :role-label-fn="formatRoleLabel"
                     :format-duration="formatDurationSec"
                   />
                 </el-tab-pane>
@@ -1174,7 +1218,7 @@ watch(
                         <el-divider direction="vertical" />
                         <span class="flow-operator">
                           操作人：{{ record.operatorName || record.operatorId }}
-                          （{{ record.operatorRole }}）
+                          （{{ formatRoleLabel(record.operatorRole) }}）
                         </span>
                         <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
                           <el-divider direction="vertical" />
@@ -1273,8 +1317,27 @@ watch(
             <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
           </div>
           <div class="attachment-info">
-            <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
-            <div class="attachment-meta">
+            <div class="attachment-name-row">
+              <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+              <div class="attachment-actions attachment-actions-inline">
+                <el-button
+                  v-if="isImageFile(attachment.fileType) && attachment.filePath"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openAttachmentPreview(attachment.filePath)"
+                >查看</el-button>
+                <el-popconfirm
+                  title="确认删除此附件？"
+                  @confirm="handleDeleteAttachment(attachment.id)"
+                >
+                  <template #reference>
+                    <el-button type="danger" link size="small">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </div>
+            <div class="attachment-meta attachment-meta-primary">
               <el-tag
                 v-if="attachment.source === 'WECOM_BOT'"
                 type="success"
@@ -1288,29 +1351,14 @@ watch(
                 effect="plain"
               >Web</el-tag>
               <span>{{ formatFileSize(attachment.fileSize) }}</span>
-              <span class="meta-divider">·</span>
+            </div>
+            <div class="attachment-meta attachment-meta-secondary">
+              <span class="meta-label">上传人：</span>
               <span>{{ attachment.uploadedByName || '-' }}</span>
               <span class="meta-divider">·</span>
+              <span class="meta-label">上传时间：</span>
               <span>{{ formatDateTime(attachment.createTime) }}</span>
             </div>
-          </div>
-          <div class="attachment-actions">
-            <el-button
-              v-if="isImageFile(attachment.fileType) && attachment.filePath"
-              type="primary"
-              link
-              size="small"
-              :href="attachment.filePath"
-              target="_blank"
-            >查看</el-button>
-            <el-popconfirm
-              title="确认删除此附件？"
-              @confirm="handleDeleteAttachment(attachment.id)"
-            >
-              <template #reference>
-                <el-button type="danger" link size="small">删除</el-button>
-              </template>
-            </el-popconfirm>
           </div>
         </div>
       </div>
@@ -1636,6 +1684,26 @@ watch(
       <el-button type="primary" :loading="submitLoading" @click="handleCloseTicket">确认关闭</el-button>
     </template>
   </el-dialog>
+
+  <el-dialog
+    v-model="attachmentPreviewVisible"
+    title="图片预览"
+    width="min(920px, 96vw)"
+    append-to-body
+    class="attachment-preview-dialog"
+    destroy-on-close
+  >
+    <div class="attachment-preview-dialog-body">
+      <el-image
+        v-if="attachmentPreviewUrl"
+        :src="attachmentPreviewUrl"
+        fit="contain"
+        class="attachment-preview-image"
+        preview-teleported
+      />
+      <EmptyState v-else description="暂无可预览图片" />
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">
@@ -1797,6 +1865,12 @@ watch(
 .inner-tabs {
   :deep(.el-tabs__header) {
     margin-bottom: 14px;
+  }
+}
+
+.bug-info-tabs {
+  :deep(.el-tabs__item) {
+    font-weight: 500;
   }
 }
 
@@ -2020,6 +2094,16 @@ watch(
 .attachment-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.attachment-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .attachment-name {
@@ -2027,18 +2111,28 @@ watch(
   font-weight: 500;
   color: #303133;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .attachment-meta {
-  margin-top: 4px;
   font-size: 12px;
   color: #909399;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  row-gap: 4px;
+  column-gap: 6px;
+}
+
+.attachment-meta-secondary {
+  color: #606266;
+}
+
+.meta-label {
+  color: #909399;
 }
 
 .meta-divider {
@@ -2048,7 +2142,29 @@ watch(
 .attachment-actions {
   flex-shrink: 0;
   display: flex;
-  gap: 4px;
+  gap: 6px;
+}
+
+.attachment-actions-inline {
+  :deep(.el-button) {
+    white-space: nowrap;
+  }
+}
+
+.attachment-preview-dialog-body {
+  min-height: 320px;
+  max-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.attachment-preview-image {
+  width: 100%;
+  height: 66vh;
 }
 
 // ===== 评论区 =====
@@ -2408,6 +2524,13 @@ watch(
     }
   }
 
+  .bug-info-tabs {
+    :deep(.el-tabs__item) {
+      min-height: 36px;
+      padding: 0 12px;
+    }
+  }
+
   .main-tabs :deep(.el-tabs__nav-scroll),
   .inner-tabs :deep(.el-tabs__nav-scroll) {
     overflow-x: auto;
@@ -2423,12 +2546,12 @@ watch(
       margin-bottom: 14px;
     }
 
-    :deep(.el-form-item__label) {
+    :deep(.el-form-item__label:not(.is-top)) {
       width: 88px !important;
       font-size: 13px;
     }
 
-    :deep(.el-form-item__content) {
+    :deep(.el-form-item__content:not(.is-top)) {
       margin-left: 88px !important;
     }
   }
@@ -2474,9 +2597,21 @@ watch(
     gap: 10px;
   }
 
+  .attachment-name-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .attachment-actions-inline {
+    align-self: flex-end;
+  }
+
   .attachment-actions {
-    width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+  }
+
+  .attachment-preview-image {
+    height: 56vh;
   }
 
   .comment-input-area {
