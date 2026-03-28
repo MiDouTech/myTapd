@@ -1404,7 +1404,7 @@ watch(
   <el-dialog
     v-model="wecomParseDialogVisible"
     title="企微消息一键解析"
-    width="640px"
+    width="min(640px, 92vw)"
     :close-on-click-modal="false"
     destroy-on-close
   >
@@ -1510,7 +1510,7 @@ watch(
   <el-dialog
     v-model="assignDialogVisible"
     :title="currentStatus === 'pending_assign' ? '分派 / 认领（进入下一环节）' : '转派工单'"
-    width="520px"
+    width="min(520px, 92vw)"
   >
     <el-form label-width="100px">
       <el-form-item label="处理人" required>
@@ -1537,7 +1537,7 @@ watch(
   </el-dialog>
 
   <!-- 待分派：仅更换对接人（不改变流程状态） -->
-  <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="480px">
+  <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="min(480px, 92vw)">
     <el-form label-width="90px">
       <el-form-item label="对接人" required>
         <el-select v-model="pendingPoolTransferForm.targetUserId" filterable placeholder="选择新的测试对接人" style="width: 100%">
@@ -1558,7 +1558,7 @@ watch(
   <el-dialog
     v-model="processDialogVisible"
     :title="selectedAction ? selectedAction.actionName : '工单操作'"
-    width="520px"
+    width="min(520px, 92vw)"
   >
     <el-form label-width="100px">
       <el-form-item label="目标状态">
@@ -1599,7 +1599,7 @@ watch(
   </el-dialog>
 
   <!-- 关闭工单弹窗 -->
-  <el-dialog v-model="closeDialogVisible" title="关闭工单" width="480px">
+  <el-dialog v-model="closeDialogVisible" title="关闭工单" width="min(480px, 92vw)">
     <el-form label-width="90px">
       <el-form-item label="关闭原因">
         <el-input v-model="closeForm.remark" type="textarea" />
@@ -1701,6 +1701,11 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.action-bar-left :deep(.el-button + .el-button),
+.action-bar-right :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 // ===== 主布局 =====
@@ -2288,5 +2293,199 @@ watch(
   margin: 12px;
   font-size: 13px;
   color: #e6a23c;
+}
+
+@media (max-width: 1024px) {
+  .detail-layout {
+    gap: 16px;
+  }
+
+  .detail-sidebar {
+    width: 280px;
+    top: 56px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ticket-detail-page {
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+
+  .header-card {
+    :deep(.el-card__header) {
+      padding: 14px 14px 10px;
+    }
+
+    :deep(.el-card__body) {
+      padding: 12px 14px 16px;
+    }
+  }
+
+  .ticket-title {
+    font-size: 16px;
+  }
+
+  .action-bar {
+    align-items: stretch;
+    padding: 10px 0 12px;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .action-bar-left,
+  .action-bar-right {
+    width: 100%;
+  }
+
+  .action-bar-left {
+    gap: 6px;
+  }
+
+  .action-bar-left :deep(.el-button),
+  .action-bar-right :deep(.el-button) {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .detail-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .detail-sidebar {
+    width: 100%;
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border-left: none;
+    border-top: 1px solid #f0f0f0;
+    padding-left: 0;
+    padding-top: 12px;
+  }
+
+  .description-block {
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  .main-tabs {
+    :deep(.el-tabs__header) {
+      margin-bottom: 12px;
+    }
+  }
+
+  .inner-tabs {
+    :deep(.el-tabs__header) {
+      margin-bottom: 10px;
+    }
+  }
+
+  .main-tabs :deep(.el-tabs__nav-scroll),
+  .inner-tabs :deep(.el-tabs__nav-scroll) {
+    overflow-x: auto;
+  }
+
+  .main-tabs :deep(.el-tabs__nav),
+  .inner-tabs :deep(.el-tabs__nav) {
+    white-space: nowrap;
+  }
+
+  .info-form {
+    :deep(.el-form-item) {
+      margin-bottom: 14px;
+    }
+
+    :deep(.el-form-item__label) {
+      width: 88px !important;
+      font-size: 13px;
+    }
+
+    :deep(.el-form-item__content) {
+      margin-left: 88px !important;
+    }
+  }
+
+  .tab-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  .wecom-parse-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .wecom-parse-hint {
+    line-height: 1.5;
+  }
+
+  .selected-screenshot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .flow-record-card {
+    padding: 10px 12px;
+  }
+
+  .section-card {
+    :deep(.el-card__header) {
+      padding: 12px 14px;
+    }
+
+    :deep(.el-card__body) {
+      padding: 12px 14px;
+    }
+  }
+
+  .attachment-item {
+    align-items: flex-start;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .attachment-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .comment-input-area {
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .comment-input-avatar {
+    display: none;
+  }
+
+  .comment-submit-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .comment-item {
+    gap: 10px;
+  }
+
+  .comment-avatar {
+    display: none;
+  }
+
+  .comment-body {
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .comment-time {
+    margin-left: 0;
+  }
+
+  .parse-example-code {
+    font-size: 11px;
+  }
 }
 </style>
