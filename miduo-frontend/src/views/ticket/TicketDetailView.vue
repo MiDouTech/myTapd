@@ -1517,6 +1517,7 @@ watch(
         <el-select
           v-model="assignForm.assigneeIds"
           multiple
+          filterable
           collapse-tags
           collapse-tags-tooltip
           placeholder="可选择多名处理人，第一位为主负责人"
@@ -1539,7 +1540,7 @@ watch(
   <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="480px">
     <el-form label-width="90px">
       <el-form-item label="对接人" required>
-        <el-select v-model="pendingPoolTransferForm.targetUserId" placeholder="选择新的测试对接人" style="width: 100%">
+        <el-select v-model="pendingPoolTransferForm.targetUserId" filterable placeholder="选择新的测试对接人" style="width: 100%">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
@@ -1570,6 +1571,7 @@ watch(
         <el-select
           v-model="transitForm.newAssigneeIds"
           multiple
+          filterable
           collapse-tags
           collapse-tags-tooltip
           clearable
