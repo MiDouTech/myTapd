@@ -128,7 +128,6 @@ onMounted(() => {
   <div class="statistics-page" v-loading="loading">
     <el-card shadow="never">
       <div class="toolbar">
-        <div class="title">Bug简报统计看板</div>
         <el-space>
           <el-button @click="router.push('/bug-report')">返回列表</el-button>
           <el-button @click="loadStatistics">刷新</el-button>
@@ -259,14 +258,8 @@ onMounted(() => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
 }
 
 .query-form {

@@ -211,10 +211,6 @@ onMounted(() => {
 
 <template>
   <div class="operation-log-view">
-    <div class="page-header">
-      <h2 class="page-title">工单日志</h2>
-    </div>
-
     <!-- 统计概览卡片 -->
     <div class="statistics-row">
       <div class="stat-card">
@@ -562,17 +558,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.page-header {
-  margin-bottom: 16px;
-}
-
-.page-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1d2129;
-  margin: 0;
 }
 
 // ─── 统计卡片 ──────────────────────────────

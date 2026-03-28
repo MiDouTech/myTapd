@@ -141,10 +141,6 @@ onMounted(() => {
 
 <template>
   <el-card shadow="never" v-loading="loading">
-    <template #header>
-      <div class="title">新建工单</div>
-    </template>
-
     <el-form label-width="120px" class="create-form">
       <div class="form-section-title">基本信息</div>
       <el-form-item label="工单标题" required>
@@ -278,12 +274,6 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
 .create-form {
   max-width: 860px;
   padding-top: 8px;

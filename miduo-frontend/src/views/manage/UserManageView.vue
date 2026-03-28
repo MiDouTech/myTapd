@@ -400,7 +400,6 @@ onMounted(async () => {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <div class="title">组织账号管理</div>
           <el-space>
             <span class="sync-tip">最近同步状态：</span>
             <el-tag :type="getSyncStatusType(latestSyncStatus?.syncStatus)">
@@ -703,12 +702,6 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
 .subtitle {
   font-size: 14px;
   font-weight: 500;

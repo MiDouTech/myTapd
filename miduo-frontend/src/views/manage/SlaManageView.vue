@@ -279,7 +279,6 @@ onMounted(async () => {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="title">SLA 管理</span>
           <el-button type="primary" @click="openCreateDialog">新增策略</el-button>
         </div>
       </template>
@@ -410,15 +409,9 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
 .card-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
 }
 </style>

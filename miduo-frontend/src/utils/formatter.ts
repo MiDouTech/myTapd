@@ -61,7 +61,7 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 export function formatRoleLabel(role?: string): string {
   if (!role) return '-'
   const normalized = role
-    .replace(/[\[\]'"`]/g, '')
+    .replace(/[[\]'"`]/g, '')
     .trim()
   if (!normalized) return '-'
   const tokens = normalized.split(/[，,|/]+/).map((item) => item.trim()).filter(Boolean)

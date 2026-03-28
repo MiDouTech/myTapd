@@ -594,7 +594,6 @@ onMounted(async () => {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span class="title">工作流管理</span>
           <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
         </div>
       </template>

@@ -164,27 +164,15 @@ onMounted(() => {
 
 <template>
   <div class="report-center" v-loading="loading">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <div class="page-icon">
-          <el-icon><DataAnalysis /></el-icon>
-        </div>
-        <div class="page-title-group">
-          <h1 class="page-title">报表中心</h1>
-          <p class="page-subtitle">数据统计与趋势分析</p>
-        </div>
-      </div>
-      <div class="header-right">
-        <el-radio-group v-model="rangeDays" @change="loadReports" class="range-group">
-          <el-radio-button :value="7">近7天</el-radio-button>
-          <el-radio-button :value="14">近14天</el-radio-button>
-          <el-radio-button :value="30">近30天</el-radio-button>
-          <el-radio-button :value="60">近60天</el-radio-button>
-        </el-radio-group>
-        <el-button :icon="Refresh" circle @click="loadReports" title="刷新" />
-        <el-button type="primary" :icon="Download" @click="handleExport">导出报表</el-button>
-      </div>
+    <div class="page-actions">
+      <el-radio-group v-model="rangeDays" @change="loadReports" class="range-group">
+        <el-radio-button :value="7">近7天</el-radio-button>
+        <el-radio-button :value="14">近14天</el-radio-button>
+        <el-radio-button :value="30">近30天</el-radio-button>
+        <el-radio-button :value="60">近60天</el-radio-button>
+      </el-radio-group>
+      <el-button :icon="Refresh" circle @click="loadReports" title="刷新" />
+      <el-button type="primary" :icon="Download" @click="handleExport">导出报表</el-button>
     </div>
 
     <!-- Overview Summary Cards -->
@@ -521,57 +509,13 @@ $bg: #f8fafc;
   gap: 16px;
 }
 
-/* ── Page Header ── */
-.page-header {
+/* ── Page Actions ── */
+.page-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: #fff;
-  border-radius: 10px;
-  padding: 18px 24px;
-  border: 1px solid $border;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  gap: 16px;
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .page-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, $primary, #42a5f5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 22px;
-    flex-shrink: 0;
-  }
-
-  .page-title {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: $text-primary;
-    line-height: 1.2;
-  }
-
-  .page-subtitle {
-    margin: 2px 0 0;
-    font-size: 13px;
-    color: $text-secondary;
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-  }
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 /* ── Overview Cards ── */
@@ -936,9 +880,9 @@ $bg: #f8fafc;
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .page-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .overview-grid {

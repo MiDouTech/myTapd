@@ -254,7 +254,6 @@ onMounted(async () => {
   <el-space direction="vertical" fill :size="16">
     <el-card shadow="never">
       <div class="toolbar">
-        <div class="title">通知中心</div>
         <el-space>
           <el-tag :type="connectionTagType">{{ connectionText }}</el-tag>
           <el-button @click="loadNotifications">刷新列表</el-button>
@@ -398,14 +397,8 @@ onMounted(async () => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
 }
 
 .query-form {
@@ -420,6 +413,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+
+  .title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2129;
+  }
 }
 
 .tip-alert {
