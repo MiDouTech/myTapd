@@ -58,22 +58,20 @@ const emit = defineEmits<{
   font-size: 14px;
 
   :deep(.el-table__header-wrapper th.el-table__cell) {
-    background-color: #f5f7fa;
-    color: #303133;
-    font-weight: 500;
-    text-align: center;
+    background-color: var(--md-bg-panel, #f9fafb);
+    color: var(--md-text-primary, #1d2129);
+    font-weight: 600;
+    font-size: 13px;
   }
 
   :deep(.el-table__body-wrapper td.el-table__cell) {
-    text-align: center;
     font-weight: 400;
   }
 
   :deep(.el-table__body tr:hover > td.el-table__cell) {
-    background-color: #f0f9ff;
+    background-color: var(--md-bg-hover, #f0f9ff);
   }
 
-  // Ensure internal scrollbar wrapper is visible
   :deep(.el-scrollbar__bar.is-horizontal) {
     display: block;
   }

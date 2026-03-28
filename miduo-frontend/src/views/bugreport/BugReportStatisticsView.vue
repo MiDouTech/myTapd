@@ -272,9 +272,8 @@ onMounted(() => {
 .query-form {
   margin-top: 14px;
   padding: 14px 16px;
-  background: #f9fafb;
+  background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
-  border: 1px solid #eef2f7;
 }
 
 .metrics-card {

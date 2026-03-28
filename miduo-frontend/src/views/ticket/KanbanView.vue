@@ -78,6 +78,34 @@ function getPriorityType(priority?: string): 'success' | 'warning' | 'danger' | 
   return 'info'
 }
 
+function getPriorityBarClass(priority?: string): string {
+  const code = String(priority || '').toLowerCase()
+  if (code === 'urgent') return 'priority-bar--urgent'
+  if (code === 'high') return 'priority-bar--high'
+  if (code === 'low') return 'priority-bar--low'
+  return 'priority-bar--medium'
+}
+
+function getColumnStatusClass(status?: string): string {
+  if (!status) return ''
+  const s = status.toLowerCase()
+  if (['completed', 'closed'].includes(s)) return 'column--success'
+  if (['pending_assign', 'pending_accept', 'pending_test_accept', 'pending_dev_accept', 'pending_verify', 'pending_cs_confirm'].includes(s)) return 'column--warning'
+  if (['processing', 'testing', 'developing', 'executing'].includes(s)) return 'column--primary'
+  if (s === 'suspended') return 'column--danger'
+  return ''
+}
+
+const dragOverStatus = ref('')
+
+function handleDragEnter(status: string): void {
+  dragOverStatus.value = status
+}
+
+function handleDragLeave(): void {
+  dragOverStatus.value = ''
+}
+
 onMounted(() => {
   loadKanban()
 })
@@ -99,18 +127,22 @@ onMounted(() => {
           v-for="column in columns"
           :key="column.status"
           class="kanban-column"
+          :class="[getColumnStatusClass(column.status), { 'drag-over': dragOverStatus === column.status }]"
           @dragover.prevent
-          @drop.prevent="handleDrop(column.status)"
+          @dragenter.prevent="handleDragEnter(column.status)"
+          @dragleave="handleDragLeave"
+          @drop.prevent="handleDrop(column.status); dragOverStatus = ''"
         >
           <div class="column-header">
             <div class="name">{{ column.statusLabel || column.status }}</div>
-            <el-tag size="small">{{ column.tickets.length }}</el-tag>
+            <el-tag size="small" round>{{ column.tickets.length }}</el-tag>
           </div>
           <div class="column-body">
             <div
               v-for="ticket in column.tickets"
               :key="ticket.id"
               class="ticket-card"
+              :class="getPriorityBarClass(ticket.priority)"
               draggable="true"
               @dragstart="handleDragStart(ticket.id, column.status)"
             >
@@ -193,8 +225,19 @@ onMounted(() => {
   .name {
     font-size: 14px;
     font-weight: 600;
-    color: #1d2129;
+    color: var(--md-text-primary, #1d2129);
   }
+}
+
+.column--primary > .column-header { border-bottom-color: #1675d1; }
+.column--warning > .column-header { border-bottom-color: #e6a23c; }
+.column--success > .column-header { border-bottom-color: #67c23a; }
+.column--danger > .column-header { border-bottom-color: #f56c6c; }
+
+.kanban-column.drag-over {
+  background: #e8f2fc;
+  border-color: #1675d1;
+  border-style: dashed;
 }
 
 .column-body {
@@ -223,14 +266,14 @@ onMounted(() => {
   background: #ffffff;
   border-radius: 8px;
   border: 1px solid #ebeef5;
-  padding: 12px;
+  border-left: 3px solid #c0c4cc;
+  padding: 12px 12px 12px 10px;
   cursor: grab;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-    border-color: #c8ddf5;
   }
 
   &:active {
@@ -238,6 +281,11 @@ onMounted(() => {
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   }
+
+  &.priority-bar--urgent { border-left-color: #f56c6c; }
+  &.priority-bar--high { border-left-color: #e6a23c; }
+  &.priority-bar--medium { border-left-color: #1675d1; }
+  &.priority-bar--low { border-left-color: #67c23a; }
 }
 
 .ticket-no {

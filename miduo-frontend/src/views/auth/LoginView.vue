@@ -81,7 +81,7 @@ async function handleDevLogin(): Promise<void> {
 <template>
   <div class="login-page">
     <!-- SSO 自动跳转中 -->
-    <el-card v-if="ssoRedirecting" class="login-card">
+    <el-card v-if="ssoRedirecting" class="login-card login-card-animate">
       <div class="sso-redirecting">
         <el-icon class="is-loading" :size="48" color="#1675d1">
           <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
@@ -100,7 +100,7 @@ async function handleDevLogin(): Promise<void> {
       </div>
     </el-card>
 
-    <el-card v-else class="login-card">
+    <el-card v-else class="login-card login-card-animate">
       <template #header>
         <div class="header-title">米多工单平台</div>
       </template>
@@ -198,8 +198,10 @@ async function handleDevLogin(): Promise<void> {
     position: absolute;
     top: -40%;
     right: -20%;
-    width: 600px;
-    height: 600px;
+    width: max(50vw, 300px);
+    height: max(50vw, 300px);
+    max-width: 600px;
+    max-height: 600px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(22, 117, 209, 0.06) 0%, transparent 70%);
     pointer-events: none;
@@ -210,8 +212,10 @@ async function handleDevLogin(): Promise<void> {
     position: absolute;
     bottom: -30%;
     left: -15%;
-    width: 500px;
-    height: 500px;
+    width: max(40vw, 250px);
+    height: max(40vw, 250px);
+    max-width: 500px;
+    max-height: 500px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(22, 117, 209, 0.04) 0%, transparent 70%);
     pointer-events: none;
@@ -288,6 +292,21 @@ async function handleDevLogin(): Promise<void> {
   margin-top: 20px;
   font-size: 16px;
   color: #606266;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-card-animate {
+  animation: fadeInUp 0.5s ease-out;
 }
 
 @media (max-width: 520px) {

@@ -39,6 +39,8 @@ function handleCurrentChange(pageNum: number): void {
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--md-border-light, #eef2f7);
 }
 </style>

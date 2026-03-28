@@ -3,6 +3,8 @@ import { storeToRefs } from 'pinia'
 import {
   ArrowDown,
   Bell,
+  Calendar,
+  Connection,
   DataAnalysis,
   Document,
   Expand,
@@ -10,9 +12,12 @@ import {
   Fold,
   Grid,
   Histogram,
+  Menu as MenuIcon,
+  Notebook,
   Plus,
   Setting,
   Tickets,
+  Timer,
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
@@ -65,13 +70,13 @@ const menuItems: MenuItem[] = [
     title: '管理',
     icon: Setting,
     children: [
-      { index: '/manage/category', title: '分类管理', icon: Setting },
-      { index: '/manage/workflow', title: '工作流管理', icon: Setting },
-      { index: '/manage/sla', title: 'SLA管理', icon: Setting },
-      { index: '/manage/user', title: '组织账号管理', icon: Setting },
+      { index: '/manage/category', title: '分类管理', icon: MenuIcon },
+      { index: '/manage/workflow', title: '工作流管理', icon: Connection },
+      { index: '/manage/sla', title: 'SLA管理', icon: Timer },
+      { index: '/manage/user', title: '组织账号管理', icon: User },
       { index: '/manage/settings', title: '系统设置', icon: Setting },
-      { index: '/manage/operation-log', title: '工单日志', icon: Setting },
-      { index: '/manage/daily-report', title: '日报管理', icon: Document },
+      { index: '/manage/operation-log', title: '工单日志', icon: Notebook },
+      { index: '/manage/daily-report', title: '日报管理', icon: Calendar },
     ],
   },
 ]
@@ -328,16 +333,16 @@ watch(
         </div>
       </el-header>
       <el-main class="main">
-        <el-breadcrumb v-if="!isMobile" class="breadcrumb" separator="/">
-          <el-breadcrumb-item
-            v-for="breadcrumb in breadcrumbs"
-            :key="breadcrumb.path"
-            :to="breadcrumb.canJump ? { path: breadcrumb.path } : undefined"
-          >
-            {{ breadcrumb.title }}
-          </el-breadcrumb-item>
-        </el-breadcrumb>
         <div class="page-container">
+          <el-breadcrumb v-if="!isMobile" class="breadcrumb" separator="/">
+            <el-breadcrumb-item
+              v-for="breadcrumb in breadcrumbs"
+              :key="breadcrumb.path"
+              :to="breadcrumb.canJump ? { path: breadcrumb.path } : undefined"
+            >
+              {{ breadcrumb.title }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
           <RouterView />
         </div>
       </el-main>
@@ -560,11 +565,7 @@ watch(
 }
 
 .page-container {
-  background: #ffffff;
-  border-radius: 10px;
   min-height: calc(100vh - 140px);
-  padding: 20px;
-  box-shadow: var(--md-shadow-sm);
 }
 
 .notification-drawer-toolbar {
@@ -649,8 +650,6 @@ watch(
 
   .page-container {
     min-height: calc(100vh - 76px);
-    padding: 10px;
-    border-radius: 6px;
   }
 
   .notification-item-header {

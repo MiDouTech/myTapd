@@ -1,17 +1,47 @@
 :root {
+  /* ── Brand ── */
   --md-primary-color: #1675d1;
   --md-primary-light: #e8f2fc;
   --md-primary-dark: #1260b0;
-  --md-header-bg: #f5f7fa;
-  --md-hover-bg: #f0f9ff;
+
+  /* ── Semantic Text ── */
+  --md-text-primary: #1d2129;
+  --md-text-regular: #303133;
+  --md-text-secondary: #606266;
+  --md-text-muted: #909399;
+  --md-text-placeholder: #c0c4cc;
+
+  /* ── Semantic Backgrounds ── */
+  --md-bg-page: #f5f7fa;
+  --md-bg-card: #ffffff;
+  --md-bg-panel: #f9fafb;
+  --md-bg-hover: #f0f9ff;
+
+  /* ── Status Colors ── */
+  --md-success: #67c23a;
+  --md-warning: #e6a23c;
+  --md-danger: #f56c6c;
+  --md-info: #909399;
+
+  /* ── Layout ── */
   --md-font-size: 14px;
   --md-border-color: #e5e7eb;
+  --md-border-light: #eef2f7;
   --md-border-radius: 8px;
   --md-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --md-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --md-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
   --md-transition-fast: 0.15s ease;
   --md-transition-normal: 0.2s ease;
+
+  /* ── Spacing Scale (4px base) ── */
+  --md-space-1: 4px;
+  --md-space-2: 8px;
+  --md-space-3: 12px;
+  --md-space-4: 16px;
+  --md-space-5: 20px;
+  --md-space-6: 24px;
+  --md-space-8: 32px;
 }
 
 * {
@@ -74,11 +104,6 @@ a {
   width: 100%;
   border-radius: var(--md-border-radius) !important;
   border-color: var(--md-border-color) !important;
-  transition: box-shadow var(--md-transition-normal);
-
-  &:hover {
-    box-shadow: var(--md-shadow-sm);
-  }
 }
 
 .el-card__header {
