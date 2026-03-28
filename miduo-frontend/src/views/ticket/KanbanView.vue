@@ -78,6 +78,34 @@ function getPriorityType(priority?: string): 'success' | 'warning' | 'danger' | 
   return 'info'
 }
 
+function getPriorityBarClass(priority?: string): string {
+  const code = String(priority || '').toLowerCase()
+  if (code === 'urgent') return 'priority-bar--urgent'
+  if (code === 'high') return 'priority-bar--high'
+  if (code === 'low') return 'priority-bar--low'
+  return 'priority-bar--medium'
+}
+
+function getColumnStatusClass(status?: string): string {
+  if (!status) return ''
+  const s = status.toLowerCase()
+  if (['completed', 'closed'].includes(s)) return 'column--success'
+  if (['pending_assign', 'pending_accept', 'pending_test_accept', 'pending_dev_accept', 'pending_verify', 'pending_cs_confirm'].includes(s)) return 'column--warning'
+  if (['processing', 'testing', 'developing', 'executing'].includes(s)) return 'column--primary'
+  if (s === 'suspended') return 'column--danger'
+  return ''
+}
+
+const dragOverStatus = ref('')
+
+function handleDragEnter(status: string): void {
+  dragOverStatus.value = status
+}
+
+function handleDragLeave(): void {
+  dragOverStatus.value = ''
+}
+
 onMounted(() => {
   loadKanban()
 })
@@ -99,18 +127,22 @@ onMounted(() => {
           v-for="column in columns"
           :key="column.status"
           class="kanban-column"
+          :class="[getColumnStatusClass(column.status), { 'drag-over': dragOverStatus === column.status }]"
           @dragover.prevent
-          @drop.prevent="handleDrop(column.status)"
+          @dragenter.prevent="handleDragEnter(column.status)"
+          @dragleave="handleDragLeave"
+          @drop.prevent="handleDrop(column.status); dragOverStatus = ''"
         >
           <div class="column-header">
             <div class="name">{{ column.statusLabel || column.status }}</div>
-            <el-tag size="small">{{ column.tickets.length }}</el-tag>
+            <el-tag size="small" round>{{ column.tickets.length }}</el-tag>
           </div>
           <div class="column-body">
             <div
               v-for="ticket in column.tickets"
               :key="ticket.id"
               class="ticket-card"
+              :class="getPriorityBarClass(ticket.priority)"
               draggable="true"
               @dragstart="handleDragStart(ticket.id, column.status)"
             >
@@ -151,41 +183,61 @@ onMounted(() => {
 }
 
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .kanban-container {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   align-items: flex-start;
 }
 
 .kanban-column {
-  min-width: 280px;
-  max-width: 300px;
+  min-width: 290px;
+  max-width: 310px;
   background: #f5f7fa;
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 200px);
+  border: 1px solid #eef2f7;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #f0f4f8;
+  }
 }
 
 .column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e5e7eb;
   flex-shrink: 0;
 
   .name {
     font-size: 14px;
     font-weight: 600;
-    color: #303133;
+    color: var(--md-text-primary, #1d2129);
   }
+}
+
+.column--primary > .column-header { border-bottom-color: #1675d1; }
+.column--warning > .column-header { border-bottom-color: #e6a23c; }
+.column--success > .column-header { border-bottom-color: #67c23a; }
+.column--danger > .column-header { border-bottom-color: #f56c6c; }
+
+.kanban-column.drag-over {
+  background: #e8f2fc;
+  border-color: #1675d1;
+  border-style: dashed;
 }
 
 .column-body {
@@ -214,15 +266,39 @@ onMounted(() => {
   background: #ffffff;
   border-radius: 8px;
   border: 1px solid #ebeef5;
-  padding: 10px;
+  border-left: 3px solid #c0c4cc;
+  padding: 12px 12px 12px 10px;
   cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  }
+
+  &:active {
+    cursor: grabbing;
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  }
+
+  &.priority-bar--urgent { border-left-color: #f56c6c; }
+  &.priority-bar--high { border-left-color: #e6a23c; }
+  &.priority-bar--medium { border-left-color: #1675d1; }
+  &.priority-bar--low { border-left-color: #67c23a; }
 }
 
 .ticket-no {
   color: #1675d1;
   font-size: 12px;
+  font-weight: 500;
+  font-family: 'SFMono-Regular', Consolas, monospace;
   cursor: pointer;
   outline: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 
   &:focus-visible {
     box-shadow: 0 0 0 2px #1675d1;
@@ -231,10 +307,15 @@ onMounted(() => {
 }
 
 .ticket-title {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 14px;
-  color: #303133;
-  line-height: 20px;
+  color: #1d2129;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .ticket-meta {
@@ -244,14 +325,16 @@ onMounted(() => {
   justify-content: space-between;
 
   .assignee {
-    color: #909399;
+    color: #6b7280;
     font-size: 12px;
   }
 }
 
 .ticket-foot {
-  margin-top: 10px;
-  color: #909399;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f2f5;
+  color: #9ca3af;
   font-size: 12px;
   display: flex;
   justify-content: space-between;

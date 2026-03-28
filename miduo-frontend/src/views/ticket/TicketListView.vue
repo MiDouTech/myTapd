@@ -997,8 +997,30 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.ticket-view-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 16px;
+  }
+
+  :deep(.el-tabs__item) {
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0 18px;
+    height: 40px;
+    line-height: 40px;
+  }
+
+  :deep(.el-tabs__active-bar) {
+    height: 3px;
+    border-radius: 2px 2px 0 0;
+  }
+}
+
 .query-form {
   width: 100%;
+  padding: 14px 16px;
+  background: var(--md-bg-panel, #f9fafb);
+  border-radius: 8px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -1031,6 +1053,10 @@ onUnmounted(() => {
 .cell-link {
   padding: 0;
   font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .title-cell-btn {

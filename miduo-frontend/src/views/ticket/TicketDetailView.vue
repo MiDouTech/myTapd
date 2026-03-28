@@ -745,6 +745,28 @@ function isOperationLog(type?: string): boolean {
   return type === 'OPERATION'
 }
 
+interface AvatarColor { bg: string; text: string }
+
+const AVATAR_COLORS: AvatarColor[] = [
+  { bg: '#e8f0fe', text: '#1675d1' },
+  { bg: '#fef0e6', text: '#e6720a' },
+  { bg: '#e6f9ee', text: '#17a34a' },
+  { bg: '#fce8ec', text: '#dc2626' },
+  { bg: '#f3e8ff', text: '#7c3aed' },
+  { bg: '#e0f2fe', text: '#0284c7' },
+]
+
+const DEFAULT_AVATAR_COLOR: AvatarColor = { bg: '#e8f0fe', text: '#1675d1' }
+
+function getAvatarColor(name: string): AvatarColor {
+  if (!name) return DEFAULT_AVATAR_COLOR
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length] ?? DEFAULT_AVATAR_COLOR
+}
+
 onMounted(async () => {
   await Promise.all([loadAll(), trackReadSilently(), loadModules()])
 })
@@ -1379,7 +1401,11 @@ watch(
           :class="{ 'comment-operation': isOperationLog(comment.type) }"
         >
           <div class="comment-avatar">
-            <el-avatar :size="32" class="user-avatar">
+            <el-avatar
+              :size="32"
+              class="user-avatar"
+              :style="{ background: getAvatarColor(comment.userName ?? '').bg, color: getAvatarColor(comment.userName ?? '').text }"
+            >
               {{ comment.userName?.charAt(0) || '?' }}
             </el-avatar>
           </div>
@@ -1727,8 +1753,10 @@ watch(
   top: 60px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
-  border-left: 1px solid #f0f0f0;
-  padding-left: 16px;
+  background: var(--md-bg-panel, #f9fafb);
+  border: 1px solid var(--md-border-light, #eef2f7);
+  border-radius: 10px;
+  padding: 16px;
 }
 
 // ===== 描述区块 =====
@@ -2097,9 +2125,8 @@ watch(
 }
 
 .user-avatar {
-  background: #e8f0fe;
-  color: #1675d1;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .comment-body {

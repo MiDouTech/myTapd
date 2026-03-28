@@ -1079,8 +1079,9 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .card-header {
@@ -1094,12 +1095,14 @@ onMounted(async () => {
 }
 
 .detail-section {
-  margin-top: 16px;
+  margin-top: 18px;
+  border-radius: 8px;
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .workflow-edit-body {
@@ -1109,14 +1112,20 @@ onMounted(async () => {
 
 .workflow-edit-tip {
   margin-bottom: 16px;
+  border-radius: 8px;
 }
 
 .workflow-edit-form {
   max-width: 720px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
 }
 
 .edit-section-card {
-  margin-top: 16px;
+  margin-top: 18px;
+  border-radius: 8px;
 }
 
 .section-header-row {

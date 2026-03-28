@@ -81,7 +81,7 @@ async function handleDevLogin(): Promise<void> {
 <template>
   <div class="login-page">
     <!-- SSO 自动跳转中 -->
-    <el-card v-if="ssoRedirecting" class="login-card">
+    <el-card v-if="ssoRedirecting" class="login-card login-card-animate">
       <div class="sso-redirecting">
         <el-icon class="is-loading" :size="48" color="#1675d1">
           <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
@@ -100,7 +100,7 @@ async function handleDevLogin(): Promise<void> {
       </div>
     </el-card>
 
-    <el-card v-else class="login-card">
+    <el-card v-else class="login-card login-card-animate">
       <template #header>
         <div class="header-title">米多工单平台</div>
       </template>
@@ -186,21 +186,66 @@ async function handleDevLogin(): Promise<void> {
 <style scoped lang="scss">
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(120deg, #f0f7ff, #ffffff);
+  background: linear-gradient(135deg, #e8f2fc 0%, #f5f7fa 50%, #ffffff 100%);
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: max(50vw, 300px);
+    height: max(50vw, 300px);
+    max-width: 600px;
+    max-height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(22, 117, 209, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -15%;
+    width: max(40vw, 250px);
+    height: max(40vw, 250px);
+    max-width: 500px;
+    max-height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(22, 117, 209, 0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
 }
 
 .login-card {
   width: 480px;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(22, 117, 209, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(22, 117, 209, 0.08) !important;
+  position: relative;
+  z-index: 1;
+
+  :deep(.el-card__header) {
+    padding: 28px 24px 20px !important;
+    border-bottom: 1px solid #eef2f7 !important;
+  }
+
+  :deep(.el-card__body) {
+    padding: 24px !important;
+  }
 }
 
 .header-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: #1675d1;
   text-align: center;
+  letter-spacing: 1px;
 }
 
 .sso-section {
@@ -211,12 +256,14 @@ async function handleDevLogin(): Promise<void> {
   margin-bottom: 16px;
   font-size: 13px;
   line-height: 1.6;
+  border-radius: 8px;
 }
 
 .sso-only-notice {
   margin-bottom: 16px;
   font-size: 13px;
   line-height: 1.6;
+  border-radius: 8px;
 }
 
 .dev-login-section {
@@ -237,13 +284,35 @@ async function handleDevLogin(): Promise<void> {
 }
 
 .sso-redirecting {
-  padding: 40px 0;
+  padding: 48px 0;
   text-align: center;
 }
 
 .redirecting-text {
-  margin-top: 16px;
+  margin-top: 20px;
   font-size: 16px;
   color: #606266;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-card-animate {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@media (max-width: 520px) {
+  .login-card {
+    width: calc(100vw - 32px);
+    margin: 0 16px;
+  }
 }
 </style>

@@ -146,6 +146,7 @@ onMounted(() => {
     </template>
 
     <el-form label-width="120px" class="create-form">
+      <div class="form-section-title">基本信息</div>
       <el-form-item label="工单标题" required>
         <el-input
           v-model="form.title"
@@ -185,6 +186,8 @@ onMounted(() => {
           <el-radio value="low">低</el-radio>
         </el-radio-group>
       </el-form-item>
+
+      <div class="form-section-title">分派与时间</div>
       <el-form-item label="处理人">
         <el-select v-model="form.assigneeId" placeholder="请选择处理人" clearable class="w-420">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
@@ -206,6 +209,8 @@ onMounted(() => {
           <el-option label="电话" value="phone" />
         </el-select>
       </el-form-item>
+
+      <div class="form-section-title">问题详情</div>
       <el-form-item label="问题描述">
         <el-input
           v-model="form.description"
@@ -274,15 +279,53 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .create-form {
   max-width: 860px;
+  padding-top: 8px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 20px;
+  }
+
+  :deep(.el-form-item__label) {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+  }
+
+  :deep(.el-divider__text) {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1675d1;
+  }
+}
+
+.form-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-text-primary, #1d2129);
+  padding: 4px 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--md-border-light, #eef2f7);
+
+  &:not(:first-child) {
+    margin-top: 8px;
+  }
 }
 
 .w-420 {
-  width: 420px;
+  max-width: 420px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .create-form {
+    max-width: 100%;
+  }
 }
 </style>

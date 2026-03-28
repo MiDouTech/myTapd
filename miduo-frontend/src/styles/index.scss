@@ -1,8 +1,47 @@
 :root {
+  /* ── Brand ── */
   --md-primary-color: #1675d1;
-  --md-header-bg: #f5f7fa;
-  --md-hover-bg: #f0f9ff;
+  --md-primary-light: #e8f2fc;
+  --md-primary-dark: #1260b0;
+
+  /* ── Semantic Text ── */
+  --md-text-primary: #1d2129;
+  --md-text-regular: #303133;
+  --md-text-secondary: #606266;
+  --md-text-muted: #909399;
+  --md-text-placeholder: #c0c4cc;
+
+  /* ── Semantic Backgrounds ── */
+  --md-bg-page: #f5f7fa;
+  --md-bg-card: #ffffff;
+  --md-bg-panel: #f9fafb;
+  --md-bg-hover: #f0f9ff;
+
+  /* ── Status Colors ── */
+  --md-success: #67c23a;
+  --md-warning: #e6a23c;
+  --md-danger: #f56c6c;
+  --md-info: #909399;
+
+  /* ── Layout ── */
   --md-font-size: 14px;
+  --md-border-color: #e5e7eb;
+  --md-border-light: #eef2f7;
+  --md-border-radius: 8px;
+  --md-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --md-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --md-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --md-transition-fast: 0.15s ease;
+  --md-transition-normal: 0.2s ease;
+
+  /* ── Spacing Scale (4px base) ── */
+  --md-space-1: 4px;
+  --md-space-2: 8px;
+  --md-space-3: 12px;
+  --md-space-4: 16px;
+  --md-space-5: 20px;
+  --md-space-6: 24px;
+  --md-space-8: 32px;
 }
 
 * {
@@ -19,6 +58,8 @@ body,
   font-size: var(--md-font-size);
   background: #f5f7fa;
   color: #303133;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -26,6 +67,27 @@ a {
   text-decoration: none;
 }
 
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+  transition: background var(--md-transition-fast);
+
+  &:hover {
+    background: #909399;
+  }
+}
+
+/* ── Primary Button Override ── */
 .el-button--primary {
   --el-button-bg-color: var(--md-primary-color);
   --el-button-border-color: var(--md-primary-color);
@@ -33,14 +95,114 @@ a {
   --el-button-hover-border-color: #3388dd;
 }
 
+/* ── Global Element Plus Overrides ── */
 .el-space {
   width: 100%;
 }
 
 .el-card {
   width: 100%;
+  border-radius: var(--md-border-radius) !important;
+  border-color: var(--md-border-color) !important;
+}
+
+.el-card__header {
+  border-bottom-color: #eef2f7 !important;
+  padding: 14px 20px !important;
 }
 
 .el-table {
   width: 100% !important;
+  --el-table-border-color: #eef2f7;
+  --el-table-header-bg-color: #f9fafb;
+
+  th.el-table__cell {
+    font-weight: 600;
+    color: #4b5563;
+    font-size: 13px;
+  }
+
+  td.el-table__cell {
+    color: #374151;
+  }
+
+  .el-table__row {
+    transition: background-color var(--md-transition-fast);
+  }
+}
+
+.el-dialog {
+  border-radius: 12px !important;
+  overflow: hidden;
+
+  .el-dialog__header {
+    padding: 18px 24px 16px !important;
+    border-bottom: 1px solid #eef2f7;
+    margin-right: 0 !important;
+  }
+
+  .el-dialog__title {
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .el-dialog__body {
+    padding: 20px 24px !important;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 24px 20px !important;
+    border-top: 1px solid #eef2f7;
+  }
+}
+
+.el-drawer {
+  .el-drawer__header {
+    margin-bottom: 0 !important;
+    padding: 18px 24px 14px !important;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .el-drawer__title {
+    font-weight: 600;
+    font-size: 16px;
+    color: #1d2129;
+  }
+}
+
+.el-tabs {
+  .el-tabs__item {
+    transition: color var(--md-transition-fast);
+  }
+
+  .el-tabs__active-bar {
+    border-radius: 2px 2px 0 0;
+  }
+}
+
+.el-tag {
+  border-radius: 4px;
+}
+
+.el-form-item__label {
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.el-input,
+.el-select,
+.el-date-editor {
+  --el-input-border-radius: 6px;
+}
+
+.el-breadcrumb {
+  font-size: 13px;
+}
+
+.el-descriptions {
+  .el-descriptions__label {
+    font-weight: 500;
+    color: #6b7280 !important;
+    background: #f9fafb !important;
+  }
 }

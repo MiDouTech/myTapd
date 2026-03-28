@@ -34,13 +34,13 @@ const defaultOrder: OverviewCardKey[] = [
 
 const cardMap = computed(() =>
   ({
-    pending_accept: { key: 'pending_accept', label: '待受理', value: props.data.pendingAcceptCount },
-    processing: { key: 'processing', label: '处理中', value: props.data.processingCount },
-    suspended: { key: 'suspended', label: '已挂起', value: props.data.suspendedCount },
-    completed: { key: 'completed', label: '已完成', value: props.data.completedCount },
-    sla_breached: { key: 'sla_breached', label: 'SLA超时', value: props.data.slaBreachedCount },
-    total: { key: 'total', label: '工单总量', value: props.data.totalCount },
-  }) as Record<OverviewCardKey, { key: OverviewCardKey; label: string; value: number }>,
+    pending_accept: { key: 'pending_accept', label: '待受理', value: props.data.pendingAcceptCount, color: 'orange' },
+    processing: { key: 'processing', label: '处理中', value: props.data.processingCount, color: 'blue' },
+    suspended: { key: 'suspended', label: '已挂起', value: props.data.suspendedCount, color: 'red' },
+    completed: { key: 'completed', label: '已完成', value: props.data.completedCount, color: 'green' },
+    sla_breached: { key: 'sla_breached', label: 'SLA超时', value: props.data.slaBreachedCount, color: 'red' },
+    total: { key: 'total', label: '工单总量', value: props.data.totalCount, color: 'blue' },
+  }) as Record<OverviewCardKey, { key: OverviewCardKey; label: string; value: number; color: string }>,
 )
 
 const normalizedOrder = computed<OverviewCardKey[]>(() => {
@@ -94,7 +94,7 @@ const draggableCards = computed({
     </template>
   </VueDraggable>
   <div v-else class="stat-grid">
-    <el-card v-for="card in topCards" :key="card.key" shadow="hover" class="stat-card">
+    <el-card v-for="card in topCards" :key="card.key" shadow="hover" class="stat-card" :class="`stat-card--${card.color}`">
       <div class="stat-title">{{ card.label }}</div>
       <div class="stat-value">{{ card.value }}</div>
     </el-card>
@@ -111,6 +111,30 @@ const draggableCards = computed({
 
 .stat-card {
   min-height: 120px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 8px 0 0 8px;
+    background: #1675d1;
+  }
+
+  &--blue::before { background: #1675d1; }
+  &--orange::before { background: #e6a23c; }
+  &--green::before { background: #67c23a; }
+  &--red::before { background: #f56c6c; }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
 
   .card-head {
     display: flex;
@@ -120,16 +144,23 @@ const draggableCards = computed({
 }
 
 .stat-title {
-  color: #909399;
-  font-size: 14px;
+  color: var(--md-text-muted, #909399);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .stat-value {
-  color: #1675d1;
-  font-size: 30px;
-  font-weight: 600;
+  font-size: 32px;
+  font-weight: 700;
   margin-top: 8px;
+  line-height: 1.1;
+  color: var(--md-text-primary, #1d2129);
 }
+
+.stat-card--blue .stat-value { color: #1675d1; }
+.stat-card--orange .stat-value { color: #e6a23c; }
+.stat-card--green .stat-value { color: #67c23a; }
+.stat-card--red .stat-value { color: #f56c6c; }
 
 .edit-mode .stat-card {
   border: 1px dashed #bfdcff;
