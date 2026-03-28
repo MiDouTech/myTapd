@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getNotificationPreferences, updateNotificationPreferences } from '@/api/notification'
+import { getBasicSettings, updateBasicSettings } from '@/api/systemConfig'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -13,7 +14,7 @@ import WecomConfigPanel from '@/views/manage/components/WecomConfigPanel.vue'
 import WecomGroupBindingPanel from '@/views/manage/components/WecomGroupBindingPanel.vue'
 import WecomNlpKeywordPanel from '@/views/manage/components/WecomNlpKeywordPanel.vue'
 import WecomNlpLogPanel from '@/views/manage/components/WecomNlpLogPanel.vue'
-import { notifySuccess, notifyWarning } from '@/utils/feedback'
+import { notifySuccess } from '@/utils/feedback'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,9 +31,12 @@ const activeSection = ref<IntegrationSection>('wecomConfig')
 const basicForm = reactive({
   systemName: '米多工单系统',
   timezone: 'Asia/Shanghai',
-  workTimeRange: '09:00 - 18:00',
+  workTimeStart: '09:00',
+  workTimeEnd: '18:00',
   defaultPageSize: 20,
 })
+const basicLoading = ref(false)
+const basicSubmitLoading = ref(false)
 
 const preferenceLoading = ref(false)
 const preferenceSubmitLoading = ref(false)
@@ -158,12 +162,37 @@ function handlePreferencePaginationChange(payload: { pageNum: number; pageSize: 
   normalizePreferencePage()
 }
 
-function handleSaveBasicSettings(): void {
-  notifyWarning('基础参数配置暂未接入后端持久化，当前仅保留页面配置能力。')
+async function loadBasicSettings(): Promise<void> {
+  basicLoading.value = true
+  try {
+    const data = await getBasicSettings()
+    basicForm.systemName = data.systemName || '米多工单系统'
+    basicForm.timezone = data.timezone || 'Asia/Shanghai'
+    basicForm.workTimeStart = data.workTimeStart || '09:00'
+    basicForm.workTimeEnd = data.workTimeEnd || '18:00'
+    basicForm.defaultPageSize = data.defaultPageSize || 20
+  } catch {
+    // 加载失败保留默认值
+  } finally {
+    basicLoading.value = false
+  }
+}
+
+async function handleSaveBasicSettings(): Promise<void> {
+  basicSubmitLoading.value = true
+  try {
+    await updateBasicSettings({ ...basicForm })
+    notifySuccess('基础参数保存成功')
+    await loadBasicSettings()
+  } catch {
+    // 提交失败由全局拦截器统一提示
+  } finally {
+    basicSubmitLoading.value = false
+  }
 }
 
 onMounted(async () => {
-  await loadPreferences()
+  await Promise.all([loadBasicSettings(), loadPreferences()])
   syncRouteState()
 })
 </script>
@@ -176,15 +205,28 @@ onMounted(async () => {
 
     <el-tabs v-model="activeTab" class="settings-tabs">
       <el-tab-pane label="基础参数" name="basic">
-        <el-form label-width="120px" class="basic-form">
+        <el-form v-loading="basicLoading" label-width="120px" class="basic-form">
           <el-form-item label="系统名称">
             <el-input v-model="basicForm.systemName" maxlength="50" />
           </el-form-item>
           <el-form-item label="默认时区">
             <el-input v-model="basicForm.timezone" />
           </el-form-item>
-          <el-form-item label="工作时间">
-            <el-input v-model="basicForm.workTimeRange" />
+          <el-form-item label="工作开始时间">
+            <el-time-picker
+              v-model="basicForm.workTimeStart"
+              value-format="HH:mm"
+              format="HH:mm"
+              placeholder="请选择工作开始时间"
+            />
+          </el-form-item>
+          <el-form-item label="工作结束时间">
+            <el-time-picker
+              v-model="basicForm.workTimeEnd"
+              value-format="HH:mm"
+              format="HH:mm"
+              placeholder="请选择工作结束时间"
+            />
           </el-form-item>
           <el-form-item label="默认分页条数">
             <el-select v-model="basicForm.defaultPageSize" placeholder="请选择默认分页条数">
@@ -195,7 +237,7 @@ onMounted(async () => {
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSaveBasicSettings">保存基础参数</el-button>
+            <el-button type="primary" :loading="basicSubmitLoading" @click="handleSaveBasicSettings">保存基础参数</el-button>
           </el-form-item>
         </el-form>
 
