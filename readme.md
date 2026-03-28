@@ -170,3 +170,48 @@ vite v7.3.1 building client environment for production...
   2. 重新执行“受理”动作；
   3. 若仍异常，检查该工作流动作名/状态映射是否被自定义改动（受理动作需能被识别）。
 
+---
+
+## 10. Bug简报“确认通过”校验报错修复（后端）
+
+### 10.1 功能用途
+- **用途**：修复 Bug 简报在点击“确认通过”时因参数校验过严导致的 9999 报错。
+- **类比理解**：以前像“通过申请也必须写长篇理由”，现在改成“通过可以一句话或不写，驳回仍然必须写清楚原因”。
+
+### 10.2 使用方法（联调/验收）
+1. 打开一条“待审核”的 Bug 简报详情。
+2. 在“审核通过”弹窗中输入短意见（例如“通过”）或留空。
+3. 点击“确认通过”。
+4. 预期结果：接口成功返回，状态进入“已归档”，不再出现 `MethodArgumentNotValidException`。
+
+### 10.3 参数说明（本次修复相关）
+| 接口 | 参数 | 类型 | 说明 |
+|---|---|---|---|
+| `PUT /api/bug-report/approve/{id}` | `reviewComment` | `String` | **可选**，审核通过意见，不再要求最少 10 个字符 |
+| `PUT /api/bug-report/reject/{id}` | `reviewComment` | `String` | **必填且最少 10 个字符**，用于保证驳回理由完整 |
+
+### 10.4 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `PUT /api/bug-report/approve/{id}` | `ApiResult<Void>` | 成功时返回空数据，简报状态流转为“已归档” |
+| `PUT /api/bug-report/reject/{id}` | `ApiResult<Void>` | 成功时返回空数据，简报状态流转为“已驳回” |
+
+### 10.5 常见问题（新增）
+#### Q4：为什么“确认通过”还会提示参数校验失败？
+- **检测**：查看返回是否仍包含 `Validation failed for argument`。
+- **记录（错误类型）**：后端版本未更新到本次修复代码，或请求仍走旧接口定义。
+- **恢复建议**：
+  1. 升级到版本 `v1.1.1-bugreport-approve-validation-fix` 及以上；
+  2. 重新部署后端并清理前端缓存再试；
+  3. 如果是“驳回”操作，请确认审核意见至少 10 个字符。
+
+### 10.6 示例截图（终端运行效果）
+```text
+[INFO] BUILD SUCCESS
+```
+
+### 10.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.1.1-bugreport-approve-validation-fix` | 修复 Bug 简报“审核通过”时 reviewComment 校验过严导致的 MethodArgumentNotValidException；通过与驳回分离校验规则 |
+
