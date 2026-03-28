@@ -40,9 +40,9 @@ miduo:
   sso:
     enabled: ${MIDUO_SSO_ENABLED:true}
     base-url: ${MIDUO_SSO_BASE_URL:https://admin.ebcone.cn}
-    app-code: ${MIDUO_SSO_APP_CODE:SSSSSSSS}
-    app-secret: ${MIDUO_SSO_APP_SECRET:82827e7bdfbe4bffa328bb090edd79d7}
-    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:79}
+    app-code: ${MIDUO_SSO_APP_CODE:APP00012}
+    app-secret: ${MIDUO_SSO_APP_SECRET:03164523bb294fe4bd43601be41a77a2}
+    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:59}
     redirect-uri: ${MIDUO_SSO_REDIRECT_URI:http://ticket.t.miduonet.com}
 
 dev-login:
