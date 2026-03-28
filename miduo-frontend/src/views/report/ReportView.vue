@@ -519,7 +519,6 @@ $bg: #f8fafc;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 4px;
 }
 
 /* ── Page Header ── */
