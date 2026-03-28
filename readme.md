@@ -135,6 +135,7 @@ vite v7.3.1 building client environment for production...
 | `v1.0.1-mobile-build-fix` | 修复 TS7006（隐式 any）并完成前端构建验证 |
 | `v1.1.0-ticket-accept-auto-claim` | 修复“点击受理后基础信息处理人不变”问题：受理动作默认自动认领当前操作人 |
 | `v1.1.3-ticket-detail-iphone14pm-layout` | 优化工单详情页在 iPhone 14 Pro Max 布局：双栏改单栏、操作区换行、表单与弹窗适配 |
+| `v1.1.5-kanban-error-message-zh` | 工单看板流转报错文案优化：将状态码（如 pending_accept）统一转换为中文状态名（如 待受理） |
 
 ---
 
@@ -401,3 +402,38 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.1.4-ticket-detail-info-attachment-role-polish` | 工单详情页优化：详细信息四块布局适配、附件信息排版优化、图片“查看”弹窗预览、角色英文统一转中文 |
+
+---
+
+## 14. 工单看板流转报错中文化（后端）
+
+### 14.1 功能用途
+- **用途**：把看板拖拽流转失败时的状态码提示，改成用户能看懂的中文状态名。
+- **类比理解**：以前报错像“快递单号”直接给用户看（`pending_accept`）；现在改成“快递状态中文”（`待受理`），一眼就懂。
+
+### 14.2 使用方法（验收步骤）
+1. 打开“工单看板”页面，拖拽任意工单到一个你当前无权限或不允许的目标列。
+2. 观察报错弹窗（右上角红色提示）。
+3. 预期结果：提示中不再出现 `pending_xxx` / `processing` 这类状态码，而是显示“待受理/待分派/处理中”等中文。
+
+### 14.3 参数说明（本次改动相关）
+| 参数/方法 | 类型 | 说明 |
+|---|---|---|
+| `resolveStatusLabel(statusCode)` | `String -> String` | 将工单状态码转换为中文状态名；未知状态则原样返回 |
+| `currentStatus` | `String` | 当前状态码（报错组装时转换为中文） |
+| `targetStatus` | `String` | 目标状态码（报错组装时转换为中文） |
+
+### 14.4 返回值说明（接口行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| 非法流转 | `BusinessException` | 报错文案从“从[pending_accept]到[processing]...”变为“从[待受理]到[处理中]...” |
+| 不支持退回 | `BusinessException` | 报错文案从“当前状态[pending_xxx]...”变为“当前状态[中文状态]...” |
+
+### 14.5 常见问题（新增）
+#### Q10：为什么我页面还是看到 `pending_accept` 这样的英文状态码？
+- **检测**：确认后端是否已部署最新代码。
+- **记录（错误类型）**：后端服务版本未更新或实例未重启。
+- **恢复建议**：
+  1. 升级到版本 `v1.1.5-kanban-error-message-zh` 及以上；
+  2. 重启后端服务；
+  3. 清理浏览器缓存后重试拖拽流转。
