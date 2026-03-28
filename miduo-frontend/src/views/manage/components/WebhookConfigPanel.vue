@@ -173,16 +173,6 @@ function getStatusTagType(isActive: number): 'success' | 'info' {
   return isActive === 1 ? 'success' : 'info'
 }
 
-function maskSecret(secret?: string): string {
-  if (!secret) {
-    return '-'
-  }
-  if (secret.length <= 4) {
-    return '*'.repeat(secret.length)
-  }
-  return `${secret.slice(0, 2)}****${secret.slice(-2)}`
-}
-
 function resolveRowClassName(payload: { row: Record<string, unknown> }): string {
   if (Number(payload.row.id) === latestChangedId.value) {
     return 'recently-changed-row'
@@ -391,25 +381,14 @@ onMounted(async () => {
           :row-class-name="resolveRowClassName"
           @sort-change="handleSortChange"
         >
-          <el-table-column label="标记" width="100">
-            <template #default="{ row }">
-              <el-tag v-if="row.id === latestChangedId" type="warning">最近变更</el-tag>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="url" label="Webhook URL" min-width="240" sortable="custom">
+          <el-table-column prop="url" label="Webhook URL" min-width="200" sortable="custom" show-overflow-tooltip>
             <template #default="{ row }">
               <el-link type="primary" :href="row.url" target="_blank" :underline="false">
                 {{ row.url }}
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column label="密钥" width="120">
-            <template #default="{ row }">
-              {{ maskSecret(row.secret) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="事件类型" min-width="220">
+          <el-table-column label="事件类型" min-width="160">
             <template #default="{ row }">
               <div class="event-tags">
                 <el-tag v-for="eventType in row.eventTypes" :key="eventType" type="info" size="small">
@@ -418,46 +397,42 @@ onMounted(async () => {
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="timeoutMs" label="超时(ms)" width="100" sortable="custom" />
-          <el-table-column prop="maxRetryTimes" label="重试次数" width="100" sortable="custom" />
-          <el-table-column label="状态" width="100">
+          <el-table-column label="超时/重试" width="100" align="center">
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.isActive)">
+              {{ row.timeoutMs }}ms / {{ row.maxRetryTimes }}次
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getStatusTagType(row.isActive)" size="small">
                 {{ row.isActive === 1 ? '启用' : '停用' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="最近成功时间" width="180" sortable="custom" prop="lastSuccessTime">
+          <el-table-column label="最近成功" width="160" sortable="custom" prop="lastSuccessTime">
             <template #default="{ row }">
               {{ formatDateTime(row.lastSuccessTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="最近失败时间" width="180" sortable="custom" prop="lastFailTime">
-            <template #default="{ row }">
-              {{ formatDateTime(row.lastFailTime) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="失败原因" min-width="180">
+          <el-table-column label="最近失败" width="160" sortable="custom" prop="lastFailTime">
             <template #default="{ row }">
               <el-tooltip v-if="row.lastFailReason" :content="row.lastFailReason" placement="top">
-                <span class="fail-reason">{{ row.lastFailReason }}</span>
+                <span class="fail-reason">{{ formatDateTime(row.lastFailTime) }}</span>
               </el-tooltip>
-              <span v-else>-</span>
+              <template v-else>{{ formatDateTime(row.lastFailTime) }}</template>
             </template>
           </el-table-column>
-          <el-table-column label="更新时间" width="180" sortable="custom" prop="updateTime">
+          <el-table-column label="更新时间" width="160" sortable="custom" prop="updateTime">
             <template #default="{ row }">
               {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="140" align="center" fixed="right">
+          <el-table-column label="操作" width="120" align="center" fixed="right">
             <template #default="{ row }">
-              <el-space>
-                <el-button type="primary" link @click="openEditDialog(row)">编辑</el-button>
-                <el-button type="danger" link :loading="deletingId === row.id" @click="handleDelete(row)"
-                  >删除</el-button
-                >
-              </el-space>
+              <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button type="danger" link size="small" :loading="deletingId === row.id" @click="handleDelete(row)">
+                删除
+              </el-button>
             </template>
           </el-table-column>
         </BaseTable>
@@ -553,26 +528,16 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .fail-reason {
-  display: inline-block;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #f56c6c;
+  cursor: pointer;
+  border-bottom: 1px dashed #f56c6c;
 }
 
 :deep(.recently-changed-row > td.el-table__cell) {
   background-color: #f0f9ff !important;
-}
-
-:deep(.el-card__body) {
-  overflow: visible;
-}
-
-:deep(.el-card) {
-  overflow: visible;
 }
 </style>
