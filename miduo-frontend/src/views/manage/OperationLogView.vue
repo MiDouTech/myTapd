@@ -559,7 +559,9 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .operation-log-view {
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .page-header {
@@ -585,7 +587,7 @@ onMounted(() => {
   background: #fff;
   border-radius: 8px;
   padding: 20px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e4e7ed;
   border-left: 4px solid #1675d1;
 
   &--danger {
@@ -619,8 +621,7 @@ onMounted(() => {
   background: #fff;
   border-radius: 8px;
   padding: 20px 24px 4px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e4e7ed;
 }
 
 .search-form {
@@ -635,7 +636,7 @@ onMounted(() => {
   background: #fff;
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e4e7ed;
 }
 
 .level-tag {

@@ -676,6 +676,18 @@ function isImageFile(fileType?: string): boolean {
   return fileType.startsWith('image/')
 }
 
+const attachmentImageUrls = computed(() => {
+  return (detail.value?.attachments ?? [])
+    .filter((a) => isImageFile(a.fileType))
+    .map((a) => a.filePath || '')
+})
+
+function getAttachmentImageIndex(filePath?: string): number {
+  if (!filePath) return 0
+  const idx = attachmentImageUrls.value.indexOf(filePath)
+  return idx >= 0 ? idx : 0
+}
+
 const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
@@ -924,15 +936,17 @@ watch(
                           </div>
                           <div class="selected-screenshot-grid">
                             <div
-                              v-for="url in customerProblemScreenshots"
+                              v-for="(url, urlIndex) in customerProblemScreenshots"
                               :key="url"
                               class="selected-screenshot-item"
                             >
                               <el-image
                                 :src="url"
                                 :preview-src-list="customerProblemScreenshots"
+                                :initial-index="urlIndex"
                                 fit="cover"
                                 class="selected-screenshot-image"
+                                preview-teleported
                               />
                               <el-button
                                 type="danger"
@@ -1227,9 +1241,11 @@ watch(
             <el-image
               v-if="isImageFile(attachment.fileType)"
               :src="attachment.filePath"
-              :preview-src-list="detail.attachments?.filter(a => isImageFile(a.fileType)).map(a => a.filePath || '')"
+              :preview-src-list="attachmentImageUrls"
+              :initial-index="getAttachmentImageIndex(attachment.filePath)"
               fit="cover"
               class="attachment-thumbnail"
+              preview-teleported
               lazy
             />
             <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
@@ -1501,6 +1517,7 @@ watch(
         <el-select
           v-model="assignForm.assigneeIds"
           multiple
+          filterable
           collapse-tags
           collapse-tags-tooltip
           placeholder="可选择多名处理人，第一位为主负责人"
@@ -1523,7 +1540,7 @@ watch(
   <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="480px">
     <el-form label-width="90px">
       <el-form-item label="对接人" required>
-        <el-select v-model="pendingPoolTransferForm.targetUserId" placeholder="选择新的测试对接人" style="width: 100%">
+        <el-select v-model="pendingPoolTransferForm.targetUserId" filterable placeholder="选择新的测试对接人" style="width: 100%">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
@@ -1554,6 +1571,7 @@ watch(
         <el-select
           v-model="transitForm.newAssigneeIds"
           multiple
+          filterable
           collapse-tags
           collapse-tags-tooltip
           clearable
