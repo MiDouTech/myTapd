@@ -5,6 +5,7 @@ import {
   Bell,
   DataAnalysis,
   Document,
+  Expand,
   Files,
   Fold,
   Grid,
@@ -39,6 +40,9 @@ const { unreadCount, unreadBadge, recentNotifications, recentLoading, realtimeCo
   storeToRefs(notificationStore)
 const collapsed = ref(false)
 const notificationDrawerVisible = ref(false)
+const isMobile = ref(false)
+const mobileSidebarVisible = ref(false)
+const MOBILE_BREAKPOINT = 768
 
 const menuItems: MenuItem[] = [
   { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
@@ -106,6 +110,17 @@ const breadcrumbs = computed(() => {
 
 function handleMenuSelect(index: string): void {
   router.push(index)
+  if (isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
+}
+
+function handleSidebarTrigger(): void {
+  if (isMobile.value) {
+    mobileSidebarVisible.value = true
+    return
+  }
+  collapsed.value = !collapsed.value
 }
 
 function handleNotificationBellClick(): void {
@@ -153,6 +168,13 @@ function handleVisibilityChange(): void {
   }
 }
 
+function updateViewportState(): void {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
+  if (!isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
+}
+
 async function handleLogout(): Promise<void> {
   try {
     const { ssoLogout } = await import('@/api/sso')
@@ -186,18 +208,30 @@ watch(
 )
 
 onMounted(() => {
+  updateViewportState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('resize', updateViewportState)
 })
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('resize', updateViewportState)
   notificationStore.teardown()
 })
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (isMobile.value) {
+      mobileSidebarVisible.value = false
+    }
+  },
+)
 </script>
 
 <template>
   <el-container class="layout-root">
-    <el-aside class="sidebar" :width="collapsed ? '64px' : '220px'">
+    <el-aside v-if="!isMobile" class="sidebar" :width="collapsed ? '64px' : '220px'">
       <div class="logo">{{ collapsed ? 'MD' : '米多工单系统' }}</div>
       <el-menu
         :default-active="activeMenu"
@@ -225,18 +259,49 @@ onUnmounted(() => {
         </template>
       </el-menu>
     </el-aside>
+    <el-drawer
+      v-model="mobileSidebarVisible"
+      direction="ltr"
+      :with-header="false"
+      size="240px"
+      class="mobile-sidebar-drawer"
+      append-to-body
+      destroy-on-close
+    >
+      <div class="mobile-sidebar-panel">
+        <div class="logo">米多工单系统</div>
+        <el-menu :default-active="activeMenu" :unique-opened="true" class="menu" @select="handleMenuSelect">
+          <template v-for="item in menuItems" :key="item.index">
+            <el-sub-menu v-if="item.children?.length" :index="item.index">
+              <template #title>
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.title }}</span>
+              </template>
+              <el-menu-item v-for="sub in item.children" :key="sub.index" :index="sub.index">
+                <el-icon><component :is="sub.icon" /></el-icon>
+                <span>{{ sub.title }}</span>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="item.index">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
+        </el-menu>
+      </div>
+    </el-drawer>
     <el-container>
       <el-header class="header">
         <div class="header-left">
-          <el-button text @click="collapsed = !collapsed">
-            <el-icon><Fold /></el-icon>
+          <el-button text @click="handleSidebarTrigger">
+            <el-icon><component :is="isMobile ? Expand : Fold" /></el-icon>
           </el-button>
           <div class="header-title">{{ currentTitle }}</div>
         </div>
         <div class="header-right">
-          <el-input class="search-input" placeholder="搜索工单编号/标题" clearable />
+          <el-input v-if="!isMobile" class="search-input" placeholder="搜索工单编号/标题" clearable />
           <el-button type="primary" :icon="Plus" @click="router.push('/ticket/create')">
-            新建工单
+            <span class="new-ticket-text">新建工单</span>
           </el-button>
           <el-badge :value="unreadBadge" :hidden="unreadCount === 0" class="notification-badge">
             <el-button text @click="handleNotificationBellClick">
@@ -248,7 +313,9 @@ onUnmounted(() => {
               <el-avatar :size="28" :src="authStore.userInfo?.avatarUrl">
                 <el-icon><UserFilled /></el-icon>
               </el-avatar>
-              <span class="username">{{ authStore.userInfo?.name || '未登录用户' }}</span>
+              <span class="username" :class="{ 'is-hidden': isMobile }">
+                {{ authStore.userInfo?.name || '未登录用户' }}
+              </span>
               <el-icon><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
@@ -261,7 +328,7 @@ onUnmounted(() => {
         </div>
       </el-header>
       <el-main class="main">
-        <el-breadcrumb class="breadcrumb" separator="/">
+        <el-breadcrumb v-if="!isMobile" class="breadcrumb" separator="/">
           <el-breadcrumb-item
             v-for="breadcrumb in breadcrumbs"
             :key="breadcrumb.path"
@@ -274,7 +341,7 @@ onUnmounted(() => {
           <RouterView />
         </div>
       </el-main>
-      <el-drawer v-model="notificationDrawerVisible" title="通知消息" size="420px">
+      <el-drawer v-model="notificationDrawerVisible" title="通知消息" :size="isMobile ? '92vw' : '420px'">
         <div class="notification-drawer-toolbar">
           <el-tag :type="realtimeConnected ? 'success' : 'warning'">
             {{ realtimeConnected ? '实时推送中' : '轮询兜底中' }}
@@ -334,6 +401,7 @@ onUnmounted(() => {
 .layout-root {
   height: 100vh;
   background: #f5f7fa;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -355,6 +423,12 @@ onUnmounted(() => {
 .menu {
   border-right: none;
   height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+.mobile-sidebar-panel {
+  height: 100%;
+  background: #ffffff;
 }
 
 .header {
@@ -376,6 +450,10 @@ onUnmounted(() => {
 .header-title {
   font-size: 16px;
   font-weight: 600;
+  max-width: min(60vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-right {
@@ -403,8 +481,13 @@ onUnmounted(() => {
   color: #303133;
 }
 
+.username.is-hidden {
+  display: none;
+}
+
 .main {
   padding: 12px 16px 16px;
+  overflow: auto;
 }
 
 .breadcrumb {
@@ -471,5 +554,39 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 10px;
+  }
+
+  .header-right {
+    gap: 4px;
+  }
+
+  .new-ticket-text {
+    display: none;
+  }
+
+  .main {
+    padding: 8px;
+  }
+
+  .page-container {
+    min-height: calc(100vh - 76px);
+    padding: 10px;
+    border-radius: 6px;
+  }
+
+  .notification-item-header {
+    align-items: flex-start;
+  }
+
+  .notification-item-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 </style>

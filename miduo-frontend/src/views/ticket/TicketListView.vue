@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ArrowRight, Document as DocumentOutlined, Edit } from '@element-plus/icons-vue'
@@ -34,6 +34,8 @@ import { formatDateTime, formatDurationSec, formatFileSize } from '@/utils/forma
 const route = useRoute()
 const router = useRouter()
 
+const isMobile = ref(false)
+const MOBILE_BREAKPOINT = 768
 const loading = ref(false)
 const categoryTree = ref<CategoryTreeOutput[]>([])
 const tableData = ref<TicketListOutput[]>([])
@@ -404,6 +406,10 @@ function getPriorityType(priority?: string): 'success' | 'warning' | 'danger' | 
   return 'info'
 }
 
+function updateViewportState(): void {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
+}
+
 watch(
   () => route.fullPath,
   () => {
@@ -415,14 +421,30 @@ watch(
 )
 
 onMounted(() => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
   loadCategoryTree()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateViewportState)
 })
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
+  <el-space direction="vertical" fill :size="16" class="ticket-list-page">
     <el-card shadow="never">
-      <el-tabs :model-value="query.view" @tab-change="handleTabChange">
+      <div v-if="isMobile" class="mobile-view-switch">
+        <el-select
+          :model-value="query.view"
+          placeholder="请选择视图"
+          class="mobile-view-select"
+          @change="handleTabChange"
+        >
+          <el-option v-for="tab in viewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
+        </el-select>
+      </div>
+      <el-tabs v-else :model-value="query.view" class="ticket-view-tabs" @tab-change="handleTabChange">
         <el-tab-pane
           v-for="tab in viewTabs"
           :key="tab.value"
@@ -430,17 +452,17 @@ onMounted(() => {
           :name="tab.value"
         />
       </el-tabs>
-      <el-form :inline="true" label-width="72px">
-        <el-form-item label="工单编号">
-          <el-input v-model="query.ticketNo" placeholder="请输入编号" clearable />
+      <el-form :inline="!isMobile" :label-width="isMobile ? 'auto' : '72px'" class="query-form">
+        <el-form-item label="工单编号" class="query-form-item">
+          <el-input v-model="query.ticketNo" class="query-input" placeholder="请输入编号" clearable />
         </el-form-item>
-        <el-form-item label="标题">
-          <el-input v-model="query.title" placeholder="请输入标题" clearable />
+        <el-form-item label="标题" class="query-form-item">
+          <el-input v-model="query.title" class="query-input" placeholder="请输入标题" clearable />
         </el-form-item>
-        <el-form-item label="分类">
+        <el-form-item label="分类" class="query-form-item">
           <el-select
             v-model="query.categoryId"
-            class="query-select"
+            class="query-input"
             placeholder="请选择内容"
             clearable
             filterable
@@ -453,8 +475,8 @@ onMounted(() => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="query.status" class="query-select" placeholder="请选择内容" clearable>
+        <el-form-item label="状态" class="query-form-item">
+          <el-select v-model="query.status" class="query-input" placeholder="请选择内容" clearable>
             <!-- 通用工单状态 -->
             <el-option label="待分派" value="pending_assign" />
             <el-option label="待受理" value="pending_accept" />
@@ -471,25 +493,26 @@ onMounted(() => {
             <el-option label="待客服确认" value="pending_cs_confirm" />
           </el-select>
         </el-form-item>
-        <el-form-item label="优先级">
-          <el-select v-model="query.priority" class="query-select" placeholder="请选择内容" clearable>
+        <el-form-item label="优先级" class="query-form-item">
+          <el-select v-model="query.priority" class="query-input" placeholder="请选择内容" clearable>
             <el-option label="紧急" value="urgent" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
             <el-option label="低" value="low" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间范围">
+        <el-form-item label="时间范围" class="query-form-item">
           <el-date-picker
             v-model="timeRange"
+            class="query-input"
             type="daterange"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
             value-format="YYYY-MM-DD HH:mm:ss"
           />
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space class="query-action-buttons">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
@@ -500,7 +523,7 @@ onMounted(() => {
     <el-card shadow="never">
       <EmptyState v-if="!loading && tableData.length === 0" description="暂无工单数据" />
       <template v-else>
-        <BaseTable :data="tableData" :loading="loading" @sort-change="handleSortChange">
+        <BaseTable :data="tableData" :loading="loading" class="ticket-table" @sort-change="handleSortChange">
           <el-table-column prop="ticketNo" label="工单编号" width="160" sortable="custom">
             <template #default="{ row }">
               <el-button type="primary" link class="cell-link" @click="openDetail(row)">
@@ -552,7 +575,12 @@ onMounted(() => {
               {{ formatDateTime(row.updateTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column
+            label="操作"
+            :width="isMobile ? 90 : 120"
+            align="center"
+            :fixed="isMobile ? undefined : 'right'"
+          >
             <template #default="{ row }">
               <el-button type="primary" link @click="openDetail(row)">详情</el-button>
             </template>
@@ -931,9 +959,37 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
-.query-select {
+.ticket-list-page {
+  width: 100%;
+}
+
+.mobile-view-switch {
+  margin-bottom: 12px;
+}
+
+.mobile-view-select {
+  width: 100%;
+}
+
+.query-form {
+  width: 100%;
+}
+
+.query-form-item {
+  margin-bottom: 12px;
+}
+
+.query-input {
   width: 220px;
   max-width: 100%;
+}
+
+.query-form-actions {
+  margin-right: 0;
+}
+
+.query-action-buttons {
+  width: 100%;
 }
 
 .cell-link {
@@ -956,6 +1012,12 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ticket-table {
+  :deep(.el-table) {
+    min-width: 1360px;
+  }
 }
 
 // ===== Drawer 全局样式覆盖 =====
@@ -1436,6 +1498,34 @@ onMounted(() => {
     width: 100%;
     max-height: none;
     position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .query-form-item {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input {
+    width: 100%;
+  }
+
+  .query-action-buttons :deep(.el-space__item) {
+    width: calc(50% - 4px);
+  }
+
+  .query-action-buttons :deep(.el-button) {
+    width: 100%;
+  }
+
+  .ticket-view-tabs :deep(.el-tabs__nav-wrap) {
+    overflow-x: auto;
   }
 }
 </style>
