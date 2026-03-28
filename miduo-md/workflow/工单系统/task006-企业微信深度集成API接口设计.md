@@ -14,6 +14,7 @@
 | API000021 | 企微群绑定列表 | GET | /api/wecom/group-binding/list | 查询群与分类绑定配置 |
 | API000022 | 企微群绑定创建 | POST | /api/wecom/group-binding/create | 新增群绑定配置 |
 | API000023 | 企微群绑定更新 | PUT | /api/wecom/group-binding/update/{id} | 修改群绑定配置 |
+| API000439 | 企微历史工单链接兼容跳转 | GET | /api/wecom/callback/open/ticket/{ticketNo} | 兼容历史错误链接，302 跳转到公开工单详情 |
 
 ---
 

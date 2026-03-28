@@ -55,7 +55,7 @@ wecom:
   contact-secret:
   callback-token: nBd196BNex8UmAlB42iqVf
   callback-aes-key: pTKsrXjxTasLv2TeGpRpkVTQlK1grMiVPmREhBb5WEO
-  trusted-domain: http://ticket.ebcone.cn/api/wecom/callback
+  trusted-domain: http://ticket.ebcone.cn
   mq:
     enabled: false
 

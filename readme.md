@@ -402,6 +402,7 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.1.4-ticket-detail-info-attachment-role-polish` | 工单详情页优化：详细信息四块布局适配、附件信息排版优化、图片“查看”弹窗预览、角色英文统一转中文 |
+| `v1.1.6-wecom-open-ticket-link-fix` | 修复企业微信工单详情链接404：统一公开链接组装规则、兼容历史错误链接自动跳转、修正测试/生产环境 trusted-domain 默认值 |
 
 ---
 
@@ -437,3 +438,55 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.1.5-kanban-error-message-zh` 及以上；
   2. 重启后端服务；
   3. 清理浏览器缓存后重试拖拽流转。
+
+---
+
+## 15. 企业微信工单详情链接 404 修复（后端）
+
+### 15.1 功能用途
+- **用途**：修复企业微信消息里的“查看详情”链接点击后出现 `Whitelabel Error Page 404` 的问题。
+- **类比理解**：原来快递单上的地址写成了“省市区+机房门牌号”，导航会找不到；现在系统会自动把地址“纠偏”成可达的标准地址。
+
+### 15.2 根因（用抓包结果说明）
+- 抓包请求是：`GET /api/wecom/callback/open/ticket/{ticketNo}`，服务里没有这个路由，所以 404。
+- 同时，`wecom.trusted-domain` 在测试/生产默认值被配置成了 `http://xxx/api/wecom/callback`，代码又拼了 `/open/ticket/{ticketNo}`，导致发出去的链接天然容易错。
+
+### 15.3 本次修复内容
+1. **新增统一链接构建器**：`WecomPublicLinkBuilder`
+   - 自动去掉错误后缀 `/api/wecom/callback`
+   - 再拼接正确路径 `/open/ticket/{ticketNo}`
+2. **替换 3 处企微回包逻辑**（创建成功、重复工单、交互确认）统一走构建器
+3. **新增历史链接兼容接口**：`GET /api/wecom/callback/open/ticket/{ticketNo}`
+   - 接口编号：`API000439`
+   - 行为：302 跳转到 `/open/ticket/{ticketNo}`
+4. **修正配置默认值**
+   - `application-test.yml`：`wecom.trusted-domain` 改为 `http://ticket.t.miduonet.com`
+   - `application-prod.yml`：`wecom.trusted-domain` 改为 `http://ticket.ebcone.cn`
+
+### 15.4 使用方法（验收步骤）
+1. 在企业微信群里重新创建一条工单，让机器人返回新“查看详情”链接。
+2. 点击链接，预期可正常打开工单公开页，不再 404。
+3. 用历史消息里的旧链接（包含 `/api/wecom/callback/open/ticket/`）再点一次。
+4. 预期会自动跳转到 `/open/ticket/{ticketNo}` 并正常展示。
+
+### 15.5 参数说明（本次修复相关）
+| 参数/路径 | 类型 | 说明 |
+|---|---|---|
+| `wecom.trusted-domain` | `String` | 企微可信域名，应该是域名根地址，不应包含 `/api/wecom/callback` |
+| `/open/ticket/{ticketNo}` | `GET` | 工单公开详情真实访问路径 |
+| `/api/wecom/callback/open/ticket/{ticketNo}` | `GET` | 历史错误链接兼容入口，302 跳转 |
+
+### 15.6 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/open/ticket/{ticketNo}` | `ApiResult<TicketPublicDetailOutput>` | 返回公开工单详情数据 |
+| `GET /api/wecom/callback/open/ticket/{ticketNo}` | `302 Found` | `Location: /open/ticket/{ticketNo}`，用于老链接兼容 |
+
+### 15.7 常见问题（新增）
+#### Q11：修复后为什么旧链接仍然 404？
+- **检测**：确认后端是否部署了包含兼容接口的版本。
+- **记录（错误类型）**：服务版本未更新或流量仍在旧实例。
+- **恢复建议**：
+  1. 升级到 `v1.1.6-wecom-open-ticket-link-fix` 及以上；
+  2. 重启后端服务并确认路由生效；
+  3. 再次使用旧链接测试，观察是否返回 302 跳转。
