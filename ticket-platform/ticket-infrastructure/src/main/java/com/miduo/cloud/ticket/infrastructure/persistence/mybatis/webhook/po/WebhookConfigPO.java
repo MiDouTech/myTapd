@@ -16,6 +16,9 @@ import java.util.Date;
 @TableName("webhook_config")
 public class WebhookConfigPO extends BaseEntity {
 
+    @TableField("name")
+    private String name;
+
     @TableField("url")
     private String url;
 

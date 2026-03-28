@@ -16,6 +16,9 @@ import java.util.List;
 @Data
 public class WebhookConfigCreateInput implements Serializable {
 
+    @NotBlank(message = "配置名称不能为空")
+    private String name;
+
     @NotBlank(message = "Webhook地址不能为空")
     private String url;
 

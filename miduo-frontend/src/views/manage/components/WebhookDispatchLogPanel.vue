@@ -12,6 +12,8 @@ const WEBHOOK_EVENT_OPTIONS = [
   { label: '工单创建', value: 'TICKET_CREATED' },
   { label: '工单状态变更', value: 'TICKET_STATUS_CHANGED' },
   { label: '工单分派', value: 'TICKET_ASSIGNED' },
+  { label: '工单完结', value: 'TICKET_COMPLETED' },
+  { label: '工单关闭', value: 'TICKET_CLOSED' },
 ] as const
 
 const DISPATCH_STATUS_OPTIONS = [

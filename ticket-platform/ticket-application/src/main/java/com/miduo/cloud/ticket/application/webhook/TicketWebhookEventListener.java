@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.application.webhook;
 
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
@@ -52,6 +53,13 @@ public class TicketWebhookEventListener {
             payload.setNewStatus(event.getNewStatus());
             payload.setOperatorId(event.getOperatorId());
             webhookDispatchService.dispatch(WebhookEventType.TICKET_STATUS_CHANGED, event.getTicketId(), payload);
+
+            TicketStatus newStatus = TicketStatus.fromCode(event.getNewStatus());
+            if (newStatus == TicketStatus.COMPLETED) {
+                webhookDispatchService.dispatch(WebhookEventType.TICKET_COMPLETED, event.getTicketId(), payload);
+            } else if (newStatus == TicketStatus.CLOSED) {
+                webhookDispatchService.dispatch(WebhookEventType.TICKET_CLOSED, event.getTicketId(), payload);
+            }
         } catch (Exception ex) {
             log.error("处理工单状态变更Webhook事件失败: ticketId={}", event != null ? event.getTicketId() : null, ex);
         }

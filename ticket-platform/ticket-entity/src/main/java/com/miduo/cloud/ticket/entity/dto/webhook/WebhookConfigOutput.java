@@ -14,6 +14,8 @@ public class WebhookConfigOutput implements Serializable {
 
     private Long id;
 
+    private String name;
+
     private String url;
 
     private String secret;

@@ -55,7 +55,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public Long create(WebhookConfigCreateInput input) {
         WebhookConfigPO po = new WebhookConfigPO();
-        fillForCreateOrUpdate(po, input.getUrl(), input.getSecret(), input.getEventTypes(),
+        fillForCreateOrUpdate(po, input.getName(), input.getUrl(), input.getSecret(), input.getEventTypes(),
                 input.getIsActive(), input.getTimeoutMs(), input.getMaxRetryTimes(), input.getDescription());
         webhookConfigMapper.insert(po);
         return po.getId();
@@ -67,7 +67,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
         if (existing == null) {
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "Webhook配置不存在");
         }
-        fillForCreateOrUpdate(existing, input.getUrl(), input.getSecret(), input.getEventTypes(),
+        fillForCreateOrUpdate(existing, input.getName(), input.getUrl(), input.getSecret(), input.getEventTypes(),
                 input.getIsActive(), input.getTimeoutMs(), input.getMaxRetryTimes(), input.getDescription());
         webhookConfigMapper.updateById(existing);
     }
@@ -84,7 +84,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
     private void buildPageCondition(QueryWrapper<WebhookConfigPO> wrapper, WebhookConfigPageInput input) {
         if (input.getKeyword() != null && !input.getKeyword().trim().isEmpty()) {
             String keyword = input.getKeyword().trim();
-            wrapper.and(w -> w.like("url", keyword).or().like("description", keyword));
+            wrapper.and(w -> w.like("name", keyword).or().like("url", keyword).or().like("description", keyword));
         }
         if (input.getEventType() != null && !input.getEventType().trim().isEmpty()) {
             wrapper.apply("FIND_IN_SET({0}, event_types)", input.getEventType().trim());
@@ -95,6 +95,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
     }
 
     private void fillForCreateOrUpdate(WebhookConfigPO po,
+                                       String name,
                                        String url,
                                        String secret,
                                        List<String> eventTypes,
@@ -102,6 +103,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
                                        Integer timeoutMs,
                                        Integer maxRetryTimes,
                                        String description) {
+        po.setName(name);
         po.setUrl(url);
         po.setSecret(secret);
         po.setEventTypes(joinEventTypes(eventTypes));
@@ -149,6 +151,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
     private WebhookConfigOutput convertToOutput(WebhookConfigPO po) {
         WebhookConfigOutput output = new WebhookConfigOutput();
         output.setId(po.getId());
+        output.setName(po.getName());
         output.setUrl(po.getUrl());
         output.setSecret(po.getSecret());
         output.setEventTypes(splitEventTypes(po.getEventTypes()));

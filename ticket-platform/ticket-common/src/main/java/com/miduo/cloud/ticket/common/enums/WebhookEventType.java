@@ -12,7 +12,9 @@ public enum WebhookEventType {
 
     TICKET_CREATED("TICKET_CREATED", "工单创建"),
     TICKET_STATUS_CHANGED("TICKET_STATUS_CHANGED", "工单状态变更"),
-    TICKET_ASSIGNED("TICKET_ASSIGNED", "工单分派");
+    TICKET_ASSIGNED("TICKET_ASSIGNED", "工单分派"),
+    TICKET_COMPLETED("TICKET_COMPLETED", "工单完结"),
+    TICKET_CLOSED("TICKET_CLOSED", "工单关闭");
 
     private final String code;
     private final String label;
