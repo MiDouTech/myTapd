@@ -148,13 +148,31 @@ async function loadCategoryTree(): Promise<void> {
 async function loadTickets(): Promise<void> {
   loading.value = true
   try {
-    const response = await getTicketPage({
-      ...query,
-      createTimeStart: timeRange.value[0],
-      createTimeEnd: timeRange.value[1],
-    })
+    const params: TicketPageInput = {
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      view: query.view,
+    }
+    if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
+    if (query.title?.trim()) params.title = query.title.trim()
+    if (query.categoryId) params.categoryId = query.categoryId
+    if (query.status) params.status = query.status
+    if (query.priority) params.priority = query.priority
+    if (query.creatorId) params.creatorId = query.creatorId
+    if (query.assigneeId) params.assigneeId = query.assigneeId
+    if (query.orderBy) {
+      params.orderBy = query.orderBy
+      params.asc = query.asc
+    }
+    if (timeRange.value?.[0]) params.createTimeStart = timeRange.value[0]
+    if (timeRange.value?.[1]) params.createTimeEnd = timeRange.value[1]
+
+    const response = await getTicketPage(params)
     tableData.value = response.records
     total.value = response.total
+  } catch {
+    tableData.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

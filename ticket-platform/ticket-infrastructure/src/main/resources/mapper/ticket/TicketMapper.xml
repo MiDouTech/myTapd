@@ -10,14 +10,22 @@
             AND t.creator_id = #{currentUserId}
         </if>
         <if test="view == 'my_todo'">
-            AND t.assignee_id = #{currentUserId}
+            AND (t.assignee_id = #{currentUserId}
+                 OR t.id IN (
+                     SELECT ta.ticket_id FROM ticket_assignee ta
+                     WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
+                 ))
             AND t.status NOT IN ('completed', 'closed', 'rejected')
         </if>
         <if test="view == 'my_participated'">
-            AND t.id IN (
-                SELECT DISTINCT tl.ticket_id FROM ticket_log tl
-                WHERE tl.user_id = #{currentUserId} AND tl.deleted = 0
-            )
+            AND (t.id IN (
+                    SELECT DISTINCT tl.ticket_id FROM ticket_log tl
+                    WHERE tl.user_id = #{currentUserId} AND tl.deleted = 0
+                 )
+                 OR t.id IN (
+                     SELECT ta.ticket_id FROM ticket_assignee ta
+                     WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
+                 ))
         </if>
         <if test="view == 'my_followed'">
             AND t.id IN (
