@@ -112,7 +112,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16" v-loading="loading">
+  <div class="kanban-page" v-loading="loading">
     <el-card shadow="never">
       <div class="toolbar">
         <div class="title">工单看板</div>
@@ -120,7 +120,7 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="kanban-card">
       <EmptyState v-if="columns.length === 0" description="暂无看板数据" />
       <div v-else class="kanban-container">
         <div
@@ -172,10 +172,19 @@ onMounted(() => {
         </div>
       </div>
     </el-card>
-  </el-space>
+  </div>
 </template>
 
 <style scoped lang="scss">
+.kanban-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -186,6 +195,15 @@ onMounted(() => {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+}
+
+.kanban-card {
+  min-width: 0;
+  overflow: hidden;
+
+  :deep(.el-card__body) {
+    overflow: hidden;
+  }
 }
 
 .kanban-container {
