@@ -97,7 +97,8 @@ public class BugReportController {
     @OperationLog(moduleName = "Bug简报管理", operationItem = "审核通过")
     @PutMapping("/approve/{id}")
     @Operation(summary = "审核通过", description = "接口编号：API000025")
-    public ApiResult<Void> approve(@PathVariable("id") Long id, @Valid @RequestBody BugReportReviewInput input) {
+    public ApiResult<Void> approve(@PathVariable("id") Long id,
+                                   @RequestBody(required = false) BugReportApproveInput input) {
         bugReportApplicationService.approve(id, input, getCurrentUserId());
         return ApiResult.success();
     }

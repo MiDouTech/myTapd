@@ -450,8 +450,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16" class="ticket-list-page">
-    <el-card shadow="never">
+  <div class="ticket-list-page">
+    <el-card shadow="never" class="ticket-list-card">
       <div v-if="isMobile" class="mobile-view-switch">
         <el-select
           :model-value="query.view"
@@ -538,7 +538,7 @@ onUnmounted(() => {
       </el-form>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="ticket-list-card">
       <EmptyState v-if="!loading && tableData.length === 0" description="暂无工单数据" />
       <template v-else>
         <BaseTable :data="tableData" :loading="loading" class="ticket-table" @sort-change="handleSortChange">
@@ -973,11 +973,19 @@ onUnmounted(() => {
         </template>
       </div>
     </el-drawer>
-  </el-space>
+  </div>
 </template>
 
 <style scoped lang="scss">
 .ticket-list-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #fff;
+}
+
+.ticket-list-card {
   width: 100%;
 }
 
@@ -1013,23 +1021,33 @@ onUnmounted(() => {
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
 }
 
 .query-form-item {
-  margin-bottom: 12px;
+  margin-bottom: 0;
+  margin-right: 0;
 }
 
 .query-input {
-  width: 220px;
+  width: 210px;
   max-width: 100%;
 }
 
 .query-form-actions {
+  margin-left: auto;
   margin-right: 0;
 }
 
 .query-action-buttons {
-  width: 100%;
+  width: auto;
+}
+
+.query-action-buttons :deep(.el-button) {
+  min-width: 88px;
 }
 
 .cell-link {
@@ -1546,8 +1564,13 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .query-form {
+    gap: 0;
+  }
+
   .query-form-item {
     width: 100%;
+    margin-bottom: 12px;
     margin-right: 0;
   }
 

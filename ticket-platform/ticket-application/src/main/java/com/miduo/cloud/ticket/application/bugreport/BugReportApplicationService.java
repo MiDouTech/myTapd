@@ -363,7 +363,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void approve(Long id, BugReportReviewInput input, Long currentUserId) {
+    public void approve(Long id, BugReportApproveInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
         if (!BugReportStatus.PENDING_REVIEW.getCode().equals(report.getStatus())) {
             throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "当前状态不允许审核通过");
@@ -371,15 +371,14 @@ public class BugReportApplicationService extends BaseApplicationService {
         String oldStatus = report.getStatus();
         report.setStatus(BugReportStatus.ARCHIVED.getCode());
         report.setReviewedAt(new Date());
-        report.setReviewComment(input.getReviewComment());
+        String reviewComment = input != null ? input.getReviewComment() : null;
+        report.setReviewComment(reviewComment);
         bugReportMapper.updateById(report);
-        recordLog(id, currentUserId, "APPROVE", oldStatus, report.getStatus(), input.getReviewComment());
+        recordLog(id, currentUserId, "APPROVE", oldStatus, report.getStatus(), reviewComment);
 
         String notifyTitle = String.format("Bug简报已归档 - %s", report.getReportNo());
         String severity = StringUtils.hasText(report.getSeverityLevel()) ? report.getSeverityLevel() : "-";
         String category = StringUtils.hasText(report.getDefectCategory()) ? report.getDefectCategory() : "-";
-        String reviewComment = StringUtils.hasText(input.getReviewComment()) ? input.getReviewComment() : "";
-
         // 通知简报责任人（站内信 + 企微应用消息）
         List<Long> responsibleUserIds = findResponsibleUserIds(id);
         if (!responsibleUserIds.isEmpty()) {
