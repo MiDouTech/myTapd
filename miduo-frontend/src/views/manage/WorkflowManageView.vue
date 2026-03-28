@@ -100,6 +100,24 @@ const WORKFLOW_ROLE_OPTIONS = [
   { label: 'DEVELOPER（开发）', value: 'DEVELOPER' },
 ] as const
 
+const WORKFLOW_ROLE_LABEL_MAP: Record<string, string> = {
+  SUBMITTER: '提交人',
+  HANDLER: '处理人',
+  ADMIN: '系统管理员',
+  TICKET_ADMIN: '工单管理员',
+  OBSERVER: '观察者',
+  CUSTOMER_SERVICE: '客服',
+  TESTER: '测试',
+  DEVELOPER: '开发',
+}
+
+const SLA_ACTION_LABEL_MAP: Record<string, string> = {
+  START_RESPONSE: '开始响应计时',
+  START_RESOLVE: '开始解决计时',
+  PAUSE: '暂停计时',
+  STOP: '停止计时',
+}
+
 const STATE_TYPE_OPTIONS = [
   { label: '初始 INITIAL', value: 'INITIAL' },
   { label: '中间 INTERMEDIATE', value: 'INTERMEDIATE' },
@@ -581,7 +599,14 @@ function formatAllowedRoles(roles?: string[]): string {
   if (!roles || roles.length === 0) {
     return '-'
   }
-  return roles.join('、')
+  return roles.map((role) => WORKFLOW_ROLE_LABEL_MAP[role] || role).join('、')
+}
+
+function getSlaActionLabel(action?: string): string {
+  if (!action) {
+    return '-'
+  }
+  return SLA_ACTION_LABEL_MAP[action] || action
 }
 
 onMounted(async () => {
@@ -790,7 +815,11 @@ onMounted(async () => {
                 {{ getStateTypeLabel(row.type) }}
               </template>
             </el-table-column>
-            <el-table-column prop="slaAction" label="SLA动作" min-width="140" />
+            <el-table-column label="SLA动作" min-width="140">
+              <template #default="{ row }">
+                {{ getSlaActionLabel(row.slaAction) }}
+              </template>
+            </el-table-column>
           </BaseTable>
         </el-card>
 
