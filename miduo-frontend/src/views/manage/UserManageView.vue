@@ -401,7 +401,7 @@ onMounted(async () => {
       <template #header>
         <div class="card-header">
           <div class="title">组织账号管理</div>
-          <el-space>
+          <el-space class="card-header-right">
             <span class="sync-tip">最近同步状态：</span>
             <el-tag :type="getSyncStatusType(latestSyncStatus?.syncStatus)">
               {{ getSyncStatusLabel(latestSyncStatus?.syncStatus) }}
@@ -707,6 +707,9 @@ onMounted(async () => {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .subtitle {
@@ -718,6 +721,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-header-right {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .toolbar-row {

@@ -149,7 +149,7 @@ onMounted(async () => {
     <el-card shadow="never">
       <div class="toolbar">
         <div class="title">Bug简报列表</div>
-        <el-space>
+        <el-space class="toolbar-actions">
           <el-button @click="router.push('/bug-report/statistics')">查看统计</el-button>
           <el-button type="primary" @click="router.push('/bug-report/edit')">新建简报</el-button>
         </el-space>
@@ -305,12 +305,21 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .title {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar-actions {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .query-form {

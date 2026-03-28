@@ -129,7 +129,7 @@ onMounted(() => {
     <el-card shadow="never">
       <div class="toolbar">
         <div class="title">Bug简报统计看板</div>
-        <el-space>
+        <el-space class="toolbar-actions">
           <el-button @click="router.push('/bug-report')">返回列表</el-button>
           <el-button @click="loadStatistics">刷新</el-button>
           <el-button type="primary" @click="handleExport">导出CSV</el-button>
@@ -261,12 +261,21 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .title {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar-actions {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .query-form {
