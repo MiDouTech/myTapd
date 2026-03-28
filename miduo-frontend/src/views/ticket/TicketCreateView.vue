@@ -274,15 +274,43 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .create-form {
   max-width: 860px;
+  padding-top: 8px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 20px;
+  }
+
+  :deep(.el-form-item__label) {
+    font-size: 14px;
+    font-weight: 500;
+    color: #4b5563;
+  }
+
+  :deep(.el-divider__text) {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1675d1;
+  }
 }
 
 .w-420 {
   width: 420px;
+}
+
+@media (max-width: 768px) {
+  .w-420 {
+    width: 100%;
+  }
+
+  .create-form {
+    max-width: 100%;
+  }
 }
 </style>

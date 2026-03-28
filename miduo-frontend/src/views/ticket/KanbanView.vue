@@ -151,40 +151,49 @@ onMounted(() => {
 }
 
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .kanban-container {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   align-items: flex-start;
 }
 
 .kanban-column {
-  min-width: 280px;
-  max-width: 300px;
+  min-width: 290px;
+  max-width: 310px;
   background: #f5f7fa;
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 200px);
+  border: 1px solid #eef2f7;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #f0f4f8;
+  }
 }
 
 .column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e5e7eb;
   flex-shrink: 0;
 
   .name {
     font-size: 14px;
     font-weight: 600;
-    color: #303133;
+    color: #1d2129;
   }
 }
 
@@ -214,15 +223,34 @@ onMounted(() => {
   background: #ffffff;
   border-radius: 8px;
   border: 1px solid #ebeef5;
-  padding: 10px;
+  padding: 12px;
   cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    border-color: #c8ddf5;
+  }
+
+  &:active {
+    cursor: grabbing;
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  }
 }
 
 .ticket-no {
   color: #1675d1;
   font-size: 12px;
+  font-weight: 500;
+  font-family: 'SFMono-Regular', Consolas, monospace;
   cursor: pointer;
   outline: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 
   &:focus-visible {
     box-shadow: 0 0 0 2px #1675d1;
@@ -231,10 +259,15 @@ onMounted(() => {
 }
 
 .ticket-title {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 14px;
-  color: #303133;
-  line-height: 20px;
+  color: #1d2129;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .ticket-meta {
@@ -244,14 +277,16 @@ onMounted(() => {
   justify-content: space-between;
 
   .assignee {
-    color: #909399;
+    color: #6b7280;
     font-size: 12px;
   }
 }
 
 .ticket-foot {
-  margin-top: 10px;
-  color: #909399;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f2f5;
+  color: #9ca3af;
   font-size: 12px;
   display: flex;
   justify-content: space-between;

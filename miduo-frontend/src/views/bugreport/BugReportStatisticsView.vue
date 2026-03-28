@@ -264,12 +264,17 @@ onMounted(() => {
 }
 
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .query-form {
   margin-top: 14px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #eef2f7;
 }
 
 .metrics-card {
@@ -308,8 +313,9 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .board-grid {

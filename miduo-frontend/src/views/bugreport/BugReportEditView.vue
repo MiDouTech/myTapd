@@ -1314,8 +1314,9 @@ watch(
 }
 
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .status-line {

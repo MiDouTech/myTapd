@@ -406,8 +406,9 @@ watch(
 
 .sidebar {
   background: #ffffff;
-  border-right: 1px solid #e5e7eb;
-  transition: width 0.2s;
+  border-right: 1px solid var(--md-border-color);
+  transition: width 0.2s ease;
+  box-shadow: 1px 0 4px rgba(0, 0, 0, 0.02);
 }
 
 .logo {
@@ -416,14 +417,52 @@ watch(
   text-align: center;
   color: #1675d1;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #fafcff 0%, #ffffff 100%);
 }
 
 .menu {
   border-right: none;
   height: calc(100vh - 56px);
   overflow-y: auto;
+  padding: 6px 0;
+
+  :deep(.el-menu-item) {
+    margin: 2px 8px;
+    border-radius: 6px;
+    height: 42px;
+    line-height: 42px;
+    transition: all 0.15s ease;
+
+    &.is-active {
+      background: #e8f2fc;
+      color: #1675d1;
+      font-weight: 500;
+    }
+
+    &:hover:not(.is-active) {
+      background: #f5f7fa;
+    }
+  }
+
+  :deep(.el-sub-menu .el-menu-item) {
+    margin: 2px 8px;
+    border-radius: 6px;
+    min-width: auto;
+  }
+
+  :deep(.el-sub-menu__title) {
+    margin: 2px 8px;
+    border-radius: 6px;
+    height: 42px;
+    line-height: 42px;
+
+    &:hover {
+      background: #f5f7fa;
+    }
+  }
 }
 
 .mobile-sidebar-panel {
@@ -434,22 +473,24 @@ watch(
 .header {
   height: 56px;
   background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--md-border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .header-title {
   font-size: 16px;
   font-weight: 600;
+  color: #1d2129;
   max-width: min(60vw, 360px);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -459,11 +500,26 @@ watch(
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .search-input {
   width: 280px;
+
+  :deep(.el-input__wrapper) {
+    border-radius: 20px;
+    background: #f5f7fa;
+    box-shadow: none !important;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+
+    &:hover,
+    &.is-focus {
+      background: #ffffff;
+      border-color: #1675d1;
+      box-shadow: 0 0 0 2px rgba(22, 117, 209, 0.1) !important;
+    }
+  }
 }
 
 .notification-badge {
@@ -475,10 +531,18 @@ watch(
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #f5f7fa;
+  }
 }
 
 .username {
   color: #303133;
+  font-size: 14px;
 }
 
 .username.is-hidden {
@@ -486,19 +550,21 @@ watch(
 }
 
 .main {
-  padding: 12px 16px 16px;
+  padding: 16px 20px 20px;
   overflow: auto;
+  background: #f5f7fa;
 }
 
 .breadcrumb {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .page-container {
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 10px;
   min-height: calc(100vh - 140px);
-  padding: 16px;
+  padding: 20px;
+  box-shadow: var(--md-shadow-sm);
 }
 
 .notification-drawer-toolbar {
@@ -511,14 +577,22 @@ watch(
 .notification-item {
   border: 1px solid #ebeef5;
   border-radius: 8px;
-  padding: 12px;
+  padding: 12px 14px;
   margin-bottom: 10px;
   background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #c8ddf5;
+    box-shadow: 0 2px 6px rgba(22, 117, 209, 0.06);
+  }
 }
 
 .notification-item.unread {
   border-color: #bcdcff;
-  background: #f7fbff;
+  background: linear-gradient(135deg, #f7fbff 0%, #f0f7ff 100%);
+  border-left: 3px solid #1675d1;
 }
 
 .notification-item-header {

@@ -484,10 +484,26 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  span {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1d2129;
+  }
 }
 
 .edit-form {
   max-width: 560px;
+  padding-top: 4px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+
+  :deep(.el-form-item__label) {
+    font-weight: 500;
+    color: #4b5563;
+  }
 }
 
 .field-tip {
@@ -495,5 +511,11 @@ onMounted(async () => {
   color: #909399;
   margin-top: 4px;
   line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .edit-form {
+    max-width: 100%;
+  }
 }
 </style>

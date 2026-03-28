@@ -597,9 +597,9 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
 
 .summary-card {
   .card-header-title {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
-    color: #303133;
+    color: #1d2129;
   }
 }
 

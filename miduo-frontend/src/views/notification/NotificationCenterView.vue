@@ -403,12 +403,17 @@ onMounted(async () => {
 }
 
 .title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  color: #1d2129;
 }
 
 .query-form {
   margin-top: 14px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #eef2f7;
 }
 
 .card-header {
@@ -419,7 +424,8 @@ onMounted(async () => {
 }
 
 .tip-alert {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  border-radius: 8px;
 }
 
 @media (max-width: 991px) {
@@ -427,6 +433,10 @@ onMounted(async () => {
   .card-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .query-form {
+    padding: 10px 12px;
   }
 }
 </style>
