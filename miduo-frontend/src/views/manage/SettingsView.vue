@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getNotificationPreferences, updateNotificationPreferences } from '@/api/notification'
-import { getBasicSettings, updateBasicSettings } from '@/api/systemConfig'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -25,18 +24,8 @@ const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom', 'nlpKeyw
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
 
-const activeTab = ref<SettingsTab>('basic')
+const activeTab = ref<SettingsTab>('notification')
 const activeSection = ref<IntegrationSection>('wecomConfig')
-
-const basicForm = reactive({
-  systemName: '米多工单系统',
-  timezone: 'Asia/Shanghai',
-  workTimeStart: '09:00',
-  workTimeEnd: '18:00',
-  defaultPageSize: 20,
-})
-const basicLoading = ref(false)
-const basicSubmitLoading = ref(false)
 
 const preferenceLoading = ref(false)
 const preferenceSubmitLoading = ref(false)
@@ -55,10 +44,10 @@ const pagedPreferenceList = computed(() => {
 })
 
 function normalizeTab(tab: unknown): SettingsTab {
-  if (typeof tab === 'string' && (tabValues as readonly string[]).includes(tab)) {
+  if (typeof tab === 'string' && tab !== 'basic' && (tabValues as readonly string[]).includes(tab)) {
     return tab as SettingsTab
   }
-  return 'basic'
+  return 'notification'
 }
 
 function normalizeSection(section: unknown): IntegrationSection {
@@ -162,37 +151,8 @@ function handlePreferencePaginationChange(payload: { pageNum: number; pageSize: 
   normalizePreferencePage()
 }
 
-async function loadBasicSettings(): Promise<void> {
-  basicLoading.value = true
-  try {
-    const data = await getBasicSettings()
-    basicForm.systemName = data.systemName || '米多工单系统'
-    basicForm.timezone = data.timezone || 'Asia/Shanghai'
-    basicForm.workTimeStart = data.workTimeStart || '09:00'
-    basicForm.workTimeEnd = data.workTimeEnd || '18:00'
-    basicForm.defaultPageSize = data.defaultPageSize || 20
-  } catch {
-    // 加载失败保留默认值
-  } finally {
-    basicLoading.value = false
-  }
-}
-
-async function handleSaveBasicSettings(): Promise<void> {
-  basicSubmitLoading.value = true
-  try {
-    await updateBasicSettings({ ...basicForm })
-    notifySuccess('基础参数保存成功')
-    await loadBasicSettings()
-  } catch {
-    // 提交失败由全局拦截器统一提示
-  } finally {
-    basicSubmitLoading.value = false
-  }
-}
-
 onMounted(async () => {
-  await Promise.all([loadBasicSettings(), loadPreferences()])
+  await loadPreferences()
   syncRouteState()
 })
 </script>
@@ -204,50 +164,7 @@ onMounted(async () => {
     </template>
 
     <el-tabs v-model="activeTab" class="settings-tabs">
-      <el-tab-pane label="基础参数" name="basic">
-        <el-form v-loading="basicLoading" label-width="120px" class="basic-form">
-          <el-form-item label="系统名称">
-            <el-input v-model="basicForm.systemName" maxlength="50" />
-          </el-form-item>
-          <el-form-item label="默认时区">
-            <el-input v-model="basicForm.timezone" />
-          </el-form-item>
-          <el-form-item label="工作开始时间">
-            <el-time-picker
-              v-model="basicForm.workTimeStart"
-              value-format="HH:mm"
-              format="HH:mm"
-              placeholder="请选择工作开始时间"
-            />
-          </el-form-item>
-          <el-form-item label="工作结束时间">
-            <el-time-picker
-              v-model="basicForm.workTimeEnd"
-              value-format="HH:mm"
-              format="HH:mm"
-              placeholder="请选择工作结束时间"
-            />
-          </el-form-item>
-          <el-form-item label="默认分页条数">
-            <el-select v-model="basicForm.defaultPageSize" placeholder="请选择默认分页条数">
-              <el-option :value="10" label="10" />
-              <el-option :value="20" label="20" />
-              <el-option :value="50" label="50" />
-              <el-option :value="100" label="100" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="basicSubmitLoading" @click="handleSaveBasicSettings">保存基础参数</el-button>
-          </el-form-item>
-        </el-form>
-
-        <el-alert
-          title="基础参数用于系统全局默认值配置，保存前请确认与运维规范一致。"
-          type="info"
-          :closable="false"
-          show-icon
-        />
-      </el-tab-pane>
+      <!-- 基础参数模块暂未启用，隐藏待后续开放 -->
 
       <el-tab-pane label="通知偏好" name="notification">
         <div class="action-row">

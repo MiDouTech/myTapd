@@ -23,6 +23,8 @@ const WEBHOOK_EVENT_OPTIONS = [
   { label: '工单创建', value: 'TICKET_CREATED' },
   { label: '工单状态变更', value: 'TICKET_STATUS_CHANGED' },
   { label: '工单分派', value: 'TICKET_ASSIGNED' },
+  { label: '工单完结', value: 'TICKET_COMPLETED' },
+  { label: '工单关闭', value: 'TICKET_CLOSED' },
 ] as const
 
 const tableLoading = ref(false)
@@ -56,6 +58,7 @@ const tableData = ref<WebhookConfigOutput[]>([])
 const total = ref(0)
 
 const form = reactive<WebhookConfigCreateInput>({
+  name: '',
   url: '',
   secret: '',
   eventTypes: [],
@@ -66,6 +69,7 @@ const form = reactive<WebhookConfigCreateInput>({
 })
 
 const formRules: FormRules<WebhookConfigCreateInput> = {
+  name: [{ required: true, message: '请输入配置名称', trigger: 'blur' }],
   url: [
     { required: true, message: '请输入Webhook地址', trigger: 'blur' },
     {
@@ -155,6 +159,7 @@ function compareByProp(
 }
 
 function resetForm(): void {
+  form.name = ''
   form.url = ''
   form.secret = ''
   form.eventTypes = []
@@ -237,6 +242,7 @@ async function openEditDialog(row: WebhookConfigOutput): Promise<void> {
   dialogLoading.value = true
   try {
     const detail = await getWebhookConfigDetail(row.id)
+    form.name = detail.name || ''
     form.url = detail.url
     form.secret = detail.secret || ''
     form.eventTypes = [...detail.eventTypes]
@@ -253,7 +259,7 @@ async function openEditDialog(row: WebhookConfigOutput): Promise<void> {
 
 async function handleDelete(row: WebhookConfigOutput): Promise<void> {
   try {
-    await confirmAction(`确认删除Webhook配置【${row.url}】吗？删除后不可恢复。`)
+    await confirmAction(`确认删除Webhook配置【${row.name || row.url}】吗？删除后不可恢复。`)
   } catch {
     return
   }
@@ -282,6 +288,7 @@ async function handleSubmit(): Promise<void> {
   submitLoading.value = true
   try {
     const payload: WebhookConfigCreateInput = {
+      name: form.name.trim(),
       url: form.url.trim(),
       secret: form.secret?.trim() || undefined,
       eventTypes: [...form.eventTypes],
@@ -318,7 +325,7 @@ onMounted(async () => {
 <template>
   <el-space direction="vertical" fill :size="12">
     <el-alert
-      title="风险提示：Webhook地址需为可访问的http/https地址，请妥善保管密钥并避免在公开渠道泄露。"
+      title="风险提示：Webhook地址需为可访问的http/https地址，签名密钥请直接拼接在URL参数中，请避免在公开渠道泄露。"
       type="warning"
       :closable="false"
       show-icon
@@ -339,7 +346,7 @@ onMounted(async () => {
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
-            placeholder="请输入URL或描述"
+            placeholder="请输入名称、URL或描述"
             clearable
             @keyup.enter="handleSearch"
           />
@@ -381,6 +388,7 @@ onMounted(async () => {
           :row-class-name="resolveRowClassName"
           @sort-change="handleSortChange"
         >
+          <el-table-column prop="name" label="配置名称" min-width="120" sortable="custom" show-overflow-tooltip />
           <el-table-column prop="url" label="Webhook URL" min-width="200" sortable="custom" show-overflow-tooltip>
             <template #default="{ row }">
               <el-link type="primary" :href="row.url" target="_blank" :underline="false">
@@ -453,11 +461,11 @@ onMounted(async () => {
   >
     <div v-loading="dialogLoading">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px">
-        <el-form-item label="Webhook URL" prop="url" required>
-          <el-input v-model="form.url" placeholder="请输入 http(s):// 开头的回调地址" />
+        <el-form-item label="配置名称" prop="name" required>
+          <el-input v-model="form.name" placeholder="请输入配置名称，便于区分推送目标" maxlength="100" show-word-limit />
         </el-form-item>
-        <el-form-item label="签名密钥" prop="secret">
-          <el-input v-model="form.secret" placeholder="用于请求签名校验，建议定期轮换" show-password />
+        <el-form-item label="Webhook URL" prop="url" required>
+          <el-input v-model="form.url" placeholder="请输入 http(s):// 开头的回调地址，签名密钥可拼接在URL参数中" />
         </el-form-item>
         <el-form-item label="事件类型" prop="eventTypes" required>
           <el-checkbox-group v-model="form.eventTypes">

@@ -15,6 +15,7 @@ export interface WebhookDispatchLogPageInput extends PageQuery {
 
 export interface WebhookConfigOutput {
   id: number
+  name: string
   url: string
   secret?: string
   eventTypes: string[]
@@ -32,6 +33,7 @@ export interface WebhookConfigOutput {
 }
 
 export interface WebhookConfigCreateInput {
+  name: string
   url: string
   secret?: string
   eventTypes: string[]

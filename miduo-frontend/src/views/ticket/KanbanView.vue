@@ -160,6 +160,7 @@ onMounted(() => {
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 6px;
+  align-items: flex-start;
 }
 
 .kanban-column {
@@ -170,6 +171,7 @@ onMounted(() => {
   padding: 10px;
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 200px);
 }
 
 .column-header {
@@ -177,6 +179,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+  flex-shrink: 0;
 
   .name {
     font-size: 14px;
@@ -190,6 +193,21 @@ onMounted(() => {
   flex-direction: column;
   gap: 10px;
   min-height: 80px;
+  overflow-y: auto;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #c0c4cc;
+    border-radius: 2px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 .ticket-card {
