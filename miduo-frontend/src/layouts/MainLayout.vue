@@ -407,6 +407,11 @@ watch(
   height: 100vh;
   background: #f5f7fa;
   overflow: hidden;
+
+  > .el-container {
+    min-width: 0;
+    overflow: hidden;
+  }
 }
 
 .sidebar {
@@ -558,6 +563,7 @@ watch(
   padding: 16px 20px 20px;
   overflow: auto;
   background: #f5f7fa;
+  min-width: 0;
 }
 
 .breadcrumb {
@@ -566,6 +572,8 @@ watch(
 
 .page-container {
   min-height: calc(100vh - 140px);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .notification-drawer-toolbar {
