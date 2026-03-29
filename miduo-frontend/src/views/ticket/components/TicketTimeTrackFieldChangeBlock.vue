@@ -160,4 +160,28 @@ function imagesForField(field: BugFieldChangeItem): string[] {
   color: #909399;
   background: #f5f7fa;
 }
+
+@media (max-width: 768px) {
+  .field-row {
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .field-label {
+    width: auto;
+    font-size: 12px;
+    color: #86909c;
+  }
+
+  .field-text-line {
+    row-gap: 4px;
+  }
+
+  .thumb,
+  .thumb-error {
+    width: 44px;
+    height: 44px;
+  }
+}
 </style>

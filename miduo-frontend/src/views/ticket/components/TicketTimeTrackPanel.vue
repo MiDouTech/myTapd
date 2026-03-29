@@ -3,7 +3,7 @@
     <div class="track-block">
       <div class="block-label">时间链</div>
       <EmptyState v-if="!mergedEntries.length" description="暂无时间追踪记录" />
-      <el-timeline v-else>
+      <el-timeline v-else class="track-timeline">
         <el-timeline-item
           v-for="(entry, idx) in mergedEntries"
           :key="entryKey(entry, idx)"
@@ -39,6 +39,48 @@
     <div class="track-block">
       <div class="block-label">节点耗时统计</div>
       <EmptyState v-if="!nodeDurationItems.length" description="暂无节点耗时数据" />
+      <div v-else-if="compact" class="mobile-node-list">
+        <div v-for="(row, index) in nodeDurationItems" :key="`node-${index}`" class="mobile-node-card">
+          <div class="mobile-node-head">
+            <div class="mobile-node-title">{{ statusLabelFn(row.nodeName) }}</div>
+            <el-tag size="small" type="primary" effect="plain">{{ row.assigneeName || '-' }}</el-tag>
+          </div>
+          <div class="mobile-node-grid">
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">角色</span>
+              <span class="mobile-node-value">{{ roleLabelFn(row.assigneeRole) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">到达时间</span>
+              <span class="mobile-node-value">{{ formatDateTime(row.arriveAt) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">首次阅读</span>
+              <span class="mobile-node-value">{{ formatDateTime(row.firstReadAt) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">开始处理</span>
+              <span class="mobile-node-value">{{ formatDateTime(row.startProcessAt) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">离开时间</span>
+              <span class="mobile-node-value">{{ formatDateTime(row.leaveAt) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">等待耗时</span>
+              <span class="mobile-node-value">{{ formatDuration(row.waitDurationSec) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">处理耗时</span>
+              <span class="mobile-node-value">{{ formatDuration(row.processDurationSec) }}</span>
+            </div>
+            <div class="mobile-node-cell">
+              <span class="mobile-node-label">总耗时</span>
+              <span class="mobile-node-value">{{ formatDuration(row.totalDurationSec) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <el-table
         v-else
         :data="nodeDurationItems"
@@ -110,6 +152,7 @@ const props = defineProps<{
   tracks: TicketTimeTrackItem[]
   standaloneFieldChanges: BugChangeHistoryOutput[]
   nodeDurationItems: TicketNodeDurationItem[]
+  compact?: boolean
   statusLabelFn: (status?: string) => string
   roleLabelFn: (role?: string) => string
   formatDuration: (sec?: number) => string
@@ -174,7 +217,10 @@ function entryKey(entry: MergedEntry, idx: number): string {
   .track-item {
     background: #f8fafc;
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: 10px 12px;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #eef2f7;
   }
 
   .track-item-standalone {
@@ -195,6 +241,83 @@ function entryKey(entry: MergedEntry, idx: number): string {
     margin-top: 4px;
     color: #606266;
     font-size: 12px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+}
+
+.track-timeline {
+  :deep(.el-timeline-item__wrapper) {
+    padding-left: 18px;
+  }
+
+  :deep(.el-timeline-item__content) {
+    width: 100%;
+  }
+}
+
+.mobile-node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-node-card {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.mobile-node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mobile-node-title {
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.mobile-node-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.mobile-node-cell {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #eef2f7;
+}
+
+.mobile-node-cell:last-child {
+  border-bottom: none;
+}
+
+.mobile-node-label {
+  color: #86909c;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.mobile-node-value {
+  color: #303133;
+  font-size: 12px;
+  text-align: right;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .track-timeline {
+    :deep(.el-timeline-item__wrapper) {
+      padding-left: 14px;
+    }
   }
 }
 </style>

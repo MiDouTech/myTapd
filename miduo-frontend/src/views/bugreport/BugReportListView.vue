@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getBugReportPage, submitBugReport, voidBugReport } from '@/api/bugreport'
@@ -24,6 +24,8 @@ import {
 const router = useRouter()
 
 const loading = ref(false)
+const isMobile = ref(false)
+const MOBILE_BREAKPOINT = 768
 const tableData = ref<BugReportPageOutput[]>([])
 const total = ref(0)
 const users = ref<UserListOutput[]>([])
@@ -124,6 +126,10 @@ function openEdit(row: BugReportPageOutput): void {
   router.push(`/bug-report/edit/${row.id}`)
 }
 
+function updateViewportState(): void {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
+}
+
 async function handleSubmit(row: BugReportPageOutput): Promise<void> {
   await confirmAction(`确认提交简报【${row.reportNo}】进入审核吗？`)
   await submitBugReport(row.id)
@@ -139,8 +145,14 @@ async function handleVoid(row: BugReportPageOutput): Promise<void> {
 }
 
 onMounted(async () => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
   await loadBaseData()
   await loadList()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportState)
 })
 </script>
 
@@ -273,9 +285,33 @@ onMounted(async () => {
               {{ formatDateTime(row.updateTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="260" align="center" fixed="right">
+          <el-table-column
+            label="操作"
+            :width="isMobile ? 90 : 260"
+            align="center"
+            :fixed="isMobile ? undefined : 'right'"
+          >
             <template #default="{ row }">
-              <el-space :size="4">
+              <template v-if="isMobile">
+                <el-dropdown trigger="click">
+                  <el-button type="primary" link class="mobile-operation-trigger">操作</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item @click="openDetail(row)">详情</el-dropdown-item>
+                      <el-dropdown-item v-if="isBugReportEditable(row.status)" @click="openEdit(row)">
+                        编辑
+                      </el-dropdown-item>
+                      <el-dropdown-item v-if="canSubmitBugReport(row.status)" @click="handleSubmit(row)">
+                        提交审核
+                      </el-dropdown-item>
+                      <el-dropdown-item v-if="canVoidBugReport(row.status)" @click="handleVoid(row)">
+                        作废
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <el-space v-else :size="4">
                 <el-button type="primary" link @click="openDetail(row)">详情</el-button>
                 <el-button v-if="isBugReportEditable(row.status)" type="primary" link @click="openEdit(row)">
                   编辑
@@ -377,6 +413,10 @@ onMounted(async () => {
   &:hover {
     text-decoration: underline;
   }
+}
+
+.mobile-operation-trigger {
+  min-height: 44px;
 }
 
 @media (max-width: 991px) {

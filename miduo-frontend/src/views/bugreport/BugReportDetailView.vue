@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -33,8 +33,10 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
+const MOBILE_BREAKPOINT = 768
 const loading = ref(false)
 const submitLoading = ref(false)
+const isMobile = ref(false)
 const detail = ref<BugReportDetailOutput>()
 const users = ref<UserListOutput[]>([])
 
@@ -108,6 +110,10 @@ async function loadDetail(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function updateViewportState(): void {
+  isMobile.value = window.innerWidth <= MOBILE_BREAKPOINT
 }
 
 function handleBack(): void {
@@ -196,6 +202,28 @@ async function handleVoid(): Promise<void> {
   }
 }
 
+type DetailMobileActionCommand = 'edit' | 'submit' | 'approve' | 'reject' | 'void'
+
+function handleMobileActionCommand(command: DetailMobileActionCommand): void {
+  if (command === 'edit') {
+    handleEdit()
+    return
+  }
+  if (command === 'submit') {
+    openSubmitDialog()
+    return
+  }
+  if (command === 'approve') {
+    openReviewDialog('approve')
+    return
+  }
+  if (command === 'reject') {
+    openReviewDialog('reject')
+    return
+  }
+  void handleVoid()
+}
+
 function openTicketDetail(ticket: BugReportRelatedTicketOutput): void {
   if (!ticket.ticketId) {
     return
@@ -238,6 +266,10 @@ function getSeverityTagType(level?: string): '' | 'success' | 'warning' | 'dange
   return level ? (map[level] ?? 'info') : 'info'
 }
 
+function getTicketSourceLabel(isAutoCreated?: number): string {
+  return isAutoCreated === 1 ? '自动关联' : '手动关联'
+}
+
 function buildCopyText(): string {
   const d = detail.value
   if (!d) return ''
@@ -271,7 +303,13 @@ function handleCopyReport(): void {
 }
 
 onMounted(async () => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState)
   await Promise.all([loadUsers(), loadDetail()])
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportState)
 })
 
 watch(
@@ -286,198 +324,351 @@ watch(
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never" v-loading="loading">
-      <template #header>
-        <div class="header">
-          <div class="subtitle">
-            <el-tag :type="getBugReportStatusTagType(detail?.status)">
-              {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
-            </el-tag>
-            <span>简报编号：{{ detail?.reportNo || '-' }}</span>
-            <span>创建时间：{{ formatDateTime(detail?.createTime) }}</span>
-            <span>更新时间：{{ formatDateTime(detail?.updateTime) }}</span>
+  <div class="bug-report-detail-page">
+    <el-space direction="vertical" fill :size="16">
+      <el-card shadow="never" v-loading="loading">
+        <template #header>
+          <div class="header">
+            <div class="subtitle">
+              <el-tag :type="getBugReportStatusTagType(detail?.status)">
+                {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
+              </el-tag>
+              <span>简报编号：{{ detail?.reportNo || '-' }}</span>
+              <span>创建时间：{{ formatDateTime(detail?.createTime) }}</span>
+              <span>更新时间：{{ formatDateTime(detail?.updateTime) }}</span>
+            </div>
+            <el-space class="header-actions" wrap>
+              <el-button @click="handleBack">返回列表</el-button>
+              <el-button type="default" @click="handleCopyReport">一键复制</el-button>
+              <template v-if="isMobile">
+                <el-dropdown
+                  trigger="click"
+                  @command="(command: DetailMobileActionCommand) => handleMobileActionCommand(command)"
+                >
+                  <el-button type="primary" plain class="mobile-more-trigger">更多操作</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="canEdit" command="edit">编辑</el-dropdown-item>
+                      <el-dropdown-item v-if="canSubmit" command="submit">提交审核</el-dropdown-item>
+                      <el-dropdown-item v-if="canReview" command="approve">审核通过</el-dropdown-item>
+                      <el-dropdown-item v-if="canReview" command="reject">审核驳回</el-dropdown-item>
+                      <el-dropdown-item v-if="canVoid" command="void">作废</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <el-button v-if="canEdit" type="primary" plain @click="handleEdit">编辑</el-button>
+                <el-button v-if="canSubmit" type="primary" @click="openSubmitDialog">提交审核</el-button>
+                <el-button v-if="canReview" type="success" @click="openReviewDialog('approve')">
+                  审核通过
+                </el-button>
+                <el-button v-if="canReview" type="warning" @click="openReviewDialog('reject')">
+                  审核驳回
+                </el-button>
+                <el-button v-if="canVoid" type="danger" plain @click="handleVoid">作废</el-button>
+              </template>
+            </el-space>
           </div>
-          <el-space>
-            <el-button @click="handleBack">返回列表</el-button>
-            <el-button type="default" @click="handleCopyReport">一键复制</el-button>
-            <el-button v-if="canEdit" type="primary" plain @click="handleEdit">编辑</el-button>
-            <el-button v-if="canSubmit" type="primary" @click="openSubmitDialog">提交审核</el-button>
-            <el-button v-if="canReview" type="success" @click="openReviewDialog('approve')"
-              >审核通过</el-button
-            >
-            <el-button v-if="canReview" type="warning" @click="openReviewDialog('reject')"
-              >审核驳回</el-button
-            >
-            <el-button v-if="canVoid" type="danger" plain @click="handleVoid">作废</el-button>
-          </el-space>
+        </template>
+
+        <div v-if="isMobile" class="mobile-detail-panel">
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">状态</span>
+            <span class="mobile-detail-value">
+              <el-tag :type="getBugReportStatusTagType(detail?.status)">
+                {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
+              </el-tag>
+            </span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">反馈人</span>
+            <span class="mobile-detail-value">{{ detail?.reporterName || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">审核人</span>
+            <span class="mobile-detail-value">{{ detail?.reviewerName || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">缺陷分类</span>
+            <span class="mobile-detail-value">{{ detail?.defectCategory || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">严重级别</span>
+            <span class="mobile-detail-value">
+              <el-tag
+                v-if="detail?.severityLevel"
+                :type="getSeverityTagType(detail.severityLevel)"
+                size="small"
+              >
+                {{ getSeverityLabel(detail.severityLevel) }}
+              </el-tag>
+              <span v-else>-</span>
+            </span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">引入项目</span>
+            <span class="mobile-detail-value">{{ detail?.introducedProject || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">影响范围</span>
+            <span class="mobile-detail-value">{{ detail?.impactScope || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">开始时间</span>
+            <span class="mobile-detail-value">{{ formatDateDisplay(detail?.startDate) }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">临时解决时间</span>
+            <span class="mobile-detail-value">{{ formatDateDisplay(detail?.tempResolveDate) }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">彻底解决时间</span>
+            <span class="mobile-detail-value">{{ formatDateDisplay(detail?.resolveDate) }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">提交时间</span>
+            <span class="mobile-detail-value">{{ formatDateTime(detail?.submittedAt) }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">审核完成时间</span>
+            <span class="mobile-detail-value">{{ formatDateTime(detail?.reviewedAt) }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">逻辑归因</span>
+            <span class="mobile-detail-value">
+              {{ detail?.logicCauseLevel1 || '-' }} / {{ detail?.logicCauseLevel2 || '-' }}
+            </span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">归因明细</span>
+            <span class="mobile-detail-value pre-wrap">{{ detail?.logicCauseDetail || '-' }}</span>
+          </div>
+          <div class="mobile-detail-row">
+            <span class="mobile-detail-label">审核意见</span>
+            <span class="mobile-detail-value pre-wrap">{{ detail?.reviewComment || '-' }}</span>
+          </div>
+          <div class="mobile-detail-block">
+            <div class="mobile-detail-block-title">问题描述</div>
+            <div class="pre-wrap">{{ detail?.problemDesc || '-' }}</div>
+          </div>
+          <div v-if="detail?.tempSolution" class="mobile-detail-block">
+            <div class="mobile-detail-block-title">临时解决方案</div>
+            <div class="pre-wrap">{{ detail.tempSolution }}</div>
+          </div>
+          <div class="mobile-detail-block">
+            <div class="mobile-detail-block-title">彻底解决方案</div>
+            <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
+          </div>
+          <div class="mobile-detail-block">
+            <div class="mobile-detail-block-title">备注</div>
+            <div class="pre-wrap">{{ detail?.remark || '-' }}</div>
+          </div>
         </div>
-      </template>
 
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="简报编号">{{ detail?.reportNo || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="反馈人">{{ detail?.reporterName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="审核人">{{ detail?.reviewerName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="缺陷分类">
-          {{ detail?.defectCategory || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="严重级别">
-          <el-tag
-            v-if="detail?.severityLevel"
-            :type="getSeverityTagType(detail.severityLevel)"
-            size="small"
-          >
-            {{ getSeverityLabel(detail.severityLevel) }}
+        <el-descriptions v-else :column="2" border class="detail-descriptions">
+          <el-descriptions-item label="简报编号">{{ detail?.reportNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="反馈人">{{ detail?.reporterName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="审核人">{{ detail?.reviewerName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="缺陷分类">
+            {{ detail?.defectCategory || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="严重级别">
+            <el-tag
+              v-if="detail?.severityLevel"
+              :type="getSeverityTagType(detail.severityLevel)"
+              size="small"
+            >
+              {{ getSeverityLabel(detail.severityLevel) }}
+            </el-tag>
+            <span v-else>-</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="引入项目">
+            {{ detail?.introducedProject || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="影响范围">
+            {{ detail?.impactScope || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="开始时间">
+            {{ formatDateDisplay(detail?.startDate) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="临时解决时间">
+            {{ formatDateDisplay(detail?.tempResolveDate) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="彻底解决时间">
+            {{ formatDateDisplay(detail?.resolveDate) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="提交时间">
+            {{ formatDateTime(detail?.submittedAt) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="逻辑归因">
+            {{ detail?.logicCauseLevel1 || '-' }} / {{ detail?.logicCauseLevel2 || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="归因明细">
+            {{ detail?.logicCauseDetail || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="审核完成时间">
+            {{ formatDateTime(detail?.reviewedAt) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="审核意见">
+            {{ detail?.reviewComment || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="问题描述" :span="2">
+            <span class="pre-wrap">{{ detail?.problemDesc || '-' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
+            <span class="pre-wrap">{{ detail.tempSolution }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="彻底解决方案" :span="2">
+            <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="备注" :span="2">{{ detail?.remark || '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </el-card>
+
+      <el-card shadow="never">
+        <template #header>
+          <div class="section-title">责任人</div>
+        </template>
+        <EmptyState v-if="!detail?.responsibleUsers?.length" description="暂无责任人信息" />
+        <el-space v-else wrap>
+          <el-tag v-for="item in detail.responsibleUsers" :key="item.userId">
+            {{ item.userName || item.userId }}
           </el-tag>
-          <span v-else>-</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="引入项目">
-          {{ detail?.introducedProject || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="影响范围">
-          {{ detail?.impactScope || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="开始时间">
-          {{ formatDateDisplay(detail?.startDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="临时解决时间">
-          {{ formatDateDisplay(detail?.tempResolveDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="彻底解决时间">
-          {{ formatDateDisplay(detail?.resolveDate) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="提交时间">
-          {{ formatDateTime(detail?.submittedAt) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="逻辑归因">
-          {{ detail?.logicCauseLevel1 || '-' }} / {{ detail?.logicCauseLevel2 || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="归因明细">
-          {{ detail?.logicCauseDetail || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="审核完成时间">
-          {{ formatDateTime(detail?.reviewedAt) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="审核意见">
-          {{ detail?.reviewComment || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="问题描述" :span="2">
-          <span class="pre-wrap">{{ detail?.problemDesc || '-' }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
-          <span class="pre-wrap">{{ detail.tempSolution }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="彻底解决方案" :span="2">
-          <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">{{ detail?.remark || '-' }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
+        </el-space>
+      </el-card>
 
-    <el-card shadow="never">
-      <template #header>
-        <div class="section-title">责任人</div>
-      </template>
-      <EmptyState v-if="!detail?.responsibleUsers?.length" description="暂无责任人信息" />
-      <el-space v-else wrap>
-        <el-tag v-for="item in detail.responsibleUsers" :key="item.userId">
-          {{ item.userName || item.userId }}
-        </el-tag>
-      </el-space>
-    </el-card>
-
-    <el-card shadow="never">
-      <template #header>
-        <div class="section-title">关联工单</div>
-      </template>
-      <EmptyState v-if="!detail?.tickets?.length" description="暂无关联工单" />
-      <el-table
-        v-else
-        :data="detail.tickets"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      >
-        <el-table-column prop="ticketNo" label="工单编号" min-width="180" align="center" />
-        <el-table-column prop="title" label="工单标题" min-width="260" align="center" />
-        <el-table-column prop="status" label="工单状态" width="130" align="center" />
-        <el-table-column label="来源" width="120" align="center">
-          <template #default="{ row }">
-            {{ row.isAutoCreated === 1 ? '自动关联' : '手动关联' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="openTicketDetail(row)">查看工单</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-card shadow="never">
-      <template #header>
-        <div class="section-title">附件</div>
-      </template>
-      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件" />
-      <el-table
-        v-else
-        :data="detail.attachments"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      >
-        <el-table-column prop="fileName" label="文件名" min-width="240" align="center" />
-        <el-table-column label="大小" width="120" align="center">
-          <template #default="{ row }">
-            {{ formatFileSize(row.fileSize) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="uploadedByName" label="上传人" width="140" align="center" />
-        <el-table-column label="上传时间" width="180" align="center">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="openAttachment(row)">下载/预览</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-card shadow="never">
-      <template #header>
-        <div class="section-title">状态日志</div>
-      </template>
-      <EmptyState v-if="!detail?.logs?.length" description="暂无日志记录" />
-      <el-timeline v-else>
-        <el-timeline-item
-          v-for="item in detail.logs"
-          :key="item.id"
-          :timestamp="formatDateTime(item.createTime)"
+      <el-card shadow="never">
+        <template #header>
+          <div class="section-title">关联工单</div>
+        </template>
+        <EmptyState v-if="!detail?.tickets?.length" description="暂无关联工单" />
+        <div v-else-if="isMobile" class="mobile-block-list">
+          <div v-for="row in detail.tickets" :key="row.ticketId" class="mobile-block-item">
+            <div class="mobile-block-head">
+              <div class="mobile-block-title">{{ row.ticketNo || '-' }}</div>
+              <el-tag size="small">{{ row.status || '-' }}</el-tag>
+            </div>
+            <div class="mobile-block-desc">{{ row.title || '-' }}</div>
+            <div class="mobile-block-meta">来源：{{ getTicketSourceLabel(row.isAutoCreated) }}</div>
+            <el-button type="primary" link class="mobile-block-action" @click="openTicketDetail(row)">
+              查看工单
+            </el-button>
+          </div>
+        </div>
+        <el-table
+          v-else
+          :data="detail.tickets"
+          :border="false"
+          :stripe="true"
+          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
         >
-          <div class="log-item">
+          <el-table-column prop="ticketNo" label="工单编号" min-width="180" align="center" />
+          <el-table-column prop="title" label="工单标题" min-width="260" align="center" />
+          <el-table-column prop="status" label="工单状态" width="130" align="center" />
+          <el-table-column label="来源" width="120" align="center">
+            <template #default="{ row }">
+              {{ getTicketSourceLabel(row.isAutoCreated) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link @click="openTicketDetail(row)">查看工单</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <el-card shadow="never">
+        <template #header>
+          <div class="section-title">附件</div>
+        </template>
+        <EmptyState v-if="!detail?.attachments?.length" description="暂无附件" />
+        <div v-else-if="isMobile" class="mobile-block-list">
+          <div v-for="row in detail.attachments" :key="row.id" class="mobile-block-item">
+            <div class="mobile-block-title">{{ row.fileName || '-' }}</div>
+            <div class="mobile-block-meta">大小：{{ formatFileSize(row.fileSize) }}</div>
+            <div class="mobile-block-meta">上传人：{{ row.uploadedByName || '-' }}</div>
+            <div class="mobile-block-meta">上传时间：{{ formatDateTime(row.createTime) }}</div>
+            <el-button type="primary" link class="mobile-block-action" @click="openAttachment(row)">
+              下载/预览
+            </el-button>
+          </div>
+        </div>
+        <el-table
+          v-else
+          :data="detail.attachments"
+          :border="false"
+          :stripe="true"
+          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+        >
+          <el-table-column prop="fileName" label="文件名" min-width="240" align="center" />
+          <el-table-column label="大小" width="120" align="center">
+            <template #default="{ row }">
+              {{ formatFileSize(row.fileSize) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="uploadedByName" label="上传人" width="140" align="center" />
+          <el-table-column label="上传时间" width="180" align="center">
+            <template #default="{ row }">
+              {{ formatDateTime(row.createTime) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link @click="openAttachment(row)">下载/预览</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <el-card shadow="never">
+        <template #header>
+          <div class="section-title">状态日志</div>
+        </template>
+        <EmptyState v-if="!detail?.logs?.length" description="暂无日志记录" />
+        <div v-else-if="isMobile" class="mobile-block-list">
+          <div v-for="item in detail.logs" :key="item.id" class="mobile-block-item">
             <div class="log-title">
               {{ getReviewActionLabel(item.action) }}
               <span class="log-user">（{{ item.userName || '-' }}）</span>
             </div>
+            <div class="mobile-block-meta">时间：{{ formatDateTime(item.createTime) }}</div>
             <div class="log-content">
               状态：{{ getBugReportStatusLabel(item.oldStatus) }} →
               {{ getBugReportStatusLabel(item.newStatus) }}
             </div>
             <div class="log-content" v-if="item.remark">备注：{{ item.remark }}</div>
           </div>
-        </el-timeline-item>
-      </el-timeline>
-    </el-card>
-  </el-space>
+        </div>
+        <el-timeline v-else>
+          <el-timeline-item
+            v-for="item in detail.logs"
+            :key="item.id"
+            :timestamp="formatDateTime(item.createTime)"
+          >
+            <div class="log-item">
+              <div class="log-title">
+                {{ getReviewActionLabel(item.action) }}
+                <span class="log-user">（{{ item.userName || '-' }}）</span>
+              </div>
+              <div class="log-content">
+                状态：{{ getBugReportStatusLabel(item.oldStatus) }} →
+                {{ getBugReportStatusLabel(item.newStatus) }}
+              </div>
+              <div class="log-content" v-if="item.remark">备注：{{ item.remark }}</div>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+      </el-card>
+    </el-space>
+  </div>
 
-  <el-dialog v-model="submitDialogVisible" title="提交审核" width="520px">
-    <el-form label-width="90px">
+  <el-dialog v-model="submitDialogVisible" title="提交审核" :width="isMobile ? '92vw' : '520px'">
+    <el-form :label-width="isMobile ? 'auto' : '90px'">
       <el-form-item label="审核人" required>
         <el-select v-model="submitForm.reviewerId" placeholder="请选择审核人" filterable clearable>
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
@@ -494,18 +685,16 @@ watch(
     </el-form>
     <template #footer>
       <el-button @click="submitDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleSubmitReport"
-        >确认提交</el-button
-      >
+      <el-button type="primary" :loading="submitLoading" @click="handleSubmitReport">确认提交</el-button>
     </template>
   </el-dialog>
 
   <el-dialog
     v-model="reviewDialogVisible"
     :title="reviewAction === 'approve' ? '审核通过' : '审核驳回'"
-    width="520px"
+    :width="isMobile ? '92vw' : '520px'"
   >
-    <el-form label-width="90px">
+    <el-form :label-width="isMobile ? 'auto' : '90px'">
       <el-form-item label="审核意见" required>
         <el-input
           v-model="reviewForm.reviewComment"
@@ -529,6 +718,10 @@ watch(
 </template>
 
 <style scoped lang="scss">
+.bug-report-detail-page {
+  width: 100%;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -544,10 +737,102 @@ watch(
   flex-wrap: wrap;
 }
 
+.header-actions {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .section-title {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+}
+
+.detail-descriptions :deep(.el-descriptions__label) {
+  width: 112px;
+}
+
+.mobile-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f2f5;
+}
+
+.mobile-detail-label {
+  color: #86909c;
+  font-size: 13px;
+  min-width: 92px;
+}
+
+.mobile-detail-value {
+  flex: 1;
+  color: #1d2129;
+  text-align: right;
+  word-break: break-word;
+}
+
+.mobile-detail-block {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.mobile-detail-block-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.mobile-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-block-item {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.mobile-block-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.mobile-block-title {
+  font-weight: 600;
+  color: #1d2129;
+  word-break: break-word;
+}
+
+.mobile-block-desc {
+  margin-top: 8px;
+  color: #303133;
+  word-break: break-word;
+}
+
+.mobile-block-meta {
+  margin-top: 6px;
+  color: #606266;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.mobile-block-action {
+  margin-top: 8px;
+  min-height: 44px;
 }
 
 .log-item {
@@ -575,10 +860,28 @@ watch(
   word-break: break-word;
 }
 
+.mobile-more-trigger {
+  min-height: 44px;
+}
+
 @media (max-width: 991px) {
   .header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    gap: 8px;
+  }
+
+  .header-actions :deep(.el-button) {
+    min-height: 44px;
   }
 }
 </style>
