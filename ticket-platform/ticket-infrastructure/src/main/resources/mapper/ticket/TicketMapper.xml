@@ -9,13 +9,17 @@
         <if test="view == 'my_created'">
             AND t.creator_id = #{currentUserId}
         </if>
+        <!-- 我待办的：主处理人/协同处理人下的未完成单 + 创建人名下仍待认领（assignee 为空）的未完成单，避免「刚创建、尚在待分派池」从待办列表消失 -->
         <if test="view == 'my_todo'">
-            AND (t.assignee_id = #{currentUserId}
-                 OR t.id IN (
-                     SELECT ta.ticket_id FROM ticket_assignee ta
-                     WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
-                 ))
             AND t.status NOT IN ('completed', 'closed', 'rejected')
+            AND (
+                t.assignee_id = #{currentUserId}
+                OR t.id IN (
+                    SELECT ta.ticket_id FROM ticket_assignee ta
+                    WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
+                )
+                OR (t.creator_id = #{currentUserId} AND t.assignee_id IS NULL)
+            )
         </if>
         <if test="view == 'my_participated'">
             AND (t.id IN (
