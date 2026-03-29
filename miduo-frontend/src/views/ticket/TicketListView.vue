@@ -431,8 +431,18 @@ function updateViewportState(): void {
 watch(
   () => route.fullPath,
   () => {
-    query.view = normalizeViewFromRoute()
+    const normalized = normalizeViewFromRoute()
+    query.view = normalized
     query.pageNum = 1
+    // 进入「我的工单」时补齐默认 view，避免仅路径 /ticket/mine、无 query 时刷新/分享链接与当前 Tab 不一致
+    if (route.path === '/ticket/mine') {
+      const raw = route.query.view
+      const q = typeof raw === 'string' ? raw : undefined
+      if (q !== normalized) {
+        router.replace({ path: '/ticket/mine', query: { ...route.query, view: normalized } })
+        return
+      }
+    }
     loadTickets()
   },
   { immediate: true },
