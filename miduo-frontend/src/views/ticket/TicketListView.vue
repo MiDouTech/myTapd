@@ -29,7 +29,13 @@ import type {
   TicketView,
 } from '@/types/ticket'
 import type { TicketFlowRecordOutput } from '@/types/workflow'
+import {
+  consumeTicketListKeywordClearFromHeader,
+  layoutTicketSearchKeyword,
+  persistLayoutTicketSearch,
+} from '@/stores/layoutTicketSearch'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import { isLikelyTicketNoQuery } from '@/utils/ticket-search-heuristic'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,7 +188,37 @@ async function loadTickets(): Promise<void> {
 
 function handleSearch(): void {
   query.pageNum = 1
+  const kw = (query.ticketNo || '').trim() || (query.title || '').trim()
+  layoutTicketSearchKeyword.value = kw
+  persistLayoutTicketSearch(kw)
+  const cur = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  if (kw !== cur) {
+    const next = { ...route.query }
+    if (kw) {
+      next.q = kw
+    } else {
+      delete next.q
+    }
+    void router.replace({ path: route.path, query: next })
+    return
+  }
   loadTickets()
+}
+
+function applyKeywordToQuery(keyword: string): void {
+  const k = keyword.trim()
+  if (!k) {
+    query.ticketNo = ''
+    query.title = ''
+    return
+  }
+  if (isLikelyTicketNoQuery(k)) {
+    query.ticketNo = k
+    query.title = ''
+  } else {
+    query.ticketNo = ''
+    query.title = k
+  }
 }
 
 function handleReset(): void {
@@ -195,19 +231,26 @@ function handleReset(): void {
   query.assigneeId = undefined
   timeRange.value = []
   query.pageNum = 1
-  loadTickets()
+  layoutTicketSearchKeyword.value = ''
+  persistLayoutTicketSearch('')
+  const next = { ...route.query }
+  delete next.q
+  void router.replace({ path: route.path, query: next })
 }
 
 function handleTabChange(value: string | number): void {
   const view = value as TicketView
+  const qTrim = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  const qPart = qTrim ? { q: qTrim } : {}
   if (view === 'all') {
-    router.push('/ticket/all')
+    router.push({ path: '/ticket/all', query: qPart })
     return
   }
   router.push({
     path: '/ticket/mine',
     query: {
       view,
+      ...qPart,
     },
   })
 }
@@ -431,6 +474,16 @@ function updateViewportState(): void {
 watch(
   () => route.fullPath,
   () => {
+    const rawQ = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+    if (rawQ) {
+      applyKeywordToQuery(rawQ)
+      layoutTicketSearchKeyword.value = rawQ
+      persistLayoutTicketSearch(rawQ)
+    } else if (consumeTicketListKeywordClearFromHeader()) {
+      query.ticketNo = ''
+      query.title = ''
+    }
+
     const normalized = normalizeViewFromRoute()
     query.view = normalized
     query.pageNum = 1
@@ -446,6 +499,19 @@ watch(
     loadTickets()
   },
   { immediate: true },
+)
+
+watch(
+  () => [query.ticketNo, query.title] as const,
+  ([no, tit]) => {
+    const n = (no || '').trim()
+    const t = (tit || '').trim()
+    const next = n || t
+    if (layoutTicketSearchKeyword.value.trim() !== next) {
+      layoutTicketSearchKeyword.value = next
+      persistLayoutTicketSearch(next)
+    }
+  },
 )
 
 onMounted(() => {
