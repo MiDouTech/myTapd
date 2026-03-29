@@ -4,6 +4,8 @@ export type TicketView = 'my_created' | 'my_todo' | 'my_participated' | 'my_foll
 
 export interface TicketPageInput extends PageQuery {
   view?: TicketView
+  /** 与路由 q 一致：编号与标题联合模糊 */
+  keyword?: string
   ticketNo?: string
   title?: string
   categoryId?: number

@@ -402,15 +402,11 @@ watch(
             v-if="!isMobile"
             v-model="layoutTicketSearchKeyword"
             class="search-input"
-            placeholder="搜索工单编号/标题"
+            placeholder="搜索工单编号/标题，回车查询"
             clearable
             @clear="submitHeaderTicketSearch"
             @keyup.enter="submitHeaderTicketSearch"
-          >
-            <template #append>
-              <el-button type="primary" @click="submitHeaderTicketSearch">搜索</el-button>
-            </template>
-          </el-input>
+          />
           <el-button type="primary" :icon="Plus" @click="router.push('/ticket/create')">
             <span class="new-ticket-text">新建工单</span>
           </el-button>

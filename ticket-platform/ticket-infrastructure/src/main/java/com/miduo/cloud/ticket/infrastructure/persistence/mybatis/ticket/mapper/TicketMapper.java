@@ -16,6 +16,7 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
     IPage<TicketPO> selectTicketPage(Page<TicketPO> page,
                                      @Param("view") String view,
                                      @Param("currentUserId") Long currentUserId,
+                                     @Param("keyword") String keyword,
                                      @Param("ticketNo") String ticketNo,
                                      @Param("title") String title,
                                      @Param("categoryId") Long categoryId,

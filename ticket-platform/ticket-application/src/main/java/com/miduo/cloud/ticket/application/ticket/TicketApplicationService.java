@@ -191,12 +191,18 @@ public class TicketApplicationService {
 
         String viewCode = TicketView.fromCode(input.getView()).getCode();
 
+        String keyword = input.getKeyword() == null ? null : input.getKeyword().trim();
+        if (keyword != null && keyword.isEmpty()) {
+            keyword = null;
+        }
+
         IPage<TicketPO> result = ticketMapper.selectTicketPage(
                 page,
                 viewCode,
                 currentUserId,
-                input.getTicketNo(),
-                input.getTitle(),
+                keyword,
+                keyword != null ? null : input.getTicketNo(),
+                keyword != null ? null : input.getTitle(),
                 input.getCategoryId(),
                 input.getStatus(),
                 input.getPriority(),
