@@ -25,6 +25,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
+import {
+  layoutTicketSearchKeyword,
+  markTicketListKeywordClearFromHeader,
+  persistLayoutTicketSearch,
+  readPersistedLayoutTicketSearch,
+} from '@/stores/layoutTicketSearch'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationOutput } from '@/types/notification'
@@ -175,6 +181,19 @@ function updateViewportState(): void {
   }
 }
 
+/**
+ * 顶部工单搜索：产品 5.2 / Task012 全局入口；与架构报告建议一致，走工单分页接口（所有工单视图 + 编号/标题条件）。
+ * 见 miduo-md/workflow/架构分析与问题梳理报告.md 8.3
+ */
+function submitHeaderTicketSearch(): void {
+  const raw = layoutTicketSearchKeyword.value.trim()
+  persistLayoutTicketSearch(raw)
+  if (!raw) {
+    markTicketListKeywordClearFromHeader()
+    void router.push({ path: '/ticket/all', query: {} })
+    return
+  }
+  void router.push({ path: '/ticket/all', query: { q: raw } })
 function resolveMainScrollElement(): HTMLElement | null {
   const target = mainScrollRef.value
   if (!target) {
@@ -246,10 +265,36 @@ watch(
   },
 )
 
+watch(
+  () => [route.path, route.query.q] as const,
+  ([path, q]) => {
+    if (path !== '/ticket/all' && path !== '/ticket/mine') {
+      return
+    }
+    const qs = typeof q === 'string' ? q.trim() : ''
+    if (qs) {
+      layoutTicketSearchKeyword.value = qs
+      persistLayoutTicketSearch(qs)
+      return
+    }
+    if (path === '/ticket/all') {
+      layoutTicketSearchKeyword.value = ''
+      persistLayoutTicketSearch('')
+    }
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   updateViewportState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', updateViewportState)
+  if (!layoutTicketSearchKeyword.value) {
+    const saved = readPersistedLayoutTicketSearch()
+    if (saved) {
+      layoutTicketSearchKeyword.value = saved
+    }
+  }
   desktopPointerMedia = window.matchMedia(DESKTOP_POINTER_MEDIA_QUERY)
   desktopPointerMedia.addEventListener('change', setupInertiaWheelScroll)
   void setupInertiaWheelScroll()
@@ -351,7 +396,19 @@ watch(
           <div class="header-title">{{ currentTitle }}</div>
         </div>
         <div class="header-right">
-          <el-input v-if="!isMobile" class="search-input" placeholder="搜索工单编号/标题" clearable />
+          <el-input
+            v-if="!isMobile"
+            v-model="layoutTicketSearchKeyword"
+            class="search-input"
+            placeholder="搜索工单编号/标题"
+            clearable
+            @clear="submitHeaderTicketSearch"
+            @keyup.enter="submitHeaderTicketSearch"
+          >
+            <template #append>
+              <el-button type="primary" @click="submitHeaderTicketSearch">搜索</el-button>
+            </template>
+          </el-input>
           <el-button type="primary" :icon="Plus" @click="router.push('/ticket/create')">
             <span class="new-ticket-text">新建工单</span>
           </el-button>

@@ -68,6 +68,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         boolean includeSuspended = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true"));
 
         Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount());
+        Long newIssueCountToday = safeLong(dailyReportMapper.selectCreatedCountByDateRange(startOfDay, endOfDay));
 
         List<DailyReportTicketRow> investigatingTickets = dailyReportMapper.selectTicketsByStatus("investigating");
         List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets();
@@ -92,6 +93,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
         DailyReportSummary summary = new DailyReportSummary();
         summary.setTotalFeedbackCount(totalFeedbackCount);
+        summary.setNewIssueCountToday(newIssueCountToday);
         summary.setPendingResolveCount(pendingResolveCount);
         summary.setTempResolvedCount(tempResolvedTickets.size());
         summary.setResolvedCount(resolvedTodayCount);
@@ -391,6 +393,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
         md.append("**").append(reportDate).append("线上问题日报**\n");
         md.append("本月问题反馈总数：").append(summary.getTotalFeedbackCount());
+        md.append("，今日新增问题：").append(summary.getNewIssueCountToday()).append("个");
         md.append("，待解决问题：").append(summary.getPendingResolveCount()).append("个");
         md.append("，临时解决：").append(summary.getTempResolvedCount()).append("个");
         md.append("，已解决：").append(summary.getResolvedCount()).append("个");

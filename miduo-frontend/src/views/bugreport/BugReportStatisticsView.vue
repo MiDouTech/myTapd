@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getBugReportStatistics } from '@/api/bugreport'
@@ -11,6 +11,9 @@ import { notifySuccess } from '@/utils/feedback'
 const router = useRouter()
 const loading = ref(false)
 const timeRange = ref<string[]>([])
+/** 与当前时间范围一致的快捷预设天数；手动改日期后为 null */
+const quickRangePreset = ref<number | null>(1)
+const suppressPresetClear = ref(false)
 
 const statistics = ref<BugReportStatisticsOutput>({
   logicCauseDistribution: [],
@@ -30,13 +33,25 @@ function formatDateTimeText(date: Date): string {
 }
 
 function applyQuickRange(days: number): void {
+  quickRangePreset.value = days
+  suppressPresetClear.value = true
   const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - (days - 1))
   start.setHours(0, 0, 0, 0)
   end.setHours(23, 59, 59, 0)
   timeRange.value = [formatDateTimeText(start), formatDateTimeText(end)]
+  void nextTick(() => {
+    suppressPresetClear.value = false
+  })
   void loadStatistics()
+}
+
+function onDateRangeChange(): void {
+  if (suppressPresetClear.value) {
+    return
+  }
+  quickRangePreset.value = null
 }
 
 async function loadStatistics(): Promise<void> {
@@ -61,11 +76,13 @@ async function loadStatistics(): Promise<void> {
 }
 
 function handleSearch(): void {
+  quickRangePreset.value = null
   void loadStatistics()
 }
 
 function handleReset(): void {
   timeRange.value = []
+  quickRangePreset.value = null
   void loadStatistics()
 }
 
@@ -120,7 +137,7 @@ function handleExport(): void {
 }
 
 onMounted(() => {
-  applyQuickRange(30)
+  applyQuickRange(1)
 })
 </script>
 
@@ -145,13 +162,23 @@ onMounted(() => {
             value-format="YYYY-MM-DD HH:mm:ss"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
+            @change="onDateRangeChange"
           />
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space wrap class="query-action-row">
-            <el-button @click="applyQuickRange(7)">近7天</el-button>
-            <el-button @click="applyQuickRange(30)">近30天</el-button>
-            <el-button @click="applyQuickRange(90)">近90天</el-button>
+            <el-button :type="quickRangePreset === 1 ? 'primary' : 'default'" @click="applyQuickRange(1)">
+              今天
+            </el-button>
+            <el-button :type="quickRangePreset === 7 ? 'primary' : 'default'" @click="applyQuickRange(7)">
+              近7天
+            </el-button>
+            <el-button :type="quickRangePreset === 30 ? 'primary' : 'default'" @click="applyQuickRange(30)">
+              近30天
+            </el-button>
+            <el-button :type="quickRangePreset === 90 ? 'primary' : 'default'" @click="applyQuickRange(90)">
+              近90天
+            </el-button>
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>

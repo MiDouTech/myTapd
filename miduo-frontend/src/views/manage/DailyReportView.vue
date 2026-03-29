@@ -313,6 +313,10 @@ onMounted(() => {
                 <span class="stat-label">问题反馈总数</span>
                 <span class="stat-value">{{ previewData.summary.totalFeedbackCount }}</span>
               </div>
+              <div class="stat-item stat-new-today">
+                <span class="stat-label">今日新增问题</span>
+                <span class="stat-value">{{ previewData.summary.newIssueCountToday ?? 0 }}</span>
+              </div>
               <div class="stat-item stat-pending">
                 <span class="stat-label">待解决</span>
                 <span class="stat-value">{{ previewData.summary.pendingResolveCount }}</span>
@@ -607,6 +611,10 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
   font-size: 24px;
   font-weight: 600;
   color: #303133;
+}
+
+.stat-new-today .stat-value {
+  color: #1675d1;
 }
 
 .stat-pending .stat-value {
