@@ -35,8 +35,6 @@ import {
   persistLayoutTicketSearch,
 } from '@/stores/layoutTicketSearch'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
-import { isLikelyTicketNoQuery } from '@/utils/ticket-search-heuristic'
-
 const route = useRoute()
 const router = useRouter()
 
@@ -101,6 +99,7 @@ const query = reactive<TicketPageInput>({
   pageNum: 1,
   pageSize: 20,
   view: 'my_created',
+  keyword: '',
   ticketNo: '',
   title: '',
   categoryId: undefined,
@@ -161,8 +160,12 @@ async function loadTickets(): Promise<void> {
       pageSize: query.pageSize,
       view: query.view,
     }
-    if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
-    if (query.title?.trim()) params.title = query.title.trim()
+    if (query.keyword?.trim()) {
+      params.keyword = query.keyword.trim()
+    } else {
+      if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
+      if (query.title?.trim()) params.title = query.title.trim()
+    }
     if (query.categoryId) params.categoryId = query.categoryId
     if (query.status) params.status = query.status
     if (query.priority) params.priority = query.priority
@@ -188,40 +191,35 @@ async function loadTickets(): Promise<void> {
 
 function handleSearch(): void {
   query.pageNum = 1
+  query.keyword = ''
   const kw = (query.ticketNo || '').trim() || (query.title || '').trim()
   layoutTicketSearchKeyword.value = kw
   persistLayoutTicketSearch(kw)
-  const cur = typeof route.query.q === 'string' ? route.query.q.trim() : ''
-  if (kw !== cur) {
-    const next = { ...route.query }
-    if (kw) {
-      next.q = kw
-    } else {
-      delete next.q
-    }
-    void router.replace({ path: route.path, query: next })
+  const next = { ...route.query }
+  delete next.q
+  const targetPath = router.resolve({ path: route.path, query: next }).fullPath
+  if (targetPath === route.fullPath) {
+    loadTickets()
     return
   }
-  loadTickets()
+  void router.replace({ path: route.path, query: next })
 }
 
 function applyKeywordToQuery(keyword: string): void {
   const k = keyword.trim()
   if (!k) {
+    query.keyword = ''
     query.ticketNo = ''
     query.title = ''
     return
   }
-  if (isLikelyTicketNoQuery(k)) {
-    query.ticketNo = k
-    query.title = ''
-  } else {
-    query.ticketNo = ''
-    query.title = k
-  }
+  query.keyword = k
+  query.ticketNo = ''
+  query.title = ''
 }
 
 function handleReset(): void {
+  query.keyword = ''
   query.ticketNo = ''
   query.title = ''
   query.categoryId = undefined
@@ -480,6 +478,7 @@ watch(
       layoutTicketSearchKeyword.value = rawQ
       persistLayoutTicketSearch(rawQ)
     } else if (consumeTicketListKeywordClearFromHeader()) {
+      query.keyword = ''
       query.ticketNo = ''
       query.title = ''
     }
@@ -502,11 +501,12 @@ watch(
 )
 
 watch(
-  () => [query.ticketNo, query.title] as const,
-  ([no, tit]) => {
+  () => [query.keyword, query.ticketNo, query.title] as const,
+  ([kw, no, tit]) => {
+    const k = (kw || '').trim()
     const n = (no || '').trim()
     const t = (tit || '').trim()
-    const next = n || t
+    const next = k || n || t
     if (layoutTicketSearchKeyword.value.trim() !== next) {
       layoutTicketSearchKeyword.value = next
       persistLayoutTicketSearch(next)
@@ -548,10 +548,10 @@ onUnmounted(() => {
       </el-tabs>
       <el-form :inline="!isMobile" :label-width="isMobile ? 'auto' : '72px'" class="query-form">
         <el-form-item label="工单编号" class="query-form-item">
-          <el-input v-model="query.ticketNo" class="query-input" placeholder="请输入编号" clearable />
+          <el-input v-model="query.ticketNo" class="query-input" placeholder="支持模糊匹配" clearable />
         </el-form-item>
         <el-form-item label="标题" class="query-form-item">
-          <el-input v-model="query.title" class="query-input" placeholder="请输入标题" clearable />
+          <el-input v-model="query.title" class="query-input" placeholder="支持模糊匹配" clearable />
         </el-form-item>
         <el-form-item label="分类" class="query-form-item">
           <el-select

@@ -37,12 +37,19 @@
                 WHERE tf.user_id = #{currentUserId} AND tf.deleted = 0
             )
         </if>
-        <if test="ticketNo != null and ticketNo != ''">
-            AND t.ticket_no LIKE CONCAT(#{ticketNo}, '%')
-        </if>
-        <if test="title != null and title != ''">
-            AND t.title LIKE CONCAT('%', #{title}, '%')
-        </if>
+        <choose>
+            <when test="keyword != null and keyword != ''">
+                AND (t.ticket_no LIKE CONCAT('%', #{keyword}, '%') OR t.title LIKE CONCAT('%', #{keyword}, '%'))
+            </when>
+            <otherwise>
+                <if test="ticketNo != null and ticketNo != ''">
+                    AND t.ticket_no LIKE CONCAT('%', #{ticketNo}, '%')
+                </if>
+                <if test="title != null and title != ''">
+                    AND t.title LIKE CONCAT('%', #{title}, '%')
+                </if>
+            </otherwise>
+        </choose>
         <if test="categoryId != null">
             AND t.category_id = #{categoryId}
         </if>
