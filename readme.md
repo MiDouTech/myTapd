@@ -933,3 +933,62 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.2.5-ticket-time-track-node-duration-layout-fix` | 修复工单详情“时间追踪”被节点耗时统计表格撑开：移动端正确启用卡片模式，桌面端表格加入独立滚动容器与高度限制 |
+
+---
+
+## 25. 新建工单后企微未@处理人修复（后端）
+
+### 25.1 功能用途
+- **用途**：修复“新建工单时系统里有处理人，但企业微信群消息没有真正@到处理人”的问题。  
+- **类比理解**：以前像“快递单上写了收件人名字，但没贴门牌号”，快递员（企微）找不到人；现在系统会同时带上“门牌号A（wecom_userid）”和“门牌号B（手机号兜底）”，提高@命中率。
+
+### 25.2 根因说明（对应你反馈的现象）
+- 这类消息走的是 `WebhookDispatchService` 的企业微信机器人 `text` 消息。
+- 旧逻辑只在少数场景拼 `mentioned_list`（企微userid），如果用户资料里 `wecom_userid` 缺失或未同步，就会出现“消息显示了指派给XXX，但没有真正@到人”。
+
+### 25.3 本次修复内容
+1. 把@对象收集逻辑升级为统一的 `collectMentionTargets(...)`：
+   - 收集创建人、当前处理人、原处理人、操作人等候选人；
+   - 一次性批量查用户，避免重复查库。
+2. 发送企微机器人 `text` 消息时：
+   - **优先**写入 `mentioned_list`（wecom_userid）；
+   - **兜底**写入 `mentioned_mobile_list`（手机号，自动清洗 `+86/空格/横杠`）。
+3. 处理人没有 `wecom_userid` 时，不再直接漏@，会自动回退到手机号@。
+
+### 25.4 使用方法（验收步骤）
+1. 在“新建工单”页面选择一个处理人后提交工单。
+2. 到对应企微群查看“工单事件通知”消息。
+3. 预期结果：
+   - “变更：指派给：XXX”正常显示；
+   - 群里会出现真正的@提醒（处理人应收到被@通知）。
+4. 建议额外验证两个用户：
+   - A用户：有 `wecom_userid`（应走 `mentioned_list`）；
+   - B用户：无 `wecom_userid` 但有手机号（应走 `mentioned_mobile_list` 兜底）。
+
+### 25.5 参数说明（本次修复相关）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `text.mentioned_list` | `string[]` | 企微机器人@用户列表（企微 `userid`） |
+| `text.mentioned_mobile_list` | `string[]` | 企微机器人@手机号列表（本次新增兜底） |
+| `sys_user.wecom_userid` | `string` | 用户企微唯一标识，优先使用 |
+| `sys_user.phone` | `string` | 手机号兜底来源，会自动做格式清洗 |
+
+### 25.6 返回值说明（接口行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| Webhook 推送成功 | `2xx` | 企微机器人收到标准 `text` 消息体，包含@字段 |
+| Webhook 推送失败 | 记录失败日志 | 在 webhook_dispatch_log 中可查看请求体、响应码和失败原因 |
+
+### 25.7 常见问题（新增）
+#### Q24：为什么消息里还是没有@？
+- **检测**：在管理端查看 webhook 分发日志，确认请求体里是否包含 `mentioned_list` 或 `mentioned_mobile_list`。
+- **记录（错误类型）**：用户资料缺少可用的企微userid和手机号，或手机号格式不合法。
+- **恢复建议**：
+  1. 优先补齐 `sys_user.wecom_userid`；
+  2. 若暂未同步企微userid，确保 `sys_user.phone` 为有效手机号；
+  3. 重新新建工单触发一次通知并复测。
+
+### 25.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.2.6-wecom-mention-assignee-fallback-mobile` | 修复新建工单后企微未@处理人：企业微信Webhook消息新增手机号@兜底（mentioned_mobile_list），并统一@目标收集逻辑 |

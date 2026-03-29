@@ -381,15 +381,20 @@ public class WebhookDispatchService extends BaseApplicationService {
             content.append("详情：").append(baseUrl).append("/").append(ticketNo);
         }
 
-        List<String> mentionWecomUserids = collectMentionWecomUserids(ticket, data);
+        MentionTargets mentionTargets = collectMentionTargets(ticket, data);
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
         text.put("content", normalizedContent);
-        if (!mentionWecomUserids.isEmpty()) {
+        if (!mentionTargets.getWecomUserids().isEmpty()) {
             JSONArray mentionedList = new JSONArray();
-            mentionedList.addAll(mentionWecomUserids);
+            mentionedList.addAll(mentionTargets.getWecomUserids());
             text.put("mentioned_list", mentionedList);
+        }
+        if (!mentionTargets.getMobileList().isEmpty()) {
+            JSONArray mentionedMobileList = new JSONArray();
+            mentionedMobileList.addAll(mentionTargets.getMobileList());
+            text.put("mentioned_mobile_list", mentionedMobileList);
         }
 
         JSONObject payload = new JSONObject();
@@ -399,21 +404,25 @@ public class WebhookDispatchService extends BaseApplicationService {
     }
 
     /**
-     * 收集需要@的企微用户ID列表：包含创建人、指派处理人
+     * 收集需要@的目标：优先企微 userId，同时补充手机号兜底。
+     * 这么做是为了处理“系统里有处理人，但没同步到 wecom_userid”导致的漏@问题。
      */
-    private List<String> collectMentionWecomUserids(JSONObject ticket, Object data) {
-        Set<String> wecomIds = new LinkedHashSet<>();
+    private MentionTargets collectMentionTargets(JSONObject ticket, Object data) {
+        MentionTargets targets = new MentionTargets();
+        Set<Long> userIds = new LinkedHashSet<>();
         if (ticket != null) {
-            String creatorWecomUserid = safeJsonString(ticket, "creatorWecomUserid", null);
-            if (creatorWecomUserid != null && !creatorWecomUserid.isEmpty()) {
-                wecomIds.add(creatorWecomUserid);
+            // 保留快照内已携带的企微账号，避免用户记录缺失时丢失@对象。
+            String creatorWecomUserid = normalizeWecomUserid(safeJsonString(ticket, "creatorWecomUserid", null));
+            if (creatorWecomUserid != null) {
+                targets.getWecomUserids().add(creatorWecomUserid);
+            }
+            Long creatorId = ticket.getLong("creatorId");
+            if (creatorId != null) {
+                userIds.add(creatorId);
             }
             Long assigneeId = ticket.getLong("assigneeId");
             if (assigneeId != null) {
-                String wecomId = resolveWecomUserid(assigneeId);
-                if (wecomId != null) {
-                    wecomIds.add(wecomId);
-                }
+                userIds.add(assigneeId);
             }
         }
         if (data != null) {
@@ -422,43 +431,73 @@ public class WebhookDispatchService extends BaseApplicationService {
                 if (json != null) {
                     Long assigneeId = json.getLong("assigneeId");
                     if (assigneeId != null) {
-                        String wecomId = resolveWecomUserid(assigneeId);
-                        if (wecomId != null) {
-                            wecomIds.add(wecomId);
-                        }
+                        userIds.add(assigneeId);
                     }
                     Long previousAssigneeId = json.getLong("previousAssigneeId");
                     if (previousAssigneeId != null) {
-                        String wecomId = resolveWecomUserid(previousAssigneeId);
-                        if (wecomId != null) {
-                            wecomIds.add(wecomId);
-                        }
+                        userIds.add(previousAssigneeId);
                     }
                     Long operatorId = json.getLong("operatorId");
                     if (operatorId != null) {
-                        String wecomId = resolveWecomUserid(operatorId);
-                        if (wecomId != null) {
-                            wecomIds.add(wecomId);
-                        }
+                        userIds.add(operatorId);
                     }
                 }
             } catch (Exception ex) {
                 log.warn("收集@mention用户失败: {}", ex.getMessage());
             }
         }
-        return new ArrayList<>(wecomIds);
+        if (userIds.isEmpty()) {
+            return targets;
+        }
+        List<SysUserPO> users = sysUserMapper.selectBatchIds(new ArrayList<>(userIds));
+        if (users == null || users.isEmpty()) {
+            return targets;
+        }
+        for (SysUserPO user : users) {
+            if (user == null) {
+                continue;
+            }
+            String wecomUserid = normalizeWecomUserid(user.getWecomUserid());
+            if (wecomUserid != null) {
+                targets.getWecomUserids().add(wecomUserid);
+                continue;
+            }
+            String normalizedMobile = normalizeMentionMobile(user.getPhone());
+            if (normalizedMobile != null) {
+                targets.getMobileList().add(normalizedMobile);
+            }
+        }
+        return targets;
     }
 
-    private String resolveWecomUserid(Long userId) {
-        if (userId == null) {
+    private String normalizeWecomUserid(String wecomUserid) {
+        if (wecomUserid == null) {
             return null;
         }
-        SysUserPO user = sysUserMapper.selectById(userId);
-        if (user == null || user.getWecomUserid() == null) {
+        String normalized = wecomUserid.trim();
+        if (normalized.isEmpty()) {
             return null;
         }
-        String wecomId = user.getWecomUserid().trim();
-        return wecomId.isEmpty() ? null : wecomId;
+        return normalized;
+    }
+
+    private String normalizeMentionMobile(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            return null;
+        }
+        String digitsOnly = phone.trim().replaceAll("[^0-9+]", "");
+        if (digitsOnly.startsWith("+86")) {
+            digitsOnly = digitsOnly.substring(3);
+        } else if (digitsOnly.startsWith("86") && digitsOnly.length() > 11) {
+            digitsOnly = digitsOnly.substring(2);
+        }
+        if (digitsOnly.isEmpty()) {
+            return null;
+        }
+        if (!digitsOnly.matches("[0-9]{5,20}")) {
+            return null;
+        }
+        return digitsOnly;
     }
 
     private String resolveStatusLabel(String code) {
@@ -748,6 +787,12 @@ public class WebhookDispatchService extends BaseApplicationService {
         private String creatorName;
         private String creatorWecomUserid;
         private Long assigneeId;
+    }
+
+    @Data
+    private static class MentionTargets {
+        private final Set<String> wecomUserids = new LinkedHashSet<>();
+        private final Set<String> mobileList = new LinkedHashSet<>();
     }
 
     @Data
