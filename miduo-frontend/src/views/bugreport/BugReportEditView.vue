@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -50,6 +50,20 @@ const currentStatus = ref('DRAFT')
 
 // Mobile preview modal
 const showMobilePreview = ref(false)
+
+/** 窄屏下采用纵向表单与精简工具栏，避免底部被裁切、严重级别长说明占满一屏 */
+const MOBILE_EDIT_BREAKPOINT = 768
+const isMobileNarrow = ref(false)
+/** 折叠面板展开项 name，空数组表示默认收起「更多字段」 */
+const advancedCollapseActive = ref<string[]>([])
+const showSeverityDescriptions = ref(false)
+
+function updateMobileEditLayout(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  isMobileNarrow.value = window.innerWidth <= MOBILE_EDIT_BREAKPOINT
+}
 
 let ticketSearchTimer: ReturnType<typeof setTimeout> | null = null
 let ticketSearchToken = 0
@@ -663,12 +677,28 @@ async function handleCopyContent(): Promise<void> {
   }
 }
 
+function handleMobileToolbarCommand(command: string): void {
+  if (command === 'preview') {
+    showMobilePreview.value = true
+    return
+  }
+  if (command === 'copy') {
+    void handleCopyContent()
+  }
+}
+
 onMounted(async () => {
+  updateMobileEditLayout()
+  window.addEventListener('resize', updateMobileEditLayout)
   await loadBaseData()
   await searchTickets('')
   if (reportId.value) {
     await loadDetail()
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateMobileEditLayout)
 })
 
 watch(
@@ -683,12 +713,12 @@ watch(
 </script>
 
 <template>
-  <div class="edit-page-layout">
+  <div class="edit-page-layout bug-report-edit-root">
     <!-- Main form area -->
     <div class="edit-main">
-      <el-card shadow="never" v-loading="loading">
+      <el-card shadow="never" v-loading="loading" class="edit-card">
         <template #header>
-          <div class="header">
+          <div class="header" :class="{ 'header--mobile': isMobileNarrow }">
             <div class="title-group">
               <div v-if="isEditMode" class="status-line">
                 <span>当前状态：</span>
@@ -697,34 +727,76 @@ watch(
                 </el-tag>
               </div>
             </div>
-            <el-space>
-              <el-button @click="handleCancel">取消</el-button>
-              <el-button type="info" plain @click="showMobilePreview = true">
-                <el-icon class="btn-icon"><Monitor /></el-icon>
-                手机预览
-              </el-button>
-              <el-button type="success" plain @click="handleCopyContent">
-                <el-icon class="btn-icon"><DocumentCopy /></el-icon>
-                一键复制
-              </el-button>
+            <template v-if="!isMobileNarrow">
+              <el-space wrap>
+                <el-button @click="handleCancel">取消</el-button>
+                <el-button type="info" plain @click="showMobilePreview = true">
+                  <el-icon class="btn-icon"><Monitor /></el-icon>
+                  手机预览
+                </el-button>
+                <el-button type="success" plain @click="handleCopyContent">
+                  <el-icon class="btn-icon"><DocumentCopy /></el-icon>
+                  一键复制
+                </el-button>
+                <el-button
+                  v-if="canEdit"
+                  type="primary"
+                  plain
+                  :loading="submitLoading"
+                  @click="handleSaveDraft"
+                >
+                  保存草稿
+                </el-button>
+                <el-button
+                  v-if="canEdit"
+                  type="primary"
+                  :loading="submitLoading"
+                  @click="handleSaveAndSubmit"
+                >
+                  保存并提交
+                </el-button>
+              </el-space>
+            </template>
+            <div v-else class="mobile-toolbar">
+              <el-button size="small" @click="handleCancel">取消</el-button>
+              <el-dropdown trigger="click" @command="handleMobileToolbarCommand">
+                <el-button size="small" type="primary" plain>
+                  更多
+                  <el-icon class="btn-icon btn-icon--after"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="preview">
+                      <el-icon class="dropdown-item-icon"><Monitor /></el-icon>
+                      手机预览
+                    </el-dropdown-item>
+                    <el-dropdown-item command="copy">
+                      <el-icon class="dropdown-item-icon"><DocumentCopy /></el-icon>
+                      一键复制
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button
                 v-if="canEdit"
+                size="small"
                 type="primary"
                 plain
                 :loading="submitLoading"
                 @click="handleSaveDraft"
               >
-                保存草稿
+                草稿
               </el-button>
               <el-button
                 v-if="canEdit"
+                size="small"
                 type="primary"
                 :loading="submitLoading"
                 @click="handleSaveAndSubmit"
               >
-                保存并提交
+                提交
               </el-button>
-            </el-space>
+            </div>
           </div>
         </template>
 
@@ -737,7 +809,13 @@ watch(
           class="status-alert"
         />
 
-        <el-form label-width="120px" :disabled="!canEdit" class="edit-form">
+        <el-form
+          :label-width="isMobileNarrow ? 'auto' : '120px'"
+          :label-position="isMobileNarrow ? 'top' : 'right'"
+          :disabled="!canEdit"
+          class="edit-form"
+          :class="{ 'edit-form--mobile-stack': isMobileNarrow }"
+        >
           <!-- Common fields -->
           <el-form-item label="关联工单" required>
             <div class="ticket-select-wrap">
@@ -847,7 +925,12 @@ watch(
 
           <el-form-item label="严重级别">
             <div class="severity-wrap">
-              <el-select v-model="form.severityLevel" class="w-220" placeholder="请选择">
+              <el-select
+                v-model="form.severityLevel"
+                class="severity-select"
+                :class="{ 'w-220': !isMobileNarrow }"
+                placeholder="请选择"
+              >
                 <el-option
                   v-for="level in SEVERITY_LEVELS"
                   :key="level.value"
@@ -855,7 +938,16 @@ watch(
                   :value="level.value"
                 />
               </el-select>
-              <div class="severity-desc-list">
+              <el-button
+                v-if="isMobileNarrow"
+                type="primary"
+                link
+                class="severity-toggle"
+                @click="showSeverityDescriptions = !showSeverityDescriptions"
+              >
+                {{ showSeverityDescriptions ? '收起级别说明' : '查看各级别说明' }}
+              </el-button>
+              <div v-if="!isMobileNarrow || showSeverityDescriptions" class="severity-desc-list">
                 <div
                   v-for="level in SEVERITY_LEVELS"
                   :key="level.value"
@@ -868,6 +960,17 @@ watch(
               </div>
             </div>
           </el-form-item>
+
+          <el-collapse
+            v-if="isMobileNarrow"
+            v-model="advancedCollapseActive"
+            class="advanced-fields-collapse"
+          >
+            <el-collapse-item title="更多字段（选填）" name="more">
+              <template #title>
+                <span class="collapse-title-text">更多字段（选填）</span>
+                <span class="collapse-title-hint">影响范围、解决方案、审核人等</span>
+              </template>
 
           <el-form-item label="影响范围">
             <el-input
@@ -968,12 +1071,115 @@ watch(
               placeholder="请输入备注（可选）"
             />
           </el-form-item>
+            </el-collapse-item>
+          </el-collapse>
+
+          <template v-if="!isMobileNarrow">
+          <el-form-item label="影响范围">
+            <el-input
+              v-model="form.impactScope"
+              type="textarea"
+              :rows="2"
+              maxlength="500"
+              show-word-limit
+              placeholder="请输入影响范围（可选）"
+            />
+          </el-form-item>
+
+          <!-- Solution fields - flat layout per PRD F2.1 -->
+          <el-form-item label="临时解决时间">
+            <el-date-picker
+              v-model="form.tempResolveDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="请选择临时解决日期（可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="临时解决方案">
+            <el-input
+              v-model="form.tempSolution"
+              type="textarea"
+              :rows="3"
+              maxlength="1000"
+              show-word-limit
+              placeholder="请输入临时解决方案（权宜之计，可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="彻底解决日期">
+            <el-date-picker
+              v-model="form.resolveDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="请选择彻底解决日期（可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="彻底解决方案">
+            <el-input
+              v-model="form.solution"
+              type="textarea"
+              :rows="4"
+              maxlength="1000"
+              show-word-limit
+              placeholder="请输入彻底解决方案（根本性修复，可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="反馈人">
+            <el-select
+              v-model="form.reporterId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择反馈人（可选）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="审核人">
+            <el-select
+              v-model="form.reviewerId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择审核人"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="责任人">
+            <el-select
+              v-model="form.responsibleUserIds"
+              multiple
+              clearable
+              filterable
+              class="w-520"
+              placeholder="请选择责任人（可多选）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="备注">
+            <el-input
+              v-model="form.remark"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              placeholder="请输入备注（可选）"
+            />
+          </el-form-item>
+          </template>
         </el-form>
       </el-card>
     </div>
 
-    <!-- Right instructions panel -->
-    <div class="edit-sidebar">
+    <div v-show="!isMobileNarrow" class="edit-sidebar">
       <el-card shadow="never" class="instruction-card">
         <template #header>
           <div class="instruction-header">
@@ -1269,6 +1475,119 @@ watch(
 </template>
 
 <style scoped lang="scss">
+.bug-report-edit-root {
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+}
+
+.edit-card {
+  :deep(.el-card__header) {
+    border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+  }
+
+  :deep(.el-card__body) {
+    @media (max-width: 768px) {
+      padding: 16px 14px 20px;
+    }
+  }
+}
+
+.header--mobile {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.mobile-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon--after {
+  margin-left: 2px;
+  margin-right: 0;
+  vertical-align: middle;
+}
+
+.dropdown-item-icon {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.edit-form--mobile-stack {
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+
+  :deep(.el-form-item__label) {
+    font-weight: 500;
+    color: #303133;
+    padding-bottom: 4px;
+    line-height: 1.4;
+  }
+
+  :deep(.el-date-editor.el-input),
+  :deep(.el-date-editor.el-input__wrapper) {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.severity-select {
+  width: 100%;
+  max-width: 100%;
+}
+
+.severity-toggle {
+  margin-top: 4px;
+  padding-left: 0;
+  font-size: 13px;
+}
+
+.advanced-fields-collapse {
+  margin-top: 4px;
+  margin-bottom: 8px;
+  border: none;
+
+  :deep(.el-collapse-item__header) {
+    height: auto;
+    min-height: 44px;
+    line-height: 1.35;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    font-weight: 600;
+    color: #303133;
+    transition: background var(--md-transition-fast, 0.15s ease);
+  }
+
+  :deep(.el-collapse-item__header:hover) {
+    background: #f0f6ff;
+  }
+
+  :deep(.el-collapse-item__wrap) {
+    border-bottom: none;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding: 12px 0 4px;
+  }
+}
+
+.collapse-title-text {
+  display: block;
+}
+
+.collapse-title-hint {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
+  margin-top: 2px;
+}
+
 .edit-page-layout {
   display: flex;
   gap: 16px;
@@ -1855,7 +2174,7 @@ watch(
     max-height: none;
   }
 
-  .header {
+  .header:not(.header--mobile) {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1865,6 +2184,21 @@ watch(
   .w-520,
   .w-640 {
     width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .edit-page-layout {
+    gap: 12px;
+  }
+
+  .severity-desc-list {
+    max-width: none;
+  }
+
+  .severity-desc-item {
+    padding: 10px 12px;
+    border-radius: 8px;
   }
 }
 </style>

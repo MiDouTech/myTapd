@@ -69,6 +69,15 @@ a {
   text-decoration: none;
 }
 
+/* Bug简报编辑等长表单：主区域子容器勿裁切底部，并预留安全区避免与移动浏览器底栏重叠 */
+@media (max-width: 768px) {
+  .layout-root .main .page-container:has(.bug-report-edit-root) {
+    overflow: visible;
+    min-height: auto;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;

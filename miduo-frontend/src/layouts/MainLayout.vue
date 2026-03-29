@@ -194,6 +194,8 @@ function submitHeaderTicketSearch(): void {
     return
   }
   void router.push({ path: '/ticket/all', query: { q: raw } })
+}
+
 function resolveMainScrollElement(): HTMLElement | null {
   const target = mainScrollRef.value
   if (!target) {
