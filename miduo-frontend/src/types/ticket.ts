@@ -106,6 +106,7 @@ export interface TicketBugDevInfoInput {
   gitBranch?: string
   impactAssessment?: string
   devRemark?: string
+  plannedFullResolveAt?: string
 }
 
 export interface TicketTimeTrackItem {

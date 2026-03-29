@@ -83,10 +83,10 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   completed: '已完成',
   closed: '已关闭',
   pending_test_accept: '待测试受理',
-  testing: '测试中',
+  testing: '测试复现中',
   investigating: '排查中',
   pending_dev_accept: '待开发受理',
-  developing: '开发中',
+  developing: '开发解决中',
   temp_resolved: '临时解决',
   pending_cs_confirm: '待客服确认',
   submitted: '已提交',
@@ -581,9 +581,9 @@ onUnmounted(() => {
             <el-option label="已关闭" value="closed" />
             <!-- 缺陷工单专属状态 -->
             <el-option label="待测试受理" value="pending_test_accept" />
-            <el-option label="测试中" value="testing" />
+            <el-option label="测试复现中" value="testing" />
             <el-option label="待开发受理" value="pending_dev_accept" />
-            <el-option label="开发中" value="developing" />
+            <el-option label="开发解决中" value="developing" />
             <el-option label="待客服确认" value="pending_cs_confirm" />
           </el-select>
         </el-form-item>

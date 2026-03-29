@@ -144,6 +144,10 @@ export interface TransitInput {
   remark?: string
   newAssigneeId?: number
   newAssigneeIds?: number[]
+  /** 缺陷：转开发时复现环境 PRODUCTION | TEST | BOTH */
+  reproduceEnv?: string
+  /** 缺陷：临时解决时计划彻底解决时间（ISO 日期时间字符串） */
+  plannedFullResolveAt?: string
 }
 
 /** 转派请求 */
