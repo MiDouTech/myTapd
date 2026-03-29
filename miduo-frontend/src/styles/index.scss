@@ -50,6 +50,11 @@
   box-sizing: border-box;
 }
 
+/* 展开/收起长内容时纵向滚动条出现或消失会导致视口宽度变化，表单会左右“跳一下”；预留滚动条槽位保持宽度稳定 */
+html {
+  scrollbar-gutter: stable;
+}
+
 html,
 body,
 #app {
