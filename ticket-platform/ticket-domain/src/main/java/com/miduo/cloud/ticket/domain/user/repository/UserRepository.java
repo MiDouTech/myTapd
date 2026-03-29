@@ -31,6 +31,16 @@ public interface UserRepository {
     User findByEmployeeNo(String employeeNo);
 
     /**
+     * 根据邮箱查询用户
+     */
+    User findByEmail(String email);
+
+    /**
+     * 根据姓名查询用户
+     */
+    User findByName(String name);
+
+    /**
      * 查询所有用户
      */
     List<User> findAll();

@@ -95,6 +95,38 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
+    public User findByEmail(String email) {
+        if (email == null || email.isEmpty()) {
+            return null;
+        }
+        LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUserPO::getEmail, email);
+        SysUserPO po = sysUserMapper.selectOne(wrapper);
+        if (po == null) {
+            return null;
+        }
+        User user = convertToModel(po);
+        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
+        return user;
+    }
+
+    @Override
+    public User findByName(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUserPO::getName, name);
+        SysUserPO po = sysUserMapper.selectOne(wrapper);
+        if (po == null) {
+            return null;
+        }
+        User user = convertToModel(po);
+        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
+        return user;
+    }
+
+    @Override
     public List<User> findAllActive() {
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getAccountStatus, 1);

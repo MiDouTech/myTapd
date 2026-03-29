@@ -167,7 +167,7 @@ public class SsoApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 通过手机号/工号/邮箱匹配本地用户，匹配不到则自动创建
+     * 通过手机号 → 工号 → 邮箱 → 姓名 匹配本地已同步用户；未匹配则拒绝登录（不再自动创建）。
      */
     private User matchOrCreateUser(MiduoSsoClient.ValidateResult validateResult) {
         User user = null;
@@ -180,21 +180,40 @@ public class SsoApplicationService extends BaseApplicationService {
             user = userRepository.findByEmployeeNo(validateResult.getEmployeeNo());
         }
 
-        if (user == null) {
-            String displayName = resolveSsoDisplayName(validateResult);
-            log.info("SSO登录自动创建用户: miduoUserId={}, displayName={}, mobile={}",
-                    validateResult.getUserId(), displayName, validateResult.getMobile());
-            user = new User();
-            user.setName(displayName);
-            user.setPhone(validateResult.getMobile());
-            user.setEmail(validateResult.getEmail());
-            user.setEmployeeNo(validateResult.getEmployeeNo());
-            user.setAccountStatus(1);
-            user.setWecomUserid("SSO_" + validateResult.getUserId());
-            user = userRepository.save(user);
-            userRepository.assignRole(user.getId(), 4L);
-            log.info("SSO自动创建用户成功: id={}, name={}", user.getId(), user.getName());
+        if (user == null && validateResult.getEmail() != null && !validateResult.getEmail().isEmpty()) {
+            user = userRepository.findByEmail(validateResult.getEmail());
         }
+
+        if (user == null && validateResult.getUserName() != null && !validateResult.getUserName().isEmpty()) {
+            user = userRepository.findByName(validateResult.getUserName());
+        }
+
+        if (user == null) {
+            log.warn("SSO登录未匹配到本地用户: miduoUserId={}, mobile={}, employeeNo={}, email={}, userName={}",
+                    validateResult.getUserId(),
+                    validateResult.getMobile(),
+                    validateResult.getEmployeeNo(),
+                    validateResult.getEmail(),
+                    validateResult.getUserName());
+            throw BusinessException.of(ErrorCode.SSO_ACCOUNT_NOT_SYNCED);
+        }
+
+        // 以下为原「自动创建用户」逻辑，已停用：未同步企微账号的用户须由管理员同步后再登录
+        // if (user == null) {
+        //     String displayName = resolveSsoDisplayName(validateResult);
+        //     log.info("SSO登录自动创建用户: miduoUserId={}, displayName={}, mobile={}",
+        //             validateResult.getUserId(), displayName, validateResult.getMobile());
+        //     user = new User();
+        //     user.setName(displayName);
+        //     user.setPhone(validateResult.getMobile());
+        //     user.setEmail(validateResult.getEmail());
+        //     user.setEmployeeNo(validateResult.getEmployeeNo());
+        //     user.setAccountStatus(1);
+        //     user.setWecomUserid("SSO_" + validateResult.getUserId());
+        //     user = userRepository.save(user);
+        //     userRepository.assignRole(user.getId(), 4L);
+        //     log.info("SSO自动创建用户成功: id={}, name={}", user.getId(), user.getName());
+        // }
 
         if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
             throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
@@ -209,26 +228,22 @@ public class SsoApplicationService extends BaseApplicationService {
         return user;
     }
 
-    /**
-     * 从 SSO 返回字段中推导用户显示名称。
-     * 允许返回字段为 userId/employeeNo/mobile/email，不含 userName，
-     * 因此按 userName → employeeNo → mobile → userId → 固定兜底 的优先级取值。
-     */
-    private String resolveSsoDisplayName(MiduoSsoClient.ValidateResult result) {
-        if (result.getUserName() != null && !result.getUserName().isEmpty()) {
-            return result.getUserName();
-        }
-        if (result.getEmployeeNo() != null && !result.getEmployeeNo().isEmpty()) {
-            return result.getEmployeeNo();
-        }
-        if (result.getMobile() != null && !result.getMobile().isEmpty()) {
-            return result.getMobile();
-        }
-        if (result.getUserId() != null && !result.getUserId().isEmpty()) {
-            return "SSO_" + result.getUserId();
-        }
-        return "SSO用户";
-    }
+    // 原自动创建用户时使用；创建逻辑已注释停用
+    // private String resolveSsoDisplayName(MiduoSsoClient.ValidateResult result) {
+    //     if (result.getUserName() != null && !result.getUserName().isEmpty()) {
+    //         return result.getUserName();
+    //     }
+    //     if (result.getEmployeeNo() != null && !result.getEmployeeNo().isEmpty()) {
+    //         return result.getEmployeeNo();
+    //     }
+    //     if (result.getMobile() != null && !result.getMobile().isEmpty()) {
+    //         return result.getMobile();
+    //     }
+    //     if (result.getUserId() != null && !result.getUserId().isEmpty()) {
+    //         return "SSO_" + result.getUserId();
+    //     }
+    //     return "SSO用户";
+    // }
 
     private void saveSsoSession(Long userId, MiduoSsoClient.ValidateResult validateResult) {
         SsoSessionPO session = new SsoSessionPO();
