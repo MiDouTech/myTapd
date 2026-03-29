@@ -43,7 +43,7 @@ miduo:
     app-code: ${MIDUO_SSO_APP_CODE:APP00012}
     app-secret: ${MIDUO_SSO_APP_SECRET:03164523bb294fe4bd43601be41a77a2}
     shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:59}
-    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:http://ticket.t.miduonet.com}
+    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:http://ticket.ebcone.cn}
 
 dev-login:
   enabled: true
