@@ -50,6 +50,7 @@ public enum ErrorCode {
     SSO_REFRESH_FAILED(5103, "SSO会话续期失败"),
     SSO_API_ERROR(5104, "SSO接口调用异常"),
     SSO_STATE_INVALID(5105, "SSO状态参数校验失败"),
+    SSO_ACCOUNT_NOT_SYNCED(5106, "未同步企微账号，请联系管理员同步"),
 
     BUG_REPORT_NOT_FOUND(6001, "Bug简报不存在"),
     BUG_REPORT_STATUS_INVALID(6002, "Bug简报状态不允许此操作"),
