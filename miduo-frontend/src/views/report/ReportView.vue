@@ -37,7 +37,7 @@ type ReportTab = 'trend' | 'category' | 'efficiency' | 'sla' | 'workload' | 'ove
 
 const loading = ref(false)
 const activeTab = ref<ReportTab>('trend')
-const rangeDays = ref(30)
+const rangeDays = ref(1)
 
 const trend = ref<DashboardTrendPointOutput[]>([])
 const categories = ref<DashboardCategoryDistributionOutput[]>([])

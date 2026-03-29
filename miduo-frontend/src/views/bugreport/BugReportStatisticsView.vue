@@ -12,7 +12,7 @@ const router = useRouter()
 const loading = ref(false)
 const timeRange = ref<string[]>([])
 /** 与当前时间范围一致的快捷预设天数；手动改日期后为 null */
-const quickRangePreset = ref<number | null>(30)
+const quickRangePreset = ref<number | null>(1)
 const suppressPresetClear = ref(false)
 
 const statistics = ref<BugReportStatisticsOutput>({
@@ -137,7 +137,7 @@ function handleExport(): void {
 }
 
 onMounted(() => {
-  applyQuickRange(30)
+  applyQuickRange(1)
 })
 </script>
 
