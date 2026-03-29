@@ -50,7 +50,7 @@ const mobileSidebarVisible = ref(false)
 const MOBILE_BREAKPOINT = 768
 
 const menuItems: MenuItem[] = [
-  { index: '/dashboard', title: '数据看板', icon: DataAnalysis },
+  { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
   { index: '/ticket/mine', title: '我的工单', icon: Tickets },
   { index: '/ticket/all', title: '所有工单', icon: Files },
   { index: '/ticket/kanban', title: '工单看板', icon: Grid },
