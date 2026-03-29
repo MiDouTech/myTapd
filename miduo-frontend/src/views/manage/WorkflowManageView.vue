@@ -100,6 +100,46 @@ const WORKFLOW_ROLE_OPTIONS = [
   { label: 'DEVELOPER（开发）', value: 'DEVELOPER' },
 ] as const
 
+const WORKFLOW_ROLE_LABEL_MAP: Record<string, string> = {
+  SUBMITTER: '提交人',
+  HANDLER: '处理人',
+  ADMIN: '系统管理员',
+  TICKET_ADMIN: '工单管理员',
+  OBSERVER: '观察者',
+  CUSTOMER_SERVICE: '客服',
+  TESTER: '测试',
+  DEVELOPER: '开发',
+}
+
+const SLA_ACTION_LABEL_MAP: Record<string, string> = {
+  START_RESPONSE: '开始响应计时',
+  START_RESOLVE: '开始解决计时',
+  PAUSE: '暂停计时',
+  STOP: '停止计时',
+}
+
+const WORKFLOW_STATE_LABEL_MAP: Record<string, string> = {
+  pending: '待处理',
+  pending_assign: '待分派',
+  pending_accept: '待受理',
+  processing: '处理中',
+  suspended: '已挂起',
+  pending_verify: '待验收',
+  completed: '已完成',
+  closed: '已关闭',
+  pending_test_accept: '待测试受理',
+  testing: '测试中',
+  investigating: '排查中',
+  pending_dev_accept: '待开发受理',
+  developing: '开发中',
+  temp_resolved: '临时解决',
+  pending_cs_confirm: '待客服确认',
+  submitted: '已提交',
+  dept_approval: '部门审批',
+  executing: '执行中',
+  rejected: '已驳回',
+}
+
 const STATE_TYPE_OPTIONS = [
   { label: '初始 INITIAL', value: 'INITIAL' },
   { label: '中间 INTERMEDIATE', value: 'INTERMEDIATE' },
@@ -581,7 +621,23 @@ function formatAllowedRoles(roles?: string[]): string {
   if (!roles || roles.length === 0) {
     return '-'
   }
-  return roles.join('、')
+  return roles.map((role) => WORKFLOW_ROLE_LABEL_MAP[role] || role).join('、')
+}
+
+function getSlaActionLabel(action?: string): string {
+  if (!action) {
+    return '-'
+  }
+  return SLA_ACTION_LABEL_MAP[action] || action
+}
+
+function getWorkflowStateLabel(state?: string): string {
+  if (!state) {
+    return '-'
+  }
+  // 详情里有些工作流状态是英文状态码，这里统一翻译成中文，便于业务人员理解。
+  const normalized = state.trim().toLowerCase()
+  return WORKFLOW_STATE_LABEL_MAP[normalized] || state
 }
 
 onMounted(async () => {
@@ -789,7 +845,11 @@ onMounted(async () => {
                 {{ getStateTypeLabel(row.type) }}
               </template>
             </el-table-column>
-            <el-table-column prop="slaAction" label="SLA动作" min-width="140" />
+            <el-table-column label="SLA动作" min-width="140">
+              <template #default="{ row }">
+                {{ getSlaActionLabel(row.slaAction) }}
+              </template>
+            </el-table-column>
           </BaseTable>
         </el-card>
 
@@ -800,12 +860,12 @@ onMounted(async () => {
           <BaseTable :data="detailTransitionRows">
             <el-table-column label="起始状态" min-width="140">
               <template #default="{ row }">
-                {{ row.fromName || row.from }}
+                {{ getWorkflowStateLabel(row.fromName || row.from) }}
               </template>
             </el-table-column>
             <el-table-column label="目标状态" min-width="140">
               <template #default="{ row }">
-                {{ row.toName || row.to }}
+                {{ getWorkflowStateLabel(row.toName || row.to) }}
               </template>
             </el-table-column>
             <el-table-column prop="name" label="流转名称" min-width="140" />

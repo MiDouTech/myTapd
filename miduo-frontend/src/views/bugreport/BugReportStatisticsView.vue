@@ -127,6 +127,15 @@ onMounted(() => {
 <template>
   <div class="statistics-page" v-loading="loading">
     <el-card shadow="never">
+      <div class="toolbar">
+        <div class="title">Bug简报统计看板</div>
+        <el-space class="toolbar-actions">
+          <el-button @click="router.push('/bug-report')">返回列表</el-button>
+          <el-button @click="loadStatistics">刷新</el-button>
+          <el-button type="primary" @click="handleExport">导出CSV</el-button>
+        </el-space>
+      </div>
+
       <el-form :inline="true" label-width="84px" class="query-form">
         <el-form-item label="统计周期">
           <el-date-picker
@@ -250,6 +259,28 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
   min-height: calc(100vh - 180px);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar-actions {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .query-form {

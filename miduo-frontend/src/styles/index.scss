@@ -33,6 +33,8 @@
   --md-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
   --md-transition-fast: 0.15s ease;
   --md-transition-normal: 0.2s ease;
+  --md-dropdown-motion-duration: 0.14s;
+  --md-dropdown-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ── Spacing Scale (4px base) ── */
   --md-space-1: 4px;
@@ -193,6 +195,72 @@ a {
 .el-select,
 .el-date-editor {
   --el-input-border-radius: 6px;
+}
+
+/* ── Global Select Smoothness ── */
+.el-select {
+  --el-select-input-focus-border-color: var(--md-primary-color);
+}
+
+.el-select .el-select__wrapper {
+  transition:
+    border-color var(--md-dropdown-motion-duration) var(--md-dropdown-motion-ease),
+    box-shadow var(--md-dropdown-motion-duration) var(--md-dropdown-motion-ease),
+    background-color var(--md-dropdown-motion-duration) var(--md-dropdown-motion-ease);
+  will-change: border-color, box-shadow;
+}
+
+.el-select .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 2px rgba(22, 117, 209, 0.14);
+}
+
+.el-select__placeholder,
+.el-select__selected-item,
+.el-select-dropdown__item {
+  transition: color 0.12s ease-out, background-color 0.12s ease-out;
+}
+
+.el-select__popper.el-popper {
+  border-radius: 10px;
+  border-color: #e7edf4;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background-color: #f0f7ff;
+  color: var(--md-primary-color);
+}
+
+.el-select-dropdown__item.selected {
+  color: var(--md-primary-color);
+  background-color: #e8f2fc;
+  font-weight: 600;
+}
+
+.el-zoom-in-top-enter-active,
+.el-zoom-in-top-leave-active {
+  transition:
+    opacity 0.12s ease-out,
+    transform var(--md-dropdown-motion-duration) var(--md-dropdown-motion-ease) !important;
+}
+
+.el-zoom-in-top-enter-from,
+.el-zoom-in-top-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.985) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .el-select .el-select__wrapper,
+  .el-select-dropdown__item,
+  .el-zoom-in-top-enter-active,
+  .el-zoom-in-top-leave-active {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .el-breadcrumb {

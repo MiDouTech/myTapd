@@ -347,18 +347,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
     }
 
     private String buildPublicTicketLink(String ticketNo) {
-        if (ticketNo == null || ticketNo.trim().isEmpty()) {
-            return "-";
-        }
-        String domain = wecomProperties.getTrustedDomain();
-        if (domain == null || domain.trim().isEmpty()) {
-            return "-";
-        }
-        String normalizedDomain = domain.trim();
-        if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
-            normalizedDomain = "https://" + normalizedDomain;
-        }
-        return normalizedDomain + "/open/ticket/" + ticketNo.trim();
+        return WecomPublicLinkBuilder.buildPublicTicketLink(wecomProperties.getTrustedDomain(), ticketNo);
     }
 
     private void sendReply(WecomGroupBindingPO binding, String reply) {

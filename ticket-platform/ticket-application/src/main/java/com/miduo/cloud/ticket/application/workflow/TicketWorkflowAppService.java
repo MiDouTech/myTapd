@@ -395,18 +395,20 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                 .collect(Collectors.toList());
 
         if (returnTransitions.isEmpty()) {
+            String currentStatusLabel = resolveStatusLabel(currentStatus);
             throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
-                    "当前状态[" + currentStatus + "]不支持退回操作，或您无权限执行退回");
+                    "当前状态[" + currentStatusLabel + "]不支持退回操作，或您无权限执行退回");
         }
 
         // 若有多个退回路径，使用 input.getTargetStatus 指定；否则取第一个
         WorkflowTransition returnTransition;
         if (StringUtils.hasText(input.getTargetStatus())) {
+            String targetStatusLabel = resolveStatusLabel(input.getTargetStatus());
             returnTransition = returnTransitions.stream()
                     .filter(t -> t.getTo().equalsIgnoreCase(input.getTargetStatus()))
                     .findFirst()
                     .orElseThrow(() -> BusinessException.of(ErrorCode.WORKFLOW_TRANSITION_INVALID,
-                            "指定的退回目标状态[" + input.getTargetStatus() + "]不合法"));
+                            "指定的退回目标状态[" + targetStatusLabel + "]不合法"));
         } else {
             returnTransition = returnTransitions.get(0);
         }
@@ -581,8 +583,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             boolean valid = workflowEngine.validate(
                     transitionsJson, currentStatus, targetStatus, userRole);
             if (!valid) {
+                String currentStatusLabel = resolveStatusLabel(currentStatus);
+                String targetStatusLabel = resolveStatusLabel(targetStatus);
                 throw BusinessException.of(ErrorCode.WORKFLOW_TRANSITION_INVALID,
-                        "从[" + currentStatus + "]到[" + targetStatus + "]的流转不合法或无权限");
+                        "从[" + currentStatusLabel + "]到[" + targetStatusLabel + "]的流转不合法或无权限");
             }
             // 找到匹配的流转规则（取第一个匹配）
             matched = workflowEngine.parseTransitions(transitionsJson).stream()
@@ -602,6 +606,20 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             return true;
         }
         return t.getAllowedRoles().contains(userRole);
+    }
+
+    /**
+     * 将状态码转换为中文状态名，避免前端提示出现 pending_xxx 之类的技术码。
+     */
+    private String resolveStatusLabel(String statusCode) {
+        if (!StringUtils.hasText(statusCode)) {
+            return "";
+        }
+        TicketStatus status = TicketStatus.fromCode(statusCode);
+        if (status != null) {
+            return status.getLabel();
+        }
+        return statusCode.trim();
     }
 
     private TicketPO requireTicket(Long ticketId) {

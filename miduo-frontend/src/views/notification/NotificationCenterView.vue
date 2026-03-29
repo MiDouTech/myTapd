@@ -255,6 +255,8 @@ onMounted(async () => {
     <el-card shadow="never">
       <div class="toolbar">
         <el-space>
+        <div class="title">通知中心</div>
+        <el-space class="toolbar-actions">
           <el-tag :type="connectionTagType">{{ connectionText }}</el-tag>
           <el-button @click="loadNotifications">刷新列表</el-button>
           <el-button type="primary" plain @click="handleMarkAllAsRead">全部标记已读</el-button>
@@ -399,6 +401,21 @@ onMounted(async () => {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar-actions {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .query-form {
@@ -419,6 +436,7 @@ onMounted(async () => {
     font-weight: 600;
     color: #1d2129;
   }
+  flex-wrap: wrap;
 }
 
 .tip-alert {
