@@ -21,7 +21,7 @@ import {
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -29,6 +29,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationOutput } from '@/types/notification'
 import { formatDateTime } from '@/utils/formatter'
+import { createInertiaWheelScroll } from '@/utils/inertiaWheelScroll'
 
 interface MenuItem {
   index: string
@@ -48,6 +49,10 @@ const notificationDrawerVisible = ref(false)
 const isMobile = ref(false)
 const mobileSidebarVisible = ref(false)
 const MOBILE_BREAKPOINT = 768
+const DESKTOP_POINTER_MEDIA_QUERY = '(hover: hover) and (pointer: fine)'
+const mainScrollRef = ref<HTMLElement | { $el?: Element | null } | null>(null)
+let inertiaWheelController: { destroy: () => void } | null = null
+let desktopPointerMedia: MediaQueryList | null = null
 
 const menuItems: MenuItem[] = [
   { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
@@ -170,6 +175,45 @@ function updateViewportState(): void {
   }
 }
 
+function resolveMainScrollElement(): HTMLElement | null {
+  const target = mainScrollRef.value
+  if (!target) {
+    return null
+  }
+  if (target instanceof HTMLElement) {
+    return target
+  }
+  const maybeElement = target.$el
+  if (maybeElement instanceof HTMLElement) {
+    return maybeElement
+  }
+  return null
+}
+
+function teardownInertiaWheelScroll(): void {
+  inertiaWheelController?.destroy()
+  inertiaWheelController = null
+}
+
+async function setupInertiaWheelScroll(): Promise<void> {
+  teardownInertiaWheelScroll()
+  if (isMobile.value) {
+    return
+  }
+  if (!window.matchMedia(DESKTOP_POINTER_MEDIA_QUERY).matches) {
+    return
+  }
+  await nextTick()
+  const mainScrollElement = resolveMainScrollElement()
+  if (!mainScrollElement) {
+    return
+  }
+  inertiaWheelController = createInertiaWheelScroll(mainScrollElement, {
+    lerpFactor: 0.14,
+    maxDeltaPerFrame: 220,
+  })
+}
+
 async function handleLogout(): Promise<void> {
   try {
     const { ssoLogout } = await import('@/api/sso')
@@ -206,11 +250,17 @@ onMounted(() => {
   updateViewportState()
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', updateViewportState)
+  desktopPointerMedia = window.matchMedia(DESKTOP_POINTER_MEDIA_QUERY)
+  desktopPointerMedia.addEventListener('change', setupInertiaWheelScroll)
+  void setupInertiaWheelScroll()
 })
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', updateViewportState)
+  desktopPointerMedia?.removeEventListener('change', setupInertiaWheelScroll)
+  desktopPointerMedia = null
+  teardownInertiaWheelScroll()
   notificationStore.teardown()
 })
 
@@ -220,6 +270,13 @@ watch(
     if (isMobile.value) {
       mobileSidebarVisible.value = false
     }
+  },
+)
+
+watch(
+  () => isMobile.value,
+  () => {
+    void setupInertiaWheelScroll()
   },
 )
 </script>
@@ -322,7 +379,7 @@ watch(
           </el-dropdown>
         </div>
       </el-header>
-      <el-main class="main">
+      <el-main ref="mainScrollRef" class="main">
         <div class="page-container">
           <RouterView />
         </div>
@@ -419,6 +476,8 @@ watch(
   height: calc(100vh - 56px);
   overflow-y: auto;
   padding: 6px 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 
   :deep(.el-menu-item) {
     margin: 2px 8px;
@@ -545,6 +604,9 @@ watch(
   overflow: auto;
   background: #f5f7fa;
   min-width: 0;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
 }
 
 .page-container {
