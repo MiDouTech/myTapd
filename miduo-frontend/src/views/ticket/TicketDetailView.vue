@@ -1173,6 +1173,7 @@ watch(
                     :tracks="timeTrackItems"
                     :standalone-field-changes="timeTrackStandalone"
                     :node-duration-items="nodeDurationItems"
+                    :compact="isCompactLayout"
                     :status-label-fn="getStatusLabel"
                     :role-label-fn="formatRoleLabel"
                     :format-duration="formatDurationSec"

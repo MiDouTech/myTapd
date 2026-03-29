@@ -81,13 +81,14 @@
           </div>
         </div>
       </div>
-      <el-table
-        v-else
-        :data="nodeDurationItems"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      >
+      <div v-else class="node-duration-table-wrap">
+        <el-table
+          :data="nodeDurationItems"
+          :border="false"
+          :stripe="true"
+          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+          max-height="420"
+        >
         <el-table-column label="节点" align="center" min-width="130">
           <template #default="{ row }">
             {{ statusLabelFn(row.nodeName) }}
@@ -134,7 +135,8 @@
             {{ formatDuration(row.totalDurationSec) }}
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </div>
   </div>
 </template>
@@ -311,6 +313,19 @@ function entryKey(entry: MergedEntry, idx: number): string {
   font-size: 12px;
   text-align: right;
   word-break: break-word;
+}
+
+.node-duration-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+
+  :deep(.el-table) {
+    min-width: 1360px;
+  }
 }
 
 @media (max-width: 768px) {
