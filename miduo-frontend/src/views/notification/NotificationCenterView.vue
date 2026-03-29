@@ -261,6 +261,7 @@ onMounted(async () => {
           <el-button @click="loadNotifications">刷新列表</el-button>
           <el-button type="primary" plain @click="handleMarkAllAsRead">全部标记已读</el-button>
         </el-space>
+        </el-space>
       </div>
 
       <el-form :inline="true" label-width="72px" class="query-form">
