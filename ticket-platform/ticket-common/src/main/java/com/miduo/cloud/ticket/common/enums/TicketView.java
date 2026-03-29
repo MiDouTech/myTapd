@@ -20,8 +20,13 @@ public enum TicketView {
         if (code == null) {
             return ALL;
         }
+        String normalized = code.trim();
+        if (normalized.isEmpty()) {
+            return ALL;
+        }
+        normalized = normalized.toLowerCase();
         for (TicketView view : values()) {
-            if (view.code.equals(code)) {
+            if (view.code.equals(normalized)) {
                 return view;
             }
         }
