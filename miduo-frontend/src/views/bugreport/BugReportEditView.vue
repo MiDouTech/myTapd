@@ -877,7 +877,6 @@ watch(useInstructionDrawer, (drawer) => {
               <el-select
                 v-model="form.severityLevel"
                 class="severity-select"
-                :class="{ 'w-220': !isMobileNarrow }"
                 placeholder="请选择"
               >
                 <el-option
@@ -1254,6 +1253,34 @@ watch(useInstructionDrawer, (drawer) => {
 <style scoped lang="scss">
 .bug-report-edit-root {
   padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  /* 表单项内容区占满主栏宽度，避免固定 px 宽度在「侧栏 + 中等视口」下右侧大块留白 */
+  .edit-form {
+    :deep(.el-form-item__content) {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    :deep(.el-select),
+    :deep(.el-cascader),
+    :deep(.el-date-editor.el-input),
+    :deep(.el-date-editor.el-input__wrapper) {
+      width: 100% !important;
+      max-width: 100%;
+    }
+
+    :deep(.el-input:not(.el-input--textarea)) {
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+
+  .w-220,
+  .w-420,
+  .w-520,
+  .w-640 {
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 .edit-card {
