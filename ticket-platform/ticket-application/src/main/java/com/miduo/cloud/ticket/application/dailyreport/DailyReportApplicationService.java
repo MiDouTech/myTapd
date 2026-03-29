@@ -18,6 +18,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.S
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import org.springframework.stereotype.Service;
 
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,6 +36,9 @@ public class DailyReportApplicationService extends BaseApplicationService {
     private static final String CONFIG_KEY_INCLUDE_DEFECT_DETAIL = "daily_report_include_defect_detail";
     private static final String CONFIG_KEY_INCLUDE_SUSPENDED = "daily_report_include_suspended";
     private static final String CONFIG_GROUP = "DAILY_REPORT";
+    private static final String BASIC_CONFIG_GROUP = "BASIC";
+    private static final String BASIC_CONFIG_KEY_TIMEZONE = "timezone";
+    private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
     private static final String CRON_SEPARATOR = ";";
 
     private final DailyReportMapper dailyReportMapper;
@@ -219,19 +224,41 @@ public class DailyReportApplicationService extends BaseApplicationService {
         return "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
     }
 
+    /**
+     * 获取日报调度时区
+     */
+    public String getScheduleTimezone() {
+        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SystemConfigPO::getConfigGroup, BASIC_CONFIG_GROUP)
+                .eq(SystemConfigPO::getConfigKey, BASIC_CONFIG_KEY_TIMEZONE)
+                .eq(SystemConfigPO::getDeleted, 0);
+        SystemConfigPO timezoneConfig = systemConfigMapper.selectOne(wrapper);
+        if (timezoneConfig == null || timezoneConfig.getConfigValue() == null || timezoneConfig.getConfigValue().trim().isEmpty()) {
+            return DEFAULT_TIMEZONE;
+        }
+        String timezone = timezoneConfig.getConfigValue().trim();
+        try {
+            ZoneId.of(timezone);
+            return timezone;
+        } catch (DateTimeException ex) {
+            log.warn("日报推送：读取到非法时区配置，timezone={}，回退默认时区={}", timezone, DEFAULT_TIMEZONE);
+            return DEFAULT_TIMEZONE;
+        }
+    }
+
     // ==================== 私有方法 ====================
 
     private List<String> parseCronList(String cronValue) {
         if (cronValue == null || cronValue.trim().isEmpty()) {
             return Collections.singletonList("0 0 18 * * ?");
         }
-        List<String> result = new ArrayList<>();
+        Set<String> unique = new LinkedHashSet<>();
         for (String cron : cronValue.split(CRON_SEPARATOR)) {
             if (!cron.trim().isEmpty()) {
-                result.add(cron.trim());
+                unique.add(cron.trim());
             }
         }
-        return result.isEmpty() ? Collections.singletonList("0 0 18 * * ?") : result;
+        return unique.isEmpty() ? Collections.singletonList("0 0 18 * * ?") : new ArrayList<>(unique);
     }
 
     private DailyReportSection buildPendingSection(List<DailyReportTicketRow> investigating,

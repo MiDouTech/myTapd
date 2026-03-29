@@ -26,6 +26,7 @@ public final class RedisKeyConstants {
 
     public static final String WS_USER_SESSION_PREFIX = "ws:user:session:";
     public static final String SLA_CHECK_LOCK = "sla:check:lock";
+    public static final String DAILY_REPORT_PUSH_DEDUP_PREFIX = "daily:report:push:dedup:";
 
     /**
      * NLP关键词缓存（TTL 5分钟）
