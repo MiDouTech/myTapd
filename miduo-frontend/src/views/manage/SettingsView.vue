@@ -159,10 +159,6 @@ onMounted(async () => {
 
 <template>
   <el-card shadow="never">
-    <template #header>
-      <div class="title">系统设置</div>
-    </template>
-
     <el-tabs v-model="activeTab" class="settings-tabs">
       <!-- 基础参数模块暂未启用，隐藏待后续开放 -->
 
@@ -244,12 +240,6 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
 .settings-tabs {
   margin-top: 4px;
 }

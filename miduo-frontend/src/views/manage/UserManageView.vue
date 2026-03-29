@@ -400,6 +400,7 @@ onMounted(async () => {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
+          <el-space>
           <div class="title">组织账号管理</div>
           <el-space class="card-header-right">
             <span class="sync-tip">最近同步状态：</span>

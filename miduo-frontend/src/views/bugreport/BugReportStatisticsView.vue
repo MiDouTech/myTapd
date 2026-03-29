@@ -156,6 +156,11 @@ onMounted(() => {
           </el-space>
         </el-form-item>
       </el-form>
+      <div class="action-bar">
+        <el-button @click="router.push('/bug-report')">返回列表</el-button>
+        <el-button @click="loadStatistics">刷新</el-button>
+        <el-button type="primary" @click="handleExport">导出CSV</el-button>
+      </div>
     </el-card>
 
     <el-card shadow="never" class="metrics-card">
@@ -279,10 +284,17 @@ onMounted(() => {
 }
 
 .query-form {
-  margin-top: 14px;
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .metrics-card {
@@ -345,9 +357,9 @@ onMounted(() => {
 }
 
 @media (max-width: 991px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: flex-start;
+  .action-bar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .metric-wrapper {

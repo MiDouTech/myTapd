@@ -250,9 +250,7 @@ onMounted(() => {
 
 <template>
   <div class="dashboard-page" v-loading="loading">
-    <!-- 页面头部：标题 + 操作按钮 -->
     <div class="dashboard-header">
-      <div class="dashboard-title">数据看板</div>
       <div class="header-actions">
         <!-- 查看模式：编辑布局按钮 -->
         <el-button
@@ -363,14 +361,8 @@ onMounted(() => {
 .dashboard-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 16px;
-}
-
-.dashboard-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
 }
 
 .header-actions {

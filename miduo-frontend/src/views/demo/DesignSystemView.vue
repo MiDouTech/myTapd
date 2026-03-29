@@ -47,9 +47,6 @@ function toggleLoading(): void {
 <template>
   <el-space direction="vertical" fill :size="16">
     <el-card shadow="never">
-      <template #header>
-        <div class="title">Task014 设计系统示例</div>
-      </template>
       <el-space wrap>
         <el-button type="primary" @click="toggleLoading">演示加载态</el-button>
         <el-button @click="showEmpty = !showEmpty">切换空状态</el-button>

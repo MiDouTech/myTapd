@@ -115,7 +115,6 @@ onMounted(() => {
   <div class="kanban-page" v-loading="loading">
     <el-card shadow="never">
       <div class="toolbar">
-        <div class="title">工单看板</div>
         <el-button @click="loadKanban">刷新</el-button>
       </div>
     </el-card>
@@ -188,13 +187,7 @@ onMounted(() => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
+  justify-content: flex-end;
 }
 
 .kanban-card {

@@ -290,15 +290,13 @@ watch(
     <el-card shadow="never" v-loading="loading">
       <template #header>
         <div class="header">
-          <div>
-            <div class="title">Bug简报：{{ detail?.reportNo || '-' }}</div>
-            <div class="subtitle">
-              <el-tag :type="getBugReportStatusTagType(detail?.status)">
-                {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
-              </el-tag>
-              <span>创建时间：{{ formatDateTime(detail?.createTime) }}</span>
-              <span>更新时间：{{ formatDateTime(detail?.updateTime) }}</span>
-            </div>
+          <div class="subtitle">
+            <el-tag :type="getBugReportStatusTagType(detail?.status)">
+              {{ getBugReportStatusLabel(detail?.status, detail?.statusLabel) }}
+            </el-tag>
+            <span>简报编号：{{ detail?.reportNo || '-' }}</span>
+            <span>创建时间：{{ formatDateTime(detail?.createTime) }}</span>
+            <span>更新时间：{{ formatDateTime(detail?.updateTime) }}</span>
           </div>
           <el-space>
             <el-button @click="handleBack">返回列表</el-button>
@@ -538,13 +536,7 @@ watch(
   gap: 16px;
 }
 
-.title {
-  font-size: 18px;
-  font-weight: 600;
-}
-
 .subtitle {
-  margin-top: 8px;
   display: flex;
   gap: 12px;
   color: #606266;

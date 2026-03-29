@@ -176,11 +176,6 @@ onMounted(() => {
 
 <template>
   <div class="daily-report-view">
-    <div class="page-header">
-      <h2 class="page-title">日报管理</h2>
-      <p class="page-desc">配置日报自动推送规则，支持预览和手动推送到企微群</p>
-    </div>
-
     <el-tabs v-model="activeTab" class="report-tabs">
       <el-tab-pane label="推送配置" name="config">
         <el-card v-loading="configLoading" shadow="never" class="config-card">
@@ -474,23 +469,6 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
 <style lang="scss" scoped>
 .daily-report-view {
   padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
 }
 
 .report-tabs {

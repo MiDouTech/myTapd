@@ -202,7 +202,6 @@ const reportId = computed(() => {
 const isEditMode = computed(() => Boolean(reportId.value))
 const canEdit = computed(() => !isEditMode.value || isBugReportEditable(currentStatus.value))
 
-const pageTitle = computed(() => (isEditMode.value ? '编辑Bug简报' : '新建Bug简报'))
 
 const logicCauseOptions = computed<LogicCauseOption[]>(() => {
   const convert = (nodes: LogicCauseTreeOutput[]): LogicCauseOption[] =>
@@ -691,7 +690,6 @@ watch(
         <template #header>
           <div class="header">
             <div class="title-group">
-              <div class="title">{{ pageTitle }}</div>
               <div v-if="isEditMode" class="status-line">
                 <span>当前状态：</span>
                 <el-tag :type="getBugReportStatusTagType(currentStatus)">
@@ -1311,12 +1309,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1d2129;
 }
 
 .status-line {

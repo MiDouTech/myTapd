@@ -254,6 +254,7 @@ onMounted(async () => {
   <el-space direction="vertical" fill :size="16">
     <el-card shadow="never">
       <div class="toolbar">
+        <el-space>
         <div class="title">通知中心</div>
         <el-space class="toolbar-actions">
           <el-tag :type="connectionTagType">{{ connectionText }}</el-tag>
@@ -398,7 +399,7 @@ onMounted(async () => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -429,6 +430,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+
+  .title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2129;
+  }
   flex-wrap: wrap;
 }
 

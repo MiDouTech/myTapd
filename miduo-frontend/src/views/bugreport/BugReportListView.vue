@@ -238,6 +238,10 @@ onMounted(async () => {
           </el-space>
         </el-form-item>
       </el-form>
+      <div class="action-bar">
+        <el-button @click="router.push('/bug-report/statistics')">查看统计</el-button>
+        <el-button type="primary" @click="router.push('/bug-report/edit')">新建简报</el-button>
+      </div>
     </el-card>
 
     <el-card shadow="never">
@@ -323,7 +327,6 @@ onMounted(async () => {
 }
 
 .query-form {
-  margin-top: 14px;
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
@@ -332,6 +335,14 @@ onMounted(async () => {
 .query-select {
   width: 220px;
   max-width: 100%;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .cell-link {
@@ -344,13 +355,13 @@ onMounted(async () => {
 }
 
 @media (max-width: 991px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .query-form {
     padding: 10px 12px;
+  }
+
+  .action-bar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 </style>

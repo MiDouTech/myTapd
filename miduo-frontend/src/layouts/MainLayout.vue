@@ -102,16 +102,6 @@ const activeMenu = computed(() => {
   return route.path
 })
 
-const breadcrumbs = computed(() => {
-  const matchedRoutes = route.matched
-    .filter((item) => item.meta.title && item.path !== '/')
-    .map((item, index, arr) => ({
-      path: item.path.startsWith('/') ? item.path : `/${item.path}`,
-      title: String(item.meta.title),
-      canJump: index < arr.length - 1 && !item.path.includes(':'),
-    }))
-  return matchedRoutes
-})
 
 function handleMenuSelect(index: string): void {
   router.push(index)
@@ -334,15 +324,6 @@ watch(
       </el-header>
       <el-main class="main">
         <div class="page-container">
-          <el-breadcrumb v-if="!isMobile" class="breadcrumb" separator="/">
-            <el-breadcrumb-item
-              v-for="breadcrumb in breadcrumbs"
-              :key="breadcrumb.path"
-              :to="breadcrumb.canJump ? { path: breadcrumb.path } : undefined"
-            >
-              {{ breadcrumb.title }}
-            </el-breadcrumb-item>
-          </el-breadcrumb>
           <RouterView />
         </div>
       </el-main>
@@ -564,10 +545,6 @@ watch(
   overflow: auto;
   background: #f5f7fa;
   min-width: 0;
-}
-
-.breadcrumb {
-  margin-bottom: 14px;
 }
 
 .page-container {
