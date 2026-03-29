@@ -275,39 +275,39 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <el-button type="primary" @click="openCreateDialog">新增策略</el-button>
-        </div>
-      </template>
+  <div class="sla-manage-page">
+    <el-card shadow="never" class="page-card">
+      <div class="toolbar">
+        <div class="title">SLA 管理</div>
+        <el-button type="primary" @click="openCreateDialog">新增策略</el-button>
+      </div>
 
-      <el-form :inline="true" label-width="72px">
-        <el-form-item label="关键字">
+      <el-form :inline="true" label-width="72px" class="query-form">
+        <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="query.keyword"
+            class="query-input"
             placeholder="请输入策略名称或描述"
             clearable
             @keyup.enter="handleSearch"
           />
         </el-form-item>
-        <el-form-item label="优先级">
-          <el-select v-model="query.priority" clearable placeholder="全部优先级">
+        <el-form-item label="优先级" class="query-form-item">
+          <el-select v-model="query.priority" class="query-input" clearable placeholder="全部优先级">
             <el-option label="紧急" value="urgent" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
             <el-option label="低" value="low" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="query.isActive" clearable placeholder="全部状态">
+        <el-form-item label="状态" class="query-form-item">
+          <el-select v-model="query.isActive" class="query-input" clearable placeholder="全部状态">
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space wrap class="query-action-row">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
             <el-button link @click="loadPolicyList">刷新</el-button>
@@ -360,7 +360,7 @@ onMounted(async () => {
         />
       </template>
     </el-card>
-  </el-space>
+  </div>
 
   <el-dialog
     v-model="dialogVisible"
@@ -409,9 +409,94 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
-.card-header {
+.sla-manage-page {
+  width: 100%;
+}
+
+.page-card {
+  width: 100%;
+}
+
+.toolbar {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.query-form {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--md-bg-panel, #f9fafb);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
+  max-width: 100%;
+}
+
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-row {
+  width: auto;
+}
+
+@media (max-width: 991px) {
+  .query-form {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input {
+    width: 100%;
+  }
+
+  .query-form-actions {
+    margin-left: 0;
+  }
 }
 </style>

@@ -251,22 +251,20 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never">
+  <div class="notification-center-page">
+    <el-card shadow="never" class="page-card">
       <div class="toolbar">
-        <el-space>
         <div class="title">通知中心</div>
-        <el-space class="toolbar-actions">
+        <el-space class="toolbar-actions" wrap>
           <el-tag :type="connectionTagType">{{ connectionText }}</el-tag>
           <el-button @click="loadNotifications">刷新列表</el-button>
           <el-button type="primary" plain @click="handleMarkAllAsRead">全部标记已读</el-button>
         </el-space>
-        </el-space>
       </div>
 
       <el-form :inline="true" label-width="72px" class="query-form">
-        <el-form-item label="通知类型">
-          <el-select v-model="query.type" placeholder="全部类型" clearable filterable>
+        <el-form-item label="通知类型" class="query-form-item">
+          <el-select v-model="query.type" class="query-input" placeholder="全部类型" clearable filterable>
             <el-option
               v-for="option in typeOptions"
               :key="option.value"
@@ -275,23 +273,24 @@ onMounted(async () => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="已读状态">
-          <el-select v-model="query.isRead" placeholder="全部状态" clearable>
+        <el-form-item label="已读状态" class="query-form-item">
+          <el-select v-model="query.isRead" class="query-input" placeholder="全部状态" clearable>
             <el-option label="未读" :value="0" />
             <el-option label="已读" :value="1" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间范围">
+        <el-form-item label="时间范围" class="query-form-item">
           <el-date-picker
             v-model="timeRange"
+            class="query-input query-input--wide"
             type="daterange"
             value-format="YYYY-MM-DD HH:mm:ss"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
           />
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space class="query-action-buttons">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
@@ -299,7 +298,7 @@ onMounted(async () => {
       </el-form>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="page-card">
       <EmptyState v-if="!tableLoading && notificationList.length === 0" description="暂无通知数据" />
       <template v-else>
         <BaseTable :data="notificationList" :loading="tableLoading">
@@ -347,7 +346,7 @@ onMounted(async () => {
       </template>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="page-card">
       <template #header>
         <div class="card-header">
           <span class="title">通知偏好</span>
@@ -393,16 +392,28 @@ onMounted(async () => {
         </el-table-column>
       </BaseTable>
     </el-card>
-  </el-space>
+  </div>
 </template>
 
 <style scoped lang="scss">
+.notification-center-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-card {
+  width: 100%;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .title {
@@ -420,10 +431,41 @@ onMounted(async () => {
 }
 
 .query-form {
-  margin-top: 14px;
+  width: 100%;
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
+  max-width: 100%;
+}
+
+.query-input--wide {
+  width: 280px;
+}
+
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-buttons {
+  width: auto;
+}
+
+.query-action-buttons :deep(.el-button) {
+  min-width: 88px;
 }
 
 .card-header {
@@ -446,7 +488,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 991px) {
-  .toolbar,
   .card-header {
     flex-direction: column;
     align-items: flex-start;
@@ -454,6 +495,44 @@ onMounted(async () => {
 
   .query-form {
     padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input,
+  .query-input--wide {
+    width: 100%;
+  }
+
+  .query-form-actions {
+    margin-left: 0;
+  }
+
+  .query-action-buttons :deep(.el-space__item) {
+    width: calc(50% - 4px);
+  }
+
+  .query-action-buttons :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

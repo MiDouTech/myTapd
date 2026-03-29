@@ -646,37 +646,37 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
-        </div>
-      </template>
+  <div class="workflow-manage-page">
+    <el-card shadow="never" class="page-card">
+      <div class="toolbar">
+        <div class="title">工作流管理</div>
+        <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
+      </div>
 
-      <el-form :inline="true" label-width="72px">
-        <el-form-item label="关键字">
+      <el-form :inline="true" label-width="72px" class="query-form">
+        <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="workflowQuery.keyword"
+            class="query-input"
             placeholder="请输入名称或描述"
             clearable
             @keyup.enter="handleWorkflowSearch"
           />
         </el-form-item>
-        <el-form-item label="模式">
-          <el-select v-model="workflowQuery.mode" clearable placeholder="全部模式">
+        <el-form-item label="模式" class="query-form-item">
+          <el-select v-model="workflowQuery.mode" class="query-input" clearable placeholder="全部模式">
             <el-option label="简单模式" value="SIMPLE" />
             <el-option label="高级模式" value="ADVANCED" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="workflowQuery.isActive" clearable placeholder="全部状态">
+        <el-form-item label="状态" class="query-form-item">
+          <el-select v-model="workflowQuery.isActive" class="query-input" clearable placeholder="全部状态">
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space class="query-action-buttons">
             <el-button type="primary" @click="handleWorkflowSearch">查询</el-button>
             <el-button @click="handleWorkflowReset">重置</el-button>
           </el-space>
@@ -731,25 +731,24 @@ onMounted(async () => {
       </template>
     </el-card>
 
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="title">处理组管理</span>
-          <el-button type="primary" @click="openCreateHandlerGroupDialog">新建处理组</el-button>
-        </div>
-      </template>
+    <el-card shadow="never" class="page-card">
+      <div class="section-toolbar">
+        <div class="title">处理组管理</div>
+        <el-button type="primary" @click="openCreateHandlerGroupDialog">新建处理组</el-button>
+      </div>
 
-      <el-form :inline="true" label-width="72px">
-        <el-form-item label="关键字">
+      <el-form :inline="true" label-width="72px" class="query-form query-form--compact">
+        <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="handlerGroupQuery.keyword"
+            class="query-input"
             placeholder="请输入名称/描述/技能标签"
             clearable
             @keyup.enter="handleHandlerGroupSearch"
           />
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space wrap class="handler-query-actions">
             <el-button type="primary" @click="handleHandlerGroupSearch">查询</el-button>
             <el-button @click="handleHandlerGroupReset">重置</el-button>
             <el-button link @click="loadHandlerGroups">刷新</el-button>
@@ -808,7 +807,7 @@ onMounted(async () => {
         />
       </template>
     </el-card>
-  </el-space>
+  </div>
 
   <el-drawer v-model="workflowDetailVisible" title="工作流详情" size="56%">
     <div v-loading="workflowDetailLoading" class="detail-wrapper">
@@ -1137,16 +1136,92 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
+.workflow-manage-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-card {
+  width: 100%;
+}
+
 .title {
   font-size: 17px;
   font-weight: 600;
   color: #1d2129;
+  line-height: 24px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.query-form {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--md-bg-panel, #f9fafb);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.query-form--compact {
+  margin-bottom: 12px;
+}
+
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
+  max-width: 100%;
+}
+
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-buttons {
+  width: auto;
+}
+
+.query-action-buttons :deep(.el-button) {
+  min-width: 88px;
+}
+
+.handler-query-actions {
+  width: auto;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .detail-wrapper {
@@ -1191,5 +1266,49 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+@media (max-width: 991px) {
+  .query-form {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar,
+  .section-toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input {
+    width: 100%;
+  }
+
+  .query-form-actions {
+    margin-left: 0;
+  }
+
+  .query-action-buttons :deep(.el-space__item) {
+    width: calc(50% - 4px);
+  }
+
+  .query-action-buttons :deep(.el-button) {
+    width: 100%;
+  }
 }
 </style>
