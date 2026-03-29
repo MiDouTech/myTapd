@@ -410,6 +410,7 @@ onMounted(async () => {
             <span class="sync-tip">{{ formatDateTime(latestSyncStatus?.endTime) }}</span>
             <span v-if="syncStatusLoading" class="sync-tip">加载中...</span>
           </el-space>
+          </el-space>
         </div>
       </template>
 
