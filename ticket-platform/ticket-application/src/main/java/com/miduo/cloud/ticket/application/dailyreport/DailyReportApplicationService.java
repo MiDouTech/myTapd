@@ -70,7 +70,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount());
         Long newIssueCountToday = safeLong(dailyReportMapper.selectCreatedCountByDateRange(startOfDay, endOfDay));
 
-        List<DailyReportTicketRow> investigatingTickets = dailyReportMapper.selectTicketsByStatus("investigating");
+        List<DailyReportTicketRow> testingReproduceTickets = dailyReportMapper.selectTicketsByStatus("testing");
         List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets();
         List<DailyReportTicketRow> pendingVerifyTickets = dailyReportMapper.selectPendingVerifyTickets();
         List<DailyReportTicketRow> tempResolvedTickets = dailyReportMapper.selectTempResolvedTickets();
@@ -100,7 +100,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         summary.setSuspendedCount(suspendedTickets.size());
         output.setSummary(summary);
 
-        output.setPendingSection(buildPendingSection(investigatingTickets, processingTickets, pendingVerifyTickets));
+        output.setPendingSection(buildPendingSection(testingReproduceTickets, processingTickets, pendingVerifyTickets));
         output.setTempResolvedSection(buildTempResolvedSection(tempResolvedTickets));
         output.setResolvedSection(buildResolvedSection(closedByDefectType, includeDefectDetail));
 
@@ -263,21 +263,21 @@ public class DailyReportApplicationService extends BaseApplicationService {
         return unique.isEmpty() ? Collections.singletonList("0 0 18 * * ?") : new ArrayList<>(unique);
     }
 
-    private DailyReportSection buildPendingSection(List<DailyReportTicketRow> investigating,
+    private DailyReportSection buildPendingSection(List<DailyReportTicketRow> testingReproduce,
                                                     List<DailyReportTicketRow> processing,
                                                     List<DailyReportTicketRow> pendingVerify) {
         DailyReportSection section = new DailyReportSection();
         section.setTitle("待解决");
-        long total = investigating.size() + processing.size() + pendingVerify.size();
+        long total = testingReproduce.size() + processing.size() + pendingVerify.size();
         section.setCount(total);
 
         List<DailyReportSubSection> subs = new ArrayList<>();
 
-        DailyReportSubSection investigatingSub = new DailyReportSubSection();
-        investigatingSub.setTitle("排查中");
-        investigatingSub.setCount(investigating.size());
-        investigatingSub.setTickets(toTicketItems(investigating));
-        subs.add(investigatingSub);
+        DailyReportSubSection testingSub = new DailyReportSubSection();
+        testingSub.setTitle("测试复现中");
+        testingSub.setCount(testingReproduce.size());
+        testingSub.setTickets(toTicketItems(testingReproduce));
+        subs.add(testingSub);
 
         DailyReportSubSection processingSub = new DailyReportSubSection();
         processingSub.setTitle("处理中");

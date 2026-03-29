@@ -23,11 +23,14 @@ public enum TicketStatus {
 
     // ---- 缺陷工单专属状态 ----
     PENDING_TEST_ACCEPT("pending_test_accept", "待测试受理"),
-    TESTING("testing", "测试中"),
+    /** 缺陷流程中展示为「测试复现中」，状态码保持 testing 以兼容历史数据 */
+    TESTING("testing", "测试复现中"),
+    /** 已并入 testing（测试复现中），仅兼容历史库中残留状态 */
     INVESTIGATING("investigating", "排查中"),
     PENDING_DEV_ACCEPT("pending_dev_accept", "待开发受理"),
-    DEVELOPING("developing", "开发中"),
+    DEVELOPING("developing", "开发解决中"),
     TEMP_RESOLVED("temp_resolved", "临时解决"),
+    /** 已废弃节点，仅兼容历史数据；新流程验收后直达已完成 */
     PENDING_CS_CONFIRM("pending_cs_confirm", "待客服确认"),
 
     // ---- 审批工单专属状态 ----

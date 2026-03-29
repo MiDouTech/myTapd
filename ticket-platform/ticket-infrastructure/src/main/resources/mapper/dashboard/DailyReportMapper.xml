@@ -86,7 +86,7 @@
         LEFT JOIN ticket_category c ON t.category_id = c.id AND c.deleted = 0
         LEFT JOIN ticket_bug_test_info bti ON bti.ticket_id = t.id AND bti.deleted = 0
         WHERE t.deleted = 0
-          AND LOWER(t.status) IN ('processing', 'developing', 'testing', 'investigating')
+          AND LOWER(t.status) IN ('processing', 'developing')
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
@@ -102,7 +102,7 @@
         LEFT JOIN ticket_category c ON t.category_id = c.id AND c.deleted = 0
         LEFT JOIN ticket_bug_test_info bti ON bti.ticket_id = t.id AND bti.deleted = 0
         WHERE t.deleted = 0
-          AND LOWER(t.status) IN ('pending_verify', 'pending_cs_confirm')
+          AND LOWER(t.status) = 'pending_verify'
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 

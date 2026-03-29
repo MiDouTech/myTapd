@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.application.workflow;
 
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
+import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -72,6 +73,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final SlaTimerService slaTimerService;
     private final ApplicationEventPublisher eventPublisher;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
+    private final TicketBugApplicationService ticketBugApplicationService;
+
+    /** 内置缺陷工单工作流 ID（与 Flyway 初始化一致） */
+    private static final long DEFECT_WORKFLOW_ID = 3L;
 
     public TicketWorkflowAppService(TicketMapper ticketMapper,
                                      TicketLogMapper ticketLogMapper,
@@ -82,7 +87,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      TicketTimeTrackApplicationService ticketTimeTrackService,
                                      SlaTimerService slaTimerService,
                                      ApplicationEventPublisher eventPublisher,
-                                     TicketAssigneeSyncService ticketAssigneeSyncService) {
+                                     TicketAssigneeSyncService ticketAssigneeSyncService,
+                                     TicketBugApplicationService ticketBugApplicationService) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.flowRecordMapper = flowRecordMapper;
@@ -93,6 +99,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         this.slaTimerService = slaTimerService;
         this.eventPublisher = eventPublisher;
         this.ticketAssigneeSyncService = ticketAssigneeSyncService;
+        this.ticketBugApplicationService = ticketBugApplicationService;
     }
 
     /**
@@ -185,6 +192,20 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                 && !StringUtils.hasText(input.getRemark())) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR,
                     "操作[" + matchedTransition.getName() + "]必须填写备注");
+        }
+
+        if (workflow.getId() != null && workflow.getId().longValue() == DEFECT_WORKFLOW_ID) {
+            if (TicketStatus.TESTING.getCode().equalsIgnoreCase(oldStatus)
+                    && TicketStatus.PENDING_DEV_ACCEPT.getCode().equalsIgnoreCase(targetStatus)) {
+                ticketBugApplicationService.requireReproduceEnvBeforeDevTransfer(
+                        ticketId, input.getReproduceEnv());
+            }
+            if (TicketStatus.TEMP_RESOLVED.getCode().equalsIgnoreCase(targetStatus)
+                    && matchedTransition.getName() != null
+                    && matchedTransition.getName().contains("临时解决")) {
+                ticketBugApplicationService.requireAndPersistPlannedFullResolveForTempResolved(
+                        ticketId, input.getPlannedFullResolveAt());
+            }
         }
 
         // 更新工单状态
