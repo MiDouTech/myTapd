@@ -107,7 +107,7 @@ onMounted(async () => {
           <el-select
             v-model="query.parseType"
             clearable
-            placeholder="全部"
+            placeholder="请选择内容"
             style="width: 140px"
           >
             <el-option

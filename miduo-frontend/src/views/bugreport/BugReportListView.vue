@@ -145,27 +145,28 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="16">
-    <el-card shadow="never">
+  <div class="bug-report-list-page">
+    <el-card shadow="never" class="list-card">
       <div class="toolbar">
         <div class="title">Bug简报列表</div>
-        <el-space class="toolbar-actions">
+        <el-space class="toolbar-actions" wrap>
           <el-button @click="router.push('/bug-report/statistics')">查看统计</el-button>
           <el-button type="primary" @click="router.push('/bug-report/edit')">新建简报</el-button>
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="84px" class="query-form">
-        <el-form-item label="简报编号">
+      <el-form :inline="true" label-width="72px" class="query-form">
+        <el-form-item label="简报编号" class="query-form-item">
           <el-input
             v-model="query.reportNo"
+            class="query-input"
             placeholder="请输入简报编号"
             clearable
             @keyup.enter="handleSearch"
           />
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="query.status" class="query-select" placeholder="请选择内容" clearable>
+        <el-form-item label="状态" class="query-form-item">
+          <el-select v-model="query.status" class="query-input" placeholder="请选择内容" clearable>
             <el-option
               v-for="option in BUG_REPORT_STATUS_OPTIONS"
               :key="option.value"
@@ -174,10 +175,10 @@ onMounted(async () => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="缺陷分类">
+        <el-form-item label="缺陷分类" class="query-form-item">
           <el-select
             v-model="query.defectCategory"
-            class="query-select"
+            class="query-input"
             placeholder="请选择内容"
             clearable
             filterable
@@ -190,10 +191,10 @@ onMounted(async () => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="审核人">
+        <el-form-item label="审核人" class="query-form-item">
           <el-select
             v-model="query.reviewerId"
-            class="query-select"
+            class="query-input"
             placeholder="请选择内容"
             clearable
             filterable
@@ -206,10 +207,10 @@ onMounted(async () => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="责任人">
+        <el-form-item label="责任人" class="query-form-item">
           <el-select
             v-model="query.responsibleUserId"
-            class="query-select"
+            class="query-input"
             placeholder="请选择内容"
             clearable
             filterable
@@ -222,29 +223,26 @@ onMounted(async () => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="创建时间">
+        <el-form-item label="创建时间" class="query-form-item">
           <el-date-picker
             v-model="timeRange"
+            class="query-input"
             type="daterange"
             value-format="YYYY-MM-DD HH:mm:ss"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
           />
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space class="query-action-buttons">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>
       </el-form>
-      <div class="action-bar">
-        <el-button @click="router.push('/bug-report/statistics')">查看统计</el-button>
-        <el-button type="primary" @click="router.push('/bug-report/edit')">新建简报</el-button>
-      </div>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="list-card">
       <EmptyState v-if="!loading && tableData.length === 0" description="暂无Bug简报数据" />
       <template v-else>
         <BaseTable :data="tableData" :loading="loading" @sort-change="handleSortChange">
@@ -300,16 +298,28 @@ onMounted(async () => {
         />
       </template>
     </el-card>
-  </el-space>
+  </div>
 </template>
 
 <style scoped lang="scss">
+.bug-report-list-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.list-card {
+  width: 100%;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .title {
@@ -327,22 +337,37 @@ onMounted(async () => {
 }
 
 .query-form {
+  width: 100%;
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
 }
 
-.query-select {
-  width: 220px;
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
   max-width: 100%;
 }
 
-.action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-buttons {
+  width: auto;
+}
+
+.query-action-buttons :deep(.el-button) {
+  min-width: 88px;
 }
 
 .cell-link {
@@ -358,10 +383,38 @@ onMounted(async () => {
   .query-form {
     padding: 10px 12px;
   }
+}
 
-  .action-bar {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input {
+    width: 100%;
+  }
+
+  .query-action-buttons :deep(.el-space__item) {
+    width: calc(50% - 4px);
+  }
+
+  .query-action-buttons :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

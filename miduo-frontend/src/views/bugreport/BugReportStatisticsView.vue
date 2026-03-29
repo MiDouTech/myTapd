@@ -126,28 +126,29 @@ onMounted(() => {
 
 <template>
   <div class="statistics-page" v-loading="loading">
-    <el-card shadow="never">
+    <el-card shadow="never" class="filter-card">
       <div class="toolbar">
         <div class="title">Bug简报统计看板</div>
-        <el-space class="toolbar-actions">
+        <el-space class="toolbar-actions" wrap>
           <el-button @click="router.push('/bug-report')">返回列表</el-button>
           <el-button @click="loadStatistics">刷新</el-button>
           <el-button type="primary" @click="handleExport">导出CSV</el-button>
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="84px" class="query-form">
-        <el-form-item label="统计周期">
+      <el-form :inline="true" label-width="72px" class="query-form">
+        <el-form-item label="统计周期" class="query-form-item">
           <el-date-picker
             v-model="timeRange"
+            class="query-input query-input--wide"
             type="daterange"
             value-format="YYYY-MM-DD HH:mm:ss"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
           />
         </el-form-item>
-        <el-form-item>
-          <el-space>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space wrap class="query-action-row">
             <el-button @click="applyQuickRange(7)">近7天</el-button>
             <el-button @click="applyQuickRange(30)">近30天</el-button>
             <el-button @click="applyQuickRange(90)">近90天</el-button>
@@ -156,11 +157,6 @@ onMounted(() => {
           </el-space>
         </el-form-item>
       </el-form>
-      <div class="action-bar">
-        <el-button @click="router.push('/bug-report')">返回列表</el-button>
-        <el-button @click="loadStatistics">刷新</el-button>
-        <el-button type="primary" @click="handleExport">导出CSV</el-button>
-      </div>
     </el-card>
 
     <el-card shadow="never" class="metrics-card">
@@ -261,12 +257,17 @@ onMounted(() => {
   min-height: calc(100vh - 180px);
 }
 
+.filter-card {
+  width: 100%;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .title {
@@ -284,17 +285,37 @@ onMounted(() => {
 }
 
 .query-form {
+  width: 100%;
   padding: 14px 16px;
   background: var(--md-bg-panel, #f9fafb);
   border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
 }
 
-.action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
+  max-width: 100%;
+}
+
+.query-input--wide {
+  width: 280px;
+}
+
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-row {
+  width: auto;
 }
 
 .metrics-card {
@@ -357,9 +378,8 @@ onMounted(() => {
 }
 
 @media (max-width: 991px) {
-  .action-bar {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .query-form {
+    padding: 10px 12px;
   }
 
   .metric-wrapper {
@@ -369,6 +389,41 @@ onMounted(() => {
   .board-grid {
     grid-template-columns: 1fr;
     grid-auto-rows: minmax(280px, auto);
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input,
+  .query-input--wide {
+    width: 100%;
+  }
+
+  .query-form-actions {
+    margin-left: 0;
+  }
+
+  .query-action-row {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 </style>

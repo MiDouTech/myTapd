@@ -2,7 +2,7 @@
   <div class="bug-change-history-filter">
     <div class="filter-item">
       <span class="filter-label">变更内容：</span>
-      <el-select v-model="localFieldName" placeholder="全部" clearable size="small" @change="emitChange" style="width: 130px">
+      <el-select v-model="localFieldName" placeholder="请选择内容" clearable size="small" @change="emitChange" style="width: 130px">
         <el-option label="全部" value="" />
         <el-option label="状态" value="status" />
         <el-option label="处理人" value="assignee" />
@@ -17,7 +17,7 @@
     </div>
     <div class="filter-item">
       <span class="filter-label">变更方式：</span>
-      <el-select v-model="localChangeType" placeholder="全部" clearable size="small" @change="emitChange" style="width: 120px">
+      <el-select v-model="localChangeType" placeholder="请选择内容" clearable size="small" @change="emitChange" style="width: 120px">
         <el-option label="全部" value="" />
         <el-option label="创建缺陷" value="CREATE" />
         <el-option label="手动变更" value="MANUAL_CHANGE" />

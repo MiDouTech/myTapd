@@ -396,68 +396,60 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-space direction="vertical" fill :size="12">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <el-space>
-          <div class="title">组织账号管理</div>
-          <el-space class="card-header-right">
-            <span class="sync-tip">最近同步状态：</span>
-            <el-tag :type="getSyncStatusType(latestSyncStatus?.syncStatus)">
-              {{ getSyncStatusLabel(latestSyncStatus?.syncStatus) }}
-            </el-tag>
-            <span class="sync-tip">{{ formatDateTime(latestSyncStatus?.endTime) }}</span>
-            <span v-if="syncStatusLoading" class="sync-tip">加载中...</span>
-          </el-space>
-          </el-space>
-        </div>
-      </template>
-
-      <div class="toolbar-row">
-        <el-form :inline="true">
-          <el-form-item label="关键字">
-            <el-input
-              v-model="query.keyword"
-              clearable
-              placeholder="姓名/工号"
-              @keyup.enter="handleSearch"
-            />
-          </el-form-item>
-          <el-form-item label="账号状态">
-            <el-select v-model="query.accountStatus" clearable placeholder="请选择">
-              <el-option label="在职" :value="1" />
-              <el-option label="停用" :value="2" />
-              <el-option label="离职" :value="4" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="性别">
-            <el-select v-model="query.gender" clearable placeholder="请选择">
-              <el-option label="男" :value="1" />
-              <el-option label="女" :value="2" />
-              <el-option label="未知" :value="0" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="同步状态">
-            <el-select v-model="query.syncStatus" clearable placeholder="请选择">
-              <el-option label="未同步" :value="0" />
-              <el-option label="成功" :value="1" />
-              <el-option label="失败/失效" :value="2" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-space>
-              <el-button type="primary" @click="handleSearch">查询</el-button>
-              <el-button @click="handleReset">重置</el-button>
-            </el-space>
-          </el-form-item>
-        </el-form>
-
-        <el-space>
-          <el-button type="primary" :loading="syncLoading" @click="handleManualSync">同步企业微信</el-button>
-          <el-button type="warning" plain @click="openSyncLogDialog">查看同步日志</el-button>
+  <div class="user-manage-page">
+    <el-card shadow="never" class="page-card filter-card">
+      <div class="toolbar">
+        <div class="title">组织账号管理</div>
+        <el-space class="toolbar-meta" wrap>
+          <span class="sync-tip">最近同步状态：</span>
+          <el-tag :type="getSyncStatusType(latestSyncStatus?.syncStatus)">
+            {{ getSyncStatusLabel(latestSyncStatus?.syncStatus) }}
+          </el-tag>
+          <span class="sync-tip">{{ formatDateTime(latestSyncStatus?.endTime) }}</span>
+          <span v-if="syncStatusLoading" class="sync-tip">加载中...</span>
         </el-space>
       </div>
+
+      <el-form :inline="true" label-width="72px" class="query-form">
+        <el-form-item label="关键字" class="query-form-item">
+          <el-input
+            v-model="query.keyword"
+            class="query-input"
+            clearable
+            placeholder="姓名/工号"
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item label="账号状态" class="query-form-item">
+          <el-select v-model="query.accountStatus" class="query-input" clearable placeholder="请选择内容">
+            <el-option label="在职" :value="1" />
+            <el-option label="停用" :value="2" />
+            <el-option label="离职" :value="4" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="性别" class="query-form-item">
+          <el-select v-model="query.gender" class="query-input" clearable placeholder="请选择内容">
+            <el-option label="男" :value="1" />
+            <el-option label="女" :value="2" />
+            <el-option label="未知" :value="0" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="同步状态" class="query-form-item">
+          <el-select v-model="query.syncStatus" class="query-input" clearable placeholder="请选择内容">
+            <el-option label="未同步" :value="0" />
+            <el-option label="成功" :value="1" />
+            <el-option label="失败/失效" :value="2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item class="query-form-item query-form-actions">
+          <el-space wrap class="query-action-row">
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :loading="syncLoading" @click="handleManualSync">同步企业微信</el-button>
+            <el-button type="warning" plain @click="openSyncLogDialog">查看同步日志</el-button>
+          </el-space>
+        </el-form-item>
+      </el-form>
     </el-card>
 
     <el-row :gutter="16">
@@ -590,7 +582,7 @@ onMounted(async () => {
         </el-card>
       </el-col>
     </el-row>
-  </el-space>
+  </div>
 
   <el-drawer v-model="detailVisible" title="员工详情" size="520px">
     <div v-loading="detailLoading">
@@ -634,13 +626,13 @@ onMounted(async () => {
   <el-dialog v-model="syncLogDialogVisible" title="同步日志" width="980px">
     <el-form :inline="true" class="sync-log-filter">
       <el-form-item label="触发方式">
-        <el-select v-model="syncLogQuery.syncMode" clearable placeholder="请选择">
+        <el-select v-model="syncLogQuery.syncMode" clearable placeholder="请选择内容">
           <el-option label="手动" value="MANUAL" />
           <el-option label="定时" value="SCHEDULE" />
         </el-select>
       </el-form-item>
       <el-form-item label="同步状态">
-        <el-select v-model="syncLogQuery.syncStatus" clearable placeholder="请选择">
+        <el-select v-model="syncLogQuery.syncStatus" clearable placeholder="请选择内容">
           <el-option label="成功" value="SUCCESS" />
           <el-option label="部分成功" value="PARTIAL" />
           <el-option label="失败" value="FAILED" />
@@ -705,6 +697,36 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
+.user-manage-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-card {
+  width: 100%;
+}
+
+.filter-card {
+  width: 100%;
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.toolbar-meta {
+  width: auto;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
 .title {
   font-size: 17px;
   font-weight: 600;
@@ -727,17 +749,34 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.card-header-right {
-  width: auto;
-  flex: 0 0 auto;
+.query-form {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--md-bg-panel, #f9fafb);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
 }
 
-.toolbar-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+.query-form-item {
+  margin-bottom: 0;
+  margin-right: 0;
+}
+
+.query-input {
+  width: 210px;
+  max-width: 100%;
+}
+
+.query-form-actions {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.query-action-row {
+  width: auto;
 }
 
 .tree-card {
@@ -787,5 +826,40 @@ onMounted(async () => {
 
 .sync-log-filter {
   margin-bottom: 8px;
+}
+
+@media (max-width: 991px) {
+  .query-form {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .query-form {
+    gap: 0;
+  }
+
+  .query-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+    margin-right: 0;
+  }
+
+  .query-form-item :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .query-input {
+    width: 100%;
+  }
+
+  .query-form-actions {
+    margin-left: 0;
+  }
 }
 </style>
