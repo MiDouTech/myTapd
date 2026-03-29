@@ -24,7 +24,7 @@ const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom', 'nlpKeyw
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
 
-const activeTab = ref<SettingsTab>('notification')
+const activeTab = ref<SettingsTab>('integration')
 const activeSection = ref<IntegrationSection>('wecomConfig')
 
 const preferenceLoading = ref(false)
@@ -47,7 +47,7 @@ function normalizeTab(tab: unknown): SettingsTab {
   if (typeof tab === 'string' && tab !== 'basic' && (tabValues as readonly string[]).includes(tab)) {
     return tab as SettingsTab
   }
-  return 'notification'
+  return 'integration'
 }
 
 function normalizeSection(section: unknown): IntegrationSection {
@@ -162,6 +162,37 @@ onMounted(async () => {
     <el-tabs v-model="activeTab" class="settings-tabs">
       <!-- 基础参数模块暂未启用，隐藏待后续开放 -->
 
+      <el-tab-pane label="集成设置" name="integration">
+        <el-tabs v-model="activeSection" class="integration-tabs">
+          <el-tab-pane label="企微连接配置" name="wecomConfig">
+            <WecomConfigPanel
+              @open-nlp-keyword="activeSection = 'nlpKeyword'"
+              @open-nlp-log="activeSection = 'nlpLog'"
+            />
+          </el-tab-pane>
+
+          <el-tab-pane label="Webhook配置" name="webhook">
+            <WebhookConfigPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="Webhook推送日志" name="webhookLog">
+            <WebhookDispatchLogPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="企微群绑定" name="wecom">
+            <WecomGroupBindingPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="NLP关键词配置" name="nlpKeyword">
+            <WecomNlpKeywordPanel />
+          </el-tab-pane>
+
+          <el-tab-pane label="NLP解析日志" name="nlpLog">
+            <WecomNlpLogPanel />
+          </el-tab-pane>
+        </el-tabs>
+      </el-tab-pane>
+
       <el-tab-pane label="通知偏好" name="notification">
         <div class="action-row">
           <el-space>
@@ -203,37 +234,6 @@ onMounted(async () => {
             @update="handlePreferencePaginationChange"
           />
         </template>
-      </el-tab-pane>
-
-      <el-tab-pane label="集成设置" name="integration">
-        <el-tabs v-model="activeSection" class="integration-tabs">
-          <el-tab-pane label="企微连接配置" name="wecomConfig">
-            <WecomConfigPanel
-              @open-nlp-keyword="activeSection = 'nlpKeyword'"
-              @open-nlp-log="activeSection = 'nlpLog'"
-            />
-          </el-tab-pane>
-
-          <el-tab-pane label="Webhook配置" name="webhook">
-            <WebhookConfigPanel />
-          </el-tab-pane>
-
-          <el-tab-pane label="Webhook推送日志" name="webhookLog">
-            <WebhookDispatchLogPanel />
-          </el-tab-pane>
-
-          <el-tab-pane label="企微群绑定" name="wecom">
-            <WecomGroupBindingPanel />
-          </el-tab-pane>
-
-          <el-tab-pane label="NLP关键词配置" name="nlpKeyword">
-            <WecomNlpKeywordPanel />
-          </el-tab-pane>
-
-          <el-tab-pane label="NLP解析日志" name="nlpLog">
-            <WecomNlpLogPanel />
-          </el-tab-pane>
-        </el-tabs>
       </el-tab-pane>
     </el-tabs>
   </el-card>

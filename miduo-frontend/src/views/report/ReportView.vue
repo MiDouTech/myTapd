@@ -166,6 +166,7 @@ onMounted(() => {
   <div class="report-center" v-loading="loading">
     <div class="page-actions">
       <el-radio-group v-model="rangeDays" @change="loadReports" class="range-group">
+        <el-radio-button :value="1">今天</el-radio-button>
         <el-radio-button :value="7">近7天</el-radio-button>
         <el-radio-button :value="14">近14天</el-radio-button>
         <el-radio-button :value="30">近30天</el-radio-button>
