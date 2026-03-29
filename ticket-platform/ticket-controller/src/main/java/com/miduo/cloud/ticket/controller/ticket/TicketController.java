@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.application.wecom.WecomMessageFieldParser;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketView;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.controller.annotation.OperationLog;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/ticket")
@@ -60,6 +63,9 @@ public class TicketController {
     @Operation(summary = "分页查询工单列表", description = "接口编号：API000007")
     public ApiResult<PageOutput<TicketListOutput>> getTicketPage(@Valid TicketPageInput input) {
         Long currentUserId = getCurrentUserId();
+        if (!StringUtils.hasText(input.getView())) {
+            input.setView(TicketView.MY_CREATED.getCode());
+        }
         PageOutput<TicketListOutput> page = ticketService.getTicketPage(input, currentUserId);
         return ApiResult.success(page);
     }

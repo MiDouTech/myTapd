@@ -189,9 +189,11 @@ public class TicketApplicationService {
     public PageOutput<TicketListOutput> getTicketPage(TicketPageInput input, Long currentUserId) {
         Page<TicketPO> page = new Page<>(input.getPageNum(), input.getPageSize());
 
+        String viewCode = TicketView.fromCode(input.getView()).getCode();
+
         IPage<TicketPO> result = ticketMapper.selectTicketPage(
                 page,
-                input.getView(),
+                viewCode,
                 currentUserId,
                 input.getTicketNo(),
                 input.getTitle(),
