@@ -43,8 +43,6 @@ wecom:
   callback-token: ${WECOM_CALLBACK_TOKEN:}
   callback-aes-key: ${WECOM_CALLBACK_AES_KEY:}
   trusted-domain: ${WECOM_TRUSTED_DOMAIN:ticket.company.com}
-  mq:
-    enabled: false
   image:
     enabled: true
     association-window-minutes: 5
