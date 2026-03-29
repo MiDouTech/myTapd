@@ -421,21 +421,21 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item label="账号状态" class="query-form-item">
-          <el-select v-model="query.accountStatus" class="query-input" clearable placeholder="请选择">
+          <el-select v-model="query.accountStatus" class="query-input" clearable placeholder="请选择内容">
             <el-option label="在职" :value="1" />
             <el-option label="停用" :value="2" />
             <el-option label="离职" :value="4" />
           </el-select>
         </el-form-item>
         <el-form-item label="性别" class="query-form-item">
-          <el-select v-model="query.gender" class="query-input" clearable placeholder="请选择">
+          <el-select v-model="query.gender" class="query-input" clearable placeholder="请选择内容">
             <el-option label="男" :value="1" />
             <el-option label="女" :value="2" />
             <el-option label="未知" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item label="同步状态" class="query-form-item">
-          <el-select v-model="query.syncStatus" class="query-input" clearable placeholder="请选择">
+          <el-select v-model="query.syncStatus" class="query-input" clearable placeholder="请选择内容">
             <el-option label="未同步" :value="0" />
             <el-option label="成功" :value="1" />
             <el-option label="失败/失效" :value="2" />
@@ -626,13 +626,13 @@ onMounted(async () => {
   <el-dialog v-model="syncLogDialogVisible" title="同步日志" width="980px">
     <el-form :inline="true" class="sync-log-filter">
       <el-form-item label="触发方式">
-        <el-select v-model="syncLogQuery.syncMode" clearable placeholder="请选择">
+        <el-select v-model="syncLogQuery.syncMode" clearable placeholder="请选择内容">
           <el-option label="手动" value="MANUAL" />
           <el-option label="定时" value="SCHEDULE" />
         </el-select>
       </el-form-item>
       <el-form-item label="同步状态">
-        <el-select v-model="syncLogQuery.syncStatus" clearable placeholder="请选择">
+        <el-select v-model="syncLogQuery.syncStatus" clearable placeholder="请选择内容">
           <el-option label="成功" value="SUCCESS" />
           <el-option label="部分成功" value="PARTIAL" />
           <el-option label="失败" value="FAILED" />

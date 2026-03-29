@@ -455,7 +455,7 @@ onUnmounted(() => {
       <div v-if="isMobile" class="mobile-view-switch">
         <el-select
           :model-value="query.view"
-          placeholder="请选择视图"
+          placeholder="请选择内容"
           class="mobile-view-select"
           @change="handleTabChange"
         >

@@ -443,7 +443,7 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="query.categoryId" clearable filterable placeholder="全部分类">
+          <el-select v-model="query.categoryId" clearable filterable placeholder="请选择内容">
             <el-option
               v-for="option in categoryOptions"
               :key="option.value"
@@ -453,7 +453,7 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.isActive" clearable placeholder="全部状态">
+          <el-select v-model="query.isActive" clearable placeholder="请选择内容">
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>

@@ -277,7 +277,7 @@ onMounted(() => {
         <el-form-item label="日志级别">
           <el-select
             v-model="searchForm.logLevel"
-            placeholder="全部"
+            placeholder="请选择内容"
             clearable
             style="width: 120px"
           >
@@ -318,7 +318,7 @@ onMounted(() => {
         <el-form-item label="执行结果">
           <el-select
             v-model="searchForm.executeResult"
-            placeholder="全部"
+            placeholder="请选择内容"
             clearable
             style="width: 110px"
           >

@@ -264,7 +264,7 @@ onMounted(async () => {
 
       <el-form :inline="true" label-width="72px" class="query-form">
         <el-form-item label="通知类型" class="query-form-item">
-          <el-select v-model="query.type" class="query-input" placeholder="全部类型" clearable filterable>
+          <el-select v-model="query.type" class="query-input" placeholder="请选择内容" clearable filterable>
             <el-option
               v-for="option in typeOptions"
               :key="option.value"
@@ -274,7 +274,7 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="已读状态" class="query-form-item">
-          <el-select v-model="query.isRead" class="query-input" placeholder="全部状态" clearable>
+          <el-select v-model="query.isRead" class="query-input" placeholder="请选择内容" clearable>
             <el-option label="未读" :value="0" />
             <el-option label="已读" :value="1" />
           </el-select>

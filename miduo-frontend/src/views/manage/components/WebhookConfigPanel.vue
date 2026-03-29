@@ -352,7 +352,7 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item label="事件类型">
-          <el-select v-model="query.eventType" clearable placeholder="全部事件">
+          <el-select v-model="query.eventType" clearable placeholder="请选择内容">
             <el-option
               v-for="option in WEBHOOK_EVENT_OPTIONS"
               :key="option.value"
@@ -362,7 +362,7 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.isActive" clearable placeholder="全部状态">
+          <el-select v-model="query.isActive" clearable placeholder="请选择内容">
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>

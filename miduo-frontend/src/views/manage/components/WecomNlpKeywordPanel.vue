@@ -150,7 +150,7 @@ onMounted(async () => {
             <el-select
               v-model="filterMatchType"
               clearable
-              placeholder="全部类型"
+              placeholder="请选择内容"
               style="width: 120px"
               @change="loadList"
             >
