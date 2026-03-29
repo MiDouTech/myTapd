@@ -52,6 +52,8 @@ public class DailyReportOutput implements Serializable {
     @Data
     public static class DailyReportSummary implements Serializable {
         private long totalFeedbackCount;
+        /** 统计日当天 00:00 至次日 00:00 新建的工单数 */
+        private long newIssueCountToday;
         private long pendingResolveCount;
         private long tempResolvedCount;
         private long resolvedCount;

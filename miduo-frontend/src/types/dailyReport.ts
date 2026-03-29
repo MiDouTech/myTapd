@@ -24,6 +24,8 @@ export interface DailyReportSection {
 
 export interface DailyReportSummary {
   totalFeedbackCount: number
+  /** 日报日当天新建的工单数 */
+  newIssueCountToday: number
   pendingResolveCount: number
   tempResolvedCount: number
   resolvedCount: number
