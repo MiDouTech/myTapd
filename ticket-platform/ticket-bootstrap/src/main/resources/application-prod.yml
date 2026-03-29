@@ -56,8 +56,6 @@ wecom:
   callback-token: nBd196BNex8UmAlB42iqVf
   callback-aes-key: pTKsrXjxTasLv2TeGpRpkVTQlK1grMiVPmREhBb5WEO
   trusted-domain: http://ticket.ebcone.cn
-  mq:
-    enabled: false
 
 jwt:
   secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
