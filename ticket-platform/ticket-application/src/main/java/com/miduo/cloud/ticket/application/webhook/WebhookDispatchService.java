@@ -50,7 +50,7 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
 
-    @Value("${ticket.detail-url:http://ticket.t.miduonet.com/open/ticket}")
+    @Value("${ticket.detail-url:}")
     private String ticketDetailUrl;
 
     private final WebhookConfigMapper webhookConfigMapper;

@@ -1,9 +1,12 @@
+# ============================================================
+# DEV 环境配置
+# 敏感配置（数据库/Redis/JWT/七牛/企微/SSO）全部由 Nacos 注入
+# Nacos Data ID: ticket-platform-secrets.yml
+# ============================================================
+
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${DATASOURCE_URL:jdbc:mysql://localhost:3306/ticket_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${DATASOURCE_USERNAME:root}
-    password: ${DATASOURCE_PASSWORD:}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
@@ -24,9 +27,6 @@ spring:
     clean-disabled: true
 
   redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
     database: 0
     timeout: 10000
     lettuce:
@@ -37,13 +37,6 @@ spring:
         min-idle: 0
 
 wecom:
-  corp-id: ${WECOM_CORP_ID:}
-  agent-id: ${WECOM_AGENT_ID:}
-  secret: ${WECOM_SECRET:}
-  contact-secret: ${WECOM_CONTACT_SECRET:}
-  callback-token: ${WECOM_CALLBACK_TOKEN:}
-  callback-aes-key: ${WECOM_CALLBACK_AES_KEY:}
-  trusted-domain: ${WECOM_TRUSTED_DOMAIN:}
   image:
     enabled: true
     association-window-minutes: 5
@@ -51,38 +44,15 @@ wecom:
     notify-on-pending: false
     max-images-per-ticket: 10
 
-ticket:
-  detail-url: ${TICKET_DETAIL_URL:http://localhost:5173/open/ticket}
-
 qiniu:
-  access-key: ${QINIU_ACCESS_KEY:}
-  secret-key: ${QINIU_SECRET_KEY:}
-  bucket: ${QINIU_BUCKET:}
-  domain: ${QINIU_DOMAIN:}
-  zone: ${QINIU_ZONE:z2}
+  zone: z2
   token-expire-seconds: 3600
   image-path-prefix: ticket/images/
   max-file-size-mb: 10
 
-jwt:
-  secret: ${JWT_SECRET:please-configure-in-nacos}
-  access-token-expire: 7200
-  refresh-token-expire: 604800
-  token-prefix: "Bearer "
-  header-name: Authorization
+dev-login:
+  enabled: true
 
 logging:
   level:
     com.miduo.cloud.ticket: debug
-
-miduo:
-  sso:
-    enabled: ${MIDUO_SSO_ENABLED:true}
-    base-url: ${MIDUO_SSO_BASE_URL:}
-    app-code: ${MIDUO_SSO_APP_CODE:}
-    app-secret: ${MIDUO_SSO_APP_SECRET:}
-    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:}
-    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:}
-
-dev-login:
-  enabled: true
