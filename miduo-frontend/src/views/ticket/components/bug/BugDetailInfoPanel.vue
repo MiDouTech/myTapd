@@ -21,6 +21,12 @@
           <span class="info-value">{{ detail.assigneeName || '-' }}</span>
         </div>
 
+        <!-- 催办次数 -->
+        <div class="info-row">
+          <span class="info-label"><el-icon><Bell /></el-icon> 催办次数</span>
+          <span class="info-value">{{ detail.urgeCount ?? 0 }}</span>
+        </div>
+
         <!-- 创建人 -->
         <div class="info-row">
           <span class="info-label"><el-icon><User /></el-icon> 创建人</span>
@@ -190,6 +196,7 @@
 import {
   AlarmClock,
   Avatar,
+  Bell,
   Calendar,
   Check,
   CircleCheck,

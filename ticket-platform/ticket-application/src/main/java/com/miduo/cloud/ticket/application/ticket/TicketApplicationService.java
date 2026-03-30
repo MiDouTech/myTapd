@@ -582,6 +582,7 @@ public class TicketApplicationService {
         output.setExpectedTime(ticket.getExpectedTime());
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());
+        output.setUrgeCount(ticket.getUrgeCount() != null ? ticket.getUrgeCount() : 0);
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());
 

@@ -62,6 +62,12 @@ public class TicketPO extends BaseEntity {
     @TableField("closed_at")
     private Date closedAt;
 
+    /**
+     * 人工催办累计次数（Web/接口每次成功催办 +1）
+     */
+    @TableField("urge_count")
+    private Integer urgeCount;
+
     @Version
     @TableField("version")
     private Integer version;

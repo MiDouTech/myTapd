@@ -27,7 +27,8 @@ public enum TicketAction {
     FOLLOW("FOLLOW", "关注工单"),
     UNFOLLOW("UNFOLLOW", "取消关注"),
     COMMENT("COMMENT", "添加评论"),
-    STATUS_CHANGE("STATUS_CHANGE", "状态变更");
+    STATUS_CHANGE("STATUS_CHANGE", "状态变更"),
+    URGE("URGE", "催办工单");
 
     private final String code;
     private final String label;

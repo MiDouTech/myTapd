@@ -237,6 +237,8 @@ export interface TicketDetailOutput {
   assigneeIds?: number[]
   /** 催办时默认通知的关联处理人（与 assigneeIds 一致） */
   urgeDefaultNotifyUserIds?: number[]
+  /** 人工催办累计次数 */
+  urgeCount?: number
   source?: string
   sourceLabel?: string
   expectedTime?: string

@@ -66,6 +66,11 @@ public class TicketDetailOutput implements Serializable {
 
     private Date closedAt;
 
+    /**
+     * 人工催办累计次数
+     */
+    private Integer urgeCount;
+
     private Date createTime;
 
     private Date updateTime;

@@ -3,16 +3,20 @@ package com.miduo.cloud.ticket.application.ticket;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketAction;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketUrgedEvent;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketUrgeInput;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,21 +33,25 @@ public class TicketUrgeApplicationService extends BaseApplicationService {
     private final TicketMapper ticketMapper;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
     private final SysUserMapper sysUserMapper;
+    private final TicketLogMapper ticketLogMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     public TicketUrgeApplicationService(TicketMapper ticketMapper,
                                         TicketAssigneeSyncService ticketAssigneeSyncService,
                                         SysUserMapper sysUserMapper,
+                                        TicketLogMapper ticketLogMapper,
                                         ApplicationEventPublisher eventPublisher) {
         this.ticketMapper = ticketMapper;
         this.ticketAssigneeSyncService = ticketAssigneeSyncService;
         this.sysUserMapper = sysUserMapper;
+        this.ticketLogMapper = ticketLogMapper;
         this.eventPublisher = eventPublisher;
     }
 
     /**
      * 按工单ID催办（默认通知全部关联处理人，可追加 extraNotifyUserIds）
      */
+    @Transactional(rollbackFor = Exception.class)
     public TicketPO urgeByTicketId(Long ticketId, Long urgerId, TicketUrgeInput input) {
         if (ticketId == null || ticketId <= 0) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "工单ID不能为空");
@@ -62,6 +70,7 @@ public class TicketUrgeApplicationService extends BaseApplicationService {
     /**
      * 按工单编号催办（企微等场景：仅默认处理人，无额外通知人）
      */
+    @Transactional(rollbackFor = Exception.class)
     public TicketPO urgeByTicketNo(String ticketNo, Long urgerId) {
         if (ticketNo == null || ticketNo.trim().isEmpty()) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "工单编号不能为空");
@@ -100,9 +109,29 @@ public class TicketUrgeApplicationService extends BaseApplicationService {
         List<Long> notifyUserIds = new ArrayList<>(merged);
         validateNotifyUsersExist(notifyUserIds);
 
+        int affected = ticketMapper.incrementUrgeCount(ticket.getId());
+        if (affected != 1) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND, "工单不存在或已删除");
+        }
+        TicketPO afterCount = ticketMapper.selectById(ticket.getId());
+        int newCount = afterCount != null && afterCount.getUrgeCount() != null ? afterCount.getUrgeCount() : 1;
+        int oldCount = Math.max(0, newCount - 1);
+        recordUrgeLog(ticket.getId(), urgerId, oldCount, newCount, notifyUserIds.size());
+
         eventPublisher.publishEvent(new TicketUrgedEvent(ticket.getId(), urgerId, notifyUserIds));
-        log.info("工单催办事件已发布: ticketId={}, urgerId={}, notifyUserIds={}",
-                ticket.getId(), urgerId, notifyUserIds);
+        log.info("工单催办事件已发布: ticketId={}, urgerId={}, notifyUserIds={}, urgeCount={}",
+                ticket.getId(), urgerId, notifyUserIds, newCount);
+    }
+
+    private void recordUrgeLog(Long ticketId, Long urgerId, int oldCount, int newCount, int notifyUserCount) {
+        TicketLogPO logPO = new TicketLogPO();
+        logPO.setTicketId(ticketId);
+        logPO.setUserId(urgerId != null ? urgerId : 0L);
+        logPO.setAction(TicketAction.URGE.getCode());
+        logPO.setOldValue(String.valueOf(oldCount));
+        logPO.setNewValue(String.valueOf(newCount));
+        logPO.setRemark("人工催办，通知人数 " + notifyUserCount);
+        ticketLogMapper.insert(logPO);
     }
 
     private static void assertUrgeAllowedStatus(TicketPO ticket) {

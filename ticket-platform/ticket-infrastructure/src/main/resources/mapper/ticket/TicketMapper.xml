@@ -124,4 +124,11 @@
         GROUP BY t.assignee_id
     </select>
 
+    <update id="incrementUrgeCount">
+        UPDATE ticket
+        SET urge_count = IFNULL(urge_count, 0) + 1
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
 </mapper>
