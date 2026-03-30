@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -21,4 +22,9 @@ public interface SlaTimerMapper extends BaseMapper<SlaTimerPO> {
      * 批量更新计时器状态
      */
     int batchUpdateStatus(List<SlaTimerPO> timers);
+
+    /**
+     * 批量查询指定工单的SLA计时器（用于列表SLA状态聚合）
+     */
+    List<SlaTimerPO> selectByTicketIds(@Param("ticketIds") List<Long> ticketIds);
 }

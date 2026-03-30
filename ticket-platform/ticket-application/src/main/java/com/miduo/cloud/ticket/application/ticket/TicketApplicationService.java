@@ -109,6 +109,9 @@ public class TicketApplicationService {
     @Resource
     private TicketAssigneeMapper ticketAssigneeMapper;
 
+    @Resource
+    private com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaTimerMapper slaTimerMapper;
+
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
         TicketCategoryPO category = categoryMapper.selectById(input.getCategoryId());
@@ -278,13 +281,15 @@ public class TicketApplicationService {
                             (a, b) -> a));
         }
 
+        Map<Long, String> slaStatusByTicketId = resolveSlaStatusByTicketId(ticketIds);
+
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalCategoryNameMap = categoryNameMap;
         Map<Long, String> finalCompanyNameMap = companyNameByTicketId;
         Map<Long, String> finalMultiAssigneeNameMap = multiAssigneeNameByTicketId;
         List<TicketListOutput> outputs = records.stream()
                 .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap,
-                        finalMultiAssigneeNameMap))
+                        finalMultiAssigneeNameMap, slaStatusByTicketId))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -866,7 +871,8 @@ public class TicketApplicationService {
                                                   Map<Long, String> userNameMap,
                                                   Map<Long, String> categoryNameMap,
                                                   Map<Long, String> companyNameByTicketId,
-                                                  Map<Long, String> multiAssigneeNameByTicketId) {
+                                                  Map<Long, String> multiAssigneeNameByTicketId,
+                                                  Map<Long, String> slaStatusByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
         output.setTicketNo(po.getTicketNo());
@@ -908,7 +914,69 @@ public class TicketApplicationService {
             output.setSourceLabel(source.getLabel());
         }
 
+        if (po.getId() != null && slaStatusByTicketId != null) {
+            String slaStatus = slaStatusByTicketId.get(po.getId());
+            if (slaStatus != null) {
+                output.setSlaStatus(slaStatus);
+                output.setSlaStatusLabel(getSlaStatusLabel(slaStatus));
+            }
+        }
+
         return output;
+    }
+
+    private static final String SLA_STATUS_BREACHED = "BREACHED";
+    private static final String SLA_STATUS_WARNING = "WARNING";
+    private static final String SLA_STATUS_NORMAL = "NORMAL";
+
+    private String getSlaStatusLabel(String slaStatus) {
+        if (SLA_STATUS_BREACHED.equals(slaStatus)) {
+            return "已超时";
+        }
+        if (SLA_STATUS_WARNING.equals(slaStatus)) {
+            return "预警中";
+        }
+        if (SLA_STATUS_NORMAL.equals(slaStatus)) {
+            return "正常";
+        }
+        return null;
+    }
+
+    /**
+     * 批量查询工单的 SLA 状态（BREACHED > WARNING > NORMAL）
+     * 取每张工单所有 sla_timer 中最严重的状态
+     */
+    private Map<Long, String> resolveSlaStatusByTicketId(List<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO> timers =
+                slaTimerMapper.selectByTicketIds(ticketIds);
+        if (timers == null || timers.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> grouped =
+                timers.stream()
+                        .filter(t -> t.getTicketId() != null)
+                        .collect(Collectors.groupingBy(
+                                com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO::getTicketId));
+
+        Map<Long, String> result = new HashMap<>();
+        for (Map.Entry<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> entry : grouped.entrySet()) {
+            String worst = SLA_STATUS_NORMAL;
+            for (com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO timer : entry.getValue()) {
+                if (timer.getIsBreached() != null && timer.getIsBreached() == 1) {
+                    worst = SLA_STATUS_BREACHED;
+                    break;
+                }
+                if (timer.getIsWarned() != null && timer.getIsWarned() == 1
+                        && !SLA_STATUS_BREACHED.equals(worst)) {
+                    worst = SLA_STATUS_WARNING;
+                }
+            }
+            result.put(entry.getKey(), worst);
+        }
+        return result;
     }
 
     private List<Long> resolveAssigneeIdsFromAssignInput(TicketAssignInput input) {
