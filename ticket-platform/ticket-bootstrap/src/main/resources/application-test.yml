@@ -1,9 +1,9 @@
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://10.0.4.4:3306/ticket_platform_test?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: Testchjskn@2025SQL
+    url: ${DATASOURCE_URL:jdbc:mysql://localhost:3306/ticket_platform_test?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DATASOURCE_USERNAME:root}
+    password: ${DATASOURCE_PASSWORD:}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
@@ -24,9 +24,9 @@ spring:
     clean-disabled: true
 
   redis:
-    host: 10.0.3.135
-    port: 6379
-    password: MDrds_bl!2025
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
     database: 1
     timeout: 10000
     lettuce:
@@ -39,26 +39,26 @@ spring:
 miduo:
   sso:
     enabled: ${MIDUO_SSO_ENABLED:true}
-    base-url: ${MIDUO_SSO_BASE_URL:https://admin.t.ebcone.cn}
-    app-code: ${MIDUO_SSO_APP_CODE:SSSSSSSS}
-    app-secret: ${MIDUO_SSO_APP_SECRET:82827e7bdfbe4bffa328bb090edd79d7}
-    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:79}
-    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:http://ticket.t.miduonet.com}
+    base-url: ${MIDUO_SSO_BASE_URL:}
+    app-code: ${MIDUO_SSO_APP_CODE:}
+    app-secret: ${MIDUO_SSO_APP_SECRET:}
+    shortcut-id: ${MIDUO_SSO_SHORTCUT_ID:}
+    redirect-uri: ${MIDUO_SSO_REDIRECT_URI:}
 
 dev-login:
   enabled: true
 
 wecom:
-  corp-id: ww5ef196c1964ff50b
-  agent-id: 1000028
-  secret: pVAW2a4D8I4ydP1CdZQ1xiVEg2R1ogjetTonmBybo1I
-  contact-secret:
-  callback-token: nBd196BNex8UmAlB42iqVf
-  callback-aes-key: pTKsrXjxTasLv2TeGpRpkVTQlK1grMiVPmREhBb5WEO
-  trusted-domain: http://ticket.t.miduonet.com
+  corp-id: ${WECOM_CORP_ID:}
+  agent-id: ${WECOM_AGENT_ID:}
+  secret: ${WECOM_SECRET:}
+  contact-secret: ${WECOM_CONTACT_SECRET:}
+  callback-token: ${WECOM_CALLBACK_TOKEN:}
+  callback-aes-key: ${WECOM_CALLBACK_AES_KEY:}
+  trusted-domain: ${WECOM_TRUSTED_DOMAIN:}
 
 jwt:
-  secret: miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough
+  secret: ${JWT_SECRET:please-configure-in-nacos}
   access-token-expire: 7200
   refresh-token-expire: 604800
   token-prefix: "Bearer "
@@ -72,12 +72,12 @@ management:
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-    
+
 qiniu:
-  access-key: ${QINIU_ACCESS_KEY:GZuoSAtSoVpjNU4Ajsu70uxMwGCg_k8b77iGXZaR}
-  secret-key: ${QINIU_SECRET_KEY:phrzhjtLyXDovmzcUSZvy6gBzffOjxKtRlqUHABg}
-  bucket: ${QINIU_BUCKET:imgweixin12315comcn}
-  domain: ${QINIU_DOMAIN:https://image.qn.weixin12315.com.cn/}
+  access-key: ${QINIU_ACCESS_KEY:}
+  secret-key: ${QINIU_SECRET_KEY:}
+  bucket: ${QINIU_BUCKET:}
+  domain: ${QINIU_DOMAIN:}
   zone: ${QINIU_ZONE:z2}
   token-expire-seconds: 3600
   image-path-prefix: ticket/images/
