@@ -213,15 +213,23 @@
 
 ## 三、工单催办
 
-### API000010 - 催办工单
+### API000029 - 催办工单
 
 - **路径**：`POST /api/ticket/urge/{id}`
-- **说明**：创建人/关注人催办工单，向处理人发送催办通知
+- **说明**：工单处于非终态且已有关联处理人时可催办；默认通知当前工单全部关联处理人（含协同），可选追加其他人
 - **路径参数**：`id` - 工单ID
+- **请求体**（可选，`application/json`）：
+
+```json
+{
+  "extraNotifyUserIds": [101, 102]
+}
+```
+
 - **业务规则**：
-  - 发布 TicketUrgedEvent 事件
-  - 通过 NotificationOrchestrator 向处理人发送多渠道通知
-  - 通知类型为 URGE
+  - 终态、`pending_assign`、无关联处理人时不允许催办
+  - 发布 `TicketUrgedEvent`（携带完整通知人列表）
+  - 通过 `NotificationOrchestrator` 向每位接收人发送通知，类型为 `URGE`
 
 ---
 

@@ -41,7 +41,7 @@
 | API000007 | 未读数量 | GET | /api/notification/unread/count | 未读通知数量 |
 | API000008 | 通知偏好 | GET | /api/notification/preference | 获取偏好 |
 | API000009 | 通知偏好更新 | PUT | /api/notification/preference/update | 更新偏好 |
-| API000010 | 催办 | POST | /api/ticket/urge/{id} | 催办工单 |
+| API000029 | 催办 | POST | /api/ticket/urge/{id} | 催办工单（默认处理人 + 可选追加） |
 | - | WebSocket | - | /ws/notification | 实时通知推送 |
 
 ## 四、验收标准

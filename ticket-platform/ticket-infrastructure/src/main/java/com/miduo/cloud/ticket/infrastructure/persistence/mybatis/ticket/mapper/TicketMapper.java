@@ -43,4 +43,11 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
     List<UserTicketLoadStat> selectActiveCountByUserIds(
             @Param("userIds") List<Long> userIds,
             @Param("excludeStatuses") List<String> excludeStatuses);
+
+    /**
+     * 人工催办成功时累计次数 +1（原子更新）
+     *
+     * @return 影响行数，期望为 1
+     */
+    int incrementUrgeCount(@Param("id") Long id);
 }

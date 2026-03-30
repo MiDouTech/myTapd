@@ -28,6 +28,7 @@ import {
   updateBugDevInfo,
   updateBugTestInfo,
   uploadTicketImage,
+  urgeTicket,
 } from '@/api/ticket'
 import {
   getAvailableActions,
@@ -91,6 +92,8 @@ const pendingPoolTransferVisible = ref(false)
 const processDialogVisible = ref(false)
 const closeDialogVisible = ref(false)
 const submitLoading = ref(false)
+const urgeDialogVisible = ref(false)
+const urgeExtraNotifyUserIds = ref<number[]>([])
 
 // ---- 动态工作流操作 ----
 const availableActions = ref<AvailableActionOutput | null>(null)
@@ -262,6 +265,51 @@ const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
 /** 内置缺陷工作流 ID 与后端 Flyway 一致 */
 const isDefectWorkflow = computed(() => detail.value?.workflowId === 3)
+
+const urgeDefaultNotifyUserIds = computed(() => {
+  const d = detail.value
+  if (!d) {
+    return [] as number[]
+  }
+  if (d.urgeDefaultNotifyUserIds?.length) {
+    return d.urgeDefaultNotifyUserIds
+  }
+  if (d.assigneeIds?.length) {
+    return d.assigneeIds
+  }
+  if (d.assigneeId != null) {
+    return [d.assigneeId]
+  }
+  return [] as number[]
+})
+
+const canShowUrgeTicket = computed(() => {
+  if (!detail.value) {
+    return false
+  }
+  const s = currentStatus.value
+  if (s === 'pending_assign') {
+    return false
+  }
+  if (s === 'completed' || s === 'closed' || s === 'rejected') {
+    return false
+  }
+  return urgeDefaultNotifyUserIds.value.length > 0
+})
+
+function urgeNotifyUserName(userId: number): string {
+  return users.value.find((u) => u.id === userId)?.name ?? `用户#${userId}`
+}
+
+const urgeDefaultNotifyNames = computed(() =>
+  urgeDefaultNotifyUserIds.value.map(urgeNotifyUserName).join('、'),
+)
+
+const extraNotifyCandidates = computed(() => {
+  const ids = new Set(urgeDefaultNotifyUserIds.value)
+  return users.value.filter((u) => !ids.has(u.id))
+})
+
 const assignDialogTitle = computed(() => {
   if (currentStatus.value === 'pending_assign') {
     return '分派 / 认领（进入下一环节）'
@@ -598,6 +646,24 @@ async function handleCloseTicket(): Promise<void> {
     notifySuccess('工单关闭成功')
     closeDialogVisible.value = false
     await loadAll()
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+function openUrgeDialog(): void {
+  urgeExtraNotifyUserIds.value = []
+  urgeDialogVisible.value = true
+}
+
+async function handleUrgeSubmit(): Promise<void> {
+  const defaultSet = new Set(urgeDefaultNotifyUserIds.value)
+  const extra = urgeExtraNotifyUserIds.value.filter((id) => !defaultSet.has(id))
+  submitLoading.value = true
+  try {
+    await urgeTicket(ticketId.value, { extraNotifyUserIds: extra })
+    notifySuccess('催办通知已发送')
+    urgeDialogVisible.value = false
   } finally {
     submitLoading.value = false
   }
@@ -954,6 +1020,15 @@ watch(
           </template>
           <el-button v-else size="small" type="warning" plain @click="openAssignDialog">
             {{ isDefectWorkflow && currentStatus === 'testing' ? '追加处理人' : '转派' }}
+          </el-button>
+          <el-button
+            v-if="canShowUrgeTicket"
+            size="small"
+            type="danger"
+            plain
+            @click="openUrgeDialog"
+          >
+            催办
           </el-button>
         </div>
         <div class="action-bar-right">
@@ -1701,6 +1776,39 @@ watch(
     </template>
   </el-dialog>
 
+  <!-- 催办：默认通知关联处理人，可追加通知人 -->
+  <el-dialog v-model="urgeDialogVisible" title="催办通知" width="min(520px, 92vw)">
+    <p class="urge-dialog-hint">
+      将向以下关联处理人发送催办通知：<strong>{{ urgeDefaultNotifyNames }}</strong>
+    </p>
+    <el-form label-width="100px">
+      <el-form-item label="追加通知人">
+        <el-select
+          v-model="urgeExtraNotifyUserIds"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="可选，额外通知其他同事"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="user in extraNotifyCandidates"
+            :key="user.id"
+            :label="user.name"
+            :value="user.id"
+          />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="urgeDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handleUrgeSubmit">
+        确认发送
+      </el-button>
+    </template>
+  </el-dialog>
+
   <!-- 待分派：仅更换对接人（不改变流程状态） -->
   <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="min(480px, 92vw)">
     <el-form label-width="90px">
@@ -1848,6 +1956,16 @@ watch(
 
 .assign-merge-hint {
   margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.urge-dialog-hint {
+  margin: 0 0 16px;
   padding: 10px 12px;
   font-size: 13px;
   color: #606266;
