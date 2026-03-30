@@ -26,3 +26,8 @@ logs/
 *.tmp
 *.bak
 *.swp
+
+# Local environment config (never commit secrets)
+.env.prod
+.env.test.local
+*.local

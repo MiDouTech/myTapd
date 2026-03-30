@@ -35,7 +35,7 @@ REDIS_PORT="${REDIS_PORT:-6379}"
 REDIS_DB="${REDIS_DB:-1}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 
-JWT_SECRET="${JWT_SECRET:-miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough}"
+JWT_SECRET="${JWT_SECRET:?请通过环境变量设置 JWT_SECRET}"
 RUN_BASE_DIR="${RUN_BASE_DIR:-.run}"
 
 RUN_DIR="$PROJECT_DIR/$RUN_BASE_DIR"
