@@ -1,0 +1,3 @@
+# Local nacos config with real secrets (never commit)
+miduo-md/nacos-config/*.local
+miduo-md/nacos-config/*.local.yml

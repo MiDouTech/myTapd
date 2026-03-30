@@ -731,7 +731,8 @@ CREATE TABLE `sys_wework_config`  (
 -- ----------------------------
 -- Records of sys_wework_config
 -- ----------------------------
-INSERT INTO `sys_wework_config` VALUES (1, 'ww5ef196c1964ff50b', '1000153', 'ENC:jctjvrpuQG4UcD4KESIB1/KWY2Ly/pT8TWaVscmC2zkp1/RNyb3a13IuW3DQWHP3', 'https://qyapi.weixin.qq.com', 10000, 30000, 0, NULL, 0, 100, 1, '2026-03-05 10:47:44', '2026-03-05 10:47:44', 'debug-user', 'debug-user', 0);
+-- 企微配置请在部署后通过管理后台或直接 INSERT 填入真实的 corp_id / agent_id / secret
+-- INSERT INTO `sys_wework_config` VALUES (1, '<YOUR_CORP_ID>', '<YOUR_AGENT_ID>', '<YOUR_ENCRYPTED_SECRET>', 'https://qyapi.weixin.qq.com', 10000, 30000, 0, NULL, 0, 100, 1, NOW(), NOW(), 'admin', 'admin', 0);
 
 -- ----------------------------
 -- Table structure for system_config

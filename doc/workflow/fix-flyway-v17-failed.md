@@ -45,8 +45,8 @@ SHOW COLUMNS FROM bug_report;
 若有 Flyway 命令行，可使用：
 
 ```bash
-flyway -url=jdbc:mysql://10.0.4.4:3306/ticket_platform_test \
-  -user=root -password='Testchjskn@2025SQL' \
+flyway -url=jdbc:mysql://<DB_HOST>:3306/ticket_platform_test \
+  -user=root -password='<YOUR_DB_PASSWORD>' \
   -table=flyway_schema_history \
   repair
 ```

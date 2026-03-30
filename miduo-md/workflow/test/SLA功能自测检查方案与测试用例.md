@@ -838,7 +838,7 @@ payload = {
   'iat': int(time.time()),
   'exp': int(time.time()) + 86400
 }
-print(jwt.encode(payload, 'miduo-ticket-platform-jwt-secret-key-2026-must-be-long-enough', algorithm='HS256'))
+print(jwt.encode(payload, '<YOUR_JWT_SECRET>', algorithm='HS256'))
 ")
 echo "TOKEN=$TOKEN"
 ```
