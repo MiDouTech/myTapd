@@ -355,30 +355,33 @@ public class WebhookDispatchService extends BaseApplicationService {
 
         StringBuilder content = new StringBuilder();
         content.append("【工单事件通知】\n");
-        content.append("事件：")
+        content.append("────────────────\n");
+        content.append("【事件】")
                 .append(eventName == null || eventName.isEmpty() ? eventType.getLabel() : eventName)
                 .append("\n");
         if (eventTime != null && !eventTime.isEmpty()) {
-            content.append("时间：").append(eventTime).append("\n");
+            content.append("【时间】").append(eventTime).append("\n");
         }
         if (ticket != null) {
-            content.append("工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
-            content.append("标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
+            content.append("【工单信息】\n");
+            content.append("1) 工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
+            content.append("2) 标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
             String statusCode = safeJsonString(ticket, "status", "-");
-            content.append("状态：").append(resolveStatusLabel(statusCode)).append("\n");
+            content.append("3) 状态：").append(resolveStatusLabel(statusCode)).append("\n");
             String priorityCode = safeJsonString(ticket, "priority", "-");
-            content.append("优先级：").append(resolvePriorityLabel(priorityCode)).append("\n");
+            content.append("4) 优先级：").append(resolvePriorityDisplay(priorityCode)).append("\n");
         }
-        if (data != null) {
-            String changeSummary = buildChangeSummary(data);
-            if (changeSummary != null && !changeSummary.trim().isEmpty()) {
-                content.append("变更：").append(changeSummary).append("\n");
+        List<String> changeLines = buildChangeLines(data);
+        if (!changeLines.isEmpty()) {
+            content.append("【变更内容】\n");
+            for (int i = 0; i < changeLines.size(); i++) {
+                content.append(i + 1).append(") ").append(changeLines.get(i)).append("\n");
             }
         }
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
         if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
-            content.append("详情：").append(baseUrl).append("/").append(ticketNo);
+            content.append("【详情】").append(baseUrl).append("/").append(ticketNo);
         }
 
         MentionTargets mentionTargets = collectMentionTargets(ticket, data);
@@ -516,72 +519,73 @@ public class WebhookDispatchService extends BaseApplicationService {
         return priority != null ? priority.getLabel() : code;
     }
 
-    private String buildChangeSummary(Object data) {
+    private String resolvePriorityDisplay(String code) {
+        if (code == null || "-".equals(code)) {
+            return "-";
+        }
+        Priority priority = Priority.fromCode(code);
+        if (priority == null) {
+            return code;
+        }
+        switch (priority) {
+            case URGENT:
+                return "🔴 " + priority.getLabel();
+            case HIGH:
+                return "🟠 " + priority.getLabel();
+            case MEDIUM:
+                return "🟡 " + priority.getLabel();
+            case LOW:
+                return "🟢 " + priority.getLabel();
+            default:
+                return priority.getLabel();
+        }
+    }
+
+    private List<String> buildChangeLines(Object data) {
+        List<String> changeLines = new ArrayList<>();
         if (data == null) {
-            return null;
+            return changeLines;
         }
         try {
             JSONObject json = JSON.parseObject(JSON.toJSONString(data));
             if (json == null || json.isEmpty()) {
-                return null;
+                return changeLines;
             }
-            StringBuilder sb = new StringBuilder();
             if (json.containsKey("categoryId")) {
                 Long categoryId = json.getLong("categoryId");
                 String categoryName = resolveCategoryName(categoryId);
-                sb.append("分类: ").append(categoryName);
+                changeLines.add("分类：" + categoryName);
             }
             if (json.containsKey("priority")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
-                sb.append("优先级: ").append(resolvePriorityLabel(json.getString("priority")));
+                changeLines.add("优先级：" + resolvePriorityDisplay(json.getString("priority")));
             }
             if (json.containsKey("oldStatus")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
-                sb.append("原状态: ").append(resolveStatusLabel(json.getString("oldStatus")));
+                changeLines.add("原状态：" + resolveStatusLabel(json.getString("oldStatus")));
             }
             if (json.containsKey("newStatus")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
-                sb.append("新状态: ").append(resolveStatusLabel(json.getString("newStatus")));
+                changeLines.add("新状态：" + resolveStatusLabel(json.getString("newStatus")));
             }
             if (json.containsKey("assigneeId")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
                 Long assigneeId = json.getLong("assigneeId");
-                sb.append("指派给: ").append(resolveUserNameById(assigneeId));
+                changeLines.add("指派给：" + resolveUserNameById(assigneeId));
             }
             if (json.containsKey("assignType")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
-                sb.append("分派类型: ").append(resolveAssignTypeLabel(json.getString("assignType")));
+                changeLines.add("分派类型：" + resolveAssignTypeLabel(json.getString("assignType")));
             }
             if (json.containsKey("operatorId")) {
-                if (sb.length() > 0) {
-                    sb.append(", ");
-                }
                 Long operatorId = json.getLong("operatorId");
-                sb.append("操作人: ").append(resolveUserNameById(operatorId));
+                changeLines.add("操作人：" + resolveUserNameById(operatorId));
             }
             if (json.containsKey("previousAssigneeId")) {
                 Long prevId = json.getLong("previousAssigneeId");
                 if (prevId != null) {
-                    if (sb.length() > 0) {
-                        sb.append(", ");
-                    }
-                    sb.append("原处理人: ").append(resolveUserNameById(prevId));
+                    changeLines.add("原处理人：" + resolveUserNameById(prevId));
                 }
             }
-            return sb.length() > 0 ? sb.toString() : null;
+            return changeLines;
         } catch (Exception ex) {
             log.warn("解析变更数据失败: {}", ex.getMessage());
-            return null;
+            return new ArrayList<>();
         }
     }
 
