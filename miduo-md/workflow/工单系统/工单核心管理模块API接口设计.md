@@ -25,6 +25,7 @@
 | API000011 | 工单关闭 | PUT | /api/ticket/close/{id} | 关闭工单 |
 | API000012 | 关注工单 | POST | /api/ticket/follow/{id} | 关注工单 |
 | API000013 | 取消关注 | DELETE | /api/ticket/follow/{id} | 取消关注 |
+| API000029 | 催办工单 | POST | /api/ticket/urge/{id} | 中间态催办；默认通知关联处理人，请求体可选 extraNotifyUserIds |
 
 ---
 

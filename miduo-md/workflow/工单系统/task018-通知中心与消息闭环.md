@@ -58,7 +58,7 @@
 | API000007 | 查询未读数量 | GET | /api/notification/unread/count | 铃铛角标 |
 | API000008 | 获取通知偏好 | GET | /api/notification/preference | 偏好查询 |
 | API000009 | 更新通知偏好 | PUT | /api/notification/preference/update | 偏好保存 |
-| API000010 | 催办工单 | POST | /api/ticket/urge/{id} | 工单催办触发通知 |
+| API000029 | 催办工单 | POST | /api/ticket/urge/{id} | 工单催办触发通知 |
 | - | 实时通知推送 | WebSocket | /ws/notification | 实时消息 |
 
 ## 五、交付物清单
