@@ -10,7 +10,7 @@
 - **版本**：Spring Cloud Alibaba 2021.0.5.0 / Spring Cloud 2021.0.5
 - **配置格式**：YAML
 - **命名空间**：与其他项目共用（namespace: `e4479836-f77e-4b46-9e96-56179bdd6875`）
-- **Data ID**：`ticket-platform-secrets.yaml`
+- **Data ID**：`ticket-platform-test.yaml`（test）/ `ticket-platform-prod.yaml`（prod）
 - **Group**：`DEFAULT_GROUP`
 
 ## 影响范围

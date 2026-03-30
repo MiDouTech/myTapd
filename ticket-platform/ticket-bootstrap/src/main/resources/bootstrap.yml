@@ -8,7 +8,3 @@ spring:
         server-addr: ${NACOS_SERVER_ADDR:http://10.0.4.4:8848}
         file-extension: yaml
         namespace: ${NACOS_NAMESPACE:e4479836-f77e-4b46-9e96-56179bdd6875}
-        shared-configs:
-          - data-id: ticket-platform-secrets.yaml
-            group: DEFAULT_GROUP
-            refresh: true
