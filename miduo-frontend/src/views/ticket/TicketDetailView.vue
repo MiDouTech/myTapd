@@ -104,6 +104,8 @@ const transitForm = reactive({
   remark: '',
   newAssigneeId: undefined as number | undefined,
   newAssigneeIds: [] as number[],
+  reproduceEnv: '' as string,
+  plannedFullResolveAt: '' as string,
 })
 
 const imageUploadLoading = ref(false)
@@ -249,6 +251,7 @@ const devInfoForm = reactive<TicketBugDevInfoInput>({
   gitBranch: '',
   impactAssessment: '',
   devRemark: '',
+  plannedFullResolveAt: '',
 })
 
 const ticketId = computed(() => Number(route.params.id))
@@ -257,6 +260,17 @@ const roleCodes = computed(() =>
 )
 const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
+/** 内置缺陷工作流 ID 与后端 Flyway 一致 */
+const isDefectWorkflow = computed(() => detail.value?.workflowId === 3)
+const assignDialogTitle = computed(() => {
+  if (currentStatus.value === 'pending_assign') {
+    return '分派 / 认领（进入下一环节）'
+  }
+  if (isDefectWorkflow.value && currentStatus.value === 'testing') {
+    return '追加协同处理人'
+  }
+  return '转派工单'
+})
 const isCompactLayout = computed(() => viewportWidth.value <= MOBILE_BREAKPOINT)
 
 const customFieldEntries = computed(() => {
@@ -328,6 +342,9 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     gitBranch: ticketDetail.bugDevInfo?.gitBranch || '',
     impactAssessment: ticketDetail.bugDevInfo?.impactAssessment || '',
     devRemark: ticketDetail.bugDevInfo?.devRemark || '',
+    plannedFullResolveAt: ticketDetail.bugDevInfo?.plannedFullResolveAt
+      ? String(ticketDetail.bugDevInfo.plannedFullResolveAt).replace(' ', 'T').slice(0, 19)
+      : '',
   })
 }
 
@@ -421,8 +438,14 @@ async function handleAssign(): Promise<void> {
     await assignTicket(ticketId.value, {
       assigneeIds: [...assignForm.assigneeIds],
       remark: assignForm.remark,
+      mergeAssignees:
+        isDefectWorkflow.value && currentStatus.value === 'testing' ? true : undefined,
     })
-    notifySuccess('工单分派成功')
+    notifySuccess(
+      isDefectWorkflow.value && currentStatus.value === 'testing'
+        ? '已追加协同处理人'
+        : '工单分派成功',
+    )
     assignDialogVisible.value = false
     await loadAll()
   } finally {
@@ -477,6 +500,18 @@ function openTransitDialog(action: TicketActionItem): void {
   transitForm.remark = ''
   transitForm.newAssigneeId = undefined
   transitForm.newAssigneeIds = []
+  transitForm.reproduceEnv =
+    isDefectWorkflow.value &&
+    currentStatus.value === 'testing' &&
+    action.targetStatus === 'pending_dev_accept'
+      ? testInfoForm.reproduceEnv || ''
+      : ''
+  transitForm.plannedFullResolveAt =
+    isDefectWorkflow.value &&
+    action.targetStatus === 'temp_resolved' &&
+    (action.actionName || '').includes('临时解决')
+      ? devInfoForm.plannedFullResolveAt || ''
+      : ''
   processDialogVisible.value = true
 }
 
@@ -491,12 +526,36 @@ async function handleProcess(): Promise<void> {
       notifyError('该操作需要填写备注')
       return
     }
+    if (
+      isDefectWorkflow.value &&
+      currentStatus.value === 'testing' &&
+      selectedAction.value.targetStatus === 'pending_dev_accept'
+    ) {
+      const env = transitForm.reproduceEnv?.trim() || testInfoForm.reproduceEnv?.trim()
+      if (!env) {
+        notifyError('确认缺陷转开发前请选择复现环境')
+        return
+      }
+    }
+    if (
+      isDefectWorkflow.value &&
+      selectedAction.value.targetStatus === 'temp_resolved' &&
+      selectedAction.value.actionName?.includes('临时解决')
+    ) {
+      const plan = transitForm.plannedFullResolveAt?.trim() || devInfoForm.plannedFullResolveAt?.trim()
+      if (!plan) {
+        notifyError('临时解决必须填写计划彻底解决时间')
+        return
+      }
+    }
     const transitPayload: {
       transitionId: string
       targetStatus: string
       remark: string
       newAssigneeId?: number
       newAssigneeIds?: number[]
+      reproduceEnv?: string
+      plannedFullResolveAt?: string
     } = {
       transitionId: transitForm.transitionId,
       targetStatus: transitForm.targetStatus,
@@ -506,6 +565,21 @@ async function handleProcess(): Promise<void> {
       transitPayload.newAssigneeIds = [...transitForm.newAssigneeIds]
     } else if (transitForm.newAssigneeId != null) {
       transitPayload.newAssigneeId = transitForm.newAssigneeId
+    }
+    if (
+      isDefectWorkflow.value &&
+      currentStatus.value === 'testing' &&
+      selectedAction.value.targetStatus === 'pending_dev_accept'
+    ) {
+      transitPayload.reproduceEnv = transitForm.reproduceEnv?.trim() || testInfoForm.reproduceEnv?.trim()
+    }
+    if (
+      isDefectWorkflow.value &&
+      selectedAction.value.targetStatus === 'temp_resolved' &&
+      selectedAction.value.actionName?.includes('临时解决')
+    ) {
+      transitPayload.plannedFullResolveAt =
+        transitForm.plannedFullResolveAt?.trim() || devInfoForm.plannedFullResolveAt?.trim()
     }
     await transitTicket(ticketId.value, transitPayload)
     notifySuccess('操作成功')
@@ -719,10 +793,10 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   completed: '已完成',
   closed: '已关闭',
   pending_test_accept: '待测试受理',
-  testing: '测试中',
+  testing: '测试复现中',
   investigating: '排查中',
   pending_dev_accept: '待开发受理',
-  developing: '开发中',
+  developing: '开发解决中',
   temp_resolved: '临时解决',
   pending_cs_confirm: '待客服确认',
   submitted: '已提交',
@@ -879,7 +953,7 @@ watch(
             </el-button>
           </template>
           <el-button v-else size="small" type="warning" plain @click="openAssignDialog">
-            转派
+            {{ isDefectWorkflow && currentStatus === 'testing' ? '追加处理人' : '转派' }}
           </el-button>
         </div>
         <div class="action-bar-right">
@@ -1155,6 +1229,16 @@ watch(
                         :ticket-id="ticketId"
                         placeholder="请填写开发备注，支持粘贴图片、插入表格等富文本内容..."
                         :height="180"
+                      />
+                    </el-form-item>
+                    <el-form-item label="计划彻底解决">
+                      <el-date-picker
+                        v-model="devInfoForm.plannedFullResolveAt"
+                        type="datetime"
+                        value-format="YYYY-MM-DDTHH:mm:ss"
+                        placeholder="临时解决时必填，可选填以提前维护"
+                        :disabled="!canEditDevInfo"
+                        style="width: 100%"
                       />
                     </el-form-item>
                   </el-form>
@@ -1582,12 +1666,14 @@ watch(
   </el-dialog>
 
   <!-- 分派工单弹窗（支持多人，首位为主处理人） -->
-  <el-dialog
-    v-model="assignDialogVisible"
-    :title="currentStatus === 'pending_assign' ? '分派 / 认领（进入下一环节）' : '转派工单'"
-    width="min(520px, 92vw)"
-  >
+  <el-dialog v-model="assignDialogVisible" :title="assignDialogTitle" width="min(520px, 92vw)">
     <el-form label-width="100px">
+      <p
+        v-if="isDefectWorkflow && currentStatus === 'testing'"
+        class="assign-merge-hint"
+      >
+        工单仍为「测试复现中」，不会变更流程状态；所选人员将加入协同处理人（主负责人不变）。
+      </p>
       <el-form-item label="处理人" required>
         <el-select
           v-model="assignForm.assigneeIds"
@@ -1595,7 +1681,11 @@ watch(
           filterable
           collapse-tags
           collapse-tags-tooltip
-          placeholder="可选择多名处理人，第一位为主负责人"
+          :placeholder="
+            isDefectWorkflow && currentStatus === 'testing'
+              ? '选择要加入协同的开发等人员（可多选）'
+              : '可选择多名处理人，第一位为主负责人'
+          "
           style="width: 100%"
         >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
@@ -1656,6 +1746,40 @@ watch(
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
+      <el-form-item
+        v-if="
+          isDefectWorkflow &&
+          currentStatus === 'testing' &&
+          selectedAction?.targetStatus === 'pending_dev_accept'
+        "
+        label="复现环境"
+        required
+      >
+        <el-select v-model="transitForm.reproduceEnv" placeholder="转开发必填" style="width: 100%">
+          <el-option label="生产环境" value="PRODUCTION" />
+          <el-option label="测试环境" value="TEST" />
+          <el-option label="均可复现" value="BOTH" />
+        </el-select>
+        <div class="form-hint">将同步写入测试信息，也可事先在「测试信息」页维护</div>
+      </el-form-item>
+      <el-form-item
+        v-if="
+          isDefectWorkflow &&
+          selectedAction?.targetStatus === 'temp_resolved' &&
+          (selectedAction?.actionName || '').includes('临时解决')
+        "
+        label="计划彻底解决"
+        required
+      >
+        <el-date-picker
+          v-model="transitForm.plannedFullResolveAt"
+          type="datetime"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+          placeholder="选择计划彻底解决时间"
+          style="width: 100%"
+        />
+        <div class="form-hint">不得早于今天；也可事先在「开发信息」中维护</div>
+      </el-form-item>
       <el-form-item label="备注" :required="selectedAction?.requireRemark">
         <el-input
           v-model="transitForm.remark"
@@ -1713,6 +1837,23 @@ watch(
   flex-direction: column;
   gap: 20px;
   padding-bottom: 24px;
+}
+
+.form-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
+}
+
+.assign-merge-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+  background: #f5f7fa;
+  border-radius: 6px;
 }
 
 // ===== 头部卡片 =====

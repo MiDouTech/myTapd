@@ -163,7 +163,18 @@ public class TicketChangeHistoryRecorder {
         detectChange(changes, "git_branch", "Git分支", old.getGitBranch(), input.getGitBranch());
         detectChange(changes, "impact_assessment", "影响评估",
                 truncate(old.getImpactAssessment()), truncate(input.getImpactAssessment()));
+        detectChange(changes, "dev_remark", "开发备注",
+                truncate(old.getDevRemark()), truncate(input.getDevRemark()));
+        detectChange(changes, "planned_full_resolve_at", "计划彻底解决时间",
+                formatDevPlanDate(old.getPlannedFullResolveAt()), formatDevPlanDate(input.getPlannedFullResolveAt()));
         return changes;
+    }
+
+    private String formatDevPlanDate(java.util.Date d) {
+        if (d == null) {
+            return null;
+        }
+        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(d);
     }
 
     /**

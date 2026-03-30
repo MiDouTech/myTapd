@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.ticket;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
+import com.miduo.cloud.ticket.common.enums.BugReproduceEnv;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.SeverityLevel;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -13,6 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -104,6 +111,14 @@ public class TicketBugApplicationService extends BaseApplicationService {
         List<BugFieldChangeItem> changes = changeHistoryRecorder.detectDevInfoChanges(devInfoPO, input);
 
         applyDevInfoChanges(devInfoPO, input);
+        if (devInfoPO.getPlannedFullResolveAt() != null) {
+            LocalDate today = LocalDate.now(ZoneId.systemDefault());
+            LocalDate plannedDay = devInfoPO.getPlannedFullResolveAt().toInstant()
+                    .atZone(ZoneId.systemDefault()).toLocalDate();
+            if (plannedDay.isBefore(today)) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "计划彻底解决时间不能早于今天");
+            }
+        }
         saveBugDevInfo(devInfoPO);
 
         changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
@@ -156,7 +171,77 @@ public class TicketBugApplicationService extends BaseApplicationService {
         output.setGitBranch(po.getGitBranch());
         output.setImpactAssessment(po.getImpactAssessment());
         output.setDevRemark(po.getDevRemark());
+        output.setPlannedFullResolveAt(po.getPlannedFullResolveAt());
         return output;
+    }
+
+    /**
+     * 缺陷工作流：测试复现中 → 待开发受理 前，复现环境必须已填写（流转参数或测试信息表）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void requireReproduceEnvBeforeDevTransfer(Long ticketId, String reproduceEnvFromTransit) {
+        requireTicket(ticketId);
+        if (StringUtils.hasText(reproduceEnvFromTransit)) {
+            String code = reproduceEnvFromTransit.trim();
+            if (BugReproduceEnv.fromCode(code) == null) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                        "复现环境取值无效，请选择：生产环境(PRODUCTION)、测试环境(TEST) 或 均可复现(BOTH)");
+            }
+            TicketBugTestInfoPO testInfoPO = getOrCreateBugTestInfo(ticketId);
+            testInfoPO.setReproduceEnv(code);
+            saveBugTestInfo(testInfoPO);
+        }
+        TicketBugTestInfoPO testInfoPO = getBugTestInfoByTicketId(ticketId);
+        String env = testInfoPO != null ? testInfoPO.getReproduceEnv() : null;
+        if (!StringUtils.hasText(env) || BugReproduceEnv.fromCode(env.trim()) == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "确认缺陷转开发前必须填写复现环境，请在流转时选择或在测试信息中维护");
+        }
+    }
+
+    /**
+     * 缺陷工作流：进入临时解决前必须存在「计划彻底解决时间」（流转参数或开发信息表），且不得早于当天 0 点
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void requireAndPersistPlannedFullResolveForTempResolved(Long ticketId, String plannedFullResolveAtRaw) {
+        requireTicket(ticketId);
+        Date planned = parsePlannedFullResolveAt(plannedFullResolveAtRaw);
+        if (planned == null) {
+            TicketBugDevInfoPO existing = getBugDevInfoByTicketId(ticketId);
+            planned = existing != null ? existing.getPlannedFullResolveAt() : null;
+        }
+        if (planned == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "临时解决必须填写计划彻底解决时间，请在流转时选择或在开发信息中维护");
+        }
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        LocalDate plannedDay = planned.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        if (plannedDay.isBefore(today)) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "计划彻底解决时间不能早于今天");
+        }
+        TicketBugDevInfoPO devInfoPO = getOrCreateBugDevInfo(ticketId);
+        devInfoPO.setPlannedFullResolveAt(planned);
+        saveBugDevInfo(devInfoPO);
+    }
+
+    private Date parsePlannedFullResolveAt(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String s = raw.trim();
+        try {
+            LocalDateTime ldt = LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException ignored) {
+            // fall through
+        }
+        try {
+            LocalDate ld = LocalDate.parse(s, DateTimeFormatter.ISO_LOCAL_DATE);
+            return Date.from(ld.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException e) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "计划彻底解决时间格式无效，请使用 yyyy-MM-dd 或 yyyy-MM-ddTHH:mm:ss");
+        }
     }
 
     private void applyCustomerInfoChanges(TicketBugInfoPO infoPO, TicketBugCustomerInfoInput input) {
@@ -199,6 +284,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         devInfoPO.setGitBranch(input.getGitBranch());
         devInfoPO.setImpactAssessment(input.getImpactAssessment());
         devInfoPO.setDevRemark(input.getDevRemark());
+        devInfoPO.setPlannedFullResolveAt(input.getPlannedFullResolveAt());
     }
 
     private TicketPO requireTicket(Long ticketId) {

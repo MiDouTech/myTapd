@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.common.BaseEnti
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.Date;
+
 /**
  * 缺陷工单开发信息PO
  * 缺陷工单开发信息
@@ -32,4 +34,8 @@ public class TicketBugDevInfoPO extends BaseEntity {
 
     @TableField("dev_remark")
     private String devRemark;
+
+    /** 计划彻底解决时间（进入临时解决状态时必填） */
+    @TableField("planned_full_resolve_at")
+    private Date plannedFullResolveAt;
 }
