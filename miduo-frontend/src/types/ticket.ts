@@ -72,6 +72,11 @@ export interface TicketCloseInput {
   remark?: string
 }
 
+/** 工单催办（可选追加通知人，默认处理人由后端根据工单关联处理人计算） */
+export interface TicketUrgeInput {
+  extraNotifyUserIds?: number[]
+}
+
 export interface TicketBugCustomerInfoInput {
   merchantNo?: string
   companyName?: string
@@ -230,6 +235,8 @@ export interface TicketDetailOutput {
   assigneeId?: number
   assigneeName?: string
   assigneeIds?: number[]
+  /** 催办时默认通知的关联处理人（与 assigneeIds 一致） */
+  urgeDefaultNotifyUserIds?: number[]
   source?: string
   sourceLabel?: string
   expectedTime?: string

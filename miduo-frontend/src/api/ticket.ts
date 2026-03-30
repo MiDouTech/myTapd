@@ -18,6 +18,7 @@ import type {
   TicketProcessInput,
   TicketPublicDetailOutput,
   TicketTimeTrackOutput,
+  TicketUrgeInput,
   WecomMessageParseInput,
   WecomMessageParseOutput,
 } from '@/types/ticket'
@@ -75,6 +76,15 @@ export function processTicket(id: number, data: TicketProcessInput): Promise<voi
  */
 export function closeTicket(id: number, data?: TicketCloseInput): Promise<void> {
   return request.put<void>(`/ticket/close/${id}`, data)
+}
+
+/**
+ * 催办工单
+ * 接口编号：API000029
+ * 产品文档功能：工单详情 - 中间态催办（默认通知关联处理人，可追加通知人）
+ */
+export function urgeTicket(id: number, data?: TicketUrgeInput): Promise<void> {
+  return request.post<void>(`/ticket/urge/${id}`, data ?? {})
 }
 
 /**
