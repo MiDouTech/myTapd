@@ -167,12 +167,30 @@ public class SsoApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 通过手机号 → 工号 → 邮箱 → 姓名 匹配本地已同步用户；未匹配则拒绝登录（不再自动创建）。
+     * 企业微信用户ID：优先使用接口返回的 wework_userid，缺失时回退 employeeNo（与米多文档兼容）。
+     */
+    private static String resolveWecomUserid(MiduoSsoClient.ValidateResult validateResult) {
+        if (validateResult.getWeworkUserid() != null && !validateResult.getWeworkUserid().trim().isEmpty()) {
+            return validateResult.getWeworkUserid().trim();
+        }
+        if (validateResult.getEmployeeNo() != null && !validateResult.getEmployeeNo().trim().isEmpty()) {
+            return validateResult.getEmployeeNo().trim();
+        }
+        return null;
+    }
+
+    /**
+     * 通过企微用户ID → 手机号 → 工号 → 邮箱 → 姓名 匹配本地已同步用户；未匹配则拒绝登录（不再自动创建）。
      */
     private User matchOrCreateUser(MiduoSsoClient.ValidateResult validateResult) {
         User user = null;
 
-        if (validateResult.getMobile() != null && !validateResult.getMobile().isEmpty()) {
+        String wecomUserid = resolveWecomUserid(validateResult);
+        if (wecomUserid != null && !wecomUserid.isEmpty()) {
+            user = userRepository.findByWecomUserid(wecomUserid);
+        }
+
+        if (user == null && validateResult.getMobile() != null && !validateResult.getMobile().isEmpty()) {
             user = userRepository.findByPhone(validateResult.getMobile());
         }
 
@@ -189,8 +207,9 @@ public class SsoApplicationService extends BaseApplicationService {
         }
 
         if (user == null) {
-            log.warn("SSO登录未匹配到本地用户: miduoUserId={}, mobile={}, employeeNo={}, email={}, userName={}",
+            log.warn("SSO登录未匹配到本地用户: miduoUserId={}, weworkUserid={}, mobile={}, employeeNo={}, email={}, userName={}",
                     validateResult.getUserId(),
+                    wecomUserid,
                     validateResult.getMobile(),
                     validateResult.getEmployeeNo(),
                     validateResult.getEmail(),
