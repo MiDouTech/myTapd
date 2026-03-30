@@ -22,6 +22,7 @@ Mark each item as `OK`, `Missing`, or `Needs Clarification`.
 - sessionToken TTL (seconds)
 - session max age (seconds)
 - allowed claims（允许返回字段列表）
+  - Note: `allowedClaims` controls optional PII fields like `mobile`/`email`. When returned, these fields are **plain/original (not masked/encrypted)**.
 
 ### 1.3 Required APIs
 
@@ -54,6 +55,10 @@ Mark each item as `OK`, `Missing`, or `Needs Clarification`.
 - Business success:
   - validate: `return_data.valid == true`
   - refresh/revoke: `return_data.success == true`
+- validate success payload expectations (`return_data.valid == true`):
+  - must include `wework_userid` (企业微信用户ID)
+  - `employeeNo` is currently equal to `wework_userid` (compat)
+  - optional `mobile`/`email` are **plain/original** when present (treat as sensitive)
 
 ## 2) Third-Party Implementation Checklist（你方必须实现的模块）
 
@@ -109,7 +114,7 @@ Mark each item as `OK`, `Missing`, or `Needs Clarification`.
 
 - No runbook for signature failures (how to debug canonical string)
 - No explicit refresh cadence recommendation
-- No distinction between "internal handoff" vs "external handoff" secrecy级别
+- No distinction between “internal handoff” vs “external handoff” secrecy级别
 
 ## 4) Recommended Acceptance Tests（可复用验收用例）
 
@@ -125,6 +130,7 @@ At minimum, verify:
 8. Bridge URL generation succeeds only for **HTTPS + allowlisted** `redirectUri`
 9. Signature failure returns a predictable error and does not leak details
 10. Expired/invalid token returns a predictable response and does not create a local session
+11. `validate-login-token` success response includes `wework_userid` and (when enabled) returns unmasked `mobile`/`email`
 
 ## 5) Suggested Review Output Template
 

@@ -69,6 +69,7 @@ public class MiduoSsoClient {
         result.setSessionToken(returnData.getString("sessionToken"));
         result.setUserId(returnData.getString("userId"));
         result.setEmployeeNo(returnData.getString("employeeNo"));
+        result.setWeworkUserid(returnData.getString("wework_userid"));
         result.setUserName(returnData.getString("userName"));
         result.setMobile(returnData.getString("mobile"));
         result.setEmail(returnData.getString("email"));
@@ -194,6 +195,8 @@ public class MiduoSsoClient {
         private String sessionToken;
         private String userId;
         private String employeeNo;
+        /** 企业微信用户ID；与文档一致，可与 employeeNo 相同（兼容字段） */
+        private String weworkUserid;
         private String userName;
         private String mobile;
         private String email;
