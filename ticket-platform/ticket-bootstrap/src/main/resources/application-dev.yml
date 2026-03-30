@@ -52,6 +52,9 @@ qiniu:
 
 dev-login:
   enabled: true
+  username: ${DEV_LOGIN_USERNAME:admin}
+  password: ${DEV_LOGIN_PASSWORD:}
+  phone-password: ${DEV_LOGIN_PHONE_PASSWORD:}
 
 logging:
   level:

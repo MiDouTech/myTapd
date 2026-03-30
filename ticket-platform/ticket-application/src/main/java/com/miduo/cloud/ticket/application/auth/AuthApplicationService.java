@@ -26,9 +26,14 @@ import java.util.List;
 @Service
 public class AuthApplicationService extends BaseApplicationService {
 
-    private static final String DEV_USERNAME = "admin";
-    private static final String DEV_PASSWORD = "admin2026";
-    private static final String PHONE_LOGIN_PASSWORD = "admin123";
+    @Value("${dev-login.username:}")
+    private String devUsername;
+
+    @Value("${dev-login.password:}")
+    private String devPassword;
+
+    @Value("${dev-login.phone-password:}")
+    private String phoneLoginPassword;
 
     private static final String PATH_WECOM_LOGIN = "/api/auth/wecom/login";
     private static final String PATH_DEV_LOGIN = "/api/auth/dev/login";
@@ -146,14 +151,14 @@ public class AuthApplicationService extends BaseApplicationService {
 
         try {
             LoginOutput output;
-            if (DEV_USERNAME.equals(input.getUsername())) {
-                if (!DEV_PASSWORD.equals(input.getPassword())) {
+            if (devUsername.equals(input.getUsername())) {
+                if (!devPassword.equals(input.getPassword())) {
                     operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",
                             "测试账号登录", false, "账号或密码错误");
                     throw BusinessException.of(ErrorCode.UNAUTHORIZED, "账号或密码错误");
                 }
                 output = loginAsDevAdmin(operatorIp, userAgent);
-            } else if (PHONE_LOGIN_PASSWORD.equals(input.getPassword())) {
+            } else if (phoneLoginPassword.equals(input.getPassword())) {
                 output = loginByPhone(input.getUsername(), operatorIp, userAgent);
             } else {
                 operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_DEV_LOGIN, "POST",

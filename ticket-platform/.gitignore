@@ -28,6 +28,10 @@ logs/
 *.swp
 
 # Local environment config (never commit secrets)
+.env
 .env.prod
+.env.local
 .env.test.local
+.env.*.local
 *.local
+deployment/docker/.env
