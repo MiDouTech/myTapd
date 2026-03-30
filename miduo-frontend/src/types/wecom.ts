@@ -41,13 +41,14 @@ export interface WecomConfigOutput {
   batchSize?: number
   enabled?: boolean
   updateTime?: string
-  callbackToken?: string
+  callbackTokenMasked?: string
   callbackAesKeyMasked?: string
 }
 
 export interface WecomConfigUpdateInput {
   corpId: string
   agentId: string
+  /** 已有配置时留空表示不修改 */
   corpSecret: string
   apiBaseUrl: string
   connectTimeoutMs: number

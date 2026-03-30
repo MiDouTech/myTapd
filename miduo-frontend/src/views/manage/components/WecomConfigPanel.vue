@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getWecomConfigDetail, saveWecomConfig, testWecomConnection } from '@/api/wecom'
 import type { WecomConfigUpdateInput } from '@/types/wecom'
@@ -17,6 +17,7 @@ const submitLoading = ref(false)
 const testLoading = ref(false)
 const hasPersistedConfig = ref(false)
 const corpSecretMasked = ref('')
+const callbackTokenMasked = ref('')
 const callbackAesKeyMasked = ref('')
 const latestUpdateTime = ref('')
 const formRef = ref<FormInstance>()
@@ -43,7 +44,7 @@ const form = reactive<WecomConfigUpdateInput>({
   ...defaultForm,
 })
 
-const rules: FormRules<WecomConfigUpdateInput> = {
+const rules = computed<FormRules<WecomConfigUpdateInput>>(() => ({
   corpId: [
     { required: true, message: '请输入企业微信CorpID', trigger: 'blur' },
     {
@@ -72,7 +73,21 @@ const rules: FormRules<WecomConfigUpdateInput> = {
       trigger: 'blur',
     },
   ],
-  corpSecret: [{ required: true, message: '请输入应用Secret', trigger: 'blur' }],
+  corpSecret: [
+    {
+      validator: (_rule, value: string, callback) => {
+        if (!hasPersistedConfig.value) {
+          const normalized = value?.trim() || ''
+          if (!normalized) {
+            callback(new Error('首次保存必须填写应用Secret'))
+            return
+          }
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
   apiBaseUrl: [{ required: true, message: '请输入企微API基础地址', trigger: 'blur' }],
   connectTimeoutMs: [
     { required: true, message: '请输入连接超时', trigger: 'change' },
@@ -102,11 +117,12 @@ const rules: FormRules<WecomConfigUpdateInput> = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
 function resetForm(): void {
   Object.assign(form, defaultForm)
   corpSecretMasked.value = ''
+  callbackTokenMasked.value = ''
   callbackAesKeyMasked.value = ''
   latestUpdateTime.value = '-'
   hasPersistedConfig.value = false
@@ -132,10 +148,11 @@ async function loadConfig(): Promise<void> {
     form.retryCount = detail.retryCount ?? defaultForm.retryCount
     form.batchSize = detail.batchSize ?? defaultForm.batchSize
     form.enabled = detail.enabled ?? defaultForm.enabled
-    form.callbackToken = detail.callbackToken || ''
+    form.callbackToken = ''
     form.callbackAesKey = ''
 
     corpSecretMasked.value = detail.corpSecretMasked || ''
+    callbackTokenMasked.value = detail.callbackTokenMasked || ''
     callbackAesKeyMasked.value = detail.callbackAesKeyMasked || ''
     latestUpdateTime.value = formatDateTime(detail.updateTime)
     hasPersistedConfig.value = true
@@ -202,7 +219,14 @@ onMounted(async () => {
     />
     <el-alert
       v-if="hasPersistedConfig && corpSecretMasked"
-      :title="`已保存密钥：${corpSecretMasked}（安全策略：每次保存都需要重新输入完整Secret）`"
+      :title="`已保存应用Secret：${corpSecretMasked}（留空表示保留；修改时请填写完整新值）`"
+      type="warning"
+      :closable="false"
+      show-icon
+    />
+    <el-alert
+      v-if="hasPersistedConfig && callbackTokenMasked"
+      :title="`已保存回调Token：${callbackTokenMasked}（留空表示保留；修改时请填写完整新值）`"
       type="warning"
       :closable="false"
       show-icon
@@ -231,11 +255,15 @@ onMounted(async () => {
         <el-form-item label="AgentID" prop="agentId" required>
           <el-input v-model="form.agentId" placeholder="请输入企微自建应用AgentID" />
         </el-form-item>
-        <el-form-item label="应用Secret" prop="corpSecret" required>
+        <el-form-item label="应用Secret" prop="corpSecret" :required="!hasPersistedConfig">
           <el-input
             v-model="form.corpSecret"
             show-password
-            placeholder="请输入企微应用Secret（每次保存需完整输入）"
+            :placeholder="
+              hasPersistedConfig
+                ? '留空保留已保存Secret，修改时填写完整新值'
+                : '请输入企微应用Secret'
+            "
           />
         </el-form-item>
         <el-form-item label="API基础地址" prop="apiBaseUrl" required>
@@ -267,7 +295,7 @@ onMounted(async () => {
 
         <el-alert
           v-if="hasPersistedConfig && callbackAesKeyMasked"
-          :title="`已保存AESKey：${callbackAesKeyMasked}（安全策略：每次保存都需要重新输入完整AESKey）`"
+          :title="`已保存AESKey：${callbackAesKeyMasked}（留空表示保留；修改时请填写完整新值）`"
           type="warning"
           :closable="false"
           show-icon
@@ -277,14 +305,22 @@ onMounted(async () => {
         <el-form-item label="回调Token" prop="callbackToken">
           <el-input
             v-model="form.callbackToken"
-            placeholder="请输入企微回调Token（企微回调配置页面中设置的Token）"
+            :placeholder="
+              hasPersistedConfig
+                ? '留空保留已保存Token，修改时填写完整新值'
+                : '请输入企微回调Token（企微回调配置页面中设置的Token）'
+            "
           />
         </el-form-item>
         <el-form-item label="回调AESKey" prop="callbackAesKey">
           <el-input
             v-model="form.callbackAesKey"
             show-password
-            placeholder="请输入企微回调EncodingAESKey（43位，每次保存需完整输入）"
+            :placeholder="
+              hasPersistedConfig
+                ? '留空保留已保存AESKey，修改时填写完整新值'
+                : '请输入企微回调EncodingAESKey（43位）'
+            "
           />
         </el-form-item>
       </el-form>

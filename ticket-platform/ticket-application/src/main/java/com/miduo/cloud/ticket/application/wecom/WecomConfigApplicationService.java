@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 企业微信连接配置应用服务
@@ -49,11 +50,46 @@ public class WecomConfigApplicationService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public Long saveOrUpdate(WecomConfigUpdateInput input) {
         SysWeworkConfigPO existing = getLatestConfig();
-        SysWeworkConfigPO po = existing == null ? new SysWeworkConfigPO() : existing;
+        if (existing == null) {
+            String plainSecret = input.getCorpSecret() == null ? "" : input.getCorpSecret().trim();
+            if (plainSecret.isEmpty()) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "首次保存必须填写应用Secret");
+            }
+            SysWeworkConfigPO po = new SysWeworkConfigPO();
+            applyNonSecretFields(po, input);
+            po.setCorpSecret(weworkSecretCodec.encode(plainSecret));
+            po.setCallbackToken(normalizeCallbackToken(input.getCallbackToken(), true, null));
+            po.setCallbackAesKey(normalizeCallbackAesKey(input.getCallbackAesKey(), true, null));
+            sysWeworkConfigMapper.insert(po);
+            wecomTokenManager.refreshAccessToken();
+            return po.getId();
+        }
 
+        String newCorpSecretStored = mergeCorpSecretStored(existing, input);
+        String newCallbackToken = normalizeCallbackToken(input.getCallbackToken(), false, existing.getCallbackToken());
+        String newCallbackAesKey = normalizeCallbackAesKey(input.getCallbackAesKey(), false, existing.getCallbackAesKey());
+
+        SysWeworkConfigPO proposed = new SysWeworkConfigPO();
+        proposed.setId(existing.getId());
+        applyNonSecretFields(proposed, input);
+        proposed.setCorpSecret(newCorpSecretStored);
+        proposed.setCallbackToken(newCallbackToken);
+        proposed.setCallbackAesKey(newCallbackAesKey);
+
+        if (isWecomConfigUnchanged(existing, proposed)) {
+            return existing.getId();
+        }
+
+        proposed.setCreateTime(existing.getCreateTime());
+        proposed.setCreateBy(existing.getCreateBy());
+        sysWeworkConfigMapper.updateById(proposed);
+        wecomTokenManager.refreshAccessToken();
+        return proposed.getId();
+    }
+
+    private void applyNonSecretFields(SysWeworkConfigPO po, WecomConfigUpdateInput input) {
         po.setCorpId(input.getCorpId().trim());
         po.setAgentId(input.getAgentId().trim());
-        po.setCorpSecret(weworkSecretCodec.encode(input.getCorpSecret().trim()));
         po.setApiBaseUrl(input.getApiBaseUrl().trim());
         po.setConnectTimeoutMs(input.getConnectTimeoutMs());
         po.setReadTimeoutMs(input.getReadTimeoutMs());
@@ -62,18 +98,62 @@ public class WecomConfigApplicationService extends BaseApplicationService {
         po.setRetryCount(input.getRetryCount());
         po.setBatchSize(input.getBatchSize());
         po.setStatus(Boolean.FALSE.equals(input.getEnabled()) ? 0 : 1);
-        po.setCallbackToken(input.getCallbackToken() != null ? input.getCallbackToken().trim() : "");
-        po.setCallbackAesKey(input.getCallbackAesKey() != null ? input.getCallbackAesKey().trim() : "");
+    }
 
-        if (existing == null) {
-            sysWeworkConfigMapper.insert(po);
-        } else {
-            sysWeworkConfigMapper.updateById(po);
+    private String mergeCorpSecretStored(SysWeworkConfigPO existing, WecomConfigUpdateInput input) {
+        String plain = input.getCorpSecret() == null ? "" : input.getCorpSecret().trim();
+        if (plain.isEmpty()) {
+            return existing.getCorpSecret();
         }
+        return weworkSecretCodec.encode(plain);
+    }
 
-        // 配置更新后强制刷新token缓存，避免旧配置继续生效
-        wecomTokenManager.refreshAccessToken();
-        return po.getId();
+    /**
+     * 新建：null/空白写入空串；更新：null 或空白表示保留原值。
+     */
+    private String normalizeCallbackToken(String raw, boolean isInsert, String previous) {
+        if (raw == null) {
+            return isInsert ? "" : previous;
+        }
+        String trimmed = raw.trim();
+        if (!isInsert && trimmed.isEmpty()) {
+            return previous;
+        }
+        return trimmed;
+    }
+
+    private String normalizeCallbackAesKey(String raw, boolean isInsert, String previous) {
+        if (raw == null) {
+            return isInsert ? "" : previous;
+        }
+        String trimmed = raw.trim();
+        if (!isInsert && trimmed.isEmpty()) {
+            return previous;
+        }
+        return trimmed;
+    }
+
+    private boolean isWecomConfigUnchanged(SysWeworkConfigPO current, SysWeworkConfigPO next) {
+        return Objects.equals(trimToEmpty(current.getCorpId()), trimToEmpty(next.getCorpId()))
+                && Objects.equals(trimToEmpty(current.getAgentId()), trimToEmpty(next.getAgentId()))
+                && Objects.equals(trimToEmpty(current.getCorpSecret()), trimToEmpty(next.getCorpSecret()))
+                && Objects.equals(trimToEmpty(current.getApiBaseUrl()), trimToEmpty(next.getApiBaseUrl()))
+                && Objects.equals(current.getConnectTimeoutMs(), next.getConnectTimeoutMs())
+                && Objects.equals(current.getReadTimeoutMs(), next.getReadTimeoutMs())
+                && Objects.equals(current.getScheduleEnabled(), next.getScheduleEnabled())
+                && Objects.equals(trimToEmpty(current.getScheduleCron()), trimToEmpty(next.getScheduleCron()))
+                && Objects.equals(current.getRetryCount(), next.getRetryCount())
+                && Objects.equals(current.getBatchSize(), next.getBatchSize())
+                && Objects.equals(current.getStatus(), next.getStatus())
+                && Objects.equals(trimToEmpty(current.getCallbackToken()), trimToEmpty(next.getCallbackToken()))
+                && Objects.equals(trimToEmpty(current.getCallbackAesKey()), trimToEmpty(next.getCallbackAesKey()));
+    }
+
+    private static String trimToEmpty(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim();
     }
 
     public WecomConnectionTestOutput testConnection() {
@@ -118,7 +198,7 @@ public class WecomConfigApplicationService extends BaseApplicationService {
         output.setBatchSize(po.getBatchSize());
         output.setEnabled(po.getStatus() == null || po.getStatus() == 1);
         output.setUpdateTime(po.getUpdateTime());
-        output.setCallbackToken(po.getCallbackToken());
+        output.setCallbackTokenMasked(maskSecret(po.getCallbackToken()));
         output.setCallbackAesKeyMasked(maskSecret(po.getCallbackAesKey()));
         return output;
     }
