@@ -132,11 +132,11 @@ public class SlaEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketUrged(TicketUrgedEvent event) {
-        log.info("接收到催办事件: ticketId={}, urgerId={}, handlerId={}",
-                event.getTicketId(), event.getUrgerId(), event.getHandlerId());
+        log.info("接收到催办事件: ticketId={}, urgerId={}, notifyUserIds={}",
+                event.getTicketId(), event.getUrgerId(), event.getNotifyUserIds());
 
-        if (event.getHandlerId() == null) {
-            log.warn("催办事件处理人ID为空，跳过通知: ticketId={}", event.getTicketId());
+        if (event.getNotifyUserIds() == null || event.getNotifyUserIds().isEmpty()) {
+            log.warn("催办事件通知对象为空，跳过通知: ticketId={}", event.getTicketId());
             return;
         }
 
@@ -147,14 +147,11 @@ public class SlaEventListener {
         String title = String.format("工单催办 - 工单 %s", ticketRef);
         String content = String.format("工单 %s 被催办，请尽快处理", ticketRef);
 
-        orchestrator.dispatch(event.getHandlerId(), event.getTicketId(), null,
+        orchestrator.dispatchToUsers(new ArrayList<>(event.getNotifyUserIds()), event.getTicketId(), null,
                 NotificationType.URGE, title, content);
-        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
+        LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(event.getNotifyUserIds());
         if (ticket != null && ticket.getCreatorId() != null) {
             mentionUserIds.add(ticket.getCreatorId());
-        }
-        if (event.getHandlerId() != null) {
-            mentionUserIds.add(event.getHandlerId());
         }
         if (event.getUrgerId() != null) {
             mentionUserIds.add(event.getUrgerId());

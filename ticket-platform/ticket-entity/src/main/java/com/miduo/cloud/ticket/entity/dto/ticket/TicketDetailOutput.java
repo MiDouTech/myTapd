@@ -51,6 +51,11 @@ public class TicketDetailOutput implements Serializable {
      */
     private List<Long> assigneeIds;
 
+    /**
+     * 催办时默认通知对象（与 assigneeIds 一致，无处理人时为空列表）
+     */
+    private List<Long> urgeDefaultNotifyUserIds;
+
     private String source;
 
     private String sourceLabel;

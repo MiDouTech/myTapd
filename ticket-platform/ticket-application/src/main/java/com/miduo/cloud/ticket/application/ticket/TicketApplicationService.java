@@ -608,6 +608,7 @@ public class TicketApplicationService {
             assigneeIdList = new ArrayList<>(Collections.singletonList(ticket.getAssigneeId()));
         }
         output.setAssigneeIds(assigneeIdList);
+        output.setUrgeDefaultNotifyUserIds(new ArrayList<>(assigneeIdList));
         for (Long aid : assigneeIdList) {
             userIds.add(aid);
         }
