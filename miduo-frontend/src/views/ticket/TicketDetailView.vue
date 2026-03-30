@@ -1583,6 +1583,8 @@ watch(
             :ticket-id="ticketId"
             placeholder="发表评论（支持粘贴图片、表格等富文本内容）..."
             :height="180"
+            :auto-grow="true"
+            :max-height="480"
             class="comment-editor"
           />
           <div class="comment-submit-row">
