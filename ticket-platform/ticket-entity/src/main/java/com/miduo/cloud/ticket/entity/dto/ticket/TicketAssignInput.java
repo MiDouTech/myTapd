@@ -19,4 +19,9 @@ public class TicketAssignInput implements Serializable {
     private List<Long> assigneeIds;
 
     private String remark;
+
+    /**
+     * true：在现有处理人基础上追加协同人（去重），首位主处理人不变；用于测试复现中联调开发等场景
+     */
+    private Boolean mergeAssignees;
 }

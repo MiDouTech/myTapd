@@ -43,6 +43,9 @@ public class TicketApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(TicketApplicationService.class);
 
+    /** 内置缺陷工单工作流（与 Flyway 初始化 id=3 一致） */
+    private static final long DEFECT_WORKFLOW_ID = 3L;
+
     @Resource
     private TicketMapper ticketMapper;
 
@@ -458,6 +461,14 @@ public class TicketApplicationService {
                     ticketId, assigneeIds, input.getRemark(), currentUserId);
             log.info("工单分派(待分派→下一节点): ticketId={}, assigneeIds={}", ticketId, assigneeIds);
             return;
+        }
+
+        if (Boolean.TRUE.equals(input.getMergeAssignees())
+                && ticket.getWorkflowId() != null && ticket.getWorkflowId() == DEFECT_WORKFLOW_ID
+                && TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.TESTING) {
+            LinkedHashSet<Long> merged = new LinkedHashSet<>(ticketAssigneeSyncService.listActiveUserIds(ticketId));
+            merged.addAll(assigneeIds);
+            assigneeIds = new ArrayList<>(merged);
         }
 
         Long oldAssigneeId = ticket.getAssigneeId();

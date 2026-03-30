@@ -58,6 +58,8 @@ export interface TicketAssignInput {
   assigneeId?: number
   assigneeIds?: number[]
   remark?: string
+  /** 缺陷工单测试复现中：在现有处理人基础上追加协同人 */
+  mergeAssignees?: boolean
 }
 
 export interface TicketProcessInput {

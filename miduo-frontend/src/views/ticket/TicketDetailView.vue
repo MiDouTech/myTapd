@@ -262,6 +262,15 @@ const currentUserId = computed(() => authStore.userInfo?.id)
 const currentStatus = computed(() => normalizeStatus(detail.value?.status))
 /** 内置缺陷工作流 ID 与后端 Flyway 一致 */
 const isDefectWorkflow = computed(() => detail.value?.workflowId === 3)
+const assignDialogTitle = computed(() => {
+  if (currentStatus.value === 'pending_assign') {
+    return '分派 / 认领（进入下一环节）'
+  }
+  if (isDefectWorkflow.value && currentStatus.value === 'testing') {
+    return '追加协同处理人'
+  }
+  return '转派工单'
+})
 const isCompactLayout = computed(() => viewportWidth.value <= MOBILE_BREAKPOINT)
 
 const customFieldEntries = computed(() => {
@@ -429,8 +438,14 @@ async function handleAssign(): Promise<void> {
     await assignTicket(ticketId.value, {
       assigneeIds: [...assignForm.assigneeIds],
       remark: assignForm.remark,
+      mergeAssignees:
+        isDefectWorkflow.value && currentStatus.value === 'testing' ? true : undefined,
     })
-    notifySuccess('工单分派成功')
+    notifySuccess(
+      isDefectWorkflow.value && currentStatus.value === 'testing'
+        ? '已追加协同处理人'
+        : '工单分派成功',
+    )
     assignDialogVisible.value = false
     await loadAll()
   } finally {
@@ -938,7 +953,7 @@ watch(
             </el-button>
           </template>
           <el-button v-else size="small" type="warning" plain @click="openAssignDialog">
-            转派
+            {{ isDefectWorkflow && currentStatus === 'testing' ? '追加处理人' : '转派' }}
           </el-button>
         </div>
         <div class="action-bar-right">
@@ -1651,12 +1666,14 @@ watch(
   </el-dialog>
 
   <!-- 分派工单弹窗（支持多人，首位为主处理人） -->
-  <el-dialog
-    v-model="assignDialogVisible"
-    :title="currentStatus === 'pending_assign' ? '分派 / 认领（进入下一环节）' : '转派工单'"
-    width="min(520px, 92vw)"
-  >
+  <el-dialog v-model="assignDialogVisible" :title="assignDialogTitle" width="min(520px, 92vw)">
     <el-form label-width="100px">
+      <p
+        v-if="isDefectWorkflow && currentStatus === 'testing'"
+        class="assign-merge-hint"
+      >
+        工单仍为「测试复现中」，不会变更流程状态；所选人员将加入协同处理人（主负责人不变）。
+      </p>
       <el-form-item label="处理人" required>
         <el-select
           v-model="assignForm.assigneeIds"
@@ -1664,7 +1681,11 @@ watch(
           filterable
           collapse-tags
           collapse-tags-tooltip
-          placeholder="可选择多名处理人，第一位为主负责人"
+          :placeholder="
+            isDefectWorkflow && currentStatus === 'testing'
+              ? '选择要加入协同的开发等人员（可多选）'
+              : '可选择多名处理人，第一位为主负责人'
+          "
           style="width: 100%"
         >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
@@ -1823,6 +1844,16 @@ watch(
   font-size: 12px;
   color: #909399;
   line-height: 1.4;
+}
+
+.assign-merge-hint {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+  background: #f5f7fa;
+  border-radius: 6px;
 }
 
 // ===== 头部卡片 =====

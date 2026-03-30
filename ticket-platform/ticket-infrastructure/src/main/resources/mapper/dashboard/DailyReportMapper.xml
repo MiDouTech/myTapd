@@ -103,6 +103,7 @@
         LEFT JOIN ticket_bug_test_info bti ON bti.ticket_id = t.id AND bti.deleted = 0
         WHERE t.deleted = 0
           AND LOWER(t.status) = 'pending_verify'
+          AND (t.workflow_id IS NULL OR t.workflow_id != 3)
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
