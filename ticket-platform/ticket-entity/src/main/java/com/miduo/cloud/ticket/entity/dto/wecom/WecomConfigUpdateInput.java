@@ -23,7 +23,9 @@ public class WecomConfigUpdateInput implements Serializable {
     @Size(max = 50, message = "agentId长度不能超过50")
     private String agentId;
 
-    @NotBlank(message = "corpSecret不能为空")
+    /**
+     * 应用 Secret。新建配置时必填；已有配置时留空表示不修改库内密文。
+     */
     @Size(max = 255, message = "corpSecret长度不能超过255")
     private String corpSecret;
 
@@ -59,7 +61,13 @@ public class WecomConfigUpdateInput implements Serializable {
 
     private Boolean enabled;
 
+    /**
+     * 回调 Token。已有配置时留空表示不修改。
+     */
     private String callbackToken;
 
+    /**
+     * 回调 EncodingAESKey。已有配置时留空表示不修改。
+     */
     private String callbackAesKey;
 }
