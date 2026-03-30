@@ -106,10 +106,16 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
-        <!-- Nacos 配置中心 -->
+        <!-- Spring Cloud Alibaba Nacos 配置中心 -->
         <dependency>
-            <groupId>com.alibaba.boot</groupId>
-            <artifactId>nacos-config-spring-boot-starter</artifactId>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <!-- Bootstrap 上下文支持（Nacos 配置需在 bootstrap.yml 加载） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
         </dependency>
 
         <!-- 测试 -->

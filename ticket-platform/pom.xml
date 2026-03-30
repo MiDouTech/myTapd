@@ -42,7 +42,8 @@
         <minio.version>8.5.7</minio.version>
         <flyway.version>8.5.13</flyway.version>
         <qiniu.version>7.14.0</qiniu.version>
-        <nacos-config-spring-boot.version>0.2.12</nacos-config-spring-boot.version>
+        <spring-cloud.version>2021.0.5</spring-cloud.version>
+        <spring-cloud-alibaba.version>2021.0.5.0</spring-cloud-alibaba.version>
     </properties>
 
     <dependencyManagement>
@@ -143,11 +144,22 @@
                 <version>${qiniu.version}</version>
             </dependency>
 
-            <!-- ==================== Nacos 配置中心 ==================== -->
+            <!-- ==================== Spring Cloud ==================== -->
             <dependency>
-                <groupId>com.alibaba.boot</groupId>
-                <artifactId>nacos-config-spring-boot-starter</artifactId>
-                <version>${nacos-config-spring-boot.version}</version>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ==================== Spring Cloud Alibaba ==================== -->
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- ==================== 数据库迁移 ==================== -->

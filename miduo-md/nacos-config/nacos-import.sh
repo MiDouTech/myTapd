@@ -1,29 +1,31 @@
 #!/bin/bash
 # ============================================================
 # Nacos 配置一键导入脚本
-# 用法: bash nacos-import.sh [环境] [nacos地址] [用户名] [密码]
+# 用法: bash nacos-import.sh [环境] [命名空间ID] [nacos地址] [用户名] [密码]
 #
 # 参数说明:
-#   环境     - dev / test / prod (必填)
-#   nacos地址 - 如 http://127.0.0.1:8848 (可选，默认 http://127.0.0.1:8848)
-#   用户名   - Nacos 用户名 (可选，默认 nacos)
-#   密码     - Nacos 密码 (可选，默认 nacos)
+#   环境       - dev / test / prod (必填)
+#   命名空间ID - Nacos namespace ID (可选，默认 e4479836-f77e-4b46-9e96-56179bdd6875)
+#   nacos地址  - 如 http://10.0.4.4:8848 (可选，默认 http://10.0.4.4:8848)
+#   用户名     - Nacos 用户名 (可选，默认 nacos)
+#   密码       - Nacos 密码 (可选，默认 nacos)
 #
 # 示例:
-#   bash nacos-import.sh dev
-#   bash nacos-import.sh prod http://nacos.company.com:8848 admin SecretPass
+#   bash nacos-import.sh test
+#   bash nacos-import.sh prod e4479836-f77e-4b46-9e96-56179bdd6875 http://10.0.4.4:8848 nacos nacos
 # ============================================================
 
 set -euo pipefail
 
 ENV="${1:?请指定环境: dev / test / prod}"
-NACOS_ADDR="${2:-http://127.0.0.1:8848}"
-NACOS_USER="${3:-nacos}"
-NACOS_PASS="${4:-nacos}"
+NS_ID="${2:-e4479836-f77e-4b46-9e96-56179bdd6875}"
+NACOS_ADDR="${3:-http://10.0.4.4:8848}"
+NACOS_USER="${4:-nacos}"
+NACOS_PASS="${5:-nacos}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/ticket-platform-secrets-${ENV}.yml"
-DATA_ID="ticket-platform-secrets.yml"
+DATA_ID="ticket-platform-secrets.yaml"
 GROUP="DEFAULT_GROUP"
 
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -37,13 +39,13 @@ echo " Nacos 配置导入工具"
 echo "============================================"
 echo " 环境:       $ENV"
 echo " Nacos地址:  $NACOS_ADDR"
+echo " 命名空间:   $NS_ID"
 echo " 用户:       $NACOS_USER"
 echo " Data ID:    $DATA_ID"
 echo " Group:      $GROUP"
 echo " 配置文件:   $CONFIG_FILE"
 echo "============================================"
 
-# 检查配置中是否还有未替换的占位符
 if grep -q '<YOUR_' "$CONFIG_FILE"; then
     echo ""
     echo "[WARNING] 配置文件中仍存在未替换的占位符:"
@@ -56,9 +58,8 @@ if grep -q '<YOUR_' "$CONFIG_FILE"; then
     fi
 fi
 
-# Step 1: 获取 Nacos accessToken
 echo ""
-echo "[1/3] 正在登录 Nacos..."
+echo "[1/2] 正在登录 Nacos..."
 LOGIN_RESP=$(curl -s -X POST "${NACOS_ADDR}/nacos/v1/auth/login" \
     -d "username=${NACOS_USER}&password=${NACOS_PASS}")
 
@@ -79,44 +80,8 @@ else
     AUTH_PARAM="&accessToken=${ACCESS_TOKEN}"
 fi
 
-# Step 2: 检查或创建 Namespace
 echo ""
-echo "[2/3] 检查命名空间 '${ENV}'..."
-
-# 获取已有命名空间列表
-NS_LIST=$(curl -s "${NACOS_ADDR}/nacos/v1/console/namespaces?${AUTH_PARAM#&}")
-NS_ID=$(echo "$NS_LIST" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    namespaces = data.get('data', [])
-    for ns in namespaces:
-        if ns.get('namespace') == '${ENV}' or ns.get('namespaceShowName') == '${ENV}':
-            print(ns.get('namespace', ''))
-            break
-except:
-    pass
-" 2>/dev/null || echo "")
-
-if [ -z "$NS_ID" ]; then
-    echo "命名空间 '${ENV}' 不存在，正在创建..."
-    CREATE_NS_RESP=$(curl -s -X POST "${NACOS_ADDR}/nacos/v1/console/namespaces" \
-        -d "customNamespaceId=${ENV}&namespaceName=${ENV}&namespaceDesc=ticket-platform ${ENV} environment${AUTH_PARAM}")
-    if echo "$CREATE_NS_RESP" | grep -qi "true"; then
-        echo "[OK] 命名空间 '${ENV}' 创建成功"
-        NS_ID="${ENV}"
-    else
-        echo "[WARNING] 创建命名空间失败: $CREATE_NS_RESP"
-        echo "将使用默认命名空间 (public)"
-        NS_ID=""
-    fi
-else
-    echo "[OK] 命名空间 '${ENV}' 已存在 (ID: ${NS_ID})"
-fi
-
-# Step 3: 发布配置
-echo ""
-echo "[3/3] 正在发布配置..."
+echo "[2/2] 正在发布配置到命名空间 ${NS_ID}..."
 
 CONTENT=$(cat "$CONFIG_FILE")
 
@@ -140,19 +105,5 @@ echo "============================================"
 echo " 导入完成!"
 echo "============================================"
 echo ""
-echo "启动应用时请设置以下环境变量:"
-echo ""
-echo "  export NACOS_SERVER_ADDR=${NACOS_ADDR#http://}"
-echo "  export NACOS_NAMESPACE=${NS_ID}"
-echo "  export NACOS_USERNAME=${NACOS_USER}"
-echo "  export NACOS_PASSWORD=${NACOS_PASS}"
-echo ""
-echo "或者在启动命令中传入:"
-echo ""
-echo "  java -jar ticket-platform.jar \\"
-echo "    -Dnacos.config.server-addr=${NACOS_ADDR#http://} \\"
-echo "    -Dnacos.config.namespace=${NS_ID} \\"
-echo "    -Dnacos.config.username=${NACOS_USER} \\"
-echo "    -Dnacos.config.password=${NACOS_PASS} \\"
-echo "    --spring.profiles.active=${ENV}"
+echo "bootstrap.yml 中已配置 Nacos 地址和命名空间，直接启动即可。"
 echo ""
