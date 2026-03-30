@@ -52,4 +52,14 @@ public class TicketListOutput implements Serializable {
     private Date resolvedAt;
 
     private Date closedAt;
+
+    /**
+     * SLA整体状态：NORMAL-正常 / WARNING-预警中 / BREACHED-已超时 / null-无SLA策略
+     */
+    private String slaStatus;
+
+    /**
+     * SLA状态中文标签
+     */
+    private String slaStatusLabel;
 }

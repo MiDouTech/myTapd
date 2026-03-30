@@ -657,6 +657,18 @@ onUnmounted(() => {
               <el-tag :type="getStatusType(row.status)">{{ row.statusLabel || row.status }}</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="SLA" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.slaStatus === 'BREACHED'" type="danger" size="small" effect="dark">
+                {{ row.slaStatusLabel || '已超时' }}
+              </el-tag>
+              <el-tag v-else-if="row.slaStatus === 'WARNING'" type="warning" size="small" effect="dark">
+                {{ row.slaStatusLabel || '预警中' }}
+              </el-tag>
+              <span v-else-if="row.slaStatus === 'NORMAL'" class="sla-normal">正常</span>
+              <span v-else class="sla-none">-</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="creatorName" label="创建人" width="120" />
           <el-table-column prop="assigneeName" label="处理人" min-width="160" :show-overflow-tooltip="true" />
           <el-table-column prop="createTime" label="创建时间" width="180" sortable="custom">
@@ -1153,9 +1165,19 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.sla-normal {
+  color: #67c23a;
+  font-size: 13px;
+}
+
+.sla-none {
+  color: #c0c4cc;
+  font-size: 13px;
+}
+
 .ticket-table {
   :deep(.el-table) {
-    min-width: 1360px;
+    min-width: 1460px;
   }
 }
 
