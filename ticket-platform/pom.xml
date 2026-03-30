@@ -42,6 +42,7 @@
         <minio.version>8.5.7</minio.version>
         <flyway.version>8.5.13</flyway.version>
         <qiniu.version>7.14.0</qiniu.version>
+        <nacos-config-spring-boot.version>0.2.12</nacos-config-spring-boot.version>
     </properties>
 
     <dependencyManagement>
@@ -140,6 +141,13 @@
                 <groupId>com.qiniu</groupId>
                 <artifactId>qiniu-java-sdk</artifactId>
                 <version>${qiniu.version}</version>
+            </dependency>
+
+            <!-- ==================== Nacos 配置中心 ==================== -->
+            <dependency>
+                <groupId>com.alibaba.boot</groupId>
+                <artifactId>nacos-config-spring-boot-starter</artifactId>
+                <version>${nacos-config-spring-boot.version}</version>
             </dependency>
 
             <!-- ==================== 数据库迁移 ==================== -->

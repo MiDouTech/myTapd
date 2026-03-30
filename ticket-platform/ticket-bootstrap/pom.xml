@@ -106,6 +106,12 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
+        <!-- Nacos 配置中心 -->
+        <dependency>
+            <groupId>com.alibaba.boot</groupId>
+            <artifactId>nacos-config-spring-boot-starter</artifactId>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

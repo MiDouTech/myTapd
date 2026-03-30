@@ -28,6 +28,20 @@ spring:
       max-file-size: 20MB
       max-request-size: 50MB
 
+nacos:
+  config:
+    server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+    namespace: ${NACOS_NAMESPACE:}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+    type: yaml
+    auto-refresh: true
+    data-id: ${NACOS_DATA_ID:ticket-platform-secrets.yml}
+    group: ${NACOS_GROUP:DEFAULT_GROUP}
+    bootstrap:
+      enable: true
+      log-enable: true
+
 mybatis-plus:
   global-config:
     db-config:
