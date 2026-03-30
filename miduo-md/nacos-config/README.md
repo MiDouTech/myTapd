@@ -11,8 +11,8 @@
 |------|-----|
 | 依赖 | `spring-cloud-starter-alibaba-nacos-config` + `spring-cloud-starter-bootstrap` |
 | 版本 | Spring Cloud Alibaba 2021.0.5.0 / Spring Cloud 2021.0.5 / Spring Boot 2.7.18 |
-| Nacos 地址 | `http://10.0.4.4:8848` |
-| 命名空间 | `e4479836-f77e-4b46-9e96-56179bdd6875` |
+| Nacos 地址 | 由环境变量 `NACOS_SERVER_ADDR` 指定 |
+| 命名空间 | 由环境变量 `NACOS_NAMESPACE` 指定 |
 
 ## Data ID 命名规则
 
@@ -28,8 +28,8 @@ Spring Cloud Alibaba 自动按 `spring.application.name` + `spring.profiles.acti
 
 ### 1. 在 Nacos 控制台创建配置
 
-1. 打开 `http://10.0.4.4:8848/nacos`
-2. 切换到命名空间 `e4479836-f77e-4b46-9e96-56179bdd6875`
+1. 打开 Nacos 控制台（地址由运维配置提供）
+2. 切换到对应环境的命名空间
 3. 新建配置：
    - **Data ID**：`ticket-platform-test.yaml`（或 `ticket-platform-prod.yaml`）
    - **Group**：`DEFAULT_GROUP`

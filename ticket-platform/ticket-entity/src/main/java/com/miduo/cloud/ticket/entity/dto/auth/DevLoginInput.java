@@ -8,8 +8,8 @@ import java.io.Serializable;
 /**
  * 临时登录请求（仅 dev-login.enabled=true 时可用）
  * 支持两种方式：
- * 1. 管理员账号：username=admin, password=admin2026
- * 2. 手机号登录：username=手机号, password=admin123
+ * 1. 管理员账号：username + password（由 Nacos 配置注入）
+ * 2. 手机号登录：username=手机号, password（由 Nacos 配置注入）
  */
 @Data
 public class DevLoginInput implements Serializable {

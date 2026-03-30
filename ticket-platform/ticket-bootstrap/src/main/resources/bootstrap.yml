@@ -5,6 +5,6 @@ spring:
     nacos:
       config:
         enabled: true
-        server-addr: ${NACOS_SERVER_ADDR:http://10.0.4.4:8848}
+        server-addr: ${NACOS_SERVER_ADDR:http://localhost:8848}
         file-extension: yaml
-        namespace: ${NACOS_NAMESPACE:e4479836-f77e-4b46-9e96-56179bdd6875}
+        namespace: ${NACOS_NAMESPACE:}

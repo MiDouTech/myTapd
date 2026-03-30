@@ -7,10 +7,10 @@
 ## 修复步骤
 
 ### 1. 连接测试库
-- 主机：10.0.4.4
+- 主机：（参见 Nacos 配置或运维提供的数据库地址）
 - 端口：3306
 - 数据库：ticket_platform_test
-- 用户名：root（参考 application-test.yml）
+- 用户名：root（参考 Nacos 中的数据源配置）
 
 ### 2. 移除失败的 V17 记录
 执行以下 SQL：

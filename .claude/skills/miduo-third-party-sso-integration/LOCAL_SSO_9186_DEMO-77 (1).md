@@ -5,7 +5,7 @@
 - 快捷入口 ID：`77`
 - 应用编码：`LOCAL_SSO_9186_DEMO`
 - 应用名称：`LOCAL_SSO_9186_DEMO`
-- 应用密钥：`LOCAL_SSO_9186_SECRET_20260320`
+- 应用密钥：`<YOUR_APP_SECRET>`（请从 Nacos 或运维处获取）
 - 服务地址：`http://localhost:9186`
 - 所属分类：-
 - 快捷入口落地页：`http://localhost:9186/sso/test/landing`
@@ -30,7 +30,7 @@
 
 - `baseUrl`: `http://localhost:9186`
 - `appCode`: `LOCAL_SSO_9186_DEMO`
-- `appSecret`: `LOCAL_SSO_9186_SECRET_20260320`
+- `appSecret`: `<YOUR_APP_SECRET>`（请从 Nacos 或运维处获取）
 - `shortcutId`: `77`
 - `callbackUrl`: `http://localhost:9186/sso/test/landing`
 - `redirectUri allowlist`: `https://localhost:9443/sso/callback`
