@@ -546,7 +546,12 @@ onUnmounted(() => {
           :name="tab.value"
         />
       </el-tabs>
-      <el-form :inline="!isMobile" :label-width="isMobile ? 'auto' : '72px'" class="query-form">
+      <el-form
+        :inline="!isMobile"
+        :label-width="isMobile ? 'auto' : '72px'"
+        class="query-form"
+        @submit.prevent="handleSearch"
+      >
         <el-form-item label="工单编号" class="query-form-item">
           <el-input v-model="query.ticketNo" class="query-input" placeholder="支持模糊匹配" clearable />
         </el-form-item>
@@ -607,7 +612,7 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>

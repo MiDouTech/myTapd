@@ -262,7 +262,7 @@ onMounted(async () => {
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleSearch">
         <el-form-item label="通知类型" class="query-form-item">
           <el-select v-model="query.type" class="query-input" placeholder="请选择内容" clearable filterable>
             <el-option
@@ -291,7 +291,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>

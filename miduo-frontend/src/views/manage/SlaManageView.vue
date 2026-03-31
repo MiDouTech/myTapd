@@ -282,14 +282,13 @@ onMounted(async () => {
         <el-button type="primary" @click="openCreateDialog">新增策略</el-button>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleSearch">
         <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="query.keyword"
             class="query-input"
             placeholder="请输入策略名称或描述"
             clearable
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="优先级" class="query-form-item">
@@ -308,7 +307,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space wrap class="query-action-row">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
             <el-button link @click="loadPolicyList">刷新</el-button>
           </el-space>

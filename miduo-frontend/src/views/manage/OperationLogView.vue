@@ -233,7 +233,7 @@ onMounted(() => {
 
     <!-- 搜索筛选区 -->
     <div class="search-panel">
-      <el-form :model="searchForm" inline class="search-form">
+      <el-form :model="searchForm" inline class="search-form" @submit.prevent="handleSearch">
         <el-form-item label="操作时间">
           <el-date-picker
             v-model="dateRange"
@@ -328,7 +328,7 @@ onMounted(() => {
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button type="primary" native-type="submit" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>

@@ -653,14 +653,13 @@ onMounted(async () => {
         <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleWorkflowSearch">
         <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="workflowQuery.keyword"
             class="query-input"
             placeholder="请输入名称或描述"
             clearable
-            @keyup.enter="handleWorkflowSearch"
           />
         </el-form-item>
         <el-form-item label="模式" class="query-form-item">
@@ -677,7 +676,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
-            <el-button type="primary" @click="handleWorkflowSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleWorkflowSearch">查询</el-button>
             <el-button @click="handleWorkflowReset">重置</el-button>
           </el-space>
         </el-form-item>
@@ -737,19 +736,23 @@ onMounted(async () => {
         <el-button type="primary" @click="openCreateHandlerGroupDialog">新建处理组</el-button>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form query-form--compact">
+      <el-form
+        :inline="true"
+        label-width="72px"
+        class="query-form query-form--compact"
+        @submit.prevent="handleHandlerGroupSearch"
+      >
         <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="handlerGroupQuery.keyword"
             class="query-input"
             placeholder="请输入名称/描述/技能标签"
             clearable
-            @keyup.enter="handleHandlerGroupSearch"
           />
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space wrap class="handler-query-actions">
-            <el-button type="primary" @click="handleHandlerGroupSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleHandlerGroupSearch">查询</el-button>
             <el-button @click="handleHandlerGroupReset">重置</el-button>
             <el-button link @click="loadHandlerGroups">刷新</el-button>
           </el-space>

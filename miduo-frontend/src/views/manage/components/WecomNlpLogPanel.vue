@@ -102,7 +102,7 @@ onMounted(async () => {
         </div>
       </template>
 
-      <el-form inline class="filter-form">
+      <el-form inline class="filter-form" @submit.prevent="handleSearch">
         <el-form-item label="解析类型">
           <el-select
             v-model="query.parseType"
@@ -143,7 +143,7 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>

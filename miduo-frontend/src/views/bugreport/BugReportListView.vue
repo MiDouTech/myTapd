@@ -167,14 +167,13 @@ onBeforeUnmount(() => {
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleSearch">
         <el-form-item label="简报编号" class="query-form-item">
           <el-input
             v-model="query.reportNo"
             class="query-input"
             placeholder="请输入简报编号"
             clearable
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="状态" class="query-form-item">
@@ -247,7 +246,7 @@ onBeforeUnmount(() => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>
