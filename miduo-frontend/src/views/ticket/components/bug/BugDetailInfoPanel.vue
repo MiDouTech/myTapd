@@ -74,6 +74,12 @@
           <span class="info-value">{{ formatDateTime(detail.resolvedAt) || '-' }}</span>
         </div>
 
+        <!-- 处理结论 -->
+        <div class="info-row" v-if="detail.resolutionSummary?.trim()">
+          <span class="info-label"><el-icon><Document /></el-icon> 处理结论</span>
+          <span class="info-value resolution-summary-text">{{ detail.resolutionSummary }}</span>
+        </div>
+
         <!-- 是否逾期 -->
         <div class="info-row" v-if="detail.bugSummaryInfo?.isOverdue !== null && detail.bugSummaryInfo?.isOverdue !== undefined">
           <span class="info-label"><el-icon><AlarmClock /></el-icon> 是否逾期</span>
@@ -456,5 +462,11 @@ async function saveField(field: string): Promise<void> {
 .valid-no {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.resolution-summary-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-weight: 400;
 }
 </style>

@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
-import type { TicketPublicDetailOutput } from '@/types/ticket'
+import type {
+  TicketPublicActivityOutput,
+  TicketPublicCommentOutput,
+  TicketPublicDetailOutput,
+} from '@/types/ticket'
 
 const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 const detail = ref<TicketPublicDetailOutput>()
+const problemDescExpanded = ref(false)
+const conclusionExpanded = ref(false)
+
+type PublicTimelineItem =
+  | { kind: 'activity'; data: TicketPublicActivityOutput }
+  | { kind: 'comment'; data: TicketPublicCommentOutput }
 
 const priorityColorMap: Record<string, string> = {
   urgent: '#f56c6c',
@@ -58,6 +68,49 @@ function formatDate(dateStr?: string): string {
 
 function isOperationLog(type?: string): boolean {
   return type === 'OPERATION'
+}
+
+function parseTimeMs(t?: string): number {
+  if (!t) return 0
+  const ms = new Date(t).getTime()
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+const mergedTimeline = computed<PublicTimelineItem[]>(() => {
+  const d = detail.value
+  if (!d) return []
+  const items: PublicTimelineItem[] = []
+  for (const a of d.activities ?? []) {
+    items.push({ kind: 'activity', data: a })
+  }
+  for (const c of d.comments ?? []) {
+    items.push({ kind: 'comment', data: c })
+  }
+  items.sort((x, y) => {
+    const tx =
+      x.kind === 'activity' ? parseTimeMs(x.data.createTime) : parseTimeMs(x.data.createTime)
+    const ty =
+      y.kind === 'activity' ? parseTimeMs(y.data.createTime) : parseTimeMs(y.data.createTime)
+    if (tx !== ty) return tx - ty
+    return x.kind === 'activity' && y.kind === 'comment' ? -1 : 1
+  })
+  return items
+})
+
+const hasTimelineItems = computed(() => mergedTimeline.value.length > 0)
+
+const terminalStatuses = new Set(['closed', 'completed', 'rejected'])
+
+const showResolutionCard = computed(() => {
+  const d = detail.value
+  if (!d?.resolutionSummary?.trim()) return false
+  const s = (d.status || '').toLowerCase()
+  return terminalStatuses.has(s)
+})
+
+function isImageAttachment(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.toLowerCase().startsWith('image/')
 }
 
 async function loadDetail(): Promise<void> {
@@ -121,6 +174,25 @@ onMounted(loadDetail)
           </div>
           <h1 class="ticket-title">{{ detail.title || '（无标题）' }}</h1>
           <p class="ticket-no">{{ detail.ticketNo }}</p>
+        </div>
+
+        <!-- 处理结论 -->
+        <div v-if="showResolutionCard" class="card resolution-card">
+          <h2 class="card-title">处理结论</h2>
+          <div
+            class="resolution-text"
+            :class="{ 'resolution-text-clamp': !conclusionExpanded && (detail.resolutionSummary?.length ?? 0) > 200 }"
+          >
+            {{ detail.resolutionSummary }}
+          </div>
+          <button
+            v-if="(detail.resolutionSummary?.length ?? 0) > 200"
+            type="button"
+            class="text-link-btn"
+            @click="conclusionExpanded = !conclusionExpanded"
+          >
+            {{ conclusionExpanded ? '收起' : '展开全文' }}
+          </button>
         </div>
 
         <!-- 工单基本信息 -->
@@ -196,59 +268,145 @@ onMounted(loadDetail)
           </div>
           <div v-if="detail.bugCustomerInfo.problemDesc" class="info-block-full">
             <span class="info-label">问题描述</span>
-            <div class="info-text-block">{{ detail.bugCustomerInfo.problemDesc }}</div>
+            <div
+              class="info-text-block"
+              :class="{ 'text-clamp': !problemDescExpanded && (detail.bugCustomerInfo.problemDesc.length > 280) }"
+            >
+              {{ detail.bugCustomerInfo.problemDesc }}
+            </div>
+            <button
+              v-if="detail.bugCustomerInfo.problemDesc.length > 280"
+              type="button"
+              class="text-link-btn"
+              @click="problemDescExpanded = !problemDescExpanded"
+            >
+              {{ problemDescExpanded ? '收起' : '展开全文' }}
+            </button>
           </div>
           <div v-if="detail.bugCustomerInfo.expectedResult" class="info-block-full">
             <span class="info-label">预期结果</span>
             <div class="info-text-block">{{ detail.bugCustomerInfo.expectedResult }}</div>
           </div>
-          <div v-if="detail.bugCustomerInfo.problemScreenshot" class="info-block-full">
+
+          <!-- 排障信息 -->
+          <div v-if="detail.bugCustomerInfo.troubleshooting" class="info-block-full troubleshoot-block">
+            <span class="info-label">排障信息</span>
+            <div class="troubleshoot-grid">
+              <div v-if="detail.bugCustomerInfo.troubleshooting.requestUrl" class="troubleshoot-row">
+                <span class="tk">请求URL</span>
+                <span class="tv">{{ detail.bugCustomerInfo.troubleshooting.requestUrl }}</span>
+              </div>
+              <div v-if="detail.bugCustomerInfo.troubleshooting.httpStatus" class="troubleshoot-row">
+                <span class="tk">HTTP状态</span>
+                <span class="tv">{{ detail.bugCustomerInfo.troubleshooting.httpStatus }}</span>
+              </div>
+              <div v-if="detail.bugCustomerInfo.troubleshooting.bizErrorCode" class="troubleshoot-row">
+                <span class="tk">业务错误码</span>
+                <span class="tv">{{ detail.bugCustomerInfo.troubleshooting.bizErrorCode }}</span>
+              </div>
+              <div v-if="detail.bugCustomerInfo.troubleshooting.traceId" class="troubleshoot-row">
+                <span class="tk">TraceId</span>
+                <span class="tv">{{ detail.bugCustomerInfo.troubleshooting.traceId }}</span>
+              </div>
+              <div v-if="detail.bugCustomerInfo.troubleshooting.occurredAt" class="troubleshoot-row">
+                <span class="tk">发生时间</span>
+                <span class="tv">{{ formatDate(detail.bugCustomerInfo.troubleshooting.occurredAt) }}</span>
+              </div>
+              <div v-if="detail.bugCustomerInfo.troubleshooting.clientTypeLabel" class="troubleshoot-row">
+                <span class="tk">客户端</span>
+                <span class="tv">{{ detail.bugCustomerInfo.troubleshooting.clientTypeLabel }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 证据：截图 + 附件 -->
+        <div
+          v-if="detail.bugCustomerInfo?.problemScreenshot || (detail.publicAttachments?.length ?? 0) > 0"
+          class="card evidence-card"
+        >
+          <h2 class="card-title">证据</h2>
+          <div v-if="detail.bugCustomerInfo?.problemScreenshot" class="info-block-full">
             <span class="info-label">问题截图</span>
             <div class="screenshot-wrap">
               <img
                 v-for="(url, idx) in detail.bugCustomerInfo.problemScreenshot.split(',')"
-                :key="idx"
+                :key="'s' + idx"
                 :src="url.trim()"
                 class="screenshot-img"
                 alt="问题截图"
               />
             </div>
           </div>
+          <div v-if="detail.publicAttachments?.length" class="info-block-full">
+            <span class="info-label">附件</span>
+            <ul class="attachment-list">
+              <li v-for="att in detail.publicAttachments" :key="att.id" class="attachment-row">
+                <template v-if="isImageAttachment(att.fileType) && att.fileUrl">
+                  <a :href="att.fileUrl" target="_blank" rel="noopener noreferrer" class="attachment-thumb-link">
+                    <img :src="att.fileUrl" class="attachment-thumb" alt="" />
+                  </a>
+                  <span class="attachment-name">{{ att.fileName || '图片' }}</span>
+                </template>
+                <template v-else>
+                  <a
+                    v-if="att.fileUrl"
+                    :href="att.fileUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="attachment-link"
+                  >{{ att.fileName || '下载附件' }}</a>
+                  <span v-else class="attachment-name">{{ att.fileName || '附件' }}</span>
+                </template>
+              </li>
+            </ul>
+          </div>
         </div>
 
-        <!-- 工单描述 -->
-        <div v-if="detail.description" class="card desc-card">
-          <h2 class="card-title">工单描述</h2>
+        <!-- 处理动态 -->
+        <div class="card comments-card">
+          <h2 class="card-title">处理动态</h2>
+          <div v-if="!hasTimelineItems" class="empty-comments">暂无处理动态</div>
+          <div v-else class="comment-list">
+            <template v-for="item in mergedTimeline" :key="item.kind + '-' + item.data.id">
+              <div v-if="item.kind === 'activity'" class="comment-item activity-item">
+                <div class="comment-header">
+                  <div class="comment-avatar activity-avatar">{{ (item.data.eventTypeLabel || '系')[0] }}</div>
+                  <div class="comment-meta">
+                    <span class="comment-user">{{ item.data.operatorName || '系统' }}</span>
+                    <span class="activity-tag">{{ item.data.eventTypeLabel || '系统' }}</span>
+                    <span class="comment-time">{{ formatDate(item.data.createTime) }}</span>
+                  </div>
+                </div>
+                <div class="comment-body comment-body-plain">{{ item.data.summary || '-' }}</div>
+              </div>
+              <div v-else class="comment-item">
+                <div class="comment-header">
+                  <div class="comment-avatar">{{ ((item.data.userName || '?')[0] ?? '?').toUpperCase() }}</div>
+                  <div class="comment-meta">
+                    <span class="comment-user">{{ item.data.userName || '系统' }}</span>
+                    <span class="comment-time">{{ formatDate(item.data.createTime) }}</span>
+                  </div>
+                </div>
+                <div v-if="isOperationLog(item.data.type)" class="comment-body comment-body-plain">
+                  {{ item.data.content }}
+                </div>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-else class="comment-body" v-html="item.data.content || '-'" />
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- 工单描述（补充） -->
+        <div v-if="detail.description && !detail.descriptionDuplicateOfProblemDesc" class="card desc-card">
+          <h2 class="card-title">工单描述（补充）</h2>
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div class="desc-content" v-html="detail.description" />
         </div>
-
-        <!-- 处理记录 -->
-        <div class="card comments-card">
-          <h2 class="card-title">处理记录</h2>
-          <div v-if="!detail.comments || detail.comments.length === 0" class="empty-comments">
-            暂无处理记录
-          </div>
-          <div v-else class="comment-list">
-            <div
-              v-for="comment in detail.comments"
-              :key="comment.id"
-              class="comment-item"
-            >
-              <div class="comment-header">
-                <div class="comment-avatar">{{ ((comment.userName || '?')[0] ?? '?').toUpperCase() }}</div>
-                <div class="comment-meta">
-                  <span class="comment-user">{{ comment.userName || '系统' }}</span>
-                  <span class="comment-time">{{ formatDate(comment.createTime) }}</span>
-                </div>
-              </div>
-              <div v-if="isOperationLog(comment.type)" class="comment-body comment-body-plain">
-                {{ comment.content }}
-              </div>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-else class="comment-body" v-html="comment.content || '-'" />
-            </div>
-          </div>
+        <div v-else-if="detail.description && detail.descriptionDuplicateOfProblemDesc" class="card desc-card muted-desc-card">
+          <h2 class="card-title">工单描述</h2>
+          <p class="dedupe-hint">与上方「问题描述」一致，已折叠避免重复展示。</p>
         </div>
       </template>
     </main>
@@ -368,6 +526,129 @@ onMounted(loadDetail)
   color: #909399;
   margin: 0;
   font-weight: 500;
+}
+
+.resolution-card {
+  border: 1px solid #bae6fd;
+  background: linear-gradient(180deg, #f0f9ff 0%, #fff 100%);
+}
+
+.resolution-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #0c4a6e;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.resolution-text-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text-link-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1675d1;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.text-link-btn:hover {
+  text-decoration: underline;
+}
+
+.troubleshoot-block .troubleshoot-grid {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.troubleshoot-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px;
+  font-size: 13px;
+  align-items: start;
+}
+
+.troubleshoot-row .tk {
+  color: #909399;
+}
+
+.troubleshoot-row .tv {
+  color: #303133;
+  word-break: break-all;
+}
+
+.attachment-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.attachment-thumb-link {
+  display: block;
+  flex-shrink: 0;
+}
+
+.attachment-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px solid #e5e6eb;
+  object-fit: cover;
+  display: block;
+}
+
+.attachment-name,
+.attachment-link {
+  font-size: 13px;
+  color: #1675d1;
+  word-break: break-all;
+}
+
+.activity-item .activity-avatar {
+  background: #64748b;
+}
+
+.activity-tag {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.muted-desc-card {
+  opacity: 0.9;
+}
+
+.dedupe-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.6;
 }
 
 /* 信息网格 */

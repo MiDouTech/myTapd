@@ -105,7 +105,7 @@ public class TicketController {
      */
     @OperationLog(moduleName = "工单管理", operationItem = "处理工单")
     @PutMapping("/process/{id}")
-    @Operation(summary = "处理工单并流转", description = "接口编号：API000010")
+    @Operation(summary = "处理工单并流转", description = "接口编号：API000010；可选 resolutionSummary（终态流转）")
     public ApiResult<Void> processTicket(@PathVariable Long id,
                                          @Valid @RequestBody TicketProcessInput input) {
         Long currentUserId = getCurrentUserId();
@@ -120,7 +120,7 @@ public class TicketController {
      */
     @OperationLog(moduleName = "工单管理", operationItem = "关闭工单")
     @PutMapping("/close/{id}")
-    @Operation(summary = "关闭工单", description = "接口编号：API000011")
+    @Operation(summary = "关闭工单", description = "接口编号：API000011；可选 resolutionSummary 写入处理结论")
     public ApiResult<Void> closeTicket(@PathVariable Long id,
                                        @RequestBody(required = false) TicketCloseInput input) {
         Long currentUserId = getCurrentUserId();
@@ -177,7 +177,7 @@ public class TicketController {
      */
     @OperationLog(moduleName = "工单管理", operationItem = "更新客服信息")
     @PutMapping("/bug/customer-info/{id}")
-    @Operation(summary = "更新缺陷工单客服信息", description = "接口编号：API000021")
+    @Operation(summary = "更新缺陷工单客服信息", description = "接口编号：API000021；可选接口排障扩展字段 troubleshoot*")
     public ApiResult<Void> updateBugCustomerInfo(@PathVariable Long id,
                                                  @RequestBody TicketBugCustomerInfoInput input) {
         Long currentUserId = getCurrentUserId();
