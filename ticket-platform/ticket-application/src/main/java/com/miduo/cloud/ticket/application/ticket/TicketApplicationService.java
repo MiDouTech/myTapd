@@ -8,6 +8,7 @@ import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.util.PublicUrlSanitizer;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
@@ -45,6 +46,10 @@ public class TicketApplicationService {
 
     /** 内置缺陷工单工作流（与 Flyway 初始化 id=3 一致） */
     private static final long DEFECT_WORKFLOW_ID = 3L;
+
+    private static final Set<String> PUBLIC_ACTIVITY_LOG_ACTIONS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
+                    "CREATE", "ASSIGN", "TRANSFER", "TRANSIT", "RETURN")));
 
     @Resource
     private TicketMapper ticketMapper;
@@ -355,6 +360,7 @@ public class TicketApplicationService {
         output.setExpectedTime(ticket.getExpectedTime());
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());
+        output.setResolutionSummary(ticket.getResolutionSummary());
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());
 
@@ -390,6 +396,7 @@ public class TicketApplicationService {
         }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
+        String problemDescPlain = null;
         if (customerInfoOutput != null) {
             TicketPublicDetailOutput.BugCustomerInfo bugCustomerInfo = new TicketPublicDetailOutput.BugCustomerInfo();
             bugCustomerInfo.setMerchantNo(customerInfoOutput.getMerchantNo());
@@ -399,7 +406,30 @@ public class TicketApplicationService {
             bugCustomerInfo.setExpectedResult(customerInfoOutput.getExpectedResult());
             bugCustomerInfo.setSceneCode(customerInfoOutput.getSceneCode());
             bugCustomerInfo.setProblemScreenshot(customerInfoOutput.getProblemScreenshot());
+            if (ticket.getWorkflowId() != null && ticket.getWorkflowId() == DEFECT_WORKFLOW_ID) {
+                TicketPublicDetailOutput.BugTroubleshooting ts = buildPublicTroubleshooting(customerInfoOutput);
+                if (hasTroubleshootingData(ts)) {
+                    bugCustomerInfo.setTroubleshooting(ts);
+                }
+            }
             output.setBugCustomerInfo(bugCustomerInfo);
+            problemDescPlain = normalizePlainText(customerInfoOutput.getProblemDesc());
+        }
+
+        output.setDescriptionDuplicateOfProblemDesc(
+                isDescriptionDuplicateOfProblemDesc(ticket.getDescription(), problemDescPlain));
+
+        List<TicketAttachmentPO> attachments = attachmentMapper.selectList(
+                new LambdaQueryWrapper<TicketAttachmentPO>()
+                        .eq(TicketAttachmentPO::getTicketId, ticket.getId())
+                        .orderByDesc(TicketAttachmentPO::getCreateTime)
+        );
+        if (attachments != null) {
+            for (TicketAttachmentPO a : attachments) {
+                if (a.getUploadedBy() != null) {
+                    userIds.add(a.getUploadedBy());
+                }
+            }
         }
 
         List<TicketCommentPO> comments = commentMapper.selectList(
@@ -411,6 +441,20 @@ public class TicketApplicationService {
             for (TicketCommentPO c : comments) {
                 if (c.getUserId() != null) {
                     userIds.add(c.getUserId());
+                }
+            }
+        }
+
+        List<TicketLogPO> activityLogs = logMapper.selectList(
+                new LambdaQueryWrapper<TicketLogPO>()
+                        .eq(TicketLogPO::getTicketId, ticket.getId())
+                        .in(TicketLogPO::getAction, PUBLIC_ACTIVITY_LOG_ACTIONS)
+                        .orderByAsc(TicketLogPO::getCreateTime)
+        );
+        if (activityLogs != null) {
+            for (TicketLogPO l : activityLogs) {
+                if (l.getUserId() != null && l.getUserId() != 0L) {
+                    userIds.add(l.getUserId());
                 }
             }
         }
@@ -430,6 +474,18 @@ public class TicketApplicationService {
             output.setAssigneeName(assignee.getName());
         }
 
+        if (attachments != null && !attachments.isEmpty()) {
+            output.setPublicAttachments(attachments.stream().map(a -> {
+                TicketPublicAttachmentOutput ao = new TicketPublicAttachmentOutput();
+                ao.setId(a.getId());
+                ao.setFileName(a.getFileName());
+                ao.setFileType(a.getFileType());
+                ao.setFileSize(a.getFileSize());
+                ao.setFileUrl(a.getFilePath());
+                return ao;
+            }).collect(Collectors.toList()));
+        }
+
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
             output.setComments(comments.stream().map(c -> {
@@ -446,7 +502,138 @@ public class TicketApplicationService {
             }).collect(Collectors.toList()));
         }
 
+        if (activityLogs != null && !activityLogs.isEmpty()) {
+            Map<Long, SysUserPO> finalUserMapLogs = userMap;
+            List<TicketPublicActivityOutput> activities = new ArrayList<>();
+            long seq = 0L;
+            for (TicketLogPO l : activityLogs) {
+                TicketPublicActivityOutput ao = mapLogToPublicActivity(l, finalUserMapLogs, ++seq);
+                if (ao != null) {
+                    activities.add(ao);
+                }
+            }
+            output.setActivities(activities);
+        }
+
         return output;
+    }
+
+    private static boolean hasTroubleshootingData(TicketPublicDetailOutput.BugTroubleshooting ts) {
+        if (ts == null) {
+            return false;
+        }
+        return ts.getRequestUrl() != null || ts.getHttpStatus() != null || ts.getBizErrorCode() != null
+                || ts.getTraceId() != null || ts.getOccurredAt() != null || ts.getClientType() != null;
+    }
+
+    private TicketPublicDetailOutput.BugTroubleshooting buildPublicTroubleshooting(
+            TicketBugCustomerInfoOutput customerInfoOutput) {
+        TicketPublicDetailOutput.BugTroubleshooting ts = new TicketPublicDetailOutput.BugTroubleshooting();
+        ts.setRequestUrl(PublicUrlSanitizer.sanitizeUrlForPublic(customerInfoOutput.getTroubleshootRequestUrl()));
+        ts.setHttpStatus(customerInfoOutput.getTroubleshootHttpStatus());
+        ts.setBizErrorCode(customerInfoOutput.getTroubleshootBizErrorCode());
+        ts.setTraceId(customerInfoOutput.getTroubleshootTraceId());
+        ts.setOccurredAt(customerInfoOutput.getTroubleshootOccurredAt());
+        ts.setClientType(customerInfoOutput.getTroubleshootClientType());
+        ts.setClientTypeLabel(customerInfoOutput.getTroubleshootClientTypeLabel());
+        return ts;
+    }
+
+    private static String normalizePlainText(String htmlOrText) {
+        if (htmlOrText == null || htmlOrText.trim().isEmpty()) {
+            return null;
+        }
+        return PublicUrlSanitizer.stripHtmlTags(htmlOrText).replaceAll("\\s+", " ").trim();
+    }
+
+    private static boolean isDescriptionDuplicateOfProblemDesc(String description, String problemDescPlain) {
+        String d = normalizePlainText(description);
+        String p = problemDescPlain;
+        if (d == null || d.isEmpty() || p == null || p.isEmpty()) {
+            return false;
+        }
+        return d.equals(p) || d.contains(p) || p.contains(d);
+    }
+
+    private TicketPublicActivityOutput mapLogToPublicActivity(TicketLogPO logPO,
+                                                                Map<Long, SysUserPO> userMap,
+                                                                long seq) {
+        if (logPO == null || logPO.getAction() == null) {
+            return null;
+        }
+        String action = logPO.getAction().trim();
+        if (!PUBLIC_ACTIVITY_LOG_ACTIONS.contains(action)) {
+            return null;
+        }
+        TicketPublicActivityOutput out = new TicketPublicActivityOutput();
+        out.setId(-seq);
+        out.setCreateTime(logPO.getCreateTime());
+        Long uid = logPO.getUserId();
+        if (uid != null && uid != 0L) {
+            SysUserPO u = userMap.get(uid);
+            out.setOperatorName(u != null ? u.getName() : "系统");
+        } else {
+            out.setOperatorName("系统");
+        }
+        String remark = logPO.getRemark();
+        if (remark != null && remark.trim().startsWith("{")) {
+            out.setSummary("工单信息已更新");
+        } else {
+            out.setSummary(buildPublicLogSummary(action, logPO.getOldValue(), logPO.getNewValue(), remark));
+        }
+        switch (action) {
+            case "CREATE":
+                out.setEventType("STRUCT_CREATE");
+                out.setEventTypeLabel("创建");
+                break;
+            case "ASSIGN":
+                out.setEventType("STRUCT_ASSIGN");
+                out.setEventTypeLabel("分派");
+                break;
+            case "TRANSFER":
+                out.setEventType("STRUCT_TRANSFER");
+                out.setEventTypeLabel("转派");
+                break;
+            case "TRANSIT":
+                out.setEventType("STRUCT_TRANSIT");
+                out.setEventTypeLabel("状态变更");
+                break;
+            case "RETURN":
+                out.setEventType("STRUCT_RETURN");
+                out.setEventTypeLabel("退回");
+                break;
+            default:
+                out.setEventType("STRUCT_OTHER");
+                out.setEventTypeLabel("系统");
+        }
+        return out;
+    }
+
+    private String buildPublicLogSummary(String action, String oldValue, String newValue, String remark) {
+        if ("CREATE".equals(action)) {
+            if (remark != null && !remark.trim().isEmpty() && !remark.trim().startsWith("{")) {
+                return remark.trim();
+            }
+            return "创建了工单";
+        }
+        if ("ASSIGN".equals(action)) {
+            return "已分派处理人";
+        }
+        if ("TRANSFER".equals(action)) {
+            return "已转派处理人";
+        }
+        if ("RETURN".equals(action)) {
+            return "已退回上一环节";
+        }
+        if ("TRANSIT".equals(action)) {
+            TicketStatus to = TicketStatus.fromCode(newValue);
+            String toLabel = to != null ? to.getLabel() : (newValue != null ? newValue : "");
+            if (toLabel.isEmpty()) {
+                return "状态已更新";
+            }
+            return "状态变更为「" + toLabel + "」";
+        }
+        return "工单已更新";
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -501,6 +688,7 @@ public class TicketApplicationService {
                 ? input.getTargetStatus().toLowerCase() : null);
         transitInput.setNewAssigneeId(input.getTargetUserId());
         transitInput.setRemark(input.getRemark());
+        transitInput.setResolutionSummary(input.getResolutionSummary());
 
         ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
 
@@ -524,6 +712,7 @@ public class TicketApplicationService {
         TransitInput transitInput = new TransitInput();
         transitInput.setTargetStatus(TicketStatus.CLOSED.getCode());
         transitInput.setRemark(input != null ? input.getRemark() : null);
+        transitInput.setResolutionSummary(input != null ? input.getResolutionSummary() : null);
 
         try {
             ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
@@ -587,6 +776,7 @@ public class TicketApplicationService {
         output.setExpectedTime(ticket.getExpectedTime());
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());
+        output.setResolutionSummary(ticket.getResolutionSummary());
         output.setUrgeCount(ticket.getUrgeCount() != null ? ticket.getUrgeCount() : 0);
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());

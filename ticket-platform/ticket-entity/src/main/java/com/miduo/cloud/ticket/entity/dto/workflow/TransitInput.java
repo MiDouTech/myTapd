@@ -33,6 +33,11 @@ public class TransitInput implements Serializable {
     private String remark;
 
     /**
+     * 终态流转时的处理结论（优先于 remark 写入 resolution_summary，公开详情展示）
+     */
+    private String resolutionSummary;
+
+    /**
      * 流转时同步指定新的处理人（allowTransfer=true 的流转可选填）
      */
     private Long newAssigneeId;

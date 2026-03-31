@@ -22,6 +22,8 @@ import org.springframework.util.CollectionUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -123,6 +125,19 @@ public class TicketChangeHistoryRecorder {
         detectChange(changes, "scene_code", "场景码", old.getSceneCode(), input.getSceneCode());
         detectChange(changes, "problem_screenshot", "问题截图",
                 old.getProblemScreenshot(), input.getProblemScreenshot());
+        detectChange(changes, "troubleshoot_request_url", "请求URL",
+                truncate(old.getTroubleshootRequestUrl()), truncate(input.getTroubleshootRequestUrl()));
+        detectChange(changes, "troubleshoot_http_status", "HTTP状态码",
+                old.getTroubleshootHttpStatus(), input.getTroubleshootHttpStatus());
+        detectChange(changes, "troubleshoot_biz_error_code", "业务错误码",
+                old.getTroubleshootBizErrorCode(), input.getTroubleshootBizErrorCode());
+        detectChange(changes, "troubleshoot_trace_id", "TraceId",
+                old.getTroubleshootTraceId(), input.getTroubleshootTraceId());
+        detectChange(changes, "troubleshoot_occurred_at", "问题发生时间",
+                formatTroubleshootTime(old.getTroubleshootOccurredAt()),
+                input.getTroubleshootOccurredAt());
+        detectChange(changes, "troubleshoot_client_type", "客户端类型",
+                old.getTroubleshootClientType(), input.getTroubleshootClientType());
         return changes;
     }
 
@@ -254,6 +269,13 @@ public class TicketChangeHistoryRecorder {
     /**
      * 截断较长文本，防止 remark 字段超长
      */
+    private String formatTroubleshootTime(Date d) {
+        if (d == null) {
+            return null;
+        }
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(d);
+    }
+
     private String truncate(String val) {
         if (val == null) {
             return null;

@@ -14,4 +14,7 @@ public class TicketProcessInput implements Serializable {
     private Long targetUserId;
 
     private String remark;
+
+    /** 流转至终态时的处理结论（写入 resolution_summary） */
+    private String resolutionSummary;
 }

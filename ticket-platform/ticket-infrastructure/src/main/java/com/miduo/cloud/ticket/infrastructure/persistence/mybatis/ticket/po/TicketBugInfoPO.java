@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.common.BaseEnti
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.Date;
+
 /**
  * 缺陷工单客服信息PO
  * 缺陷工单客服信息
@@ -38,4 +40,22 @@ public class TicketBugInfoPO extends BaseEntity {
 
     @TableField("problem_screenshot")
     private String problemScreenshot;
+
+    @TableField("troubleshoot_request_url")
+    private String troubleshootRequestUrl;
+
+    @TableField("troubleshoot_http_status")
+    private String troubleshootHttpStatus;
+
+    @TableField("troubleshoot_biz_error_code")
+    private String troubleshootBizErrorCode;
+
+    @TableField("troubleshoot_trace_id")
+    private String troubleshootTraceId;
+
+    @TableField("troubleshoot_occurred_at")
+    private Date troubleshootOccurredAt;
+
+    @TableField("troubleshoot_client_type")
+    private String troubleshootClientType;
 }

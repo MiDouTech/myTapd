@@ -56,6 +56,9 @@ public class AvailableActionOutput implements Serializable {
 
         /** 允许执行此操作的角色（前端可据此做权限提示） */
         private List<String> allowedRoles;
+
+        /** 目标状态是否为终态（用于前端展示「处理结论」等） */
+        private Boolean targetTerminal;
     }
 
     @Data

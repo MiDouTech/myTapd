@@ -105,6 +105,7 @@ const transitForm = reactive({
   transitionId: '',
   targetStatus: '',
   remark: '',
+  resolutionSummary: '' as string,
   newAssigneeId: undefined as number | undefined,
   newAssigneeIds: [] as number[],
   reproduceEnv: '' as string,
@@ -131,6 +132,7 @@ const pendingPoolTransferForm = reactive({
 
 const closeForm = reactive({
   remark: '',
+  resolutionSummary: '' as string,
 })
 
 // ---- 评论输入 ----
@@ -236,6 +238,12 @@ const customerInfoForm = reactive<TicketBugCustomerInfoInput>({
   expectedResult: '',
   sceneCode: '',
   problemScreenshot: '',
+  troubleshootRequestUrl: '',
+  troubleshootHttpStatus: '',
+  troubleshootBizErrorCode: '',
+  troubleshootTraceId: '',
+  troubleshootOccurredAt: '',
+  troubleshootClientType: '',
 })
 
 const testInfoForm = reactive<TicketBugTestInfoInput>({
@@ -334,6 +342,30 @@ const canEditTestInfo = computed(() => true)
 
 const canEditDevInfo = computed(() => true)
 
+function htmlToPlainText(raw?: string): string {
+  if (!raw?.trim()) {
+    return ''
+  }
+  return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+const descriptionDuplicateOfProblemDesc = computed(() => {
+  const d = htmlToPlainText(detail.value?.description)
+  const p = htmlToPlainText(detail.value?.bugCustomerInfo?.problemDesc)
+  if (!d || !p) {
+    return false
+  }
+  return d === p || d.includes(p) || p.includes(d)
+})
+
+const TROUBLESHOOT_CLIENT_OPTIONS = [
+  { value: 'H5', label: 'H5' },
+  { value: 'MINI_APP', label: '小程序' },
+  { value: 'APP', label: 'App' },
+  { value: 'PC', label: 'PC' },
+  { value: 'UNKNOWN', label: '未知' },
+]
+
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
 }
@@ -365,6 +397,14 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     expectedResult: ticketDetail.bugCustomerInfo?.expectedResult || '',
     sceneCode: ticketDetail.bugCustomerInfo?.sceneCode || '',
     problemScreenshot: ticketDetail.bugCustomerInfo?.problemScreenshot || '',
+    troubleshootRequestUrl: ticketDetail.bugCustomerInfo?.troubleshootRequestUrl || '',
+    troubleshootHttpStatus: ticketDetail.bugCustomerInfo?.troubleshootHttpStatus || '',
+    troubleshootBizErrorCode: ticketDetail.bugCustomerInfo?.troubleshootBizErrorCode || '',
+    troubleshootTraceId: ticketDetail.bugCustomerInfo?.troubleshootTraceId || '',
+    troubleshootOccurredAt: ticketDetail.bugCustomerInfo?.troubleshootOccurredAt
+      ? String(ticketDetail.bugCustomerInfo.troubleshootOccurredAt).replace(' ', 'T').slice(0, 19)
+      : '',
+    troubleshootClientType: ticketDetail.bugCustomerInfo?.troubleshootClientType || '',
   })
   customerProblemScreenshots.value = parseScreenshotList(ticketDetail.bugCustomerInfo?.problemScreenshot)
 
@@ -546,6 +586,7 @@ function openTransitDialog(action: TicketActionItem): void {
   transitForm.transitionId = action.transitionId
   transitForm.targetStatus = action.targetStatus
   transitForm.remark = ''
+  transitForm.resolutionSummary = ''
   transitForm.newAssigneeId = undefined
   transitForm.newAssigneeIds = []
   transitForm.reproduceEnv =
@@ -600,6 +641,7 @@ async function handleProcess(): Promise<void> {
       transitionId: string
       targetStatus: string
       remark: string
+      resolutionSummary?: string
       newAssigneeId?: number
       newAssigneeIds?: number[]
       reproduceEnv?: string
@@ -608,6 +650,9 @@ async function handleProcess(): Promise<void> {
       transitionId: transitForm.transitionId,
       targetStatus: transitForm.targetStatus,
       remark: transitForm.remark,
+    }
+    if (selectedAction.value.targetTerminal && transitForm.resolutionSummary?.trim()) {
+      transitPayload.resolutionSummary = transitForm.resolutionSummary.trim()
     }
     if (transitForm.newAssigneeIds.length > 0) {
       transitPayload.newAssigneeIds = [...transitForm.newAssigneeIds]
@@ -642,9 +687,14 @@ async function handleProcess(): Promise<void> {
 async function handleCloseTicket(): Promise<void> {
   submitLoading.value = true
   try {
-    await closeTicket(ticketId.value, closeForm)
+    await closeTicket(ticketId.value, {
+      remark: closeForm.remark,
+      resolutionSummary: closeForm.resolutionSummary?.trim() || undefined,
+    })
     notifySuccess('工单关闭成功')
     closeDialogVisible.value = false
+    closeForm.remark = ''
+    closeForm.resolutionSummary = ''
     await loadAll()
   } finally {
     submitLoading.value = false
@@ -1051,12 +1101,24 @@ watch(
       <div class="detail-layout">
         <!-- 左侧主区 -->
         <div class="detail-main">
+          <div v-if="detail?.resolutionSummary?.trim()" class="resolution-block">
+            <div class="block-label">处理结论</div>
+            <div class="resolution-content">{{ detail.resolutionSummary }}</div>
+          </div>
           <!-- 工单描述 -->
-          <div v-if="detail?.description" class="description-block">
+          <div v-if="detail?.description && !descriptionDuplicateOfProblemDesc" class="description-block">
             <div class="block-label">描述</div>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="description-content" v-html="detail.description" />
           </div>
+          <el-alert
+            v-else-if="detail?.description && descriptionDuplicateOfProblemDesc"
+            type="info"
+            :closable="false"
+            show-icon
+            class="desc-dedupe-alert"
+            title="工单描述与「问题描述」内容一致，已在客服信息中展示，此处折叠。"
+          />
 
           <!-- 主 Tab -->
           <el-tabs v-model="activeMainTab" class="main-tabs">
@@ -1110,6 +1172,66 @@ watch(
                         :disabled="!canEditCustomerInfo"
                       />
                     </el-form-item>
+                    <template v-if="isDefectWorkflow">
+                      <div class="panel-subtitle">接口排障（可选）</div>
+                      <el-form-item label="请求URL">
+                        <el-input
+                          v-model="customerInfoForm.troubleshootRequestUrl"
+                          type="textarea"
+                          :rows="2"
+                          placeholder="接口路径或完整 URL"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="HTTP状态">
+                        <el-input
+                          v-model="customerInfoForm.troubleshootHttpStatus"
+                          placeholder="如 500"
+                          :disabled="!canEditCustomerInfo"
+                          style="max-width: 200px"
+                        />
+                      </el-form-item>
+                      <el-form-item label="业务错误码">
+                        <el-input
+                          v-model="customerInfoForm.troubleshootBizErrorCode"
+                          :disabled="!canEditCustomerInfo"
+                          style="max-width: 280px"
+                        />
+                      </el-form-item>
+                      <el-form-item label="TraceId">
+                        <el-input
+                          v-model="customerInfoForm.troubleshootTraceId"
+                          :disabled="!canEditCustomerInfo"
+                          style="max-width: 360px"
+                        />
+                      </el-form-item>
+                      <el-form-item label="发生时间">
+                        <el-date-picker
+                          v-model="customerInfoForm.troubleshootOccurredAt"
+                          type="datetime"
+                          value-format="YYYY-MM-DDTHH:mm:ss"
+                          placeholder="选择时间"
+                          :disabled="!canEditCustomerInfo"
+                          style="width: 100%; max-width: 280px"
+                        />
+                      </el-form-item>
+                      <el-form-item label="客户端">
+                        <el-select
+                          v-model="customerInfoForm.troubleshootClientType"
+                          clearable
+                          placeholder="请选择"
+                          :disabled="!canEditCustomerInfo"
+                          style="width: 100%; max-width: 200px"
+                        >
+                          <el-option
+                            v-for="opt in TROUBLESHOOT_CLIENT_OPTIONS"
+                            :key="opt.value"
+                            :label="opt.label"
+                            :value="opt.value"
+                          />
+                        </el-select>
+                      </el-form-item>
+                    </template>
                     <el-form-item label="问题截图">
                       <div class="problem-screenshot-field">
                         <el-upload
@@ -1898,6 +2020,16 @@ watch(
           :placeholder="selectedAction?.requireRemark ? '必填：请说明操作原因' : '可选'"
         />
       </el-form-item>
+      <el-form-item v-if="selectedAction?.targetTerminal" label="处理结论">
+        <el-input
+          v-model="transitForm.resolutionSummary"
+          type="textarea"
+          :rows="4"
+          maxlength="2000"
+          show-word-limit
+          placeholder="选填：对外可见的处理结论（将展示在公开工单链接）"
+        />
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="processDialogVisible = false">取消</el-button>
@@ -1910,8 +2042,18 @@ watch(
   <!-- 关闭工单弹窗 -->
   <el-dialog v-model="closeDialogVisible" title="关闭工单" width="min(480px, 92vw)">
     <el-form label-width="90px">
+      <el-form-item label="处理结论">
+        <el-input
+          v-model="closeForm.resolutionSummary"
+          type="textarea"
+          :rows="4"
+          maxlength="2000"
+          show-word-limit
+          placeholder="建议填写：对外可见的关闭说明"
+        />
+      </el-form-item>
       <el-form-item label="关闭原因">
-        <el-input v-model="closeForm.remark" type="textarea" />
+        <el-input v-model="closeForm.remark" type="textarea" placeholder="内部备注（可选）" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -2090,6 +2232,33 @@ watch(
 }
 
 // ===== 描述区块 =====
+.resolution-block {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+}
+
+.resolution-content {
+  font-size: 14px;
+  color: #0c4a6e;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.desc-dedupe-alert {
+  margin-bottom: 16px;
+}
+
+.panel-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin: 12px 0 8px;
+}
+
 .description-block {
   margin-bottom: 20px;
   padding: 16px 20px;

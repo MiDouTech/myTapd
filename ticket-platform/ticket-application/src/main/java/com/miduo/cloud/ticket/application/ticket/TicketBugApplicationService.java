@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.BugReproduceEnv;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.SeverityLevel;
+import com.miduo.cloud.ticket.common.enums.TroubleshootClientType;
+import com.miduo.cloud.ticket.common.util.PublicUrlSanitizer;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
@@ -62,7 +64,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         }
         TicketBugInfoPO infoPO = new TicketBugInfoPO();
         infoPO.setTicketId(ticketId);
-        applyCustomerInfoChanges(infoPO, input);
+        applyCustomerInfoChanges(infoPO, normalizeCustomerInfoInput(input, infoPO));
         bugInfoMapper.insert(infoPO);
     }
 
@@ -75,9 +77,10 @@ public class TicketBugApplicationService extends BaseApplicationService {
         requireTicket(ticketId);
 
         TicketBugInfoPO infoPO = getOrCreateBugInfo(ticketId);
-        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, input);
+        TicketBugCustomerInfoInput normalized = normalizeCustomerInfoInput(input, infoPO);
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, normalized);
 
-        applyCustomerInfoChanges(infoPO, input);
+        applyCustomerInfoChanges(infoPO, normalized);
         saveBugInfo(infoPO);
 
         changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
@@ -138,6 +141,16 @@ public class TicketBugApplicationService extends BaseApplicationService {
         output.setExpectedResult(po.getExpectedResult());
         output.setSceneCode(po.getSceneCode());
         output.setProblemScreenshot(po.getProblemScreenshot());
+        output.setTroubleshootRequestUrl(po.getTroubleshootRequestUrl());
+        output.setTroubleshootHttpStatus(po.getTroubleshootHttpStatus());
+        output.setTroubleshootBizErrorCode(po.getTroubleshootBizErrorCode());
+        output.setTroubleshootTraceId(po.getTroubleshootTraceId());
+        output.setTroubleshootOccurredAt(po.getTroubleshootOccurredAt());
+        output.setTroubleshootClientType(po.getTroubleshootClientType());
+        TroubleshootClientType ct = TroubleshootClientType.fromCode(po.getTroubleshootClientType());
+        if (ct != null) {
+            output.setTroubleshootClientTypeLabel(ct.getLabel());
+        }
         return output;
     }
 
@@ -252,6 +265,106 @@ public class TicketBugApplicationService extends BaseApplicationService {
         infoPO.setExpectedResult(input.getExpectedResult());
         infoPO.setSceneCode(input.getSceneCode());
         infoPO.setProblemScreenshot(input.getProblemScreenshot());
+        if (isTroubleshootBlockProvided(input)) {
+            infoPO.setTroubleshootRequestUrl(PublicUrlSanitizer.sanitizeUrlForPublic(input.getTroubleshootRequestUrl()));
+            infoPO.setTroubleshootHttpStatus(trimToNull(input.getTroubleshootHttpStatus()));
+            infoPO.setTroubleshootBizErrorCode(trimToNull(input.getTroubleshootBizErrorCode()));
+            infoPO.setTroubleshootTraceId(trimToNull(input.getTroubleshootTraceId()));
+            infoPO.setTroubleshootOccurredAt(parseTroubleshootOccurredAt(input.getTroubleshootOccurredAt()));
+            infoPO.setTroubleshootClientType(normalizeTroubleshootClientType(input.getTroubleshootClientType()));
+        }
+    }
+
+    /**
+     * 归一化入参；若请求体未携带任何排障字段，则保留库内原值（避免部分更新时误清空）
+     */
+    private TicketBugCustomerInfoInput normalizeCustomerInfoInput(TicketBugCustomerInfoInput input,
+                                                                   TicketBugInfoPO existing) {
+        if (input == null) {
+            input = new TicketBugCustomerInfoInput();
+        }
+        TicketBugCustomerInfoInput n = new TicketBugCustomerInfoInput();
+        n.setMerchantNo(input.getMerchantNo());
+        n.setCompanyName(input.getCompanyName());
+        n.setMerchantAccount(input.getMerchantAccount());
+        n.setProblemDesc(input.getProblemDesc());
+        n.setExpectedResult(input.getExpectedResult());
+        n.setSceneCode(input.getSceneCode());
+        n.setProblemScreenshot(input.getProblemScreenshot());
+        if (!isTroubleshootBlockProvided(input)) {
+            if (existing != null && existing.getId() != null) {
+                n.setTroubleshootRequestUrl(existing.getTroubleshootRequestUrl());
+                n.setTroubleshootHttpStatus(existing.getTroubleshootHttpStatus());
+                n.setTroubleshootBizErrorCode(existing.getTroubleshootBizErrorCode());
+                n.setTroubleshootTraceId(existing.getTroubleshootTraceId());
+                if (existing.getTroubleshootOccurredAt() != null) {
+                    n.setTroubleshootOccurredAt(existing.getTroubleshootOccurredAt().toInstant()
+                            .atZone(ZoneId.systemDefault()).toLocalDateTime()
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                }
+                n.setTroubleshootClientType(existing.getTroubleshootClientType());
+            }
+            return n;
+        }
+        n.setTroubleshootRequestUrl(PublicUrlSanitizer.sanitizeUrlForPublic(input.getTroubleshootRequestUrl()));
+        n.setTroubleshootHttpStatus(trimToNull(input.getTroubleshootHttpStatus()));
+        n.setTroubleshootBizErrorCode(trimToNull(input.getTroubleshootBizErrorCode()));
+        n.setTroubleshootTraceId(trimToNull(input.getTroubleshootTraceId()));
+        n.setTroubleshootOccurredAt(trimToNull(input.getTroubleshootOccurredAt()));
+        n.setTroubleshootClientType(normalizeTroubleshootClientType(input.getTroubleshootClientType()));
+        return n;
+    }
+
+    private boolean isTroubleshootBlockProvided(TicketBugCustomerInfoInput input) {
+        if (input == null) {
+            return false;
+        }
+        return StringUtils.hasText(input.getTroubleshootRequestUrl())
+                || StringUtils.hasText(input.getTroubleshootHttpStatus())
+                || StringUtils.hasText(input.getTroubleshootBizErrorCode())
+                || StringUtils.hasText(input.getTroubleshootTraceId())
+                || StringUtils.hasText(input.getTroubleshootOccurredAt())
+                || StringUtils.hasText(input.getTroubleshootClientType());
+    }
+
+    private static String trimToNull(String s) {
+        if (!StringUtils.hasText(s)) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private Date parseTroubleshootOccurredAt(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String s = raw.trim();
+        try {
+            LocalDateTime ldt = LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException ignored) {
+            // fall through
+        }
+        try {
+            LocalDate ld = LocalDate.parse(s, DateTimeFormatter.ISO_LOCAL_DATE);
+            return Date.from(ld.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException e) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "问题发生时间格式无效，请使用 yyyy-MM-dd 或 yyyy-MM-ddTHH:mm:ss");
+        }
+    }
+
+    private String normalizeTroubleshootClientType(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        TroubleshootClientType t = TroubleshootClientType.fromCode(raw.trim());
+        if (t == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "客户端类型无效，可选：H5、MINI_APP、APP、PC、UNKNOWN");
+        }
+        return t.getCode();
     }
 
     private void applyTestInfoChanges(TicketBugTestInfoPO testInfoPO, TicketBugTestInfoInput input) {
