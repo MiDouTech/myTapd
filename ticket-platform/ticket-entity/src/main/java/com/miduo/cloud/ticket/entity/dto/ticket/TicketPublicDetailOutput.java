@@ -46,19 +46,9 @@ public class TicketPublicDetailOutput implements Serializable {
 
     private Date closedAt;
 
-    /**
-     * 处理结论（终态工单，公开可读）
-     */
-    private String resolutionSummary;
-
     private Date createTime;
 
     private Date updateTime;
-
-    /**
-     * 工单描述是否与客服「问题描述」重复（前端用于折叠展示）
-     */
-    private Boolean descriptionDuplicateOfProblemDesc;
 
     /**
      * 客服信息（商户编号、公司名称、问题描述等）
@@ -66,16 +56,6 @@ public class TicketPublicDetailOutput implements Serializable {
     private BugCustomerInfo bugCustomerInfo;
 
     private List<CommentOutput> comments;
-
-    /**
-     * 处理动态-系统事件（与 comments 合并展示时按时间排序）
-     */
-    private List<TicketPublicActivityOutput> activities;
-
-    /**
-     * 附件列表（公开只读）
-     */
-    private List<TicketPublicAttachmentOutput> publicAttachments;
 
     @Data
     public static class BugCustomerInfo implements Serializable {
@@ -86,20 +66,6 @@ public class TicketPublicDetailOutput implements Serializable {
         private String expectedResult;
         private String sceneCode;
         private String problemScreenshot;
-
-        /** 接口排障扩展（URL 已脱敏） */
-        private BugTroubleshooting troubleshooting;
-    }
-
-    @Data
-    public static class BugTroubleshooting implements Serializable {
-        private String requestUrl;
-        private String httpStatus;
-        private String bizErrorCode;
-        private String traceId;
-        private Date occurredAt;
-        private String clientType;
-        private String clientTypeLabel;
     }
 
     @Data

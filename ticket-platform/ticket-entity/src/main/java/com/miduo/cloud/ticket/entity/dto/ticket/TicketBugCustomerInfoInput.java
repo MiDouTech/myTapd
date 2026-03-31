@@ -23,19 +23,4 @@ public class TicketBugCustomerInfoInput implements Serializable {
     private String sceneCode;
 
     private String problemScreenshot;
-
-    /** 请求路径或 URL（保存前由服务端脱敏敏感 query） */
-    private String troubleshootRequestUrl;
-
-    private String troubleshootHttpStatus;
-
-    private String troubleshootBizErrorCode;
-
-    private String troubleshootTraceId;
-
-    /** ISO 日期时间字符串，如 2026-03-31T12:00:00 */
-    private String troubleshootOccurredAt;
-
-    /** H5 / MINI_APP / APP / PC / UNKNOWN */
-    private String troubleshootClientType;
 }
