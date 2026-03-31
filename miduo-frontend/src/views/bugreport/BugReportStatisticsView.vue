@@ -153,7 +153,7 @@ onMounted(() => {
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleSearch">
         <el-form-item label="统计周期" class="query-form-item">
           <el-date-picker
             v-model="timeRange"
@@ -179,7 +179,7 @@ onMounted(() => {
             <el-button :type="quickRangePreset === 90 ? 'primary' : 'default'" @click="applyQuickRange(90)">
               近90天
             </el-button>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>

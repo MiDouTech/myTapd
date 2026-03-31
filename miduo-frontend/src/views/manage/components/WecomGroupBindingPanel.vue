@@ -433,13 +433,12 @@ onMounted(async () => {
         </div>
       </template>
 
-      <el-form :inline="true" class="filter-form">
+      <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="请输入群ID、群名称、分类或模板"
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="分类">
@@ -460,7 +459,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item>
           <el-space>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>

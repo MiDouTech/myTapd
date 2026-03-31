@@ -137,13 +137,12 @@ onMounted(async () => {
         </div>
       </template>
 
-      <el-form :inline="true" class="filter-form">
+      <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
         <el-form-item label="工单ID">
           <el-input
             v-model="query.ticketIdInput"
             clearable
             placeholder="请输入工单ID"
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="配置ID">
@@ -151,7 +150,6 @@ onMounted(async () => {
             v-model="query.webhookConfigIdInput"
             clearable
             placeholder="请输入配置ID"
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="事件类型">
@@ -176,7 +174,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item>
           <el-space>
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>

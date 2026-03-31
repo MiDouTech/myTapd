@@ -410,14 +410,13 @@ onMounted(async () => {
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form">
+      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleSearch">
         <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="query.keyword"
             class="query-input"
             clearable
             placeholder="姓名/工号"
-            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="账号状态" class="query-form-item">
@@ -443,7 +442,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space wrap class="query-action-row">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
             <el-button type="primary" :loading="syncLoading" @click="handleManualSync">同步企业微信</el-button>
             <el-button type="warning" plain @click="openSyncLogDialog">查看同步日志</el-button>
@@ -624,7 +623,7 @@ onMounted(async () => {
   </el-drawer>
 
   <el-dialog v-model="syncLogDialogVisible" title="同步日志" width="980px">
-    <el-form :inline="true" class="sync-log-filter">
+    <el-form :inline="true" class="sync-log-filter" @submit.prevent="handleSyncLogSearch">
       <el-form-item label="触发方式">
         <el-select v-model="syncLogQuery.syncMode" clearable placeholder="请选择内容">
           <el-option label="手动" value="MANUAL" />
@@ -640,7 +639,7 @@ onMounted(async () => {
       </el-form-item>
       <el-form-item>
         <el-space>
-          <el-button type="primary" @click="handleSyncLogSearch">查询</el-button>
+          <el-button type="primary" native-type="submit" @click="handleSyncLogSearch">查询</el-button>
           <el-button @click="handleSyncLogReset">重置</el-button>
         </el-space>
       </el-form-item>
