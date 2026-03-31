@@ -69,12 +69,10 @@ export interface TicketProcessInput {
   targetStatus: string
   targetUserId?: number
   remark?: string
-  resolutionSummary?: string
 }
 
 export interface TicketCloseInput {
   remark?: string
-  resolutionSummary?: string
 }
 
 /** 工单催办（可选追加通知人，默认处理人由后端根据工单关联处理人计算） */
@@ -90,14 +88,6 @@ export interface TicketBugCustomerInfoInput {
   expectedResult?: string
   sceneCode?: string
   problemScreenshot?: string
-  troubleshootRequestUrl?: string
-  troubleshootHttpStatus?: string
-  troubleshootBizErrorCode?: string
-  troubleshootTraceId?: string
-  troubleshootOccurredAt?: string
-  troubleshootClientType?: string
-  /** 服务端返回展示用 */
-  troubleshootClientTypeLabel?: string
 }
 
 export interface TicketBugTestInfoInput {
@@ -257,8 +247,6 @@ export interface TicketDetailOutput {
   expectedTime?: string
   resolvedAt?: string
   closedAt?: string
-  /** 处理结论（终态） */
-  resolutionSummary?: string
   createTime?: string
   updateTime?: string
   customFields?: Record<string, string>
@@ -358,34 +346,6 @@ export interface TicketPublicBugCustomerInfo {
   expectedResult?: string
   sceneCode?: string
   problemScreenshot?: string
-  troubleshooting?: TicketPublicBugTroubleshooting
-}
-
-export interface TicketPublicBugTroubleshooting {
-  requestUrl?: string
-  httpStatus?: string
-  bizErrorCode?: string
-  traceId?: string
-  occurredAt?: string
-  clientType?: string
-  clientTypeLabel?: string
-}
-
-export interface TicketPublicActivityOutput {
-  id: number
-  eventType?: string
-  eventTypeLabel?: string
-  summary?: string
-  operatorName?: string
-  createTime?: string
-}
-
-export interface TicketPublicAttachmentOutput {
-  id: number
-  fileName?: string
-  fileType?: string
-  fileSize?: number
-  fileUrl?: string
 }
 
 export interface TicketPublicDetailOutput {
@@ -406,13 +366,8 @@ export interface TicketPublicDetailOutput {
   expectedTime?: string
   resolvedAt?: string
   closedAt?: string
-  resolutionSummary?: string
   createTime?: string
   updateTime?: string
-  /** 工单描述是否与问题描述重复（用于折叠） */
-  descriptionDuplicateOfProblemDesc?: boolean
   bugCustomerInfo?: TicketPublicBugCustomerInfo
   comments?: TicketPublicCommentOutput[]
-  activities?: TicketPublicActivityOutput[]
-  publicAttachments?: TicketPublicAttachmentOutput[]
 }

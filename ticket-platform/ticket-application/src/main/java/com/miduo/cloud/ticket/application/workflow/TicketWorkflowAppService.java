@@ -3,7 +3,6 @@ package com.miduo.cloud.ticket.application.workflow;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
-import com.miduo.cloud.ticket.application.ticket.TicketResolutionSupport;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -141,8 +140,6 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             item.setRequireRemark(t.isRequireRemark());
             item.setAllowTransfer(t.isAllowTransfer());
             item.setAllowedRoles(t.getAllowedRoles());
-            WorkflowState toState = workflowEngine.findState(workflow.getStates(), t.getTo());
-            item.setTargetTerminal(toState != null && toState.isTerminal());
             actions.add(item);
         }
         output.setActions(actions);
@@ -234,13 +231,6 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                 ticket.setResolvedAt(new Date());
             }
             ticket.setClosedAt(new Date());
-            String mergedResolution = TicketResolutionSupport.merge(
-                    ticket.getResolutionSummary(),
-                    input.getRemark(),
-                    input.getResolutionSummary());
-            if (StringUtils.hasText(mergedResolution)) {
-                ticket.setResolutionSummary(mergedResolution);
-            }
         }
 
         ticketMapper.updateById(ticket);

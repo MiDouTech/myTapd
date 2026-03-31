@@ -116,8 +116,6 @@ export interface TicketActionItem {
   requireRemark?: boolean
   allowTransfer?: boolean
   allowedRoles?: string[]
-  /** 目标是否为终态（用于展示处理结论） */
-  targetTerminal?: boolean
 }
 
 /** 工作流状态条目（全状态列表，用于进度展示） */
@@ -144,8 +142,6 @@ export interface TransitInput {
   transitionId?: string
   targetStatus?: string
   remark?: string
-  /** 终态流转时的处理结论（写入 resolution_summary） */
-  resolutionSummary?: string
   newAssigneeId?: number
   newAssigneeIds?: number[]
   /** 缺陷：转开发时复现环境 PRODUCTION | TEST | BOTH */

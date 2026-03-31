@@ -63,12 +63,6 @@ public class TicketPO extends BaseEntity {
     private Date closedAt;
 
     /**
-     * 处理结论/关闭说明（终态时写入，公开详情可读）
-     */
-    @TableField("resolution_summary")
-    private String resolutionSummary;
-
-    /**
      * 人工催办累计次数（Web/接口每次成功催办 +1）
      */
     @TableField("urge_count")
