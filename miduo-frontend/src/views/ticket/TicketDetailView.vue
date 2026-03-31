@@ -1061,7 +1061,7 @@ watch(
           <!-- 主 Tab -->
           <el-tabs v-model="activeMainTab" class="main-tabs">
             <el-tab-pane label="详细信息" name="detail">
-              <el-tabs v-model="activeBugTab" class="inner-tabs bug-info-tabs" :stretch="!isCompactLayout">
+              <el-tabs v-model="activeBugTab" class="inner-tabs bug-info-tabs">
                 <el-tab-pane label="客服信息" name="customer">
                   <!-- 企微消息一键解析入口 -->
                   <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
@@ -2133,6 +2133,7 @@ watch(
 .bug-info-tabs {
   :deep(.el-tabs__item) {
     font-weight: 500;
+    padding: 0 12px;
   }
 }
 

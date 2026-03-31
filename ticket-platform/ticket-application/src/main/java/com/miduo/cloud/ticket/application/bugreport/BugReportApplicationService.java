@@ -608,7 +608,8 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 工单关闭后自动创建简报草稿
+     * 工单进入终态后自动创建简报草稿（无已有关联时）。
+     * 注意：终态为「已关闭」时由 {@link BugReportEventListener} 跳过，不调用本方法。
      */
     @Transactional(rollbackFor = Exception.class)
     public Long createDraftFromClosedTicket(Long ticketId, Long operatorId) {
