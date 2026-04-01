@@ -26,10 +26,10 @@ public class OpenTicketPublicController {
 
     /**
      * 按工单编号查询公开详情（无需登录）
-     * 接口编号：API000417
-     * 产品文档功能：4.12 工单公开链接 - 外网无需登录查看工单详情
+     * 接口编号：API000417；响应扩展（时间追踪摘要、多人处理人）：API000440
+     * 产品文档功能：工单公开链接 - 外网无需登录查看工单详情
      */
-    @Operation(summary = "工单公开详情（无需登录）", description = "接口编号：API000417，支持手机端访问")
+    @Operation(summary = "工单公开详情（无需登录）", description = "接口编号：API000417 / 响应扩展 API000440，支持手机端访问")
     @GetMapping("/{ticketNo}")
     public ApiResult<TicketPublicDetailOutput> getPublicDetail(@PathVariable String ticketNo) {
         TicketPublicDetailOutput output = ticketApplicationService.getPublicTicketDetail(ticketNo);

@@ -381,12 +381,19 @@ public class TicketApplicationService {
             }
         }
 
+        List<Long> assigneeIdList = ticketAssigneeSyncService.listActiveUserIds(ticket.getId());
+        if (assigneeIdList.isEmpty() && ticket.getAssigneeId() != null) {
+            assigneeIdList = new ArrayList<>(Collections.singletonList(ticket.getAssigneeId()));
+        }
+
         Set<Long> userIds = new HashSet<>();
         if (ticket.getCreatorId() != null) {
             userIds.add(ticket.getCreatorId());
         }
-        if (ticket.getAssigneeId() != null) {
-            userIds.add(ticket.getAssigneeId());
+        for (Long aid : assigneeIdList) {
+            if (aid != null) {
+                userIds.add(aid);
+            }
         }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
@@ -425,10 +432,18 @@ public class TicketApplicationService {
         if (creator != null) {
             output.setCreatorName(creator.getName());
         }
-        SysUserPO assignee = userMap.get(ticket.getAssigneeId());
-        if (assignee != null) {
-            output.setAssigneeName(assignee.getName());
+        List<String> assigneeNames = new ArrayList<>();
+        for (Long aid : assigneeIdList) {
+            SysUserPO u = userMap.get(aid);
+            if (u != null && u.getName() != null) {
+                assigneeNames.add(u.getName());
+            }
         }
+        if (!assigneeNames.isEmpty()) {
+            output.setAssigneeName(String.join("、", assigneeNames));
+        }
+
+        output.setTimeTrackItems(ticketTimeTrackService.listPublicTimeTrackItems(ticket.getId()));
 
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;

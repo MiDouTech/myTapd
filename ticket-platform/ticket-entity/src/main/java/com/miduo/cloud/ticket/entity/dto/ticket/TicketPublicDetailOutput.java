@@ -57,6 +57,11 @@ public class TicketPublicDetailOutput implements Serializable {
 
     private List<CommentOutput> comments;
 
+    /**
+     * 处理过程时间线摘要（基于 ticket_time_track，不含阅读/关注/评论类噪音动作）
+     */
+    private List<TicketPublicTimeTrackItemOutput> timeTrackItems;
+
     @Data
     public static class BugCustomerInfo implements Serializable {
         private String merchantNo;

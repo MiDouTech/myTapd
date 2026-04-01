@@ -5,10 +5,12 @@ import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketAction;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketTimeTrackRecordedEvent;
 import com.miduo.cloud.ticket.entity.dto.ticket.BugChangeHistoryOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketNodeDurationOutput;
+import com.miduo.cloud.ticket.entity.dto.ticket.TicketPublicTimeTrackItemOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketTimeTrackOutput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketNodeDurationMapper;
@@ -41,6 +43,14 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
 
     private static final Set<String> START_PROCESS_STATUS = new HashSet<>(Arrays.asList("TESTING", "DEVELOPING", "PROCESSING"));
     private static final Set<String> TERMINAL_STATUS = new HashSet<>(Arrays.asList("COMPLETED", "CLOSED"));
+
+    /** 公开时间线中排除的动作（阅读、关注、评论类与处理记录重复或对外无意义） */
+    private static final Set<String> PUBLIC_TIME_TRACK_EXCLUDE_ACTIONS = new HashSet<>(Arrays.asList(
+            TicketAction.READ.getCode(),
+            TicketAction.FOLLOW.getCode(),
+            TicketAction.UNFOLLOW.getCode(),
+            TicketAction.COMMENT.getCode()
+    ));
 
     private final TicketMapper ticketMapper;
     private final TicketTimeTrackMapper timeTrackMapper;
@@ -192,6 +202,73 @@ public class TicketTimeTrackApplicationService extends BaseApplicationService {
         output.setTracks(items);
         output.setStandaloneFieldChanges(buildStandaloneFieldChanges(historyList, matchedHistoryIds));
         return output;
+    }
+
+    /**
+     * 公开详情用时间追踪摘要：仅基于 ticket_time_track，不含缺陷字段变更关联
+     */
+    public List<TicketPublicTimeTrackItemOutput> listPublicTimeTrackItems(Long ticketId) {
+        if (ticketId == null) {
+            return Collections.emptyList();
+        }
+        List<TicketTimeTrackPO> tracks = timeTrackMapper.selectList(new LambdaQueryWrapper<TicketTimeTrackPO>()
+                .eq(TicketTimeTrackPO::getTicketId, ticketId)
+                .orderByAsc(TicketTimeTrackPO::getTimestamp)
+                .orderByAsc(TicketTimeTrackPO::getId));
+        if (CollectionUtils.isEmpty(tracks)) {
+            return Collections.emptyList();
+        }
+        Set<Long> userIds = new HashSet<>();
+        for (TicketTimeTrackPO track : tracks) {
+            if (track.getAction() != null && PUBLIC_TIME_TRACK_EXCLUDE_ACTIONS.contains(track.getAction())) {
+                continue;
+            }
+            if (track.getUserId() != null) {
+                userIds.add(track.getUserId());
+            }
+            if (track.getFromUserId() != null) {
+                userIds.add(track.getFromUserId());
+            }
+            if (track.getToUserId() != null) {
+                userIds.add(track.getToUserId());
+            }
+        }
+        Map<Long, String> userNameMap = loadUserNames(userIds);
+        List<TicketPublicTimeTrackItemOutput> result = new ArrayList<>();
+        for (TicketTimeTrackPO track : tracks) {
+            if (track.getAction() != null && PUBLIC_TIME_TRACK_EXCLUDE_ACTIONS.contains(track.getAction())) {
+                continue;
+            }
+            result.add(convertToPublicTimeTrackItem(track, userNameMap));
+        }
+        return result;
+    }
+
+    private TicketPublicTimeTrackItemOutput convertToPublicTimeTrackItem(TicketTimeTrackPO trackPO,
+                                                                         Map<Long, String> userNameMap) {
+        TicketPublicTimeTrackItemOutput item = new TicketPublicTimeTrackItemOutput();
+        item.setId(trackPO.getId());
+        item.setUserName(userNameMap.get(trackPO.getUserId()));
+        item.setAction(trackPO.getAction());
+        TicketAction ticketAction = TicketAction.fromCode(trackPO.getAction());
+        if (ticketAction != null) {
+            item.setActionLabel(ticketAction.getLabel());
+        }
+        item.setFromStatus(trackPO.getFromStatus());
+        TicketStatus fromStatus = TicketStatus.fromCode(trackPO.getFromStatus());
+        if (fromStatus != null) {
+            item.setFromStatusLabel(fromStatus.getLabel());
+        }
+        item.setToStatus(trackPO.getToStatus());
+        TicketStatus toStatus = TicketStatus.fromCode(trackPO.getToStatus());
+        if (toStatus != null) {
+            item.setToStatusLabel(toStatus.getLabel());
+        }
+        item.setFromUserName(userNameMap.get(trackPO.getFromUserId()));
+        item.setToUserName(userNameMap.get(trackPO.getToUserId()));
+        item.setRemark(trackPO.getRemark());
+        item.setTimestamp(trackPO.getTimestamp());
+        return item;
     }
 
     /**
