@@ -180,6 +180,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'manage/alert-mapping',
+        name: 'manageAlertMapping',
+        component: () => import('@/views/manage/AlertMappingView.vue'),
+        meta: {
+          title: '告警接入',
+        },
+      },
+      {
         path: 'design-system',
         name: 'designSystem',
         component: () => import('@/views/demo/DesignSystemView.vue'),
