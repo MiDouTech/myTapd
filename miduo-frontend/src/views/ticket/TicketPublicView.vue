@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
-import type { TicketPublicDetailOutput } from '@/types/ticket'
+import type { TicketPublicDetailOutput, TicketPublicTimeTrackItemOutput } from '@/types/ticket'
 
 const route = useRoute()
 const loading = ref(false)
@@ -58,6 +58,32 @@ function formatDate(dateStr?: string): string {
 
 function isOperationLog(type?: string): boolean {
   return type === 'OPERATION'
+}
+
+function formatTrackSummary(item: TicketPublicTimeTrackItemOutput): string {
+  const segments: string[] = []
+  if (item.actionLabel) {
+    segments.push(item.actionLabel)
+  }
+  const from = item.fromStatusLabel?.trim() || ''
+  const to = item.toStatusLabel?.trim() || ''
+  if (from && to && from !== to) {
+    segments.push(`状态 ${from} → ${to}`)
+  } else if (to) {
+    segments.push(`状态 ${to}`)
+  } else if (from) {
+    segments.push(`状态 ${from}`)
+  }
+  const op = item.userName?.trim()
+  if (op) {
+    segments.push(`操作人 ${op}`)
+  }
+  if (item.fromUserName || item.toUserName) {
+    const a = item.fromUserName?.trim() || '—'
+    const b = item.toUserName?.trim() || '—'
+    segments.push(`处理人 ${a} → ${b}`)
+  }
+  return segments.length > 0 ? segments.join(' · ') : '处理记录'
 }
 
 async function loadDetail(): Promise<void> {
@@ -151,7 +177,7 @@ onMounted(loadDetail)
               <span class="info-value">{{ detail.creatorName || '-' }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">处理人</span>
+              <span class="info-label">当前处理人</span>
               <span class="info-value">{{ detail.assigneeName || '待分配' }}</span>
             </div>
             <div class="info-item">
@@ -169,6 +195,22 @@ onMounted(loadDetail)
             <div v-if="detail.closedAt" class="info-item">
               <span class="info-label">关闭时间</span>
               <span class="info-value">{{ formatDate(detail.closedAt) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 处理进度（时间追踪摘要） -->
+        <div v-if="detail.timeTrackItems && detail.timeTrackItems.length > 0" class="card track-card">
+          <h2 class="card-title">处理进度</h2>
+          <div class="track-list">
+            <div
+              v-for="item in detail.timeTrackItems"
+              :key="item.id ?? item.timestamp"
+              class="track-item"
+            >
+              <div class="track-time">{{ formatDate(item.timestamp) }}</div>
+              <div class="track-summary">{{ formatTrackSummary(item) }}</div>
+              <div v-if="item.remark && item.remark.trim()" class="track-remark">{{ item.remark.trim() }}</div>
             </div>
           </div>
         </div>
@@ -558,6 +600,41 @@ onMounted(loadDetail)
 }
 
 .comment-body-plain {
+  white-space: pre-wrap;
+}
+
+/* 时间追踪摘要 */
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.track-item {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #1675d1;
+}
+
+.track-time {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+
+.track-summary {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.track-remark {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
   white-space: pre-wrap;
 }
 

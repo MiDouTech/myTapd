@@ -348,6 +348,22 @@ export interface TicketPublicBugCustomerInfo {
   problemScreenshot?: string
 }
 
+/** 公开详情中的时间追踪摘要项 */
+export interface TicketPublicTimeTrackItemOutput {
+  id?: number
+  userName?: string
+  action?: string
+  actionLabel?: string
+  fromStatus?: string
+  fromStatusLabel?: string
+  toStatus?: string
+  toStatusLabel?: string
+  fromUserName?: string
+  toUserName?: string
+  remark?: string
+  timestamp?: string
+}
+
 export interface TicketPublicDetailOutput {
   id: number
   ticketNo: string
@@ -370,4 +386,6 @@ export interface TicketPublicDetailOutput {
   updateTime?: string
   bugCustomerInfo?: TicketPublicBugCustomerInfo
   comments?: TicketPublicCommentOutput[]
+  /** 处理过程时间线（不含阅读/关注/评论类轨迹） */
+  timeTrackItems?: TicketPublicTimeTrackItemOutput[]
 }
