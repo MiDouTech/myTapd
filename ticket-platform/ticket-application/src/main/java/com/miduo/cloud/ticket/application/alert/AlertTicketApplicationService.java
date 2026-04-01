@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
+import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.common.constants.AlertConstants;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
@@ -66,6 +67,9 @@ public class AlertTicketApplicationService {
 
     @Resource
     private SysUserMapper userMapper;
+
+    @Resource
+    private TicketAssigneeSyncService ticketAssigneeSyncService;
 
     @Resource
     private SystemConfigMapper systemConfigMapper;
@@ -133,16 +137,13 @@ public class AlertTicketApplicationService {
 
         Long categoryId;
         String priority;
-        Long assigneeId;
 
         if (mapping != null) {
             categoryId = mapping.getCategoryId();
             priority = mapPriority(event.getSeverity(), mapping);
-            assigneeId = mapping.getAssigneeId();
         } else {
             categoryId = getDefaultCategoryId();
             priority = AlertSeverity.fromCode(event.getSeverity()).getDefaultPriority();
-            assigneeId = null;
         }
 
         if (categoryId == null) {
@@ -153,18 +154,107 @@ public class AlertTicketApplicationService {
             return;
         }
 
-        TicketCreateInput ticketInput = buildTicketCreateInput(event, categoryId, priority, assigneeId);
+        List<Long> assigneeIds = resolveAssigneeIds(event, mapping);
+        Long firstAssigneeId = assigneeIds.isEmpty() ? null : assigneeIds.get(0);
+
+        TicketCreateInput ticketInput = buildTicketCreateInput(event, categoryId, priority, firstAssigneeId);
         Long ticketId = ticketApplicationService.createTicket(ticketInput, SYSTEM_USER_ID);
+
+        if (assigneeIds.size() > 1) {
+            try {
+                ticketAssigneeSyncService.replaceAndPersist(ticketId, assigneeIds);
+                log.info("告警工单多人指派: ticketId={}, assignees={}", ticketId, assigneeIds);
+            } catch (Exception e) {
+                log.warn("告警工单多人指派失败，已保留首位处理人: ticketId={}, error={}",
+                        ticketId, e.getMessage());
+            }
+        }
 
         AlertEventLogPO logEntry = buildLogEntry(event, rawPayload);
         logEntry.setTicketId(ticketId);
-        logEntry.setProcessResult(mapping != null
-                ? AlertProcessResult.CREATED.getCode()
-                : AlertProcessResult.UNMAPPED.getCode());
+        logEntry.setProcessResult(AlertProcessResult.CREATED.getCode());
         alertEventLogMapper.insert(logEntry);
 
-        log.info("告警事件已创建工单: hash={}, ticketId={}, mapping={}",
-                event.getHash(), ticketId, mapping != null ? "matched" : "default");
+        log.info("告警事件已创建工单: hash={}, ticketId={}, assignees={}, mapping={}",
+                event.getHash(), ticketId, assigneeIds,
+                mapping != null ? "matched" : "default");
+    }
+
+    /**
+     * 从夜莺推送的 notify_users_obj 中解析通知用户，
+     * 依次按 phone、email、nickname(name) 匹配工单系统用户。
+     * 匹配不到时回退到映射配置中的 assigneeId。
+     */
+    private List<Long> resolveAssigneeIds(NightingaleAlertEvent event, AlertRuleMappingPO mapping) {
+        List<Long> matched = matchNotifyUsers(event.getNotifyUsersObj());
+
+        if (!matched.isEmpty()) {
+            return matched;
+        }
+
+        if (mapping != null && mapping.getAssigneeId() != null) {
+            return Collections.singletonList(mapping.getAssigneeId());
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * 将夜莺 notify_users_obj 中的用户与工单系统 sys_user 进行匹配。
+     * 匹配优先级：phone > email > nickname==name
+     * 一次性批量加载所有活跃用户到内存 Map 进行匹配，避免循环查库。
+     */
+    private List<Long> matchNotifyUsers(List<NightingaleNotifyUser> notifyUsers) {
+        if (notifyUsers == null || notifyUsers.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        LambdaQueryWrapper<SysUserPO> allUserQuery = new LambdaQueryWrapper<>();
+        allUserQuery.eq(SysUserPO::getAccountStatus, 1);
+        List<SysUserPO> allActiveUsers = userMapper.selectList(allUserQuery);
+        if (allActiveUsers == null || allActiveUsers.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Map<String, Long> phoneMap = new HashMap<>();
+        Map<String, Long> emailMap = new HashMap<>();
+        Map<String, Long> nameMap = new HashMap<>();
+        for (SysUserPO u : allActiveUsers) {
+            if (StringUtils.hasText(u.getPhone())) {
+                phoneMap.put(u.getPhone().trim(), u.getId());
+            }
+            if (StringUtils.hasText(u.getEmail())) {
+                emailMap.put(u.getEmail().trim().toLowerCase(), u.getId());
+            }
+            if (StringUtils.hasText(u.getName())) {
+                nameMap.put(u.getName().trim(), u.getId());
+            }
+        }
+
+        LinkedHashSet<Long> result = new LinkedHashSet<>();
+        for (NightingaleNotifyUser nu : notifyUsers) {
+            Long uid = null;
+            if (uid == null && StringUtils.hasText(nu.getPhone())) {
+                uid = phoneMap.get(nu.getPhone().trim());
+            }
+            if (uid == null && StringUtils.hasText(nu.getEmail())) {
+                uid = emailMap.get(nu.getEmail().trim().toLowerCase());
+            }
+            if (uid == null && StringUtils.hasText(nu.getNickname())) {
+                uid = nameMap.get(nu.getNickname().trim());
+            }
+            if (uid == null && StringUtils.hasText(nu.getUsername())) {
+                uid = nameMap.get(nu.getUsername().trim());
+            }
+            if (uid != null) {
+                result.add(uid);
+            } else {
+                log.debug("夜莺通知用户无法匹配工单系统: nickname={}, phone={}, email={}",
+                        nu.getNickname(), nu.getPhone(), nu.getEmail());
+            }
+        }
+
+        return new ArrayList<>(result);
     }
 
     private AlertRuleMappingPO findMapping(String ruleName) {

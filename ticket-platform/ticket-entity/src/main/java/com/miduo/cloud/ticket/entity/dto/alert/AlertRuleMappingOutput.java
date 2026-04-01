@@ -27,6 +27,9 @@ public class AlertRuleMappingOutput implements Serializable {
 
     private String priorityP3;
 
+    /**
+     * 回退处理人（夜莺推送用户匹配不到时使用）
+     */
     private Long assigneeId;
 
     private String assigneeName;

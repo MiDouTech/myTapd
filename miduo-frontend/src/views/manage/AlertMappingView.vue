@@ -389,9 +389,9 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
-          <el-table-column prop="assigneeName" label="默认处理人" width="120" align="center">
+          <el-table-column prop="assigneeName" label="回退处理人" width="120" align="center">
             <template #default="{ row }">
-              {{ row.assigneeName || '自动分派' }}
+              {{ row.assigneeName || '按夜莺推送' }}
             </template>
           </el-table-column>
           <el-table-column prop="dedupWindowMinutes" label="去重窗口" width="100" align="center">
@@ -581,7 +581,9 @@ onMounted(() => {
                 <li>复制上方Webhook URL</li>
                 <li>在夜莺监控平台 → 告警规则 → 回调地址中粘贴该URL</li>
                 <li>在本页「规则映射」Tab中配置告警规则与工单分类的对应关系</li>
-                <li>告警触发后将自动创建工单，可在「事件日志」Tab中查看处理记录</li>
+                <li>告警触发后自动创建工单，处理人优先从夜莺推送的通知用户中匹配（手机号/邮箱/姓名），支持多人指派</li>
+                <li>匹配不到时使用映射配置中的回退处理人，若未设置回退处理人则走自动分派</li>
+                <li>可在「事件日志」Tab中查看告警处理记录</li>
               </ol>
             </el-alert>
           </el-card>
@@ -630,8 +632,8 @@ onMounted(() => {
             <el-option v-for="opt in priorityOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认处理人">
-          <el-select v-model="formData.assigneeId" placeholder="不选则自动分派" filterable clearable style="width: 100%">
+        <el-form-item label="回退处理人">
+          <el-select v-model="formData.assigneeId" placeholder="夜莺推送用户匹配不到时使用" filterable clearable style="width: 100%">
             <el-option
               v-for="user in users"
               :key="user.id"
@@ -639,6 +641,9 @@ onMounted(() => {
               :label="user.name"
             />
           </el-select>
+          <div class="form-tip">
+            工单处理人优先从夜莺告警推送的通知用户中自动匹配（按手机号、邮箱、姓名），支持多人指派。匹配不到时使用此回退处理人。
+          </div>
         </el-form-item>
         <el-form-item label="去重窗口(分钟)">
           <el-input-number v-model="formData.dedupWindowMinutes" :min="1" :max="1440" />
@@ -698,6 +703,13 @@ onMounted(() => {
 .priority-mapping {
   font-size: 12px;
   color: #606266;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
 }
 
 .ticket-link {

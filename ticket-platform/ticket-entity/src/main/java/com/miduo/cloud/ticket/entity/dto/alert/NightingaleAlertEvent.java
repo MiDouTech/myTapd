@@ -96,7 +96,7 @@ public class NightingaleAlertEvent implements Serializable {
     private Boolean isRecovered;
 
     @JsonProperty("notify_users_obj")
-    private List<Object> notifyUsersObj;
+    private List<NightingaleNotifyUser> notifyUsersObj;
 
     @JsonProperty("last_eval_time")
     private Long lastEvalTime;
