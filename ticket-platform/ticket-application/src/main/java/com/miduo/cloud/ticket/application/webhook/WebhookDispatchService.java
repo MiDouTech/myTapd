@@ -370,6 +370,10 @@ public class WebhookDispatchService extends BaseApplicationService {
             content.append("3) 状态：").append(resolveStatusLabel(statusCode)).append("\n");
             String priorityCode = safeJsonString(ticket, "priority", "-");
             content.append("4) 优先级：").append(resolvePriorityDisplay(priorityCode)).append("\n");
+            if (eventType == WebhookEventType.TICKET_STATUS_CHANGED && isPendingAcceptanceStatusCode(statusCode)) {
+                Long assigneeId = ticket.getLong("assigneeId");
+                content.append("5) 当前处理人：").append(resolveUserNameById(assigneeId)).append("\n");
+            }
         }
         List<String> changeLines = buildChangeLines(data);
         if (!changeLines.isEmpty()) {
@@ -377,6 +381,8 @@ public class WebhookDispatchService extends BaseApplicationService {
             for (int i = 0; i < changeLines.size(); i++) {
                 content.append(i + 1).append(") ").append(changeLines.get(i)).append("\n");
             }
+            String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
+            content.append("变更时间：").append(changeTimeLine).append("\n");
         }
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
         if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
@@ -509,6 +515,14 @@ public class WebhookDispatchService extends BaseApplicationService {
         }
         TicketStatus status = TicketStatus.fromCode(code);
         return status != null ? status.getLabel() : code;
+    }
+
+    private boolean isPendingAcceptanceStatusCode(String code) {
+        if (code == null || code.trim().isEmpty() || "-".equals(code)) {
+            return false;
+        }
+        TicketStatus status = TicketStatus.fromCode(code);
+        return status != null && status.isPendingAcceptanceLike();
     }
 
     private String resolvePriorityLabel(String code) {

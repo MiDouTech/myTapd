@@ -50,6 +50,17 @@ public enum TicketStatus {
     }
 
     /**
+     * 是否为「待受理/待分派」类中间态（含缺陷流程的待测试受理、待开发受理）。
+     * 用于通知文案等场景：此类状态下通常需要展示当前处理人。
+     */
+    public boolean isPendingAcceptanceLike() {
+        return this == PENDING_ASSIGN
+                || this == PENDING_ACCEPT
+                || this == PENDING_TEST_ACCEPT
+                || this == PENDING_DEV_ACCEPT;
+    }
+
+    /**
      * 根据 code 查找枚举，大小写不敏感，支持历史别名映射
      */
     public static TicketStatus fromCode(String code) {

@@ -1076,7 +1076,12 @@ vite v7.3.1 building client environment for production...
 | `buildWecomRobotTextPayload(...)` | `String -> String(JSON)` | 企业微信机器人消息体组装入口，本次改为结构化分区排版 |
 | `buildChangeLines(data)` | `Object -> List<String>` | 将事件变更数据拆成多行列表，替代旧的单行逗号拼接 |
 | `resolvePriorityDisplay(code)` | `String -> String` | 输出带颜色标识的优先级文本（🔴🟠🟡🟢） |
+| `TicketStatus#isPendingAcceptanceLike()` | `boolean` | 待分派/待受理/待测试受理/待开发受理等「待受理类」状态，用于决定是否展示当前处理人 |
 | `WECOM_TEXT_MAX_BYTES` | `int` | 企业微信文本消息字节上限，超出自动截断 |
+
+**状态变更类通知补充**：
+- 当事件为 `TICKET_STATUS_CHANGED` 且工单当前状态为待受理类时，在「工单信息」中增加一行 **当前处理人**（按 `assigneeId` 解析姓名）。
+- 「变更内容」各编号行之后增加一行 **变更时间**（与顶部「时间」一致，优先使用负载中的 `eventTime`）。
 
 ### 27.4 返回值说明（接口行为）
 | 场景 | 返回值 | 说明 |
