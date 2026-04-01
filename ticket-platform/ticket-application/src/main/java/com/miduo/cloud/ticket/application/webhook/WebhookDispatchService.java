@@ -6,6 +6,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
+import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
@@ -629,22 +630,15 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (assignType == null || assignType.trim().isEmpty()) {
             return "-";
         }
+        TicketAssignType reason = TicketAssignType.fromCode(assignType);
+        if (reason != null) {
+            return reason.getLabel();
+        }
         DispatchStrategy strategy = DispatchStrategy.fromCode(assignType);
         if (strategy != null) {
             return strategy.getLabel();
         }
-        switch (assignType.toUpperCase(Locale.ROOT)) {
-            case "CREATE_ASSIGN":
-                return "创建时指派";
-            case "MANUAL_ASSIGN":
-                return "手动指派";
-            case "TRANSFER_ON_TRANSIT":
-                return "流转时转派";
-            case "TRANSFER":
-                return "转派";
-            default:
-                return assignType;
-        }
+        return assignType;
     }
 
     private String safeJsonString(JSONObject jsonObject, String key) {

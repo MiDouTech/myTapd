@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
@@ -268,8 +269,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         // 处理人变更事件（主处理人或协同处理人列表变化时通知）
         if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds)) {
             String assignmentReason = matchedTransition.isAllowTransfer()
-                    ? "TRANSFER_ON_TRANSIT"
-                    : "ACCEPT_CLAIM";
+                    ? TicketAssignType.TRANSFER_ON_TRANSIT.getCode()
+                    : TicketAssignType.ACCEPT_CLAIM.getCode();
             eventPublisher.publishEvent(
                     new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
                             oldAssigneeId, safeOperatorId, assignmentReason));
@@ -393,7 +394,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         eventPublisher.publishEvent(
                 new TicketAssignedEvent(ticketId, input.getTargetUserId(),
-                        previousAssigneeId, operatorId, "TRANSFER"));
+                        previousAssigneeId, operatorId, TicketAssignType.TRANSFER.getCode()));
     }
 
     /**
