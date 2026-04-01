@@ -49,6 +49,7 @@ public class SecurityConfig {
                         "/wecom/callback/**",
                         "/api/wecom/callback/**",
                         "/api/open/ticket/**",
+                        "/api/open/alert/**",
                         "/ws/**",
                         "/api/auth/sso/status",
                         "/api/auth/sso/callback",
