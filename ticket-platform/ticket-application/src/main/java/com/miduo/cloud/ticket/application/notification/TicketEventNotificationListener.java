@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFollowerMapper;
@@ -57,7 +58,26 @@ public class TicketEventNotificationListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCreated(TicketCreatedEvent event) {
-        TicketPO ticket = ticketMapper.selectById(event.getTicketId());
+        if (event == null) {
+            return;
+        }
+        if (event.isPendingAutoDispatch()) {
+            return;
+        }
+        sendTicketCreatedNotifications(event.getTicketId());
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onTicketCreatedAfterAutoDispatch(TicketCreatedAfterAutoDispatchEvent event) {
+        sendTicketCreatedNotifications(event.getTicketId());
+    }
+
+    private void sendTicketCreatedNotifications(Long ticketId) {
+        if (ticketId == null) {
+            return;
+        }
+        TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
             return;
         }
