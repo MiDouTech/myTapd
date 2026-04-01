@@ -167,7 +167,9 @@ public class TicketApplicationService {
                 null, ticket.getStatus(), "创建工单: " + ticket.getTicketNo());
         safeRecordCreateTrack(ticket, currentUserId);
 
-        safePublishEvent(new TicketCreatedEvent(ticket.getId(), ticket.getCategoryId(), ticket.getPriority()));
+        boolean pendingAutoDispatch = ticket.getAssigneeId() == null && input.getAssigneeId() == null;
+        safePublishEvent(new TicketCreatedEvent(
+                ticket.getId(), ticket.getCategoryId(), ticket.getPriority(), pendingAutoDispatch));
         if (ticket.getAssigneeId() != null) {
             safePublishEvent(new TicketAssignedEvent(
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));

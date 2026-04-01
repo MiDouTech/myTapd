@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.webhook;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import lombok.Data;
@@ -30,15 +31,53 @@ public class TicketWebhookEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCreated(TicketCreatedEvent event) {
+        if (event == null) {
+            return;
+        }
+        if (event.isPendingAutoDispatch()) {
+            return;
+        }
+        dispatchTicketCreatedWebhook(event);
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onTicketCreatedAfterAutoDispatch(TicketCreatedAfterAutoDispatchEvent event) {
+        dispatchTicketCreatedWebhook(event);
+    }
+
+    private void dispatchTicketCreatedWebhook(Object event) {
+        if (event == null) {
+            return;
+        }
+        Long ticketId;
+        Long categoryId;
+        String priority;
+        String eventId;
+        if (event instanceof TicketCreatedEvent) {
+            TicketCreatedEvent e = (TicketCreatedEvent) event;
+            ticketId = e.getTicketId();
+            categoryId = e.getCategoryId();
+            priority = e.getPriority();
+            eventId = e.getEventId();
+        } else if (event instanceof TicketCreatedAfterAutoDispatchEvent) {
+            TicketCreatedAfterAutoDispatchEvent e = (TicketCreatedAfterAutoDispatchEvent) event;
+            ticketId = e.getTicketId();
+            categoryId = e.getCategoryId();
+            priority = e.getPriority();
+            eventId = e.getEventId();
+        } else {
+            return;
+        }
         try {
             log.info("接收工单创建事件并触发Webhook分发: eventId={}, ticketId={}, categoryId={}, priority={}",
-                    event.getEventId(), event.getTicketId(), event.getCategoryId(), event.getPriority());
+                    eventId, ticketId, categoryId, priority);
             TicketCreatedPayload payload = new TicketCreatedPayload();
-            payload.setCategoryId(event.getCategoryId());
-            payload.setPriority(event.getPriority());
-            webhookDispatchService.dispatch(WebhookEventType.TICKET_CREATED, event.getTicketId(), payload);
+            payload.setCategoryId(categoryId);
+            payload.setPriority(priority);
+            webhookDispatchService.dispatch(WebhookEventType.TICKET_CREATED, ticketId, payload);
         } catch (Exception ex) {
-            log.error("处理工单创建Webhook事件失败: ticketId={}", event != null ? event.getTicketId() : null, ex);
+            log.error("处理工单创建Webhook事件失败: ticketId={}", ticketId, ex);
         }
     }
 

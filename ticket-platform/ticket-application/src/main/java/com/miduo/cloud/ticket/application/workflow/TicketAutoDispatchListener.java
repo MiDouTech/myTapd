@@ -1,8 +1,12 @@
 package com.miduo.cloud.ticket.application.workflow;
 
 import com.miduo.cloud.ticket.domain.common.event.TicketAutoDispatchEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,9 +23,15 @@ public class TicketAutoDispatchListener {
     private static final Logger log = LoggerFactory.getLogger(TicketAutoDispatchListener.class);
 
     private final DispatchAppService dispatchAppService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final TicketMapper ticketMapper;
 
-    public TicketAutoDispatchListener(DispatchAppService dispatchAppService) {
+    public TicketAutoDispatchListener(DispatchAppService dispatchAppService,
+                                      ApplicationEventPublisher eventPublisher,
+                                      TicketMapper ticketMapper) {
         this.dispatchAppService = dispatchAppService;
+        this.eventPublisher = eventPublisher;
+        this.ticketMapper = ticketMapper;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -37,6 +47,25 @@ public class TicketAutoDispatchListener {
         } catch (Exception e) {
             log.error("[自动分派监听] 自动分派失败，不影响工单创建: ticketId={}, errorClass={}, error={}",
                     ticketId, e.getClass().getSimpleName(), e.getMessage(), e);
+        } finally {
+            publishCreatedAfterAutoDispatch(ticketId);
+        }
+    }
+
+    private void publishCreatedAfterAutoDispatch(Long ticketId) {
+        if (eventPublisher == null || ticketId == null) {
+            return;
+        }
+        try {
+            TicketPO ticket = ticketMapper.selectById(ticketId);
+            if (ticket == null) {
+                log.warn("[自动分派监听] 延后创建推送跳过：工单不存在 ticketId={}", ticketId);
+                return;
+            }
+            eventPublisher.publishEvent(new TicketCreatedAfterAutoDispatchEvent(
+                    ticketId, ticket.getCategoryId(), ticket.getPriority()));
+        } catch (Exception e) {
+            log.error("[自动分派监听] 发布 TicketCreatedAfterAutoDispatchEvent 失败: ticketId={}", ticketId, e);
         }
     }
 }
