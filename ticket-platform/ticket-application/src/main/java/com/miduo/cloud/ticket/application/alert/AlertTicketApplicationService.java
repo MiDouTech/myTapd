@@ -432,7 +432,7 @@ public class AlertTicketApplicationService {
         if (!userIds.isEmpty()) {
             List<SysUserPO> users = userMapper.selectBatchIds(userIds);
             for (SysUserPO user : users) {
-                userNameMap.put(user.getId(), user.getNickname() != null ? user.getNickname() : user.getUsername());
+                userNameMap.put(user.getId(), user.getName() != null ? user.getName() : "");
             }
         }
 
@@ -525,7 +525,7 @@ public class AlertTicketApplicationService {
         if (po.getAssigneeId() != null) {
             SysUserPO user = userMapper.selectById(po.getAssigneeId());
             if (user != null) {
-                userNameMap.put(user.getId(), user.getNickname() != null ? user.getNickname() : user.getUsername());
+                userNameMap.put(user.getId(), user.getName() != null ? user.getName() : "");
             }
         }
 
