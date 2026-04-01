@@ -172,7 +172,8 @@ public class TicketApplicationService {
                 ticket.getId(), ticket.getCategoryId(), ticket.getPriority(), pendingAutoDispatch));
         if (ticket.getAssigneeId() != null) {
             safePublishEvent(new TicketAssignedEvent(
-                    ticket.getId(), ticket.getAssigneeId(), null, currentUserId, "CREATE_ASSIGN"));
+                    ticket.getId(), ticket.getAssigneeId(), null, currentUserId,
+                    TicketAssignType.CREATE_ASSIGN.getCode()));
         }
 
         // 启动SLA计时器（若分类绑定了SLA策略）
@@ -490,7 +491,7 @@ public class TicketApplicationService {
                 ticket.getStatus(), ticket.getStatus(), input.getRemark());
 
         safePublishEvent(new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
-                oldAssigneeId, currentUserId, "MANUAL_ASSIGN"));
+                oldAssigneeId, currentUserId, TicketAssignType.MANUAL_ASSIGN.getCode()));
 
         log.info("工单分派: ticketId={}, assigneeIds={}", ticketId, assigneeIds);
     }
