@@ -189,30 +189,39 @@ public class AlertTicketApplicationService {
         List<Long> matched = matchNotifyUsers(event.getNotifyUsersObj());
 
         if (!matched.isEmpty()) {
+            log.info("告警处理人已从 notify_users_obj 匹配: {}", matched);
             return matched;
         }
 
         if (mapping != null && mapping.getAssigneeId() != null) {
+            log.info("notify_users_obj 匹配为空，回退到映射配置处理人: assigneeId={}", mapping.getAssigneeId());
             return Collections.singletonList(mapping.getAssigneeId());
         }
 
+        log.warn("告警处理人解析为空: notify_users_obj匹配0人, 映射配置无回退处理人(mapping={}), 将走自动分派",
+                mapping != null ? "exists,assigneeId=null" : "null");
         return Collections.emptyList();
     }
 
     /**
      * 将夜莺 notify_users_obj 中的用户与工单系统 sys_user 进行匹配。
-     * 匹配优先级：phone > email > nickname==name
+     * 匹配优先级：phone > email > nickname==name > username==name
+     * 同时从 contacts map 中提取 Phone/Email 作为补充匹配源。
      * 一次性批量加载所有活跃用户到内存 Map 进行匹配，避免循环查库。
      */
     private List<Long> matchNotifyUsers(List<NightingaleNotifyUser> notifyUsers) {
         if (notifyUsers == null || notifyUsers.isEmpty()) {
+            log.info("夜莺 notify_users_obj 为空，跳过用户匹配");
             return new ArrayList<>();
         }
+
+        log.info("开始匹配夜莺通知用户，共{}人", notifyUsers.size());
 
         LambdaQueryWrapper<SysUserPO> allUserQuery = new LambdaQueryWrapper<>();
         allUserQuery.eq(SysUserPO::getAccountStatus, 1);
         List<SysUserPO> allActiveUsers = userMapper.selectList(allUserQuery);
         if (allActiveUsers == null || allActiveUsers.isEmpty()) {
+            log.warn("工单系统无活跃用户(account_status=1)，无法匹配处理人");
             return new ArrayList<>();
         }
 
@@ -234,11 +243,19 @@ public class AlertTicketApplicationService {
         LinkedHashSet<Long> result = new LinkedHashSet<>();
         for (NightingaleNotifyUser nu : notifyUsers) {
             Long uid = null;
-            if (uid == null && StringUtils.hasText(nu.getPhone())) {
-                uid = phoneMap.get(nu.getPhone().trim());
+
+            String topPhone = nu.getPhone();
+            String topEmail = nu.getEmail();
+            String contactsPhone = extractFromContacts(nu.getContacts(), "Phone", "phone");
+            String contactsEmail = extractFromContacts(nu.getContacts(), "Email", "email");
+            String effectivePhone = StringUtils.hasText(topPhone) ? topPhone : contactsPhone;
+            String effectiveEmail = StringUtils.hasText(topEmail) ? topEmail : contactsEmail;
+
+            if (uid == null && StringUtils.hasText(effectivePhone)) {
+                uid = phoneMap.get(effectivePhone.trim());
             }
-            if (uid == null && StringUtils.hasText(nu.getEmail())) {
-                uid = emailMap.get(nu.getEmail().trim().toLowerCase());
+            if (uid == null && StringUtils.hasText(effectiveEmail)) {
+                uid = emailMap.get(effectiveEmail.trim().toLowerCase());
             }
             if (uid == null && StringUtils.hasText(nu.getNickname())) {
                 uid = nameMap.get(nu.getNickname().trim());
@@ -248,13 +265,34 @@ public class AlertTicketApplicationService {
             }
             if (uid != null) {
                 result.add(uid);
+                log.info("夜莺通知用户匹配成功: nickname={}, username={}, matchedUserId={}",
+                        nu.getNickname(), nu.getUsername(), uid);
             } else {
-                log.debug("夜莺通知用户无法匹配工单系统: nickname={}, phone={}, email={}",
-                        nu.getNickname(), nu.getPhone(), nu.getEmail());
+                log.warn("夜莺通知用户无法匹配工单系统: nickname={}, username={}, phone={}, email={}, contactsPhone={}, contactsEmail={}",
+                        nu.getNickname(), nu.getUsername(), topPhone, topEmail, contactsPhone, contactsEmail);
             }
         }
 
+        log.info("夜莺通知用户匹配结果: 推送{}人, 匹配成功{}人, userIds={}",
+                notifyUsers.size(), result.size(), result);
         return new ArrayList<>(result);
+    }
+
+    /**
+     * 从夜莺用户的 contacts map 中提取联系方式。
+     * contacts 是夜莺存储用户联系信息的扩展字段，key 不区分大小写。
+     */
+    private String extractFromContacts(Map<String, String> contacts, String... keys) {
+        if (contacts == null || contacts.isEmpty()) {
+            return null;
+        }
+        for (String key : keys) {
+            String value = contacts.get(key);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private AlertRuleMappingPO findMapping(String ruleName) {
