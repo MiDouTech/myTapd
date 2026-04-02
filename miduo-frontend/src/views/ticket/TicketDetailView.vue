@@ -288,10 +288,16 @@ const canShowUrgeTicket = computed(() => {
     return false
   }
   const s = currentStatus.value
-  if (s === 'pending_assign') {
+  if (s === 'pending_assign' || s === 'alert_triggered') {
     return false
   }
-  if (s === 'completed' || s === 'closed' || s === 'rejected') {
+  if (
+    s === 'completed' ||
+    s === 'closed' ||
+    s === 'rejected' ||
+    s === 'alert_resolved' ||
+    s === 'alert_suppressed'
+  ) {
     return false
   }
   return urgeDefaultNotifyUserIds.value.length > 0
@@ -311,7 +317,7 @@ const extraNotifyCandidates = computed(() => {
 })
 
 const assignDialogTitle = computed(() => {
-  if (currentStatus.value === 'pending_assign') {
+  if (currentStatus.value === 'pending_assign' || currentStatus.value === 'alert_triggered') {
     return '分派 / 认领（进入下一环节）'
   }
   if (isDefectWorkflow.value && currentStatus.value === 'testing') {
@@ -511,7 +517,7 @@ async function claimPendingTicket(): Promise<void> {
   try {
     await assignTicket(ticketId.value, {
       assigneeIds: [uid],
-      remark: '测试认领',
+      remark: currentStatus.value === 'alert_triggered' ? '告警认领' : '测试认领',
     })
     notifySuccess('认领成功')
     await loadAll()
@@ -853,6 +859,11 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
   pending_accept: '待受理',
+  alert_triggered: '待认领',
+  alert_acknowledged: '处置中',
+  alert_stable: '待确认',
+  alert_resolved: '已解决',
+  alert_suppressed: '已抑制',
   processing: '处理中',
   suspended: '已挂起',
   pending_verify: '待验收',
@@ -1001,7 +1012,7 @@ watch(
               {{ action.actionName }}
             </el-button>
           </template>
-          <template v-if="currentStatus === 'pending_assign'">
+          <template v-if="currentStatus === 'pending_assign' || currentStatus === 'alert_triggered'">
             <el-button size="small" type="primary" plain @click="openAssignDialog">
               分派处理人
             </el-button>

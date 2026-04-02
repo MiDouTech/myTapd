@@ -37,7 +37,19 @@ public enum TicketStatus {
     SUBMITTED("submitted", "已提交"),
     DEPT_APPROVAL("dept_approval", "部门审批"),
     EXECUTING("executing", "执行中"),
-    REJECTED("rejected", "已驳回");
+    REJECTED("rejected", "已驳回"),
+
+    // ---- 告警/OnCall 工作流（参考 PagerDuty incident 与 FlashDuty 分诊语义）----
+    /** 告警已触发，待认领/分派（对应 Open + Unacknowledged） */
+    ALERT_TRIGGERED("alert_triggered", "待认领"),
+    /** 已认领，处置中（对应 Acknowledged + In progress） */
+    ALERT_ACKNOWLEDGED("alert_acknowledged", "处置中"),
+    /** 已稳定或指标恢复，待人工作结单确认（监控恢复≠结单；方案 A 仅评论不改状态后常停留于此） */
+    ALERT_STABLE("alert_stable", "待确认"),
+    /** 已解决待复盘/可选关闭（对应 Resolved） */
+    ALERT_RESOLVED("alert_resolved", "已解决"),
+    /** 抑制/静默期内，不重复打扰（对应 Suppressed / silenced） */
+    ALERT_SUPPRESSED("alert_suppressed", "已抑制");
 
     private final String code;
     private final String label;
@@ -46,7 +58,8 @@ public enum TicketStatus {
      * 终态判断
      */
     public boolean isTerminal() {
-        return this == COMPLETED || this == CLOSED || this == REJECTED;
+        return this == COMPLETED || this == CLOSED || this == REJECTED
+                || this == ALERT_RESOLVED || this == ALERT_SUPPRESSED;
     }
 
     /**
@@ -57,7 +70,8 @@ public enum TicketStatus {
         return this == PENDING_ASSIGN
                 || this == PENDING_ACCEPT
                 || this == PENDING_TEST_ACCEPT
-                || this == PENDING_DEV_ACCEPT;
+                || this == PENDING_DEV_ACCEPT
+                || this == ALERT_TRIGGERED;
     }
 
     /**

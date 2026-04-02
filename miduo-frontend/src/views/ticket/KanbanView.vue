@@ -89,9 +89,22 @@ function getPriorityBarClass(priority?: string): string {
 function getColumnStatusClass(status?: string): string {
   if (!status) return ''
   const s = status.toLowerCase()
-  if (['completed', 'closed'].includes(s)) return 'column--success'
-  if (['pending_assign', 'pending_accept', 'pending_test_accept', 'pending_dev_accept', 'pending_verify', 'pending_cs_confirm'].includes(s)) return 'column--warning'
-  if (['processing', 'testing', 'developing', 'executing'].includes(s)) return 'column--primary'
+  if (['completed', 'closed', 'alert_resolved', 'alert_suppressed'].includes(s)) return 'column--success'
+  if (
+    [
+      'pending_assign',
+      'pending_accept',
+      'pending_test_accept',
+      'pending_dev_accept',
+      'pending_verify',
+      'pending_cs_confirm',
+      'alert_triggered',
+      'alert_stable',
+    ].includes(s)
+  )
+    return 'column--warning'
+  if (['processing', 'testing', 'developing', 'executing', 'alert_acknowledged'].includes(s))
+    return 'column--primary'
   if (s === 'suspended') return 'column--danger'
   return ''
 }

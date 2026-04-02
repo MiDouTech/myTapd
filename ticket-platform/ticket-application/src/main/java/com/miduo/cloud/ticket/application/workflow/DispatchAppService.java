@@ -41,11 +41,15 @@ public class DispatchAppService extends BaseApplicationService {
 
     private static final String ROUND_ROBIN_INDEX_KEY = "dispatch:round_robin:group:";
 
+    private static final long ALERT_WORKFLOW_ID = 4L;
+
     /** 终态状态码（不参与负载统计） */
     private static final List<String> TERMINAL_STATUSES = Arrays.asList(
             TicketStatus.COMPLETED.getCode(),
             TicketStatus.CLOSED.getCode(),
-            TicketStatus.REJECTED.getCode()
+            TicketStatus.REJECTED.getCode(),
+            TicketStatus.ALERT_RESOLVED.getCode(),
+            TicketStatus.ALERT_SUPPRESSED.getCode()
     );
 
     private final TicketMapper ticketMapper;
@@ -153,9 +157,12 @@ public class DispatchAppService extends BaseApplicationService {
 
         // 矩阵未命中、目标组无成员等场景：仍在待分派且无处理人时，用分类默认组再试一次
         TicketPO afterRule = ticketMapper.selectById(ticketId);
-        if (afterRule != null
-                && TicketStatus.fromCode(afterRule.getStatus()) == TicketStatus.PENDING_ASSIGN
-                && afterRule.getAssigneeId() == null) {
+        boolean stillInDispatchPool = afterRule != null
+                && afterRule.getAssigneeId() == null
+                && (TicketStatus.fromCode(afterRule.getStatus()) == TicketStatus.PENDING_ASSIGN
+                || (afterRule.getWorkflowId() != null && afterRule.getWorkflowId() == ALERT_WORKFLOW_ID
+                        && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(afterRule.getStatus())));
+        if (stillInDispatchPool) {
             log.info("[自动分派] 工单[{}]按分派规则未产生处理人（strategy={}），回退分类默认处理组",
                     ticketId, strategy.getCode());
             dispatchByCategoryDefault(afterRule, categoryId);
@@ -421,8 +428,11 @@ public class DispatchAppService extends BaseApplicationService {
         log.info("[自动分派-assignTicket] 工单[{}]当前状态={}, 目标处理人={}, 策略={}",
                 ticket.getId(), ticket.getStatus(), assigneeId, assignType);
 
-        if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
-            log.info("[自动分派-assignTicket] 工单[{}]处于待分派状态，走工作流 assignFromPendingDispatch 流转",
+        TicketStatus st = TicketStatus.fromCode(ticket.getStatus());
+        boolean alertTriggeredPool = ticket.getWorkflowId() != null && ticket.getWorkflowId() == ALERT_WORKFLOW_ID
+                && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(ticket.getStatus());
+        if (st == TicketStatus.PENDING_ASSIGN || alertTriggeredPool) {
+            log.info("[自动分派-assignTicket] 工单[{}]处于待分派/待认领池，走工作流 assignFromPendingDispatch 流转",
                     ticket.getId());
             ticketWorkflowAppService.assignFromPendingDispatch(ticket.getId(), assigneeId, null, null);
             log.info("[自动分派-assignTicket] 工单[{}]分派给用户[{}]成功，策略: {}（含状态流转）",

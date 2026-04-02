@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
+import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
 import com.miduo.cloud.ticket.common.constants.AlertConstants;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
@@ -74,6 +75,9 @@ public class AlertTicketApplicationService {
     @Resource
     private SystemConfigMapper systemConfigMapper;
 
+    @Resource
+    private WorkflowApplicationService workflowApplicationService;
+
     /**
      * 处理夜莺告警事件
      */
@@ -114,7 +118,7 @@ public class AlertTicketApplicationService {
             logEntry.setTicketId(lastCreated.getTicketId());
 
             TicketPO ticket = ticketMapper.selectById(lastCreated.getTicketId());
-            if (ticket != null && !isTerminalStatus(ticket.getStatus())) {
+            if (ticket != null && !workflowApplicationService.isTerminalStatus(ticket.getWorkflowId(), ticket.getStatus())) {
                 addRecoveryComment(ticket.getId(), event);
             }
         }
@@ -500,10 +504,6 @@ public class AlertTicketApplicationService {
         catWrapper.last("LIMIT 1");
         TicketCategoryPO firstCategory = categoryMapper.selectOne(catWrapper);
         return firstCategory != null ? firstCategory.getId() : null;
-    }
-
-    private boolean isTerminalStatus(String status) {
-        return "closed".equalsIgnoreCase(status) || "completed".equalsIgnoreCase(status);
     }
 
     /**

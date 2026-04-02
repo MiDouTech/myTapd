@@ -77,6 +77,11 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
   pending_accept: '待受理',
+  alert_triggered: '待认领',
+  alert_acknowledged: '处置中',
+  alert_stable: '待确认',
+  alert_resolved: '已解决',
+  alert_suppressed: '已抑制',
   processing: '处理中',
   suspended: '已挂起',
   pending_verify: '待验收',
@@ -434,15 +439,26 @@ function goPreviewEdit(): void {
 function getStatusType(status?: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   if (!status) return 'info'
   // 终态：完成/关闭/驳回
-  if (['completed', 'closed', 'rejected'].includes(status)) {
+  if (['completed', 'closed', 'rejected', 'alert_resolved', 'alert_suppressed'].includes(status)) {
     return 'success'
   }
   // 待处理类（需要人工介入）
-  if (['pending_assign', 'pending_accept', 'pending_test_accept', 'pending_dev_accept', 'pending_verify', 'pending_cs_confirm'].includes(status)) {
+  if (
+    [
+      'pending_assign',
+      'pending_accept',
+      'pending_test_accept',
+      'pending_dev_accept',
+      'pending_verify',
+      'pending_cs_confirm',
+      'alert_triggered',
+      'alert_stable',
+    ].includes(status)
+  ) {
     return 'warning'
   }
   // 进行中类
-  if (['processing', 'testing', 'developing', 'executing'].includes(status)) {
+  if (['processing', 'testing', 'developing', 'executing', 'alert_acknowledged'].includes(status)) {
     return 'primary'
   }
   // 挂起类
@@ -579,6 +595,11 @@ onUnmounted(() => {
             <!-- 通用工单状态 -->
             <el-option label="待分派" value="pending_assign" />
             <el-option label="待受理" value="pending_accept" />
+            <el-option label="告警·待认领" value="alert_triggered" />
+            <el-option label="告警·处置中" value="alert_acknowledged" />
+            <el-option label="告警·待确认" value="alert_stable" />
+            <el-option label="告警·已解决" value="alert_resolved" />
+            <el-option label="告警·已抑制" value="alert_suppressed" />
             <el-option label="处理中" value="processing" />
             <el-option label="已挂起" value="suspended" />
             <el-option label="待验收" value="pending_verify" />
