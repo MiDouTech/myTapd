@@ -149,25 +149,28 @@ public class KanbanApplicationService extends BaseApplicationService {
         if ("pending".equals(code) || "pending_assign".equals(code) || "pending_accept".equals(code)
                 || "pending_dispatch".equals(code) || "pending_test".equals(code)
                 || "pending_dev".equals(code) || "pending_test_accept".equals(code)
-                || "pending_dev_accept".equals(code)) {
+                || "pending_dev_accept".equals(code)
+                || "alert_triggered".equals(code)) {
             return 1;
         }
         if ("processing".equals(code)
                 || "testing".equals(code)
                 || "investigating".equals(code)
-                || "developing".equals(code)) {
+                || "developing".equals(code)
+                || "alert_acknowledged".equals(code)) {
             return 2;
         }
         if ("temp_resolved".equals(code) || "suspended".equals(code)) {
             return 3;
         }
-        if ("pending_verify".equals(code) || "pending_cs_confirm".equals(code)) {
+        if ("pending_verify".equals(code) || "pending_cs_confirm".equals(code)
+                || "alert_stable".equals(code)) {
             return 4;
         }
-        if ("completed".equals(code)) {
+        if ("completed".equals(code) || "alert_resolved".equals(code)) {
             return 5;
         }
-        if ("closed".equals(code)) {
+        if ("closed".equals(code) || "alert_suppressed".equals(code)) {
             return 6;
         }
         return 99;

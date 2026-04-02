@@ -79,6 +79,9 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     /** 内置缺陷工单工作流 ID（与 Flyway 初始化一致） */
     private static final long DEFECT_WORKFLOW_ID = 3L;
 
+    /** 内置告警 OnCall 工作流 ID（与 Flyway V42/V43 一致） */
+    private static final long ALERT_WORKFLOW_ID = 4L;
+
     public TicketWorkflowAppService(TicketMapper ticketMapper,
                                      TicketLogMapper ticketLogMapper,
                                      TicketFlowRecordMapper flowRecordMapper,
@@ -228,7 +231,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         // 终态时记录关闭/完成时间
         WorkflowState targetState = workflowEngine.findState(workflow.getStates(), targetStatus);
         if (targetState != null && targetState.isTerminal()) {
-            if (TicketStatus.COMPLETED.getCode().equals(targetStatus)) {
+            if (TicketStatus.COMPLETED.getCode().equals(targetStatus)
+                    || TicketStatus.ALERT_RESOLVED.getCode().equals(targetStatus)) {
                 ticket.setResolvedAt(new Date());
             }
             ticket.setClosedAt(new Date());
@@ -296,9 +300,9 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public void assignFromPendingDispatch(Long ticketId, List<Long> newAssigneeIds, String remark, Long operatorId) {
         TicketPO ticket = requireTicket(ticketId);
-        if (TicketStatus.fromCode(ticket.getStatus()) != TicketStatus.PENDING_ASSIGN) {
+        if (!isPendingDispatchPoolStatus(ticket)) {
             throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
-                    "当前状态不是待分派，不能使用待分派分派流转");
+                    "当前状态不在待分派/待认领池，不能使用分派并流转");
         }
         if (newAssigneeIds == null || newAssigneeIds.isEmpty()) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "请至少指定一名处理人");
@@ -330,7 +334,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
      * 从 pending_assign 出发、允许带处理人、且目标非终态的第一条流转（与默认「分派受理/分派测试」一致）
      */
     private WorkflowTransition findPendingAssignWithTransferTransition(WorkflowPO workflow, String userRole) {
-        String fromCode = TicketStatus.PENDING_ASSIGN.getCode();
+        String fromCode = workflowEngine.getInitialStatus(workflow.getStates());
+        if (!StringUtils.hasText(fromCode)) {
+            fromCode = TicketStatus.PENDING_ASSIGN.getCode();
+        }
         List<WorkflowTransition> transitions = workflowEngine.parseTransitions(workflow.getTransitions());
         for (WorkflowTransition t : transitions) {
             if (t.getFrom() == null || !fromCode.equalsIgnoreCase(t.getFrom())) {
@@ -505,7 +512,24 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String normalizedToStatus = transition.getTo().trim().toLowerCase();
         return ("pending_accept".equals(normalizedFromStatus) && "processing".equals(normalizedToStatus))
                 || ("pending_test_accept".equals(normalizedFromStatus) && "testing".equals(normalizedToStatus))
-                || ("pending_dev_accept".equals(normalizedFromStatus) && "developing".equals(normalizedToStatus));
+                || ("pending_dev_accept".equals(normalizedFromStatus) && "developing".equals(normalizedToStatus))
+                || ("alert_triggered".equals(normalizedFromStatus)
+                        && "alert_acknowledged".equals(normalizedToStatus));
+    }
+
+    /**
+     * 待分派池：通用工单的 pending_assign，或告警 OnCall 的 alert_triggered（workflow_id=4）
+     */
+    private boolean isPendingDispatchPoolStatus(TicketPO ticket) {
+        if (ticket == null) {
+            return false;
+        }
+        TicketStatus st = TicketStatus.fromCode(ticket.getStatus());
+        if (st == TicketStatus.PENDING_ASSIGN) {
+            return true;
+        }
+        return ticket.getWorkflowId() != null && ticket.getWorkflowId() == ALERT_WORKFLOW_ID
+                && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(ticket.getStatus());
     }
 
     /**

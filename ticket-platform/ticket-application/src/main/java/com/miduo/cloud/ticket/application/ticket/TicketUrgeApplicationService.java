@@ -142,8 +142,8 @@ public class TicketUrgeApplicationService extends BaseApplicationService {
         if (status.isTerminal()) {
             throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID, "终态工单不可催办");
         }
-        if (status == TicketStatus.PENDING_ASSIGN) {
-            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID, "待分派工单请先分派处理人后再催办");
+        if (status == TicketStatus.PENDING_ASSIGN || status == TicketStatus.ALERT_TRIGGERED) {
+            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID, "待分派/待认领工单请先分派处理人后再催办");
         }
     }
 

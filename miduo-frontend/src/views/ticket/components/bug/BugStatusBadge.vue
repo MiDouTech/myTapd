@@ -13,6 +13,11 @@ const props = defineProps<{
 const STATUS_COLOR_MAP: Record<string, string> = {
   pending_assign: '#909399',
   pending_accept: '#909399',
+  alert_triggered: '#E6A23C',
+  alert_acknowledged: '#1675d1',
+  alert_stable: '#8B5CF6',
+  alert_resolved: '#67C23A',
+  alert_suppressed: '#909399',
   processing: '#1675d1',
   pending_test_accept: '#E6A23C',
   testing: '#E6A23C',
@@ -30,6 +35,11 @@ const STATUS_COLOR_MAP: Record<string, string> = {
 const STATUS_LABEL_MAP: Record<string, string> = {
   pending_assign: '待分派',
   pending_accept: '待受理',
+  alert_triggered: '待认领',
+  alert_acknowledged: '处置中',
+  alert_stable: '待确认',
+  alert_resolved: '已解决',
+  alert_suppressed: '已抑制',
   processing: '处理中',
   pending_test_accept: '待测试受理',
   testing: '测试复现中',

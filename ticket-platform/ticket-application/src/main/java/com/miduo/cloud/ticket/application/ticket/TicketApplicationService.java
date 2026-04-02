@@ -46,6 +46,8 @@ public class TicketApplicationService {
     /** 内置缺陷工单工作流（与 Flyway 初始化 id=3 一致） */
     private static final long DEFECT_WORKFLOW_ID = 3L;
 
+    private static final long ALERT_WORKFLOW_ID = 4L;
+
     @Resource
     private TicketMapper ticketMapper;
 
@@ -464,10 +466,12 @@ public class TicketApplicationService {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "请至少指定一名处理人");
         }
 
-        if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN) {
+        if (TicketStatus.fromCode(ticket.getStatus()) == TicketStatus.PENDING_ASSIGN
+                || (ticket.getWorkflowId() != null && ticket.getWorkflowId() == ALERT_WORKFLOW_ID
+                        && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(ticket.getStatus()))) {
             ticketWorkflowAppService.assignFromPendingDispatch(
                     ticketId, assigneeIds, input.getRemark(), currentUserId);
-            log.info("工单分派(待分派→下一节点): ticketId={}, assigneeIds={}", ticketId, assigneeIds);
+            log.info("工单分派(待分派/待认领池→下一节点): ticketId={}, assigneeIds={}", ticketId, assigneeIds);
             return;
         }
 
