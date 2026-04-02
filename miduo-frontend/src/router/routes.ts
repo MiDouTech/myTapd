@@ -182,10 +182,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'manage/alert-mapping',
         name: 'manageAlertMapping',
-        component: () => import('@/views/manage/AlertMappingView.vue'),
-        meta: {
-          title: '告警接入',
-        },
+        redirect: { name: 'manageSettings', query: { tab: 'alertMapping' } },
       },
       {
         path: 'design-system',

@@ -346,6 +346,11 @@ public class AlertTicketApplicationService {
         }
 
         sb.append(String.format("| **监控对象** | %s |\n", safeString(event.getTargetIdent())));
+
+        if (StringUtils.hasText(event.getTargetNote())) {
+            sb.append(String.format("| **对象备注** | %s |\n", event.getTargetNote()));
+        }
+
         sb.append(String.format("| **触发值** | %s |\n", safeString(event.getTriggerValue())));
 
         if (event.getTriggerTime() != null) {
@@ -359,6 +364,33 @@ public class AlertTicketApplicationService {
             sb.append(String.format("| **PromQL** | `%s` |\n", event.getPromQl()));
         }
 
+        if (StringUtils.hasText(event.getRuleAlgo())) {
+            sb.append(String.format("| **告警算法** | %s |\n", event.getRuleAlgo()));
+        }
+
+        if (StringUtils.hasText(event.getCate())) {
+            sb.append(String.format("| **数据源类型** | %s |\n", event.getCate()));
+        }
+
+        if (event.getDatasourceId() != null) {
+            sb.append(String.format("| **数据源ID** | %d |\n", event.getDatasourceId()));
+        }
+
+        if (event.getRuleId() != null) {
+            sb.append(String.format("| **规则ID** | %d |\n", event.getRuleId()));
+        }
+
+        if (StringUtils.hasText(event.getClaimant())) {
+            sb.append(String.format("| **认领人** | %s |\n", event.getClaimant()));
+        }
+
+        if (event.getAnnotations() != null && !event.getAnnotations().isEmpty()) {
+            sb.append("\n### 注解信息\n\n");
+            for (Map.Entry<String, String> entry : event.getAnnotations().entrySet()) {
+                sb.append(String.format("- **%s**: %s\n", entry.getKey(), entry.getValue()));
+            }
+        }
+
         if (event.getTags() != null && !event.getTags().isEmpty()) {
             sb.append("\n### 监控标签\n\n");
             for (String tag : event.getTags()) {
@@ -368,6 +400,10 @@ public class AlertTicketApplicationService {
 
         if (StringUtils.hasText(event.getGroupName())) {
             sb.append(String.format("\n**业务组**: %s\n", event.getGroupName()));
+        }
+
+        if (StringUtils.hasText(event.getRunbookUrl())) {
+            sb.append(String.format("\n**运维手册**: %s\n", event.getRunbookUrl()));
         }
 
         return sb.toString();

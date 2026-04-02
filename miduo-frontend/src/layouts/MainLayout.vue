@@ -85,7 +85,6 @@ const menuItems: MenuItem[] = [
       { index: '/manage/workflow', title: '工作流管理', icon: Connection },
       { index: '/manage/sla', title: 'SLA管理', icon: Timer },
       { index: '/manage/user', title: '组织账号管理', icon: User },
-      { index: '/manage/alert-mapping', title: '告警接入', icon: Bell },
       { index: '/manage/settings', title: '系统设置', icon: Setting },
       { index: '/manage/operation-log', title: '工单日志', icon: Notebook },
       { index: '/manage/daily-report', title: '日报管理', icon: Calendar },

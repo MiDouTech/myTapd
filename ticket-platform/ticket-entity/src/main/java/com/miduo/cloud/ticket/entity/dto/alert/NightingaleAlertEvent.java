@@ -10,7 +10,8 @@ import java.util.Map;
 
 /**
  * 夜莺（Nightingale）告警事件 Webhook 请求体
- * 对应 AlertCurEvent 结构体
+ * 完整对应 AlertCurEvent 结构体
+ * @see <a href="https://github.com/ccfos/nightingale/blob/main/models/alert_cur_event.go#L23">AlertCurEvent</a>
  */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -45,6 +46,9 @@ public class NightingaleAlertEvent implements Serializable {
     @JsonProperty("rule_prod")
     private String ruleProd;
 
+    @JsonProperty("rule_algo")
+    private String ruleAlgo;
+
     private Integer severity;
 
     @JsonProperty("prom_for_duration")
@@ -60,6 +64,9 @@ public class NightingaleAlertEvent implements Serializable {
     private Integer promEvalInterval;
 
     private List<String> callbacks;
+
+    @JsonProperty("runbook_url")
+    private String runbookUrl;
 
     @JsonProperty("notify_recovered")
     private Integer notifyRecovered;
@@ -85,10 +92,16 @@ public class NightingaleAlertEvent implements Serializable {
     @JsonProperty("trigger_value")
     private String triggerValue;
 
+    @JsonProperty("trigger_values")
+    private String triggerValues;
+
     private List<String> tags;
 
     @JsonProperty("tags_map")
     private Map<String, String> tagsMap;
+
+    @JsonProperty("original_tags")
+    private List<String> originalTags;
 
     private Map<String, String> annotations;
 
@@ -104,6 +117,9 @@ public class NightingaleAlertEvent implements Serializable {
     @JsonProperty("last_sent_time")
     private Long lastSentTime;
 
+    @JsonProperty("first_eval_time")
+    private Long firstEvalTime;
+
     @JsonProperty("notify_cur_number")
     private Integer notifyCurNumber;
 
@@ -113,8 +129,42 @@ public class NightingaleAlertEvent implements Serializable {
     @JsonProperty("extra_config")
     private Object extraConfig;
 
+    private Integer status;
+
     private String claimant;
 
     @JsonProperty("sub_rule_id")
     private Long subRuleId;
+
+    @JsonProperty("extra_info")
+    private List<String> extraInfo;
+
+    private Object target;
+
+    @JsonProperty("recover_config")
+    private Object recoverConfig;
+
+    @JsonProperty("rule_hash")
+    private String ruleHash;
+
+    @JsonProperty("extra_info_map")
+    private List<Map<String, String>> extraInfoMap;
+
+    @JsonProperty("notify_rule_ids")
+    private List<Long> notifyRuleIds;
+
+    @JsonProperty("notify_rule_id")
+    private Long notifyRuleId;
+
+    @JsonProperty("notify_rule_name")
+    private String notifyRuleName;
+
+    @JsonProperty("notify_version")
+    private Integer notifyVersion;
+
+    @JsonProperty("notify_rules")
+    private List<Object> notifyRules;
+
+    @JsonProperty("recover_time")
+    private Long recoverTime;
 }

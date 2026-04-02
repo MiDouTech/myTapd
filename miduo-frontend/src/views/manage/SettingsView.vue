@@ -7,6 +7,7 @@ import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { NotificationPreferenceOutput } from '@/types/notification'
+import AlertMappingPanel from '@/views/manage/AlertMappingView.vue'
 import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue'
 import WebhookDispatchLogPanel from '@/views/manage/components/WebhookDispatchLogPanel.vue'
 import WecomConfigPanel from '@/views/manage/components/WecomConfigPanel.vue'
@@ -18,7 +19,7 @@ import { notifySuccess } from '@/utils/feedback'
 const route = useRoute()
 const router = useRouter()
 
-const tabValues = ['basic', 'notification', 'integration'] as const
+const tabValues = ['basic', 'notification', 'integration', 'alertMapping'] as const
 const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom', 'nlpKeyword', 'nlpLog'] as const
 
 type SettingsTab = (typeof tabValues)[number]
@@ -162,7 +163,7 @@ onMounted(async () => {
     <el-tabs v-model="activeTab" class="settings-tabs">
       <!-- 基础参数模块暂未启用，隐藏待后续开放 -->
 
-      <el-tab-pane label="集成设置" name="integration">
+      <el-tab-pane label="企微设置" name="integration">
         <el-tabs v-model="activeSection" class="integration-tabs">
           <el-tab-pane label="企微连接配置" name="wecomConfig">
             <WecomConfigPanel
@@ -191,6 +192,10 @@ onMounted(async () => {
             <WecomNlpLogPanel />
           </el-tab-pane>
         </el-tabs>
+      </el-tab-pane>
+
+      <el-tab-pane label="告警接入" name="alertMapping">
+        <AlertMappingPanel />
       </el-tab-pane>
 
       <el-tab-pane label="通知偏好" name="notification">
