@@ -296,24 +296,33 @@ public class AlertTicketApplicationService {
     }
 
     private AlertRuleMappingPO findMapping(String ruleName) {
-        if (!StringUtils.hasText(ruleName)) {
-            return null;
-        }
-
         LambdaQueryWrapper<AlertRuleMappingPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AlertRuleMappingPO::getEnabled, true);
         List<AlertRuleMappingPO> allMappings = alertRuleMappingMapper.selectList(wrapper);
 
+        AlertRuleMappingPO defaultMapping = null;
+
         for (AlertRuleMappingPO mapping : allMappings) {
             AlertMatchMode mode = AlertMatchMode.fromCode(mapping.getMatchMode());
-            if (mode == AlertMatchMode.EXACT && ruleName.equals(mapping.getRuleName())) {
-                return mapping;
+            if (mode == AlertMatchMode.DEFAULT) {
+                defaultMapping = mapping;
+                continue;
             }
-            if (mode == AlertMatchMode.PREFIX && ruleName.startsWith(mapping.getRuleName())) {
-                return mapping;
+            if (StringUtils.hasText(ruleName)) {
+                if (mode == AlertMatchMode.EXACT && ruleName.equals(mapping.getRuleName())) {
+                    return mapping;
+                }
+                if (mode == AlertMatchMode.PREFIX && ruleName.startsWith(mapping.getRuleName())) {
+                    return mapping;
+                }
             }
         }
-        return null;
+
+        if (defaultMapping != null) {
+            log.info("告警规则名称未精确/前缀命中，使用默认兜底映射: ruleName={}, defaultMappingId={}",
+                    ruleName, defaultMapping.getId());
+        }
+        return defaultMapping;
     }
 
     private boolean isDuplicate(String hash, int dedupMinutes) {
@@ -609,9 +618,20 @@ public class AlertTicketApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long createMapping(AlertRuleMappingCreateInput input) {
+        String matchMode = input.getMatchMode() != null ? input.getMatchMode() : AlertMatchMode.EXACT.getCode();
+        boolean isDefault = AlertMatchMode.DEFAULT.getCode().equalsIgnoreCase(matchMode);
+
+        if (!isDefault && !StringUtils.hasText(input.getRuleName())) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "非默认兜底模式下规则名称不能为空");
+        }
+
+        if (isDefault) {
+            checkDefaultMappingUnique(null);
+        }
+
         AlertRuleMappingPO po = new AlertRuleMappingPO();
-        po.setRuleName(input.getRuleName());
-        po.setMatchMode(input.getMatchMode() != null ? input.getMatchMode() : AlertMatchMode.EXACT.getCode());
+        po.setRuleName(isDefault ? "" : input.getRuleName());
+        po.setMatchMode(matchMode);
         po.setCategoryId(input.getCategoryId());
         po.setPriorityP1(input.getPriorityP1() != null ? input.getPriorityP1() : "urgent");
         po.setPriorityP2(input.getPriorityP2() != null ? input.getPriorityP2() : "high");
@@ -631,11 +651,21 @@ public class AlertTicketApplicationService {
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "映射配置不存在");
         }
 
-        if (StringUtils.hasText(input.getRuleName())) {
-            existing.setRuleName(input.getRuleName());
+        String effectiveMatchMode = StringUtils.hasText(input.getMatchMode())
+                ? input.getMatchMode() : existing.getMatchMode();
+        boolean isDefault = AlertMatchMode.DEFAULT.getCode().equalsIgnoreCase(effectiveMatchMode);
+
+        if (isDefault) {
+            checkDefaultMappingUnique(existing.getId());
         }
+
         if (StringUtils.hasText(input.getMatchMode())) {
             existing.setMatchMode(input.getMatchMode());
+        }
+        if (isDefault) {
+            existing.setRuleName("");
+        } else if (StringUtils.hasText(input.getRuleName())) {
+            existing.setRuleName(input.getRuleName());
         }
         if (input.getCategoryId() != null) {
             existing.setCategoryId(input.getCategoryId());
@@ -733,6 +763,23 @@ public class AlertTicketApplicationService {
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputList, result.getTotal(), input.getPageNum(), input.getPageSize());
+    }
+
+    /**
+     * 校验默认兜底映射的唯一性：同一时刻只允许存在一条 match_mode=DEFAULT 的启用映射。
+     * @param excludeId 排除的记录ID（编辑场景排除自身）
+     */
+    private void checkDefaultMappingUnique(Long excludeId) {
+        LambdaQueryWrapper<AlertRuleMappingPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AlertRuleMappingPO::getMatchMode, AlertMatchMode.DEFAULT.getCode())
+                .eq(AlertRuleMappingPO::getEnabled, true);
+        if (excludeId != null) {
+            wrapper.ne(AlertRuleMappingPO::getId, excludeId);
+        }
+        Long count = alertRuleMappingMapper.selectCount(wrapper);
+        if (count != null && count > 0) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "已存在一条启用的默认兜底规则，请先停用或删除后再创建");
+        }
     }
 
     // ==================== 转换方法 ====================

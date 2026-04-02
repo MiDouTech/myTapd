@@ -11,7 +11,8 @@ import lombok.Getter;
 public enum AlertMatchMode {
 
     EXACT("EXACT", "精确匹配"),
-    PREFIX("PREFIX", "前缀匹配");
+    PREFIX("PREFIX", "前缀匹配"),
+    DEFAULT("DEFAULT", "默认兜底");
 
     private final String code;
     private final String label;

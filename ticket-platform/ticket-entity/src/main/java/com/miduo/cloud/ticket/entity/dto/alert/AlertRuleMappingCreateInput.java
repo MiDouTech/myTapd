@@ -13,7 +13,6 @@ import java.io.Serializable;
 @Data
 public class AlertRuleMappingCreateInput implements Serializable {
 
-    @NotBlank(message = "规则名称不能为空")
     @Size(max = 200, message = "规则名称长度不能超过200个字符")
     private String ruleName;
 
