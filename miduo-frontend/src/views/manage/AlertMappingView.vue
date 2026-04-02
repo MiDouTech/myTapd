@@ -83,6 +83,7 @@ const priorityOptions = [
 const matchModeOptions = [
   { value: 'EXACT', label: '精确匹配' },
   { value: 'PREFIX', label: '前缀匹配' },
+  { value: 'DEFAULT', label: '默认兜底' },
 ]
 
 const processResultOptions = [
@@ -236,7 +237,7 @@ function openEditDialog(row: AlertRuleMappingOutput) {
 }
 
 async function handleSubmit() {
-  if (!formData.ruleName) {
+  if (formData.matchMode !== 'DEFAULT' && !formData.ruleName) {
     ElMessage.warning('请输入规则名称')
     return
   }
@@ -247,10 +248,13 @@ async function handleSubmit() {
 
   formLoading.value = true
   try {
+    const isDefaultMode = formData.matchMode === 'DEFAULT'
+    const effectiveRuleName = isDefaultMode ? '' : formData.ruleName
+
     if (isEdit.value && formData.id) {
       const updateData: AlertRuleMappingUpdateInput = {
         id: formData.id,
-        ruleName: formData.ruleName,
+        ruleName: effectiveRuleName,
         matchMode: formData.matchMode,
         categoryId: formData.categoryId,
         priorityP1: formData.priorityP1,
@@ -264,7 +268,7 @@ async function handleSubmit() {
       ElMessage.success('更新成功')
     } else {
       const createData: AlertRuleMappingCreateInput = {
-        ruleName: formData.ruleName,
+        ruleName: effectiveRuleName,
         matchMode: formData.matchMode,
         categoryId: formData.categoryId,
         priorityP1: formData.priorityP1,
@@ -375,10 +379,16 @@ onMounted(() => {
           :stripe="true"
           :header-cell-style="{ backgroundColor: '#f5f7fa' }"
         >
-          <el-table-column prop="ruleName" label="规则名称" min-width="180" :show-overflow-tooltip="true" />
-          <el-table-column prop="matchMode" label="匹配模式" width="100" align="center">
+          <el-table-column prop="ruleName" label="规则名称" min-width="180" :show-overflow-tooltip="true">
             <template #default="{ row }">
-              {{ row.matchMode === 'PREFIX' ? '前缀' : '精确' }}
+              <span v-if="row.matchMode === 'DEFAULT'" style="color: #909399; font-style: italic">（所有未匹配规则的兜底）</span>
+              <span v-else>{{ row.ruleName }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="matchMode" label="匹配模式" width="110" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.matchMode === 'DEFAULT'" type="warning" size="small">默认兜底</el-tag>
+              <span v-else>{{ row.matchMode === 'PREFIX' ? '前缀' : '精确' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="categoryName" label="工单分类" width="140" :show-overflow-tooltip="true" />
@@ -593,9 +603,6 @@ onMounted(() => {
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px" destroy-on-close>
       <el-form label-width="120px" label-position="right">
-        <el-form-item label="规则名称" required>
-          <el-input v-model="formData.ruleName" placeholder="请输入夜莺告警规则名称" />
-        </el-form-item>
         <el-form-item label="匹配模式">
           <el-radio-group v-model="formData.matchMode">
             <el-radio
@@ -606,6 +613,12 @@ onMounted(() => {
               {{ opt.label }}
             </el-radio>
           </el-radio-group>
+          <div v-if="formData.matchMode === 'DEFAULT'" class="form-tip">
+            默认兜底规则：当告警规则名称未匹配到任何精确/前缀规则时，自动使用此规则。系统中只能有一条启用的默认兜底规则。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="formData.matchMode !== 'DEFAULT'" label="规则名称" required>
+          <el-input v-model="formData.ruleName" placeholder="请输入夜莺告警规则名称" />
         </el-form-item>
         <el-form-item label="工单分类" required>
           <el-select v-model="formData.categoryId" placeholder="请选择工单分类" filterable style="width: 100%">
