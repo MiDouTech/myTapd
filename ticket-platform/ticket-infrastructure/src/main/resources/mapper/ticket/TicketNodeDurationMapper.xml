@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketNodeDurationMapper">
+
+    <select id="selectWorkflowNodeObservation"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.WorkflowNodeObservationStat">
+        SELECT
+            nd.node_name AS nodeName,
+            COUNT(*) AS enterCount,
+            AVG(COALESCE(nd.wait_duration_sec, 0)) AS avgWaitDurationSec,
+            AVG(COALESCE(nd.process_duration_sec, 0)) AS avgProcessDurationSec,
+            AVG(COALESCE(nd.total_duration_sec, 0)) AS avgTotalDurationSec,
+            MAX(COALESCE(nd.total_duration_sec, 0)) AS maxTotalDurationSec
+        FROM ticket_node_duration nd
+        INNER JOIN ticket t ON t.id = nd.ticket_id
+        WHERE t.workflow_id = #{workflowId}
+          AND t.deleted = 0
+          AND nd.deleted = 0
+        GROUP BY nd.node_name
+    </select>
+
+</mapper>

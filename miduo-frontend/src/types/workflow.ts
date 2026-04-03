@@ -47,6 +47,49 @@ export interface WorkflowDetailOutput {
   updateTime?: string
 }
 
+export interface WorkflowObservationNodeItem {
+  nodeCode: string
+  nodeName: string
+  nodeType?: string
+  order?: number
+  ticketCount?: number
+  avgWaitDurationSec?: number
+  avgProcessDurationSec?: number
+  avgTotalDurationSec?: number
+  maxTotalDurationSec?: number
+}
+
+export interface WorkflowObservationRecentFlowItem {
+  id: number
+  ticketId?: number
+  ticketNo?: string
+  flowType?: string
+  flowTypeLabel?: string
+  transitionId?: string
+  transitionName?: string
+  fromStatus?: string
+  fromStatusName?: string
+  toStatus?: string
+  toStatusName?: string
+  fromAssigneeId?: number
+  fromAssigneeName?: string
+  toAssigneeId?: number
+  toAssigneeName?: string
+  operatorId?: number
+  operatorName?: string
+  operatorRole?: string
+  remark?: string
+  createTime?: string
+}
+
+export interface WorkflowObservationOutput {
+  workflowId: number
+  workflowName?: string
+  ticketCount?: number
+  nodeStats: WorkflowObservationNodeItem[]
+  recentFlows: WorkflowObservationRecentFlowItem[]
+}
+
 export interface HandlerGroupMemberOutput {
   userId: number
   userName?: string
