@@ -51,12 +51,21 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
-  async function loadRecentNotifications(pageSize = RECENT_PAGE_SIZE): Promise<void> {
+  function normalizePageSize(raw: unknown, fallback = RECENT_PAGE_SIZE): number {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed)
+    }
+    return fallback
+  }
+
+  async function loadRecentNotifications(pageSize: unknown = RECENT_PAGE_SIZE): Promise<void> {
     recentLoading.value = true
     try {
+      const normalizedPageSize = normalizePageSize(pageSize)
       const params: NotificationPageInput = {
         pageNum: 1,
-        pageSize,
+        pageSize: normalizedPageSize,
       }
       const result = await getNotificationPage(params)
       recentNotifications.value = result.records || []
@@ -67,7 +76,7 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
-  async function refreshOverview(pageSize = RECENT_PAGE_SIZE): Promise<void> {
+  async function refreshOverview(pageSize: unknown = RECENT_PAGE_SIZE): Promise<void> {
     await Promise.all([loadUnreadCount(), loadRecentNotifications(pageSize)])
   }
 
