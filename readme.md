@@ -1110,3 +1110,46 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.2.8-wecom-ticket-event-layout-priority-visual` | 优化企业微信“工单事件通知”排版：标题/内容分区、变更项拆行、优先级颜色标识（符号）显示，保留原有通知信息不丢失 |
+
+---
+
+## 28. 通知抽屉“刷新”报 BindException 修复（前端）
+
+### 28.1 功能用途
+- **用途**：修复点击通知抽屉里的“刷新”按钮后，后端报 `pageSize=[object PointerEvent]` 的错误。
+- **类比理解**：原来像把“鼠标点击动作”当成了“每页条数”传给后端；现在会先把参数“过安检”，只让数字通过。
+
+### 28.2 使用方法（验收步骤）
+1. 登录系统，点击顶部铃铛图标打开“通知消息”抽屉。
+2. 点击抽屉右上角“刷新”按钮。
+3. 预期结果：
+   - 不再出现“系统内部错误 - BindException ... pageSize=[object PointerEvent]”；
+   - 通知列表和未读数可正常刷新。
+4. 再进入“通知中心”页面做一次列表查询和翻页，确认通知相关功能都正常。
+
+### 28.3 参数说明（本次修复相关）
+| 参数/方法 | 类型 | 说明 |
+|---|---|---|
+| `handleRefreshNotificationOverview()` | `() => void` | 抽屉“刷新”按钮专用处理函数，确保调用 `refreshOverview` 时不传点击事件对象 |
+| `refreshOverview(pageSize)` | `(unknown) => Promise<void>` | 入参扩展为 `unknown`，内部先做数字化校验 |
+| `normalizePageSize(raw, fallback)` | `(unknown, number) => number` | 将 `pageSize` 统一收敛为正整数；非法值（如 PointerEvent）回退默认值 |
+
+### 28.4 返回值说明（交互行为）
+| 操作 | 返回值 | 说明 |
+|---|---|---|
+| 点击通知抽屉“刷新” | `void` | 前端发起刷新请求，后端接收到合法 `pageSize` |
+| 调用 `refreshOverview`（异常入参） | `Promise<void>` | 自动回退到默认页大小，不再触发类型绑定异常 |
+
+### 28.5 常见问题（新增）
+#### Q29：为什么会出现 `[object PointerEvent]` 这种奇怪参数？
+- **检测**：查看报错字段是否是 `pageSize`，值是否为 `[object PointerEvent]`。
+- **记录（错误类型）**：前端事件对象误传（点击事件被当成业务参数）。
+- **恢复建议**：
+  1. 不要在模板里直接把“需要业务参数的方法”裸绑到 `@click`；
+  2. 通过中间处理函数调用，或在方法内部做参数类型收敛；
+  3. 升级到版本 `v1.2.9-notification-refresh-pointerevent-fix` 及以上。
+
+### 28.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.2.9-notification-refresh-pointerevent-fix` | 修复通知抽屉点击“刷新”触发 `BindException(pageSize=[object PointerEvent])`：按钮改用中间处理函数 + 通知 store 增加 pageSize 参数兜底校验 |

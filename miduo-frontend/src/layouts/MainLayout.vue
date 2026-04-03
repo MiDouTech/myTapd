@@ -163,6 +163,10 @@ async function handleMarkAllAsRead(): Promise<void> {
   await notificationStore.markAllAsRead()
 }
 
+function handleRefreshNotificationOverview(): void {
+  void notificationStore.refreshOverview()
+}
+
 async function handleGoNotificationCenter(): Promise<void> {
   notificationDrawerVisible.value = false
   await router.push('/notification')
@@ -445,7 +449,7 @@ watch(
             {{ realtimeConnected ? '实时推送中' : '轮询兜底中' }}
           </el-tag>
           <el-space>
-            <el-button type="primary" link @click="notificationStore.refreshOverview">刷新</el-button>
+            <el-button type="primary" link @click="handleRefreshNotificationOverview">刷新</el-button>
             <el-button type="primary" link @click="handleMarkAllAsRead">全部已读</el-button>
           </el-space>
         </div>
