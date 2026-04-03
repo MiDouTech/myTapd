@@ -900,19 +900,10 @@ onMounted(async () => {
 
         <el-tabs v-model="workflowDetailActiveTab" class="workflow-detail-tabs">
           <el-tab-pane label="流程图视图" name="graph">
-            <WorkflowFlowGraph
-              :states="workflowDetail.states"
-              :transitions="workflowDetail.transitions"
-              :role-label-map="WORKFLOW_ROLE_LABEL_MAP"
-              :sla-action-label-map="SLA_ACTION_LABEL_MAP"
-            />
+            <WorkflowFlowGraph :detail="workflowDetail" />
           </el-tab-pane>
           <el-tab-pane label="流转矩阵" name="matrix">
-            <WorkflowMatrixView
-              :states="workflowDetail.states"
-              :transitions="workflowDetail.transitions"
-              :role-label-map="WORKFLOW_ROLE_LABEL_MAP"
-            />
+            <WorkflowMatrixView :detail="workflowDetail" />
           </el-tab-pane>
           <el-tab-pane label="规则明细" name="rules">
             <div class="detail-rules-layout">
