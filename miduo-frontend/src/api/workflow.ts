@@ -4,6 +4,7 @@ import type {
   HandlerGroupUpdateInput,
   WorkflowDetailOutput,
   WorkflowListOutput,
+  WorkflowObservationOutput,
   WorkflowUpdateInput,
   AvailableActionOutput,
   TransitInput,
@@ -39,6 +40,14 @@ interface WorkflowDetailRawOutput {
   transitions?: WorkflowDetailOutput['transitions']
   createTime?: string
   updateTime?: string
+}
+
+interface WorkflowObservationRawOutput {
+  workflowId: number
+  workflowName?: string
+  ticketCount?: number
+  recentFlows?: WorkflowObservationOutput['recentFlows']
+  nodeStats?: WorkflowObservationOutput['nodeStats']
 }
 
 interface HandlerGroupRawOutput {
@@ -87,6 +96,18 @@ function normalizeWorkflowDetail(item: WorkflowDetailRawOutput): WorkflowDetailO
   }
 }
 
+function normalizeWorkflowObservation(
+  item: WorkflowObservationRawOutput,
+): WorkflowObservationOutput {
+  return {
+    workflowId: item.workflowId,
+    workflowName: item.workflowName,
+    ticketCount: item.ticketCount ?? 0,
+    recentFlows: item.recentFlows || [],
+    nodeStats: item.nodeStats || [],
+  }
+}
+
 function normalizeHandlerGroup(item: HandlerGroupRawOutput): HandlerGroupListOutput {
   return {
     id: item.id,
@@ -121,6 +142,16 @@ export async function getWorkflowList(): Promise<WorkflowListOutput[]> {
 export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
   const result = await request.get<WorkflowDetailRawOutput>(`/workflow/detail/${id}`)
   return normalizeWorkflowDetail(result)
+}
+
+/**
+ * 查询工作流运行观察
+ * 接口编号：API000206
+ * 产品文档功能：4.4 工作流引擎 - 工作流详情运行观察
+ */
+export async function getWorkflowObservation(id: number): Promise<WorkflowObservationOutput> {
+  const result = await request.get<WorkflowObservationRawOutput>(`/workflow/observation/${id}`)
+  return normalizeWorkflowObservation(result)
 }
 
 /**

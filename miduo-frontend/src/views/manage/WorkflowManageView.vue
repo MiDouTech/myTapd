@@ -6,6 +6,7 @@ import {
   createHandlerGroup,
   getHandlerGroupList,
   getWorkflowDetail,
+  getWorkflowObservation,
   getWorkflowList,
   updateHandlerGroup,
   updateWorkflow,
@@ -13,12 +14,16 @@ import {
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import WorkflowFlowGraph from '@/views/manage/components/WorkflowFlowGraph.vue'
+import WorkflowMatrixView from '@/views/manage/components/WorkflowMatrixView.vue'
+import WorkflowObservationPanel from '@/views/manage/components/WorkflowObservationPanel.vue'
 import type { UserListOutput } from '@/types/user'
 import type {
   HandlerGroupCreateInput,
   HandlerGroupListOutput,
   WorkflowDetailOutput,
   WorkflowListOutput,
+  WorkflowObservationOutput,
   WorkflowUpdateInput,
 } from '@/types/workflow'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
@@ -40,12 +45,15 @@ const workflowDetailVisible = ref(false)
 const workflowEditVisible = ref(false)
 const workflowEditLoading = ref(false)
 const workflowEditSubmitLoading = ref(false)
+const workflowObservationLoading = ref(false)
 const workflowEditingId = ref<number | null>(null)
 const createHandlerGroupVisible = ref(false)
 const editingHandlerGroupId = ref<number | null>(null)
+const workflowDetailActiveTab = ref('graph')
 
 const workflowList = ref<WorkflowListOutput[]>([])
 const workflowDetail = ref<WorkflowDetailOutput>()
+const workflowObservation = ref<WorkflowObservationOutput>()
 const handlerGroupList = ref<HandlerGroupListOutput[]>([])
 const userOptions = ref<UserListOutput[]>([])
 
@@ -246,6 +254,21 @@ const detailTransitionRows = computed<Record<string, unknown>[]>(() => {
   return (workflowDetail.value?.transitions || []).map((item) => ({ ...item }))
 })
 
+const workflowOverview = computed(() => {
+  const detail = workflowDetail.value
+  if (!detail) {
+    return null
+  }
+  const initialState = detail.states.find((item) => item.type === 'INITIAL')
+  const terminalCount = detail.states.filter((item) => item.type === 'TERMINAL').length
+  const returnCount = detail.transitions.filter((item) => item.isReturn).length
+  return {
+    initialStateName: initialState?.name || initialState?.code || '-',
+    terminalCount,
+    returnCount,
+  }
+})
+
 const userSelectOptions = computed(() => {
   return userOptions.value.map((item) => ({
     label: `${item.name}${item.employeeNo ? `（${item.employeeNo}）` : ''}`,
@@ -396,12 +419,21 @@ function openEditHandlerGroupDialog(row: HandlerGroupListOutput): void {
 async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
   workflowDetailVisible.value = true
   workflowDetailLoading.value = true
+  workflowObservationLoading.value = true
+  workflowDetailActiveTab.value = 'graph'
   try {
-    workflowDetail.value = await getWorkflowDetail(row.id)
+    const [detail, observation] = await Promise.all([
+      getWorkflowDetail(row.id),
+      getWorkflowObservation(row.id),
+    ])
+    workflowDetail.value = detail
+    workflowObservation.value = observation
   } catch {
     workflowDetail.value = undefined
+    workflowObservation.value = undefined
   } finally {
     workflowDetailLoading.value = false
+    workflowObservationLoading.value = false
   }
 }
 
@@ -817,72 +849,140 @@ onMounted(async () => {
     </el-card>
   </div>
 
-  <el-drawer v-model="workflowDetailVisible" title="工作流详情" size="56%">
-    <div v-loading="workflowDetailLoading" class="detail-wrapper">
+  <el-drawer v-model="workflowDetailVisible" title="工作流详情" size="96%">
+    <div v-loading="workflowDetailLoading || workflowObservationLoading" class="workflow-detail-workbench">
       <template v-if="workflowDetail">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="工作流名称">
-            {{ workflowDetail.name }}
-          </el-descriptions-item>
-          <el-descriptions-item label="模式">
-            {{ workflowDetail.modeLabel || workflowDetail.mode }}
-          </el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusTagType(workflowDetail.isActive)">
-              {{ workflowDetail.isActive === 1 ? '启用' : '停用' }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="更新时间">
-            {{ formatDateTime(workflowDetail.updateTime || workflowDetail.createTime) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="描述" :span="2">
-            {{ workflowDetail.description || '-' }}
-          </el-descriptions-item>
-        </el-descriptions>
+        <div class="workflow-overview-panel">
+          <div class="workflow-overview-header">
+            <div class="workflow-overview-title">
+              <span class="workflow-overview-name">{{ workflowDetail.name }}</span>
+              <el-tag :type="getModeTagType(workflowDetail.mode)">
+                {{ workflowDetail.modeLabel || workflowDetail.mode }}
+              </el-tag>
+              <el-tag :type="getStatusTagType(workflowDetail.isActive)">
+                {{ workflowDetail.isActive === 1 ? '启用中' : '停用' }}
+              </el-tag>
+            </div>
+            <div class="workflow-overview-time">
+              更新时间：{{ formatDateTime(workflowDetail.updateTime || workflowDetail.createTime) }}
+            </div>
+          </div>
+          <div class="workflow-overview-cards">
+            <div class="overview-card">
+              <div class="overview-card__label">状态数</div>
+              <div class="overview-card__value">{{ workflowDetail.states.length }}</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card__label">流转数</div>
+              <div class="overview-card__value">{{ workflowDetail.transitions.length }}</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card__label">初始状态</div>
+              <div class="overview-card__value">{{ workflowOverview?.initialStateName || '-' }}</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card__label">终态数量</div>
+              <div class="overview-card__value">{{ workflowOverview?.terminalCount || 0 }}</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card__label">退回流转</div>
+              <div class="overview-card__value">{{ workflowOverview?.returnCount || 0 }}</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card__label">使用工单数</div>
+              <div class="overview-card__value">{{ workflowObservation?.ticketCount ?? 0 }}</div>
+            </div>
+          </div>
+          <div class="workflow-overview-description">
+            {{ workflowDetail.description || '暂无工作流描述' }}
+          </div>
+        </div>
 
-        <el-card shadow="never" class="detail-section">
-          <template #header>
-            <div class="section-title">状态图配置</div>
-          </template>
-          <BaseTable :data="detailStateRows">
-            <el-table-column prop="code" label="状态编码" width="140" />
-            <el-table-column prop="name" label="状态名称" min-width="140" />
-            <el-table-column label="状态类型" min-width="120">
-              <template #default="{ row }">
-                {{ getStateTypeLabel(row.type) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="SLA动作" min-width="140">
-              <template #default="{ row }">
-                {{ getSlaActionLabel(row.slaAction) }}
-              </template>
-            </el-table-column>
-          </BaseTable>
-        </el-card>
+        <el-tabs v-model="workflowDetailActiveTab" class="workflow-detail-tabs">
+          <el-tab-pane label="流程图视图" name="graph">
+            <WorkflowFlowGraph
+              :states="workflowDetail.states"
+              :transitions="workflowDetail.transitions"
+              :role-label-map="WORKFLOW_ROLE_LABEL_MAP"
+              :sla-action-label-map="SLA_ACTION_LABEL_MAP"
+            />
+          </el-tab-pane>
+          <el-tab-pane label="流转矩阵" name="matrix">
+            <WorkflowMatrixView
+              :states="workflowDetail.states"
+              :transitions="workflowDetail.transitions"
+              :role-label-map="WORKFLOW_ROLE_LABEL_MAP"
+            />
+          </el-tab-pane>
+          <el-tab-pane label="规则明细" name="rules">
+            <div class="detail-rules-layout">
+              <el-card shadow="never" class="detail-section">
+                <template #header>
+                  <div class="section-title">状态定义</div>
+                </template>
+                <BaseTable :data="detailStateRows">
+                  <el-table-column prop="code" label="状态编码" width="160" />
+                  <el-table-column prop="name" label="状态名称" min-width="140" />
+                  <el-table-column label="状态类型" width="120">
+                    <template #default="{ row }">
+                      {{ getStateTypeLabel(row.type) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="order" label="排序" width="80" />
+                  <el-table-column label="SLA动作" min-width="140">
+                    <template #default="{ row }">
+                      {{ getSlaActionLabel(row.slaAction) }}
+                    </template>
+                  </el-table-column>
+                </BaseTable>
+              </el-card>
 
-        <el-card shadow="never" class="detail-section">
-          <template #header>
-            <div class="section-title">流转规则与角色可见条件</div>
-          </template>
-          <BaseTable :data="detailTransitionRows">
-            <el-table-column label="起始状态" min-width="140">
-              <template #default="{ row }">
-                {{ getWorkflowStateLabel(row.fromName || row.from) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="目标状态" min-width="140">
-              <template #default="{ row }">
-                {{ getWorkflowStateLabel(row.toName || row.to) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="name" label="流转名称" min-width="140" />
-            <el-table-column label="角色可见条件" min-width="220" :show-overflow-tooltip="true">
-              <template #default="{ row }">
-                {{ formatAllowedRoles(row.allowedRoles) }}
-              </template>
-            </el-table-column>
-          </BaseTable>
-        </el-card>
+              <el-card shadow="never" class="detail-section">
+                <template #header>
+                  <div class="section-title">流转规则</div>
+                </template>
+                <BaseTable :data="detailTransitionRows">
+                  <el-table-column prop="id" label="流转ID" width="140" />
+                  <el-table-column label="起始状态" min-width="140">
+                    <template #default="{ row }">
+                      {{ getWorkflowStateLabel(row.fromName || row.from) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="目标状态" min-width="140">
+                    <template #default="{ row }">
+                      {{ getWorkflowStateLabel(row.toName || row.to) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="name" label="流转名称" min-width="140" />
+                  <el-table-column label="角色可见条件" min-width="220" :show-overflow-tooltip="true">
+                    <template #default="{ row }">
+                      {{ formatAllowedRoles(row.allowedRoles) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="备注必填" width="90" align="center">
+                    <template #default="{ row }">
+                      {{ row.requireRemark ? '是' : '否' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="可转派" width="90" align="center">
+                    <template #default="{ row }">
+                      {{ row.allowTransfer ? '是' : '否' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="退回" width="80" align="center">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.isReturn" type="warning" size="small">退回</el-tag>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                </BaseTable>
+              </el-card>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="运行观察" name="observation">
+            <WorkflowObservationPanel :data="workflowObservation" />
+          </el-tab-pane>
+        </el-tabs>
       </template>
       <EmptyState v-else description="未获取到工作流详情数据" />
     </div>
@@ -1232,12 +1332,94 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.detail-wrapper {
-  min-height: 260px;
+.workflow-detail-workbench {
+  min-height: 560px;
+}
+
+.workflow-overview-panel {
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #f7fbff 0%, #f9fafb 100%);
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.workflow-overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.workflow-overview-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workflow-overview-name {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.workflow-overview-time {
+  color: #86909c;
+  font-size: 13px;
+}
+
+.workflow-overview-cards {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-card {
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.overview-card__label {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.overview-card__value {
+  margin-top: 6px;
+  color: #1d2129;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+}
+
+.workflow-overview-description {
+  margin-top: 14px;
+  color: #4e5969;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.workflow-detail-tabs {
+  :deep(.el-tabs__content) {
+    padding-top: 8px;
+  }
+}
+
+.detail-rules-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .detail-section {
-  margin-top: 18px;
   border-radius: 8px;
 }
 
@@ -1280,6 +1462,10 @@ onMounted(async () => {
   .query-form {
     padding: 10px 12px;
   }
+
+  .workflow-overview-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -1317,6 +1503,18 @@ onMounted(async () => {
 
   .query-action-buttons :deep(.el-button) {
     width: 100%;
+  }
+
+  .workflow-overview-panel {
+    padding: 14px;
+  }
+
+  .workflow-overview-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-overview-name {
+    font-size: 18px;
   }
 }
 </style>

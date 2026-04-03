@@ -12,13 +12,24 @@ import com.miduo.cloud.ticket.domain.workflow.model.WorkflowTransition;
 import com.miduo.cloud.ticket.domain.workflow.service.WorkflowEngine;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowListOutput;
+import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowObservationOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowUpdateInput;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFlowRecordMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketNodeDurationMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.WorkflowNodeObservationStat;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFlowRecordPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.WorkflowMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.WorkflowPO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -34,10 +45,23 @@ public class WorkflowAppService extends BaseApplicationService {
 
     private final WorkflowMapper workflowMapper;
     private final WorkflowEngine workflowEngine;
+    private final TicketMapper ticketMapper;
+    private final TicketFlowRecordMapper ticketFlowRecordMapper;
+    private final TicketNodeDurationMapper ticketNodeDurationMapper;
+    private final SysUserMapper sysUserMapper;
 
-    public WorkflowAppService(WorkflowMapper workflowMapper, WorkflowEngine workflowEngine) {
+    public WorkflowAppService(WorkflowMapper workflowMapper,
+                              WorkflowEngine workflowEngine,
+                              TicketMapper ticketMapper,
+                              TicketFlowRecordMapper ticketFlowRecordMapper,
+                              TicketNodeDurationMapper ticketNodeDurationMapper,
+                              SysUserMapper sysUserMapper) {
         this.workflowMapper = workflowMapper;
         this.workflowEngine = workflowEngine;
+        this.ticketMapper = ticketMapper;
+        this.ticketFlowRecordMapper = ticketFlowRecordMapper;
+        this.ticketNodeDurationMapper = ticketNodeDurationMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -76,10 +100,7 @@ public class WorkflowAppService extends BaseApplicationService {
      * 查询工作流详情
      */
     public WorkflowDetailOutput getWorkflowDetail(Long id) {
-        WorkflowPO po = workflowMapper.selectById(id);
-        if (po == null) {
-            throw BusinessException.of(ErrorCode.WORKFLOW_NOT_FOUND);
-        }
+        WorkflowPO po = requireWorkflow(id);
 
         WorkflowDetailOutput output = new WorkflowDetailOutput();
         output.setId(po.getId());
@@ -104,6 +125,7 @@ public class WorkflowAppService extends BaseApplicationService {
             item.setName(state.getName());
             item.setType(state.getType());
             item.setSlaAction(state.getSlaAction());
+            item.setOrder(state.getOrder());
             stateItems.add(item);
         }
         output.setStates(stateItems);
@@ -112,16 +134,41 @@ public class WorkflowAppService extends BaseApplicationService {
         List<WorkflowDetailOutput.TransitionItem> transitionItems = new ArrayList<>();
         for (WorkflowTransition transition : transitions) {
             WorkflowDetailOutput.TransitionItem item = new WorkflowDetailOutput.TransitionItem();
+            item.setId(transition.getId());
             item.setFrom(transition.getFrom());
             item.setFromName(stateNameMap.getOrDefault(transition.getFrom(), transition.getFrom()));
             item.setTo(transition.getTo());
             item.setToName(stateNameMap.getOrDefault(transition.getTo(), transition.getTo()));
             item.setName(transition.getName());
             item.setAllowedRoles(transition.getAllowedRoles());
+            item.setRequireRemark(transition.isRequireRemark());
+            item.setAllowTransfer(transition.isAllowTransfer());
+            item.setIsReturn(transition.isReturnTransition());
             transitionItems.add(item);
         }
         output.setTransitions(transitionItems);
 
+        return output;
+    }
+
+    /**
+     * 查询工作流运行观察
+     */
+    public WorkflowObservationOutput getWorkflowObservation(Long id) {
+        WorkflowPO workflow = requireWorkflow(id);
+        WorkflowObservationOutput output = new WorkflowObservationOutput();
+        output.setWorkflowId(workflow.getId());
+        output.setWorkflowName(workflow.getName());
+
+        List<TicketFlowRecordPO> recentRecords = ticketFlowRecordMapper.selectRecentByWorkflowId(id, 20L);
+        Long ticketCount = ticketMapper.selectCount(
+                new LambdaQueryWrapper<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO>()
+                        .eq(com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO::getWorkflowId, id));
+        output.setTicketCount(ticketCount != null ? ticketCount : 0L);
+        output.setRecentFlows(convertFlowRecords(workflow, recentRecords));
+
+        List<WorkflowNodeObservationStat> nodeStats = ticketNodeDurationMapper.selectWorkflowNodeStats(id);
+        output.setNodeStats(convertNodeStats(workflow, nodeStats));
         return output;
     }
 
@@ -306,10 +353,119 @@ public class WorkflowAppService extends BaseApplicationService {
      * 根据ID获取工作流PO
      */
     public WorkflowPO getWorkflowById(Long id) {
+        return requireWorkflow(id);
+    }
+
+    private WorkflowPO requireWorkflow(Long id) {
         WorkflowPO po = workflowMapper.selectById(id);
         if (po == null) {
             throw BusinessException.of(ErrorCode.WORKFLOW_NOT_FOUND);
         }
         return po;
+    }
+
+    private List<WorkflowObservationOutput.RecentFlowItem> convertFlowRecords(WorkflowPO workflow,
+                                                                               List<TicketFlowRecordPO> records) {
+        if (records == null || records.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, String> stateNameMap = workflowEngine.parseStates(workflow.getStates()).stream()
+                .collect(Collectors.toMap(WorkflowState::getCode, WorkflowState::getName));
+        Set<Long> userIds = new HashSet<>();
+        for (TicketFlowRecordPO record : records) {
+            if (record.getFromAssigneeId() != null) {
+                userIds.add(record.getFromAssigneeId());
+            }
+            if (record.getToAssigneeId() != null) {
+                userIds.add(record.getToAssigneeId());
+            }
+            if (record.getOperatorId() != null) {
+                userIds.add(record.getOperatorId());
+            }
+        }
+        Map<Long, String> userNameMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<SysUserPO> users = sysUserMapper.selectBatchIds(userIds);
+            for (SysUserPO user : users) {
+                userNameMap.put(user.getId(), user.getName());
+            }
+        }
+
+        List<WorkflowObservationOutput.RecentFlowItem> result = new ArrayList<>();
+        for (TicketFlowRecordPO record : records) {
+            WorkflowObservationOutput.RecentFlowItem item = new WorkflowObservationOutput.RecentFlowItem();
+            item.setId(record.getId());
+            item.setTicketId(record.getTicketId());
+            item.setTicketNo(record.getTicketNo());
+            item.setFlowType(record.getFlowType());
+            item.setFlowTypeLabel(resolveFlowTypeLabel(record.getFlowType()));
+            item.setTransitionId(record.getTransitionId());
+            item.setTransitionName(record.getTransitionName());
+            item.setFromStatus(record.getFromStatus());
+            item.setFromStatusName(stateNameMap.getOrDefault(record.getFromStatus(), record.getFromStatus()));
+            item.setToStatus(record.getToStatus());
+            item.setToStatusName(stateNameMap.getOrDefault(record.getToStatus(), record.getToStatus()));
+            item.setFromAssigneeId(record.getFromAssigneeId());
+            item.setFromAssigneeName(record.getFromAssigneeId() != null
+                    ? userNameMap.get(record.getFromAssigneeId()) : null);
+            item.setToAssigneeId(record.getToAssigneeId());
+            item.setToAssigneeName(record.getToAssigneeId() != null
+                    ? userNameMap.get(record.getToAssigneeId()) : null);
+            item.setOperatorId(record.getOperatorId());
+            item.setOperatorName(record.getOperatorId() != null
+                    ? userNameMap.get(record.getOperatorId()) : null);
+            item.setOperatorRole(record.getOperatorRole());
+            item.setRemark(record.getRemark());
+            item.setCreateTime(record.getCreateTime());
+            result.add(item);
+        }
+        result.sort(Comparator.comparing(WorkflowObservationOutput.RecentFlowItem::getCreateTime).reversed());
+        return result;
+    }
+
+    private List<WorkflowObservationOutput.NodeObservationItem> convertNodeStats(WorkflowPO workflow,
+                                                                                  List<WorkflowNodeObservationStat> stats) {
+        if (stats == null || stats.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, WorkflowState> stateMap = workflowEngine.parseStates(workflow.getStates()).stream()
+                .collect(Collectors.toMap(WorkflowState::getCode, item -> item));
+        List<WorkflowObservationOutput.NodeObservationItem> result = new ArrayList<>();
+        for (WorkflowNodeObservationStat stat : stats) {
+            WorkflowState state = stateMap.get(stat.getNodeName());
+            WorkflowObservationOutput.NodeObservationItem item = new WorkflowObservationOutput.NodeObservationItem();
+            item.setNodeCode(stat.getNodeName());
+            item.setNodeName(state != null ? state.getName() : stat.getNodeName());
+            item.setNodeType(state != null ? state.getType() : null);
+            item.setOrder(state != null ? state.getOrder() : null);
+            item.setTicketCount(stat.getEnterCount());
+            item.setAvgWaitDurationSec(stat.getAvgWaitDurationSec());
+            item.setAvgProcessDurationSec(stat.getAvgProcessDurationSec());
+            item.setAvgTotalDurationSec(stat.getAvgTotalDurationSec());
+            item.setMaxTotalDurationSec(stat.getMaxTotalDurationSec());
+            result.add(item);
+        }
+        result.sort(Comparator.comparing(item -> item.getOrder() != null ? item.getOrder() : Integer.MAX_VALUE));
+        return result;
+    }
+
+    private String resolveFlowTypeLabel(String flowType) {
+        if (flowType == null) {
+            return "";
+        }
+        switch (flowType) {
+            case "TRANSIT":
+                return "状态流转";
+            case "TRANSFER":
+                return "转派";
+            case "RETURN":
+                return "退回";
+            case "ASSIGN":
+                return "分派";
+            case "CLOSE":
+                return "关闭";
+            default:
+                return flowType;
+        }
     }
 }

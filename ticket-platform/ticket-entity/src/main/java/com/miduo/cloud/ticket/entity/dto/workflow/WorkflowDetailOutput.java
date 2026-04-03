@@ -30,15 +30,20 @@ public class WorkflowDetailOutput implements Serializable {
         private String name;
         private String type;
         private String slaAction;
+        private Integer order;
     }
 
     @Data
     public static class TransitionItem implements Serializable {
+        private String id;
         private String from;
         private String fromName;
         private String to;
         private String toName;
         private String name;
         private List<String> allowedRoles;
+        private Boolean requireRemark;
+        private Boolean allowTransfer;
+        private Boolean isReturn;
     }
 }

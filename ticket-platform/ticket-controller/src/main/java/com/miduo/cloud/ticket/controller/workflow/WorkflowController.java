@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowListOutput;
+import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowObservationOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowUpdateInput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,6 +54,18 @@ public class WorkflowController {
     @GetMapping("/detail/{id}")
     public ApiResult<WorkflowDetailOutput> getWorkflowDetail(@PathVariable Long id) {
         WorkflowDetailOutput result = workflowAppService.getWorkflowDetail(id);
+        return ApiResult.success(result);
+    }
+
+    /**
+     * 工作流运行观察
+     * 接口编号：API000206
+     * 产品文档功能：4.4 工作流引擎 - 工作流详情运行观察
+     */
+    @Operation(summary = "获取工作流运行观察", description = "接口编号：API000206")
+    @GetMapping("/observation/{id}")
+    public ApiResult<WorkflowObservationOutput> getWorkflowObservation(@PathVariable Long id) {
+        WorkflowObservationOutput result = workflowAppService.getWorkflowObservation(id);
         return ApiResult.success(result);
     }
 

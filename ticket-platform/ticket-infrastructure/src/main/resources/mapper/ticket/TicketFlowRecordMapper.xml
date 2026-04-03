@@ -30,4 +30,34 @@
         ORDER BY create_time ASC
     </select>
 
+    <select id="selectRecentByWorkflowId"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFlowRecordPO">
+        SELECT
+            r.id,
+            r.ticket_id,
+            r.ticket_no,
+            r.flow_type,
+            r.transition_id,
+            r.transition_name,
+            r.from_status,
+            r.to_status,
+            r.from_assignee_id,
+            r.to_assignee_id,
+            r.operator_id,
+            r.operator_role,
+            r.remark,
+            r.create_time,
+            r.update_time,
+            r.create_by,
+            r.update_by,
+            r.deleted
+        FROM ticket_flow_record r
+        INNER JOIN ticket t ON t.id = r.ticket_id
+        WHERE r.deleted = 0
+          AND t.deleted = 0
+          AND t.workflow_id = #{workflowId}
+        ORDER BY r.create_time DESC, r.id DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
