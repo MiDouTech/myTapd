@@ -421,18 +421,22 @@ async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
   workflowDetailLoading.value = true
   workflowObservationLoading.value = true
   workflowDetailActiveTab.value = 'graph'
+  workflowDetail.value = undefined
+  workflowObservation.value = undefined
+
   try {
-    const [detail, observation] = await Promise.all([
-      getWorkflowDetail(row.id),
-      getWorkflowObservation(row.id),
-    ])
-    workflowDetail.value = detail
-    workflowObservation.value = observation
+    workflowDetail.value = await getWorkflowDetail(row.id)
   } catch {
-    workflowDetail.value = undefined
-    workflowObservation.value = undefined
+    // 详情加载失败，抽屉会展示空状态提示
   } finally {
     workflowDetailLoading.value = false
+  }
+
+  try {
+    workflowObservation.value = await getWorkflowObservation(row.id)
+  } catch {
+    // 运行观察加载失败不影响主体详情展示
+  } finally {
     workflowObservationLoading.value = false
   }
 }
@@ -971,7 +975,7 @@ onMounted(async () => {
             </div>
           </el-tab-pane>
           <el-tab-pane label="运行观察" name="observation">
-            <WorkflowObservationPanel :data="workflowObservation" />
+            <WorkflowObservationPanel :observation="workflowObservation" />
           </el-tab-pane>
         </el-tabs>
       </template>
