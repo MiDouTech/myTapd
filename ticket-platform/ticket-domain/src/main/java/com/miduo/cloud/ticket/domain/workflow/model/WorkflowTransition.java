@@ -49,14 +49,6 @@ public class WorkflowTransition implements Serializable {
      */
     private Boolean isReturn;
 
-    public boolean isRequireRemark() {
-        return Boolean.TRUE.equals(requireRemark);
-    }
-
-    public boolean isAllowTransfer() {
-        return Boolean.TRUE.equals(allowTransfer);
-    }
-
     public boolean isReturnTransition() {
         return Boolean.TRUE.equals(isReturn);
     }
