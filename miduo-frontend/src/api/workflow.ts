@@ -80,7 +80,10 @@ function normalizeWorkflowListItem(item: WorkflowListRawOutput): WorkflowListOut
   }
 }
 
-function normalizeWorkflowDetail(item: WorkflowDetailRawOutput): WorkflowDetailOutput {
+function normalizeWorkflowDetail(item: WorkflowDetailRawOutput | null | undefined): WorkflowDetailOutput | null {
+  if (!item) {
+    return null
+  }
   return {
     id: item.id,
     name: item.name,
@@ -139,8 +142,8 @@ export async function getWorkflowList(): Promise<WorkflowListOutput[]> {
  * 接口编号：API000201
  * 产品文档功能：4.4 工作流引擎 - 工作流详情
  */
-export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput> {
-  const result = await request.get<WorkflowDetailRawOutput>(`/workflow/detail/${id}`)
+export async function getWorkflowDetail(id: number): Promise<WorkflowDetailOutput | null> {
+  const result = await request.get<WorkflowDetailRawOutput | null>(`/workflow/detail/${id}`)
   return normalizeWorkflowDetail(result)
 }
 

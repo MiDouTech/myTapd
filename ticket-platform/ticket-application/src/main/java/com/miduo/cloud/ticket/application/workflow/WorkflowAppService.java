@@ -141,8 +141,8 @@ public class WorkflowAppService extends BaseApplicationService {
             item.setToName(stateNameMap.getOrDefault(transition.getTo(), transition.getTo()));
             item.setName(transition.getName());
             item.setAllowedRoles(transition.getAllowedRoles());
-            item.setRequireRemark(transition.isRequireRemark());
-            item.setAllowTransfer(transition.isAllowTransfer());
+            item.setRequireRemark(transition.getRequireRemark());
+            item.setAllowTransfer(transition.getAllowTransfer());
             item.setIsReturn(transition.isReturnTransition());
             transitionItems.add(item);
         }

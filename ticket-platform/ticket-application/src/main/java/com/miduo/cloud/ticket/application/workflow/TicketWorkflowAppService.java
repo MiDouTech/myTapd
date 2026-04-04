@@ -141,8 +141,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             item.setTargetStatusName(stateNameMap.getOrDefault(t.getTo(), t.getTo()));
             item.setActionName(t.getName());
             item.setIsReturn(t.isReturnTransition());
-            item.setRequireRemark(t.isRequireRemark());
-            item.setAllowTransfer(t.isAllowTransfer());
+            item.setRequireRemark(t.getRequireRemark());
+            item.setAllowTransfer(t.getAllowTransfer());
             item.setAllowedRoles(t.getAllowedRoles());
             actions.add(item);
         }
@@ -192,7 +192,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String targetStatus = matchedTransition.getTo();
 
         // 校验 requireRemark
-        if (matchedTransition.isRequireRemark()
+        if (Boolean.TRUE.equals(matchedTransition.getRequireRemark())
                 && !StringUtils.hasText(input.getRemark())) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR,
                     "操作[" + matchedTransition.getName() + "]必须填写备注");
@@ -217,7 +217,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         List<Long> newAssigneeIds = resolveNewAssigneeIdsFromTransit(input);
         List<Long> nextAssigneeIds = Collections.emptyList();
-        if (matchedTransition.isAllowTransfer() && !newAssigneeIds.isEmpty()) {
+        if (Boolean.TRUE.equals(matchedTransition.getAllowTransfer()) && !newAssigneeIds.isEmpty()) {
             nextAssigneeIds = newAssigneeIds;
         } else if (shouldAutoClaimOnAccept(matchedTransition, oldStatus, operatorId)) {
             // “受理”动作默认由点击人认领，避免状态已推进但处理人仍停留在旧值
@@ -272,7 +272,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         // 处理人变更事件（主处理人或协同处理人列表变化时通知）
         if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds)) {
-            String assignmentReason = matchedTransition.isAllowTransfer()
+            String assignmentReason = Boolean.TRUE.equals(matchedTransition.getAllowTransfer())
                     ? TicketAssignType.TRANSFER_ON_TRANSIT.getCode()
                     : TicketAssignType.ACCEPT_CLAIM.getCode();
             eventPublisher.publishEvent(
@@ -343,7 +343,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             if (t.getFrom() == null || !fromCode.equalsIgnoreCase(t.getFrom())) {
                 continue;
             }
-            if (!t.isAllowTransfer()) {
+            if (!Boolean.TRUE.equals(t.getAllowTransfer())) {
                 continue;
             }
             if (t.getFrom() != null && t.getTo() != null

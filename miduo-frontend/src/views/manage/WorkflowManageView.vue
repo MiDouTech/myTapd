@@ -425,7 +425,7 @@ async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
   workflowObservation.value = undefined
 
   try {
-    workflowDetail.value = await getWorkflowDetail(row.id)
+    workflowDetail.value = await getWorkflowDetail(row.id) ?? undefined
   } catch {
     // 详情加载失败，抽屉会展示空状态提示
   } finally {
@@ -461,6 +461,9 @@ async function openWorkflowEdit(row: WorkflowListOutput): Promise<void> {
   workflowEditingId.value = row.id
   try {
     const detail = await getWorkflowDetail(row.id)
+    if (!detail) {
+      throw new Error('工作流详情获取失败')
+    }
     workflowEditForm.name = detail.name
     workflowEditForm.mode = detail.mode
     workflowEditForm.description = detail.description || ''
