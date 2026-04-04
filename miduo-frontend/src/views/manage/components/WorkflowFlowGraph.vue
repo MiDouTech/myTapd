@@ -60,13 +60,22 @@ const graph = computed(() => {
   const queue: string[] = roots.map((item) => item.code)
   roots.forEach((item) => levelMap.set(item.code, 0))
 
-  while (queue.length > 0) {
+  // 最长简单路径层级不会超过状态数；工作流定义里若存在环路（非退回边），原逻辑会无限抬高 level 并入队，导致页面卡死。
+  const maxLevel = Math.max(states.length, 1)
+  const maxIterations = Math.max(
+    10000,
+    states.length * states.length * 2 + transitions.length * 4,
+  )
+  let iterations = 0
+
+  while (queue.length > 0 && iterations < maxIterations) {
+    iterations += 1
     const code = queue.shift() as string
     const currentLevel = levelMap.get(code) ?? 0
     transitions
       .filter((transition) => transition.from === code && !transition.isReturn)
       .forEach((transition) => {
-        const nextLevel = currentLevel + 1
+        const nextLevel = Math.min(currentLevel + 1, maxLevel)
         const prevLevel = levelMap.get(transition.to)
         if (prevLevel === undefined || nextLevel > prevLevel) {
           levelMap.set(transition.to, nextLevel)
