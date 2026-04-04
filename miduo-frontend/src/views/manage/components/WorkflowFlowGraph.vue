@@ -65,7 +65,7 @@ function buildOrderBasedLevels(states: WorkflowDetailStateItem[]): Map<string, n
   const orderToColumn = new Map<number, number>()
   uniqueSorted.forEach((ord, col) => orderToColumn.set(ord, col))
   states.forEach((s, i) => {
-    const ord = effectiveOrders[i]
+    const ord = effectiveOrders[i]!
     levelMap.set(s.code, orderToColumn.get(ord) ?? 0)
   })
   return levelMap
@@ -75,51 +75,7 @@ const graph = computed(() => {
   const states = [...(props.detail?.states || [])].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
   const transitions = props.detail?.transitions || []
   const nodeMap = new Map<string, GraphNode>()
-
-  states.forEach((state) => incoming.set(state.code, 0))
-  transitions.forEach((transition) => {
-    incoming.set(transition.to, (incoming.get(transition.to) || 0) + 1)
-  })
-
-  const initialStates = states.filter((item) => item.type === 'INITIAL')
-  const fallbackRoots = states.filter((item) => (incoming.get(item.code) || 0) === 0)
-  const roots = (initialStates.length > 0 ? initialStates : fallbackRoots).length > 0
-    ? (initialStates.length > 0 ? initialStates : fallbackRoots)
-    : states.slice(0, 1)
-
-  const levelMap = new Map<string, number>()
-  const queue: string[] = roots.map((item) => item.code)
-  roots.forEach((item) => levelMap.set(item.code, 0))
-
-  // 最长简单路径层级不会超过状态数；工作流定义里若存在环路（非退回边），原逻辑会无限抬高 level 并入队，导致页面卡死。
-  const maxLevel = Math.max(states.length, 1)
-  const maxIterations = Math.max(
-    10000,
-    states.length * states.length * 2 + transitions.length * 4,
-  )
-  let iterations = 0
-
-  while (queue.length > 0 && iterations < maxIterations) {
-    iterations += 1
-    const code = queue.shift() as string
-    const currentLevel = levelMap.get(code) ?? 0
-    transitions
-      .filter((transition) => transition.from === code && !transition.isReturn)
-      .forEach((transition) => {
-        const nextLevel = Math.min(currentLevel + 1, maxLevel)
-        const prevLevel = levelMap.get(transition.to)
-        if (prevLevel === undefined || nextLevel > prevLevel) {
-          levelMap.set(transition.to, nextLevel)
-          queue.push(transition.to)
-        }
-      })
-  }
-
-  states.forEach((state, index) => {
-    if (!levelMap.has(state.code)) {
-      levelMap.set(state.code, Math.min(index, 3))
-    }
-  })
+  const levelMap = buildOrderBasedLevels(states)
 
   const groups = new Map<number, WorkflowDetailStateItem[]>()
   states.forEach((state) => {
