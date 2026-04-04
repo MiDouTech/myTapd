@@ -60,7 +60,14 @@ const graph = computed(() => {
   const queue: string[] = roots.map((item) => item.code)
   roots.forEach((item) => levelMap.set(item.code, 0))
 
-  while (queue.length > 0) {
+  // 图中可能存在环路（非退回边）；原逻辑在「最长层级」松弛下会无限入队，导致页面卡死。
+  const maxRelaxSteps = Math.max(
+    1,
+    states.length * Math.max(transitions.length, 1) + states.length,
+  )
+  let relaxSteps = 0
+  while (queue.length > 0 && relaxSteps < maxRelaxSteps) {
+    relaxSteps += 1
     const code = queue.shift() as string
     const currentLevel = levelMap.get(code) ?? 0
     transitions
