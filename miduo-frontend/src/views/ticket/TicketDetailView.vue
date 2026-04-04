@@ -835,6 +835,17 @@ function isImageFile(fileType?: string): boolean {
   return fileType.startsWith('image/')
 }
 
+function isVideoFile(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.startsWith('video/')
+}
+
+function openVideoInNewTab(filePath?: string): void {
+  if (filePath) {
+    window.open(filePath, '_blank')
+  }
+}
+
 const attachmentImageUrls = computed(() => {
   return (detail.value?.attachments ?? [])
     .filter((a) => isImageFile(a.fileType))
@@ -1485,6 +1496,13 @@ watch(
               preview-teleported
               lazy
             />
+            <video
+              v-else-if="isVideoFile(attachment.fileType)"
+              :src="attachment.filePath"
+              controls
+              class="attachment-video-thumbnail"
+              preload="metadata"
+            />
             <el-icon v-else class="attachment-icon"><DocumentOutlined /></el-icon>
           </div>
           <div class="attachment-info">
@@ -1498,6 +1516,13 @@ watch(
                   size="small"
                   @click="openAttachmentPreview(attachment.filePath)"
                 >查看</el-button>
+                <el-button
+                  v-if="isVideoFile(attachment.fileType) && attachment.filePath"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openVideoInNewTab(attachment.filePath)"
+                >播放</el-button>
                 <el-popconfirm
                   title="确认删除此附件？"
                   @confirm="handleDeleteAttachment(attachment.id)"
@@ -2358,6 +2383,14 @@ watch(
   width: 60px;
   height: 60px;
   object-fit: cover;
+}
+
+.attachment-video-thumbnail {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  background-color: #000;
 }
 
 .attachment-icon {

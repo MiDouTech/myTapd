@@ -190,8 +190,7 @@ public final class WecomXmlParser {
                     log.warn("企微智能机器人图片消息 image 子对象缺失，原始JSON: {}",
                             json.length() > 500 ? json.substring(0, 500) : json);
                 }
-            } else if ("mixed".equalsIgnoreCase(msgType)) {
-                // 群聊中 @机器人 同时附带图片时，msgtype 为 mixed
+            } else if ("mixed".equalsIgnoreCase(msgType)) {                // 群聊中 @机器人 同时附带图片时，msgtype 为 mixed
                 // mixed.msg_item 数组包含若干子消息（image / text），逐项提取
                 result.put("Content", "");
                 result.put("DownloadUrl", "");
@@ -234,7 +233,27 @@ public final class WecomXmlParser {
                             json.length() > 500 ? json.substring(0, 500) : json);
                 }
             } else {
+                // 企微 AI Bot 官方文档未定义视频消息格式，此处作防御性处理
+                // 若收到 video 或其他未知类型，尽量提取 MediaId 供后续流程使用
                 result.put("Content", "");
+                result.put("DownloadUrl", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                if ("video".equalsIgnoreCase(msgType)) {
+                    JSONObject videoObj = obj.getJSONObject("video");
+                    if (videoObj != null) {
+                        result.put("MediaId", nullToEmpty(videoObj.getStr("media_id")));
+                        result.put("ThumbMediaId", nullToEmpty(videoObj.getStr("thumb_media_id")));
+                    } else {
+                        result.put("MediaId", "");
+                        result.put("ThumbMediaId", "");
+                    }
+                    log.info("企微 aibot JSON 视频消息（官方未定义）解析: msgId={}", result.get("MsgId"));
+                } else {
+                    result.put("MediaId", "");
+                    result.put("ThumbMediaId", "");
+                    log.debug("企微 aibot JSON 消息类型未知: msgType={}", msgType);
+                }
             }
 
             log.debug("企微 aibot JSON 消息解析完成: msgId={}, msgType={}, from={}",

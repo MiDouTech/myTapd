@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -218,6 +219,46 @@ public class WecomClient {
             String errMsg = result != null ? result.getString("errmsg") : "response is null";
             log.error("发送企微应用消息失败: toUser={}, errMsg={}", toUser, errMsg);
             throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微应用消息失败: " + errMsg);
+        }
+    }
+
+    /**
+     * 通过 MediaId 流式下载企微媒体文件（适用于视频等大文件），返回 InputStream。
+     * 调用方负责关闭流；下载失败时返回 null。
+     * 企微接口：GET /cgi-bin/media/get?access_token=xxx&media_id=xxx
+     *
+     * @param mediaId 企微 MediaId
+     * @return 媒体内容输入流，失败时返回 null
+     */
+    public InputStream downloadMediaStream(String mediaId) {
+        if (mediaId == null || mediaId.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String accessToken = tokenManager.getAccessToken();
+            String url = buildApiUrl(GET_MEDIA_PATH) + "?access_token=" + accessToken + "&media_id=" + mediaId.trim();
+            WeworkRuntimeConfigProvider.RuntimeConfig config = runtimeConfigProvider.getRuntimeConfig();
+            int connectTimeout = config.getConnectTimeoutMs() != null ? config.getConnectTimeoutMs() : 10000;
+            int readTimeout = config.getReadTimeoutMs() != null ? config.getReadTimeoutMs() : 60000;
+            cn.hutool.http.HttpResponse response = cn.hutool.http.HttpRequest.get(url)
+                    .timeout(connectTimeout + readTimeout)
+                    .executeAsync();
+            String contentType = response.header("Content-Type");
+            if (contentType != null && contentType.contains("application/json")) {
+                String body = response.body();
+                log.warn("企微MediaId流式下载返回错误响应: mediaId={}, response={}", mediaId,
+                        body != null && body.length() > 200 ? body.substring(0, 200) : body);
+                return null;
+            }
+            InputStream stream = response.bodyStream();
+            if (stream == null) {
+                log.warn("企微MediaId流式下载返回空流: mediaId={}", mediaId);
+                return null;
+            }
+            return stream;
+        } catch (Exception e) {
+            log.warn("企微MediaId流式下载失败: mediaId={}, error={}", mediaId, e.getMessage());
+            return null;
         }
     }
 

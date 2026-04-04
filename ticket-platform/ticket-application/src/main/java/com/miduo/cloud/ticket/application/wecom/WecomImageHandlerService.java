@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
 import com.miduo.cloud.ticket.common.enums.AttachmentSource;
 import com.miduo.cloud.ticket.common.enums.WecomPendingImageStatus;
 import com.miduo.cloud.ticket.entity.dto.wecom.WecomCallbackMessageDTO;
+import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuProperties;
+import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketAttachmentMapper;
@@ -23,6 +25,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -38,6 +41,9 @@ public class WecomImageHandlerService {
 
     private static final Logger log = LoggerFactory.getLogger(WecomImageHandlerService.class);
 
+    private static final String MEDIA_TYPE_IMAGE = "image";
+    private static final String MEDIA_TYPE_VIDEO = "video";
+
     private final WecomImageDownloadService imageDownloadService;
     private final WecomPendingImageMapper pendingImageMapper;
     private final TicketAttachmentMapper attachmentMapper;
@@ -46,6 +52,8 @@ public class WecomImageHandlerService {
     private final StringRedisTemplate redisTemplate;
     private final WecomClient wecomClient;
     private final SysUserMapper sysUserMapper;
+    private final QiniuUploadService qiniuUploadService;
+    private final QiniuProperties qiniuProperties;
 
     public WecomImageHandlerService(WecomImageDownloadService imageDownloadService,
                                     WecomPendingImageMapper pendingImageMapper,
@@ -54,7 +62,9 @@ public class WecomImageHandlerService {
                                     WecomProperties wecomProperties,
                                     StringRedisTemplate redisTemplate,
                                     WecomClient wecomClient,
-                                    SysUserMapper sysUserMapper) {
+                                    SysUserMapper sysUserMapper,
+                                    QiniuUploadService qiniuUploadService,
+                                    QiniuProperties qiniuProperties) {
         this.imageDownloadService = imageDownloadService;
         this.pendingImageMapper = pendingImageMapper;
         this.attachmentMapper = attachmentMapper;
@@ -63,6 +73,8 @@ public class WecomImageHandlerService {
         this.redisTemplate = redisTemplate;
         this.wecomClient = wecomClient;
         this.sysUserMapper = sysUserMapper;
+        this.qiniuUploadService = qiniuUploadService;
+        this.qiniuProperties = qiniuProperties;
     }
 
     /**
@@ -97,6 +109,64 @@ public class WecomImageHandlerService {
         }
 
         WecomPendingImagePO pending = savePendingImageRecord(message, qiniuUrl, WecomPendingImageStatus.PENDING);
+        if (pending == null) {
+            return;
+        }
+
+        boolean linked = tryLinkToRecentTicket(pending, config);
+
+        if (!linked && config.isNotifyOnPending()) {
+            sendPendingNotification(message.getChatId(), message.getFromWecomUserid(), message.getResponseUrl());
+        }
+    }
+
+    /**
+     * 异步处理企微视频消息：流式下载视频 → 上传七牛云 → 下载缩略图 → 暂存 → 尝试关联
+     * 通过 @Async 确保不阻塞主回调流程（企微要求 5 秒内响应）
+     *
+     * @param message 企微回调消息（MsgType=video）
+     */
+    @Async
+    public void handleVideoMessageAsync(WecomCallbackMessageDTO message) {
+        if (message == null) {
+            return;
+        }
+        WecomProperties.ImageConfig config = wecomProperties.getImage();
+        if (config == null || !config.isEnabled()) {
+            log.info("企微媒体处理功能已禁用，跳过视频: msgId={}", message.getMsgId());
+            return;
+        }
+
+        log.info("开始异步处理企微视频消息: msgId={}, chatId={}, fromUserId={}",
+                message.getMsgId(), message.getChatId(), message.getFromWecomUserid());
+
+        String videoUrl = null;
+        if (message.getMediaId() != null && !message.getMediaId().isEmpty()) {
+            InputStream videoStream = wecomClient.downloadMediaStream(message.getMediaId());
+            videoUrl = qiniuUploadService.uploadStream(
+                    videoStream,
+                    "wecom_" + message.getMsgId() + ".mp4",
+                    "video/mp4",
+                    qiniuProperties.getVideoPathPrefix());
+        }
+
+        if (videoUrl == null) {
+            savePendingMediaRecord(message, null, null, MEDIA_TYPE_VIDEO, WecomPendingImageStatus.FAILED);
+            log.warn("企微视频下载/上传失败，已标记FAILED: msgId={}", message.getMsgId());
+            return;
+        }
+
+        String thumbUrl = null;
+        if (message.getThumbMediaId() != null && !message.getThumbMediaId().isEmpty()) {
+            byte[] thumbBytes = wecomClient.downloadMediaById(message.getThumbMediaId());
+            if (thumbBytes != null && thumbBytes.length > 0) {
+                thumbUrl = qiniuUploadService.uploadImageBytes(thumbBytes,
+                        "thumb_" + message.getMsgId() + ".jpg");
+            }
+        }
+
+        WecomPendingImagePO pending = savePendingMediaRecord(message, videoUrl, thumbUrl, MEDIA_TYPE_VIDEO,
+                WecomPendingImageStatus.PENDING);
         if (pending == null) {
             return;
         }
@@ -144,7 +214,8 @@ public class WecomImageHandlerService {
                 log.warn("工单图片数已达上限 {}，停止关联: ticketId={}", maxImages, ticketId);
                 break;
             }
-            createAttachmentRecord(ticketId, pending.getQiniuUrl(), pending.getMsgId());
+            createAttachmentRecord(ticketId, pending.getQiniuUrl(), pending.getMsgId(),
+                    pending.getMediaType() != null ? pending.getMediaType() : MEDIA_TYPE_IMAGE);
             updatePendingStatus(pending.getId(), ticketId, WecomPendingImageStatus.LINKED);
             linked++;
         }
@@ -192,17 +263,29 @@ public class WecomImageHandlerService {
             return false;
         }
 
-        createAttachmentRecord(recentTicket.getId(), pending.getQiniuUrl(), pending.getMsgId());
+        createAttachmentRecord(recentTicket.getId(), pending.getQiniuUrl(), pending.getMsgId(),
+                pending.getMediaType() != null ? pending.getMediaType() : MEDIA_TYPE_IMAGE);
         updatePendingStatus(pending.getId(), recentTicket.getId(), WecomPendingImageStatus.LINKED);
         log.info("规则A先文后图关联成功: msgId={}, ticketId={}", pending.getMsgId(), recentTicket.getId());
         return true;
     }
 
     /**
-     * 写入 wecom_pending_image 暂存记录，msg_id 唯一索引幂等保护
+     * 写入 wecom_pending_image 暂存记录（图片，向后兼容原有调用）
      */
     private WecomPendingImagePO savePendingImageRecord(WecomCallbackMessageDTO message,
                                                         String qiniuUrl,
+                                                        WecomPendingImageStatus status) {
+        return savePendingMediaRecord(message, qiniuUrl, null, MEDIA_TYPE_IMAGE, status);
+    }
+
+    /**
+     * 写入 wecom_pending_image 暂存记录（通用，支持图片和视频），msg_id 唯一索引幂等保护
+     */
+    private WecomPendingImagePO savePendingMediaRecord(WecomCallbackMessageDTO message,
+                                                        String qiniuUrl,
+                                                        String thumbUrl,
+                                                        String mediaType,
                                                         WecomPendingImageStatus status) {
         try {
             int windowMinutes = wecomProperties.getImage() != null
@@ -216,6 +299,8 @@ public class WecomImageHandlerService {
             po.setMediaId(message.getMediaId());
             po.setPicUrl(message.getPicUrl());
             po.setQiniuUrl(qiniuUrl);
+            po.setMediaType(mediaType);
+            po.setThumbUrl(thumbUrl);
             po.setStatus(status.getCode());
             po.setExpireTime(minutesAfter(new Date(), windowMinutes));
             pendingImageMapper.insert(po);
@@ -239,18 +324,23 @@ public class WecomImageHandlerService {
     }
 
     /**
-     * 创建 ticket_attachment 记录（企微来源）
+     * 创建 ticket_attachment 记录（企微来源），根据 mediaType 设置对应的文件名与 MIME 类型
      */
-    private void createAttachmentRecord(Long ticketId, String qiniuUrl, String wecomMsgId) {
+    private void createAttachmentRecord(Long ticketId, String qiniuUrl, String wecomMsgId, String mediaType) {
         TicketAttachmentPO attachment = new TicketAttachmentPO();
         attachment.setTicketId(ticketId);
-        attachment.setFileName("企微截图");
         attachment.setFilePath(qiniuUrl);
         attachment.setFileSize(0L);
-        attachment.setFileType("image/jpeg");
         attachment.setUploadedBy(0L);
         attachment.setSource(AttachmentSource.WECOM_BOT.getCode());
         attachment.setWecomMsgId(wecomMsgId);
+        if (MEDIA_TYPE_VIDEO.equalsIgnoreCase(mediaType)) {
+            attachment.setFileName("企微视频");
+            attachment.setFileType("video/mp4");
+        } else {
+            attachment.setFileName("企微截图");
+            attachment.setFileType("image/jpeg");
+        }
         attachmentMapper.insert(attachment);
     }
 
