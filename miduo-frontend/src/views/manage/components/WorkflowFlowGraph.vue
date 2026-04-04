@@ -39,47 +39,44 @@ const V_GAP = 34
 const PADDING_X = 40
 const PADDING_Y = 36
 
+/**
+ * 用状态上的 order（产品定义的主线顺序）映射到列，避免对含环图做「最长路径」松弛导致卡死或列被拉爆。
+ * 回边、挂起环、终态提前关闭等由现有贝塞尔路径按左右关系绘制。
+ */
+function buildOrderBasedLevels(states: WorkflowDetailStateItem[]): Map<string, number> {
+  const levelMap = new Map<string, number>()
+  if (states.length === 0) {
+    return levelMap
+  }
+  const maxDefined = states.reduce((m, s) => {
+    if (typeof s.order === 'number' && Number.isFinite(s.order)) {
+      return Math.max(m, s.order)
+    }
+    return m
+  }, 0)
+  const fallbackStart = maxDefined > 0 ? maxDefined + 1 : states.length + 1
+  const effectiveOrders = states.map((s, i) => {
+    if (typeof s.order === 'number' && Number.isFinite(s.order)) {
+      return s.order
+    }
+    return fallbackStart + i
+  })
+  const uniqueSorted = [...new Set(effectiveOrders)].sort((a, b) => a - b)
+  const orderToColumn = new Map<number, number>()
+  uniqueSorted.forEach((ord, col) => orderToColumn.set(ord, col))
+  states.forEach((s, i) => {
+    const ord = effectiveOrders[i]
+    levelMap.set(s.code, orderToColumn.get(ord) ?? 0)
+  })
+  return levelMap
+}
+
 const graph = computed(() => {
   const states = [...(props.detail?.states || [])].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
   const transitions = props.detail?.transitions || []
   const nodeMap = new Map<string, GraphNode>()
-  const incoming = new Map<string, number>()
 
-  states.forEach((state) => incoming.set(state.code, 0))
-  transitions.forEach((transition) => {
-    incoming.set(transition.to, (incoming.get(transition.to) || 0) + 1)
-  })
-
-  const initialStates = states.filter((item) => item.type === 'INITIAL')
-  const fallbackRoots = states.filter((item) => (incoming.get(item.code) || 0) === 0)
-  const roots = (initialStates.length > 0 ? initialStates : fallbackRoots).length > 0
-    ? (initialStates.length > 0 ? initialStates : fallbackRoots)
-    : states.slice(0, 1)
-
-  const levelMap = new Map<string, number>()
-  const queue: string[] = roots.map((item) => item.code)
-  roots.forEach((item) => levelMap.set(item.code, 0))
-
-  while (queue.length > 0) {
-    const code = queue.shift() as string
-    const currentLevel = levelMap.get(code) ?? 0
-    transitions
-      .filter((transition) => transition.from === code && !transition.isReturn)
-      .forEach((transition) => {
-        const nextLevel = currentLevel + 1
-        const prevLevel = levelMap.get(transition.to)
-        if (prevLevel === undefined || nextLevel > prevLevel) {
-          levelMap.set(transition.to, nextLevel)
-          queue.push(transition.to)
-        }
-      })
-  }
-
-  states.forEach((state, index) => {
-    if (!levelMap.has(state.code)) {
-      levelMap.set(state.code, Math.min(index, 3))
-    }
-  })
+  const levelMap = buildOrderBasedLevels(states)
 
   const groups = new Map<number, WorkflowDetailStateItem[]>()
   states.forEach((state) => {
