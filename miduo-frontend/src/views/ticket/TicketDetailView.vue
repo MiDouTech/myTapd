@@ -190,6 +190,20 @@ function pickMentionUser(u: UserListOutput) {
   mentionPopoverVisible.value = false
 }
 
+/** 与后端一致：从评论 HTML 中解析 @ 占位上的 data-user-id，避免富文本与 ref 不同步时漏发通知 */
+function extractMentionUserIdsFromCommentHtml(html: string): number[] {
+  const ids = new Set<number>()
+  const re = /data-user-id\s*=\s*["']?(\d+)["']?/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const n = Number(m[1])
+    if (Number.isFinite(n) && n > 0) {
+      ids.add(n)
+    }
+  }
+  return Array.from(ids)
+}
+
 function uniqStringList(values: string[]): string[] {
   return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
 }
@@ -812,10 +826,13 @@ async function submitComment(): Promise<void> {
   }
   commentSubmitLoading.value = true
   try {
+    const fromHtml = extractMentionUserIdsFromCommentHtml(commentContent)
+    const mergedMentions = Array.from(
+      new Set([...commentMentionUserIds.value, ...fromHtml]),
+    )
     await addTicketComment(ticketId.value, {
       content: commentContent,
-      mentionedUserIds:
-        commentMentionUserIds.value.length > 0 ? [...commentMentionUserIds.value] : undefined,
+      mentionedUserIds: mergedMentions.length > 0 ? mergedMentions : undefined,
     })
     notifySuccess('评论发表成功')
     commentInput.value = ''
