@@ -232,28 +232,38 @@ public final class WecomXmlParser {
                     log.warn("企微混合消息未提取到图片内容，原始JSON: {}",
                             json.length() > 500 ? json.substring(0, 500) : json);
                 }
+            } else if ("video".equalsIgnoreCase(msgType)) {
+                // 官方文档 /document/path/100719：视频与图片一致，为 video.url（5分钟有效，需 callbackAesKey 解密）
+                result.put("Content", "");
+                result.put("PicUrl", "");
+                result.put("AesKey", "");
+                result.put("MediaId", "");
+                result.put("ThumbMediaId", "");
+                JSONObject videoObj = obj.getJSONObject("video");
+                if (videoObj != null) {
+                    String videoUrl = nullToEmpty(videoObj.getStr("url"));
+                    result.put("DownloadUrl", videoUrl);
+                    if (videoUrl.isEmpty()) {
+                        log.warn("企微智能机器人视频消息 video.url 为空，原始JSON: {}",
+                                json.length() > 500 ? json.substring(0, 500) : json);
+                    } else {
+                        log.info("企微智能机器人视频消息解析成功: msgId={}, urlLength={}",
+                                result.get("MsgId"), videoUrl.length());
+                    }
+                } else {
+                    result.put("DownloadUrl", "");
+                    log.warn("企微智能机器人视频消息 video 子对象缺失，原始JSON: {}",
+                            json.length() > 500 ? json.substring(0, 500) : json);
+                }
             } else {
-                // 企微 AI Bot 官方文档未定义视频消息格式，此处作防御性处理
-                // 若收到 video 或其他未知类型，尽量提取 MediaId 供后续流程使用
+                // 其他未知类型
                 result.put("Content", "");
                 result.put("DownloadUrl", "");
                 result.put("PicUrl", "");
                 result.put("AesKey", "");
-                if ("video".equalsIgnoreCase(msgType)) {
-                    JSONObject videoObj = obj.getJSONObject("video");
-                    if (videoObj != null) {
-                        result.put("MediaId", nullToEmpty(videoObj.getStr("media_id")));
-                        result.put("ThumbMediaId", nullToEmpty(videoObj.getStr("thumb_media_id")));
-                    } else {
-                        result.put("MediaId", "");
-                        result.put("ThumbMediaId", "");
-                    }
-                    log.info("企微 aibot JSON 视频消息（官方未定义）解析: msgId={}", result.get("MsgId"));
-                } else {
-                    result.put("MediaId", "");
-                    result.put("ThumbMediaId", "");
-                    log.debug("企微 aibot JSON 消息类型未知: msgType={}", msgType);
-                }
+                result.put("MediaId", "");
+                result.put("ThumbMediaId", "");
+                log.debug("企微 aibot JSON 消息类型未知: msgType={}", msgType);
             }
 
             log.debug("企微 aibot JSON 消息解析完成: msgId={}, msgType={}, from={}",

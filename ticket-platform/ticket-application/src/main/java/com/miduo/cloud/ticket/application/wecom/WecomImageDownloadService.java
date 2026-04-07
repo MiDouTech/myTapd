@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.application.wecom;
 
+import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuProperties;
 import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WeworkRuntimeConfigProvider;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -24,7 +26,7 @@ import java.util.Base64;
  *   - AES Key  = Base64.decode(callbackAesKey + "=")，32字节
  *   - IV       = AES Key 前 16 字节
  *   - 填充     = PKCS#7，填充至 32 字节倍数
- * 下载后用上述规则解密，再上传到七牛云。
+ * 视频消息（msgtype=video）的 video.url 与图片规则相同（官方文档 /document/path/100719），解密后通常为 mp4。
  */
 @Service
 public class WecomImageDownloadService {
@@ -37,13 +39,16 @@ public class WecomImageDownloadService {
 
     private final WecomClient wecomClient;
     private final QiniuUploadService qiniuUploadService;
+    private final QiniuProperties qiniuProperties;
     private final WeworkRuntimeConfigProvider runtimeConfigProvider;
 
     public WecomImageDownloadService(WecomClient wecomClient,
                                      QiniuUploadService qiniuUploadService,
+                                     QiniuProperties qiniuProperties,
                                      WeworkRuntimeConfigProvider runtimeConfigProvider) {
         this.wecomClient = wecomClient;
         this.qiniuUploadService = qiniuUploadService;
+        this.qiniuProperties = qiniuProperties;
         this.runtimeConfigProvider = runtimeConfigProvider;
     }
 
@@ -73,7 +78,7 @@ public class WecomImageDownloadService {
 
         // 策略1：aibot 加密图片 URL（主路径）
         if (isNotBlank(imageUrl)) {
-            imageBytes = downloadAndDecryptAibot(imageUrl, msgId);
+            imageBytes = downloadDecryptAibotEncryptedUrl(imageUrl, msgId);
             if (imageBytes != null && imageBytes.length > 0) {
                 downloadSource = "AibotImageUrl";
                 log.info("企微aibot图片解密下载成功: msgId={}, size={}", msgId, imageBytes.length);
@@ -129,13 +134,45 @@ public class WecomImageDownloadService {
     }
 
     /**
+     * 下载并解密智能机器人 video.url（与 image.url 加密规则相同），再流式上传七牛云。
+     *
+     * @param videoUrl 视频加密下载地址
+     * @param msgId    消息 ID（日志）
+     * @return 七牛持久化 URL，失败返回 null
+     */
+    public String downloadDecryptAndUploadVideo(String videoUrl, String msgId) {
+        if (!isNotBlank(videoUrl)) {
+            log.warn("企微视频下载 URL 为空: msgId={}", msgId);
+            return null;
+        }
+        byte[] videoBytes = downloadDecryptAibotEncryptedUrl(videoUrl, msgId);
+        if (videoBytes == null || videoBytes.length == 0) {
+            log.warn("企微视频解密下载失败: msgId={}", msgId);
+            return null;
+        }
+        String originalName = "wecom_" + msgId + ".mp4";
+        try {
+            ByteArrayInputStream in = new ByteArrayInputStream(videoBytes);
+            String url = qiniuUploadService.uploadStream(in, originalName, "video/mp4",
+                    qiniuProperties.getVideoPathPrefix());
+            if (url != null) {
+                log.info("企微视频解密并上传成功: msgId={}, size={}", msgId, videoBytes.length);
+            }
+            return url;
+        } catch (Exception e) {
+            log.warn("企微视频上传七牛失败: msgId={}, error={}", msgId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 下载并解密企微 aibot 图片。
      * <p>
      * 加密规则（官方文档 /document/path/100719）：
      *   AES-256-CBC，PKCS#7填充至32字节倍数，IV = AESKey前16字节，
      *   AESKey = Base64.decode(callbackAesKey + "=")
      */
-    private byte[] downloadAndDecryptAibot(String imageUrl, String msgId) {
+    private byte[] downloadDecryptAibotEncryptedUrl(String imageUrl, String msgId) {
         try {
             // 1. 获取回调 AES 密钥
             byte[] keyBytes = decodeCallbackAesKey();
@@ -159,7 +196,7 @@ public class WecomImageDownloadService {
             return removePkcs7Padding(decrypted, msgId);
 
         } catch (Exception e) {
-            log.warn("企微aibot图片解密失败: msgId={}, error={}", msgId, e.getMessage());
+            log.warn("企微aibot加密资源解密失败: msgId={}, error={}", msgId, e.getMessage());
             return null;
         }
     }

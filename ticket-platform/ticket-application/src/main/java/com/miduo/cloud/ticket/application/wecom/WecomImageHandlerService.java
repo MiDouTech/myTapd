@@ -141,7 +141,13 @@ public class WecomImageHandlerService {
                 message.getMsgId(), message.getChatId(), message.getFromWecomUserid());
 
         String videoUrl = null;
-        if (message.getMediaId() != null && !message.getMediaId().isEmpty()) {
+        // 智能机器人：video.url 与 image.url 相同，为 AES 加密体（文档 /document/path/100719）
+        if (message.getDownloadUrl() != null && !message.getDownloadUrl().isEmpty()) {
+            videoUrl = imageDownloadService.downloadDecryptAndUploadVideo(
+                    message.getDownloadUrl(), message.getMsgId());
+        }
+        // 普通应用回调等场景：MediaId + media/get
+        if (videoUrl == null && message.getMediaId() != null && !message.getMediaId().isEmpty()) {
             InputStream videoStream = wecomClient.downloadMediaStream(message.getMediaId());
             videoUrl = qiniuUploadService.uploadStream(
                     videoStream,
