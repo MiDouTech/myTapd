@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
+import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -13,6 +14,7 @@ import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCommentMentionEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
 import com.miduo.cloud.ticket.domain.common.event.DomainEvent;
 import com.miduo.cloud.ticket.application.workflow.WorkflowApplicationService;
@@ -36,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +50,10 @@ public class TicketApplicationService {
     private static final long DEFECT_WORKFLOW_ID = 3L;
 
     private static final long ALERT_WORKFLOW_ID = 4L;
+
+    private static final int COMMENT_MENTION_SUMMARY_MAX = 200;
+
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
 
     @Resource
     private TicketMapper ticketMapper;
@@ -310,10 +317,14 @@ public class TicketApplicationService {
 
     /**
      * 新增工单评论
-     * 接口编号：API000508
+     * 接口编号：API000508（请求体可含 mentionedUserIds，@ 提醒在事务提交后异步推送）
      */
     @Transactional(rollbackFor = Exception.class)
-    public Long addComment(Long ticketId, String content, Long currentUserId) {
+    public Long addComment(Long ticketId, TicketCommentInput input, Long currentUserId) {
+        if (input == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "请求体不能为空");
+        }
+        String content = input.getContent();
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
@@ -327,7 +338,71 @@ public class TicketApplicationService {
         comment.setContent(content.trim());
         comment.setType(CommentType.COMMENT.getCode());
         commentMapper.insert(comment);
+
+        List<Long> mentionTargets = resolveCommentMentionTargets(input.getMentionedUserIds(), currentUserId);
+        if (!mentionTargets.isEmpty()) {
+            String plainSummary = toCommentPlainSummary(content);
+            eventPublisher.publishEvent(new TicketCommentMentionEvent(ticketId, mentionTargets,
+                    currentUserId, plainSummary));
+        }
         return comment.getId();
+    }
+
+    /**
+     * 规范化 @ 用户列表：去重、剔除空与当前用户、剔除无效 ID，并限制人数上限
+     */
+    private List<Long> resolveCommentMentionTargets(List<Long> rawMentionedUserIds, Long currentUserId) {
+        if (rawMentionedUserIds == null || rawMentionedUserIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Long> ordered = new LinkedHashSet<>();
+        for (Long id : rawMentionedUserIds) {
+            if (id == null || id <= 0) {
+                continue;
+            }
+            if (currentUserId != null && currentUserId.equals(id)) {
+                continue;
+            }
+            ordered.add(id);
+            if (ordered.size() >= AppConstants.MAX_TICKET_COMMENT_MENTIONS) {
+                break;
+            }
+        }
+        if (ordered.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<SysUserPO> users = userMapper.selectList(
+                new LambdaQueryWrapper<SysUserPO>()
+                        .in(SysUserPO::getId, ordered)
+                        .eq(SysUserPO::getAccountStatus, 1));
+        if (users == null || users.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<Long> activeIds = users.stream()
+                .map(SysUserPO::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<Long> result = new ArrayList<>();
+        for (Long id : ordered) {
+            if (activeIds.contains(id)) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    private static String toCommentPlainSummary(String htmlOrText) {
+        if (htmlOrText == null) {
+            return "";
+        }
+        String plain = HTML_TAG_PATTERN.matcher(htmlOrText).replaceAll(" ");
+        plain = plain.replace("&nbsp;", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (plain.length() <= COMMENT_MENTION_SUMMARY_MAX) {
+            return plain;
+        }
+        return plain.substring(0, COMMENT_MENTION_SUMMARY_MAX) + "…";
     }
 
     /**

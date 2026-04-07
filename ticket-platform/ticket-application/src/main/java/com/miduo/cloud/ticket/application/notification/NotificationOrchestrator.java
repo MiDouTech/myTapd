@@ -109,6 +109,10 @@ public class NotificationOrchestrator {
         if (ticketId == null || userId == null) {
             return false;
         }
+        // 评论 @ 提醒需逐条送达，避免 N 分钟内多人 @ 同一人时被合并丢失
+        if (type == NotificationType.COMMENT_MENTION) {
+            return false;
+        }
 
         int aggregateMinutes = getAggregateMinutes();
         if (aggregateMinutes <= 0) {
