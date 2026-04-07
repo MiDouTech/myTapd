@@ -63,6 +63,49 @@ public class QiniuUploadService {
     }
 
     /**
+     * 流式上传媒体文件到七牛云（适用于视频等大文件，避免全量加载到内存）
+     *
+     * @param stream        媒体文件输入流（方法内部关闭）
+     * @param originalName  文件名（用于生成 key 和扩展名）
+     * @param contentType   MIME 类型，如 video/mp4
+     * @param pathPrefix    七牛存储路径前缀，如 ticket/videos/
+     * @return 可访问的文件 URL，上传失败时返回 null
+     */
+    public String uploadStream(InputStream stream, String originalName, String contentType, String pathPrefix) {
+        if (auth == null || uploadManager == null) {
+            log.warn("七牛云存储服务未配置，流式上传跳过");
+            return null;
+        }
+        if (stream == null) {
+            log.warn("上传流为空，跳过上传");
+            return null;
+        }
+        String key = buildObjectKey(originalName, pathPrefix);
+        String token = auth.uploadToken(qiniuProperties.getBucket(), null,
+                qiniuProperties.getTokenExpireSeconds(), new StringMap());
+        try {
+            Response response = uploadManager.put(stream, key, token, null, contentType);
+            DefaultPutRet putRet = com.alibaba.fastjson2.JSON.parseObject(response.bodyString(), DefaultPutRet.class);
+            if (putRet == null || !StringUtils.hasText(putRet.key)) {
+                log.error("七牛云流式上传返回结果异常，key 为空");
+                return null;
+            }
+            String fileUrl = buildAccessUrl(putRet.key);
+            log.info("流式上传七牛云成功: key={}, url={}", putRet.key, fileUrl);
+            return fileUrl;
+        } catch (Exception e) {
+            log.error("流式上传七牛云失败: originalName={}, contentType={}", originalName, contentType, e);
+            return null;
+        } finally {
+            try {
+                stream.close();
+            } catch (Exception ignored) {
+                // 关闭流失败不影响主流程
+            }
+        }
+    }
+
+    /**
      * 上传图片字节数组到七牛云（用于企微 MediaId 下载后直接上传）
      *
      * @param imageBytes    图片字节数组

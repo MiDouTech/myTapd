@@ -49,6 +49,11 @@ public class QiniuProperties {
     private String imagePathPrefix = "ticket/images/";
 
     /**
+     * 视频上传路径前缀
+     */
+    private String videoPathPrefix = "ticket/videos/";
+
+    /**
      * 允许上传的最大文件大小（MB，默认 10MB）
      */
     private Long maxFileSizeMb = 10L;

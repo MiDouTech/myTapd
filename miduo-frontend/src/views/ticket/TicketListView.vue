@@ -322,6 +322,11 @@ function isImageFile(fileType?: string): boolean {
   return fileType.startsWith('image/')
 }
 
+function isVideoFile(fileType?: string): boolean {
+  if (!fileType) return false
+  return fileType.startsWith('video/')
+}
+
 const previewAttachmentImageUrls = computed(() => {
   return (previewDetail.value?.attachments ?? [])
     .filter((a) => isImageFile(a.fileType))
@@ -993,6 +998,13 @@ onUnmounted(() => {
                     preview-teleported
                     lazy
                   />
+                  <video
+                    v-else-if="isVideoFile(attachment.fileType)"
+                    :src="attachment.filePath"
+                    controls
+                    class="preview-attachment-video"
+                    preload="metadata"
+                  />
                   <el-icon v-else class="preview-attachment-icon"><DocumentOutlined /></el-icon>
                 </div>
                 <div class="preview-attachment-info">
@@ -1014,6 +1026,13 @@ onUnmounted(() => {
                   target="_blank"
                   rel="noopener noreferrer"
                 >查看</el-link>
+                <el-link
+                  v-if="isVideoFile(attachment.fileType) && attachment.filePath"
+                  type="primary"
+                  :href="attachment.filePath"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >播放</el-link>
               </div>
             </div>
           </el-card>
@@ -1559,6 +1578,14 @@ onUnmounted(() => {
 .preview-attachment-thumb {
   width: 52px;
   height: 52px;
+}
+
+.preview-attachment-video {
+  width: 104px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  background-color: #000;
 }
 
 .preview-attachment-icon {

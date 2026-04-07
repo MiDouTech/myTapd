@@ -56,6 +56,11 @@ public class WecomCallbackMessageDTO implements Serializable {
     private String aesKey;
 
     /**
+     * 视频缩略图MediaId（MsgType=video时有值，通过media/get接口下载封面图）
+     */
+    private String thumbMediaId;
+
+    /**
      * 解密后的原始XML
      */
     private String rawXml;

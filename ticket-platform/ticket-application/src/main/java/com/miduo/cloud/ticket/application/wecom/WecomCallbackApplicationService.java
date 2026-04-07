@@ -79,6 +79,12 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             return;
         }
 
+        if ("video".equalsIgnoreCase(message.getMsgType())) {
+            imageHandlerService.handleVideoMessageAsync(message);
+            log.info("企微视频消息已投递异步处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+            return;
+        }
+
         // 群聊中 @机器人 附带图片时，msgType 为 mixed，msg_item 中同时含 image 和 text
         // 当同时含有图片下载地址和文本内容时，需要同时处理两部分：
         //   1. 图片部分异步下载上传，保存至暂存表，等待与工单关联
@@ -133,6 +139,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setCreateTime(safeValue(messageMap.get("CreateTime")));
         message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));
         message.setChatType(safeValue(messageMap.get("ChatType")));
+        message.setThumbMediaId(safeValue(messageMap.get("ThumbMediaId")));
 
         String msgId = safeValue(messageMap.get("MsgId"));
         if (msgId.isEmpty()) {

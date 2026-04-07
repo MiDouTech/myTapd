@@ -34,6 +34,18 @@ public class WecomPendingImagePO extends BaseEntity {
     @TableField("qiniu_url")
     private String qiniuUrl;
 
+    /**
+     * 媒体类型：image / video
+     */
+    @TableField("media_type")
+    private String mediaType;
+
+    /**
+     * 视频缩略图七牛URL（仅视频消息有值）
+     */
+    @TableField("thumb_url")
+    private String thumbUrl;
+
     @TableField("ticket_id")
     private Long ticketId;
 
