@@ -38,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -54,6 +55,10 @@ public class TicketApplicationService {
     private static final int COMMENT_MENTION_SUMMARY_MAX = 200;
 
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
+
+    /** 评论正文中 @ 占位（与前端 data-user-id 一致），用于在请求体未带 mentionedUserIds 时仍能识别被 @ 用户 */
+    private static final Pattern COMMENT_MENTION_DATA_USER_ID =
+            Pattern.compile("(?i)data-user-id\\s*=\\s*[\"']?(\\d+)[\"']?");
 
     @Resource
     private TicketMapper ticketMapper;
@@ -339,13 +344,48 @@ public class TicketApplicationService {
         comment.setType(CommentType.COMMENT.getCode());
         commentMapper.insert(comment);
 
-        List<Long> mentionTargets = resolveCommentMentionTargets(input.getMentionedUserIds(), currentUserId);
+        List<Long> combinedMentions = mergeExplicitAndHtmlMentions(input.getMentionedUserIds(), content);
+        List<Long> mentionTargets = resolveCommentMentionTargets(combinedMentions, currentUserId);
         if (!mentionTargets.isEmpty()) {
             String plainSummary = toCommentPlainSummary(content);
             eventPublisher.publishEvent(new TicketCommentMentionEvent(ticketId, mentionTargets,
                     currentUserId, plainSummary));
         }
         return comment.getId();
+    }
+
+    private static List<Long> mergeExplicitAndHtmlMentions(List<Long> explicit, String html) {
+        LinkedHashSet<Long> ordered = new LinkedHashSet<>();
+        if (explicit != null) {
+            for (Long id : explicit) {
+                if (id != null && id > 0) {
+                    ordered.add(id);
+                }
+            }
+        }
+        for (Long id : extractMentionUserIdsFromCommentHtml(html)) {
+            ordered.add(id);
+        }
+        return new ArrayList<>(ordered);
+    }
+
+    private static List<Long> extractMentionUserIdsFromCommentHtml(String html) {
+        if (html == null || html.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        Matcher m = COMMENT_MENTION_DATA_USER_ID.matcher(html);
+        while (m.find()) {
+            try {
+                long id = Long.parseLong(m.group(1));
+                if (id > 0) {
+                    ids.add(id);
+                }
+            } catch (NumberFormatException ignored) {
+                // skip malformed attribute
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     /**
