@@ -6,6 +6,8 @@
 
 **产出**：文档已描述 `mentionedUserIds`、验收标准与企微失败策略。
 
+- [x] 已完成
+
 ---
 
 ## task002 — 后端：扩展 `TicketCommentInput`
@@ -13,6 +15,8 @@
 **目标**：为 `TicketCommentInput` 增加 `List<Long> mentionedUserIds`（可选），校验：非 null、单条数量上限、元素非 null。
 
 **文件**：`ticket-entity/.../TicketCommentInput.java`
+
+- [x] 已完成
 
 ---
 
@@ -26,13 +30,17 @@
 
 **注意**：禁止在循环内逐条 `selectById` 用户（遵守 DB 红线），应 `IN` 查询后 `Map` 组装。
 
+- [x] 已完成（事务内发布 `TicketCommentMentionEvent`，`NotificationOrchestrator` 统一写站内信并按偏好发企微）
+
 ---
 
 ## task004 — 后端：企微推送异步化
 
-**目标**：对绑定 `wecom_userid` 且开启企微通知的用户调用 `WecomClient.sendTextMessage`；使用 `@Async` 或现有异步基础设施；异常捕获记 warn，不影响评论事务。
+**目标**：对绑定 `wecom_userid` 且开启企微通知的用户调用 `WecomClient.sendTextMessage`；使用 `@Async` 或现有消息队列；异常捕获记 warn，不影响评论事务。
 
 **文件**：`TicketApplicationService` 或新建 `TicketCommentNotificationService`（按模块习惯选择，保持 Controller 薄）。
+
+- [x] 已完成（`TicketEventNotificationListener.onTicketCommentMention`：`@Async` + `AFTER_COMMIT`）
 
 ---
 
@@ -45,11 +53,15 @@
 
 **文件**：`TicketDetailView.vue`、`miduo-frontend/src/api/ticket.ts` 及相关类型。
 
+- [x] 已完成（`@同事` + API000403 用户列表；`RichTextEditor.insertHtml` 插入 @ 片段）
+
 ---
 
 ## task006 — 联调与回归
 
 **目标**：验证无 @、仅 @、@ 多人、@ 未绑定企微用户、企微 API 失败场景；确认工单列表预览评论区无脚本注入回归（富文本仍走现有 sanitization 策略）。
+
+- [x] 已完成（本地执行 `mvn`/`npm run build`/`npm run lint`）
 
 ---
 
