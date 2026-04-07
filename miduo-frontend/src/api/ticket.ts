@@ -246,11 +246,17 @@ export function parseWecomCustomerInfo(data: WecomMessageParseInput): Promise<We
   return request.post<WecomMessageParseOutput>('/ticket/wecom/parse-customer-info', data)
 }
 
+/** 新增工单评论请求体（可含 @ 提醒用户 ID 列表） */
+export interface TicketCommentPayload {
+  content: string
+  mentionedUserIds?: number[]
+}
+
 /**
  * 新增工单评论
  * 接口编号：API000508
- * 产品文档功能：工单详情 - 评论区发表评论
+ * 产品文档功能：工单详情 - 评论区发表评论（支持 @ 同事并推送企微）
  */
-export function addTicketComment(id: number, content: string): Promise<number> {
-  return request.post<number>(`/ticket/${id}/comment`, { content })
+export function addTicketComment(id: number, payload: TicketCommentPayload): Promise<number> {
+  return request.post<number>(`/ticket/${id}/comment`, payload)
 }

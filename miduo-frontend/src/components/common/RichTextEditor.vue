@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { createEditor, createToolbar } from '@wangeditor/editor'
 import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor/editor'
 import '@wangeditor/editor/dist/css/style.css'
@@ -38,8 +38,24 @@ const emit = defineEmits<{
 }>()
 
 const toolbarContainer = ref<HTMLElement>()
-const editorContainer = ref<HTMLElement>()
+const editorContainer = useTemplateRef<HTMLElement>('editorContainer')
 let editorInstance: IDomEditor | null = null
+
+/** 在光标处插入 HTML（用于 @ 提及等）；依赖 wangEditor 内部 API */
+function insertHtml(html: string) {
+  if (!editorInstance || !html) {
+    return
+  }
+  editorInstance.focus()
+  const ed = editorInstance as IDomEditor & { dangerouslyInsertHtml?: (h: string) => void }
+  if (typeof ed.dangerouslyInsertHtml === 'function') {
+    ed.dangerouslyInsertHtml(html)
+  }
+}
+
+defineExpose({
+  insertHtml,
+})
 
 function applyAutoGrowLayout() {
   if (!props.autoGrow || !editorContainer.value) {
