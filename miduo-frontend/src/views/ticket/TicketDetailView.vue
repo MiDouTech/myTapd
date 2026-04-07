@@ -1680,7 +1680,7 @@ watch(
             ref="commentEditorRef"
             v-model="commentInput"
             :ticket-id="ticketId"
-            placeholder="发表评论（支持粘贴图片、表格等富文本内容）..."
+            placeholder="发表评论（支持粘贴图片、表格；可点下方「@同事」提醒对方）..."
             :height="180"
             :auto-grow="true"
             :max-height="480"
@@ -1688,7 +1688,9 @@ watch(
           />
           <div class="comment-submit-row">
             <div class="comment-submit-left">
-              <span class="comment-hint">支持粘贴图片、表格等内容</span>
+              <span class="comment-hint">
+                支持粘贴图片、表格。点击「@同事」可在正文插入 @，对方将收到站内通知；若已绑定企微且开启推送，会同步收到企微消息。
+              </span>
               <el-popover
                 v-model:visible="mentionPopoverVisible"
                 placement="top-start"
@@ -1699,6 +1701,9 @@ watch(
                   <el-button type="primary" link size="small">@同事</el-button>
                 </template>
                 <div class="comment-mention-popover">
+                  <p class="comment-mention-tip">
+                    选择同事后会在评论中插入蓝色 @ 昵称；发表后对方收到提醒（企微需在「通知偏好」中开启对应渠道）。
+                  </p>
                   <el-input
                     v-model="mentionKeyword"
                     placeholder="搜索姓名/工号"
@@ -2631,6 +2636,13 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.comment-mention-tip {
+  margin: 0;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
 }
 
 .comment-mention-scroll {
