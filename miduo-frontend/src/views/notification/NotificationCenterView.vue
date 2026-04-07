@@ -47,6 +47,7 @@ const fallbackTypeOptions = [
   { label: 'SLA预警', value: 'SLA_WARNING' },
   { label: 'SLA超时', value: 'SLA_BREACHED' },
   { label: '工单评论', value: 'COMMENT' },
+  { label: '评论@提醒', value: 'COMMENT_MENTION' },
   { label: '催办', value: 'URGE' },
   { label: '简报提审', value: 'REPORT_SUBMITTED' },
   { label: '简报审核通过', value: 'REPORT_APPROVED' },

@@ -264,6 +264,7 @@
 | SLA_WARNING | SLA预警 |
 | SLA_BREACHED | SLA超时 |
 | COMMENT | 工单评论 |
+| COMMENT_MENTION | 评论@提醒（工单详情 @ 同事） |
 | URGE | 催办 |
 | REPORT_REMIND | 简报提醒 |
 

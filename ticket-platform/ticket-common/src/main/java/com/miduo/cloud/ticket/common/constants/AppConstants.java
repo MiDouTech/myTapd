@@ -23,4 +23,7 @@ public final class AppConstants {
 
     public static final String DATE_FORMAT = "yyyy-MM-dd";
     public static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+
+    /** 单条工单评论中 @ 提醒人数上限 */
+    public static final int MAX_TICKET_COMMENT_MENTIONS = 20;
 }

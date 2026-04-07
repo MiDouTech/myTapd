@@ -16,6 +16,8 @@ public enum NotificationType {
     SLA_WARNING("SLA_WARNING", "SLA预警"),
     SLA_BREACHED("SLA_BREACHED", "SLA超时"),
     COMMENT("COMMENT", "工单评论"),
+    /** 工单评论中 @ 指定用户（与普评区分，且不参与通知合并） */
+    COMMENT_MENTION("COMMENT_MENTION", "评论@提醒"),
     URGE("URGE", "催办"),
     REPORT_SUBMITTED("REPORT_SUBMITTED", "简报提审"),
     REPORT_APPROVED("REPORT_APPROVED", "简报审核通过"),

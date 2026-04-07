@@ -136,6 +136,59 @@ const closeForm = reactive({
 // ---- 评论输入 ----
 const commentInput = ref('')
 const commentSubmitLoading = ref(false)
+const commentEditorRef = ref<InstanceType<typeof RichTextEditor> | null>(null)
+const commentMentionUserIds = ref<number[]>([])
+const mentionPopoverVisible = ref(false)
+const mentionKeyword = ref('')
+const mentionCandidates = ref<UserListOutput[]>([])
+const mentionLoading = ref(false)
+let mentionSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(mentionPopoverVisible, (open) => {
+  if (open) {
+    mentionKeyword.value = ''
+    void loadMentionUsers()
+  }
+})
+
+function scheduleMentionSearch() {
+  if (mentionSearchTimer) {
+    clearTimeout(mentionSearchTimer)
+  }
+  mentionSearchTimer = setTimeout(() => {
+    void loadMentionUsers()
+  }, 280)
+}
+
+async function loadMentionUsers() {
+  mentionLoading.value = true
+  try {
+    const kw = mentionKeyword.value.trim()
+    const list = await getUserList({
+      accountStatus: 1,
+      ...(kw ? { keyword: kw } : {}),
+    })
+    mentionCandidates.value = list
+  } catch {
+    mentionCandidates.value = []
+  } finally {
+    mentionLoading.value = false
+  }
+}
+
+function pickMentionUser(u: UserListOutput) {
+  const editor = commentEditorRef.value
+  if (!editor || u.id == null) {
+    return
+  }
+  const safeName = (u.name || '用户').replace(/</g, '').replace(/>/g, '')
+  const html = `<span data-comment-mention="1" data-user-id="${u.id}" style="color:#1675d1;font-weight:500;">@${safeName}</span>`
+  editor.insertHtml(html)
+  if (!commentMentionUserIds.value.includes(u.id)) {
+    commentMentionUserIds.value.push(u.id)
+  }
+  mentionPopoverVisible.value = false
+}
 
 function uniqStringList(values: string[]): string[] {
   return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
@@ -759,9 +812,14 @@ async function submitComment(): Promise<void> {
   }
   commentSubmitLoading.value = true
   try {
-    await addTicketComment(ticketId.value, commentContent)
+    await addTicketComment(ticketId.value, {
+      content: commentContent,
+      mentionedUserIds:
+        commentMentionUserIds.value.length > 0 ? [...commentMentionUserIds.value] : undefined,
+    })
     notifySuccess('评论发表成功')
     commentInput.value = ''
+    commentMentionUserIds.value = []
     await loadAll()
   } finally {
     commentSubmitLoading.value = false
@@ -961,6 +1019,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', updateViewportWidth)
+  }
+  if (mentionSearchTimer) {
+    clearTimeout(mentionSearchTimer)
+    mentionSearchTimer = null
   }
 })
 
@@ -1615,16 +1677,58 @@ watch(
         </div>
         <div class="comment-input-body">
           <RichTextEditor
+            ref="commentEditorRef"
             v-model="commentInput"
             :ticket-id="ticketId"
-            placeholder="发表评论（支持粘贴图片、表格等富文本内容）..."
+            placeholder="发表评论（支持粘贴图片、表格；可点下方「@同事」提醒对方）..."
             :height="180"
             :auto-grow="true"
             :max-height="480"
             class="comment-editor"
           />
           <div class="comment-submit-row">
-            <span class="comment-hint">支持粘贴图片、表格等内容</span>
+            <div class="comment-submit-left">
+              <span class="comment-hint">
+                支持粘贴图片、表格。点击「@同事」可在正文插入 @，对方将收到站内通知；若已绑定企微且开启推送，会同步收到企微消息。
+              </span>
+              <el-popover
+                v-model:visible="mentionPopoverVisible"
+                placement="top-start"
+                :width="300"
+                trigger="click"
+              >
+                <template #reference>
+                  <el-button type="primary" link size="small">@同事</el-button>
+                </template>
+                <div class="comment-mention-popover">
+                  <p class="comment-mention-tip">
+                    选择同事后会在评论中插入蓝色 @ 昵称；发表后对方收到提醒（企微需在「通知偏好」中开启对应渠道）。
+                  </p>
+                  <el-input
+                    v-model="mentionKeyword"
+                    placeholder="搜索姓名/工号"
+                    size="small"
+                    clearable
+                    @input="scheduleMentionSearch"
+                  />
+                  <el-scrollbar max-height="220px" class="comment-mention-scroll">
+                    <div v-if="mentionLoading" class="comment-mention-status">加载中…</div>
+                    <template v-else>
+                      <div
+                        v-for="u in mentionCandidates"
+                        :key="u.id"
+                        class="comment-mention-row"
+                        @click="pickMentionUser(u)"
+                      >
+                        <span>{{ u.name }}</span>
+                        <span v-if="u.employeeNo" class="comment-mention-sub">{{ u.employeeNo }}</span>
+                      </div>
+                      <div v-if="!mentionCandidates.length" class="comment-mention-status">无匹配用户</div>
+                    </template>
+                  </el-scrollbar>
+                </div>
+              </el-popover>
+            </div>
             <el-button
               type="primary"
               size="small"
@@ -2510,12 +2614,66 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 8px;
+}
+
+.comment-submit-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .comment-hint {
   font-size: 12px;
   color: #c0c4cc;
+}
+
+.comment-mention-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-mention-tip {
+  margin: 0;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
+}
+
+.comment-mention-scroll {
+  margin-top: 4px;
+}
+
+.comment-mention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: #f0f9ff;
+  }
+}
+
+.comment-mention-sub {
+  font-size: 12px;
+  color: #909399;
+}
+
+.comment-mention-status {
+  padding: 12px 6px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
 }
 
 .comment-divider {
