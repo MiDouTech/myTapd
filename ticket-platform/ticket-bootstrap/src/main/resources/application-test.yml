@@ -35,6 +35,7 @@ wecom:
     timeout-strategy: CREATE_TICKET
     notify-on-pending: false
     max-images-per-ticket: 10
+    video-decrypt-in-memory-max-mb: 8
 
 qiniu:
   zone: z2

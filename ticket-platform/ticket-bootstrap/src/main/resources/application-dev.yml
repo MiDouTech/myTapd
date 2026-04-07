@@ -43,6 +43,9 @@ wecom:
     timeout-strategy: CREATE_TICKET
     notify-on-pending: false
     max-images-per-ticket: 10
+    # 视频：加密包小于等于该值(MB)走内存解密，大于则临时文件分块解密（大视频防 OOM）
+    video-decrypt-in-memory-max-mb: 8
+    # video-temp-directory: /var/tmp/wecom-video
 
 qiniu:
   zone: z2

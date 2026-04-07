@@ -78,5 +78,15 @@ public class WecomProperties {
          * 单工单最大图片数（默认 10）
          */
         private int maxImagesPerTicket = 10;
+
+        /**
+         * 智能机器人视频：加密临时文件不超过该大小时（MB）在内存中解密，超过则落盘分块解密以降低堆占用。
+         */
+        private int videoDecryptInMemoryMaxMb = 8;
+
+        /**
+         * 视频解密/上传临时文件目录；为空则使用 {@code java.io.tmpdir}。
+         */
+        private String videoTempDirectory = "";
     }
 }
