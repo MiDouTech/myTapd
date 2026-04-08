@@ -37,6 +37,11 @@ public class WecomAppMessageSender implements NotificationSender {
 
     @Override
     public void send(Long userId, String title, String content) {
+        send(userId, title, content, null);
+    }
+
+    @Override
+    public void send(Long userId, String title, String content, String detailLink) {
         if (userId == null) {
             log.warn("企微应用消息目标用户为空，跳过发送");
             return;
@@ -52,7 +57,9 @@ public class WecomAppMessageSender implements NotificationSender {
             return;
         }
 
-        String detailUrl = buildDefaultDetailUrl();
+        String detailUrl = (detailLink != null && !detailLink.trim().isEmpty())
+                ? detailLink.trim()
+                : buildDefaultDetailUrl();
         String description = buildTextCardDescription(content);
         wecomClient.sendTextCardMessage(user.getWecomUserid(), title, description, detailUrl, "查看详情");
         log.info("企微应用消息发送成功: userId={}, title={}", userId, title);

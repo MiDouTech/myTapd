@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.webhook;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
+import com.miduo.cloud.ticket.domain.common.event.TicketCommentMentionEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
@@ -13,6 +14,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 工单Webhook事件监听器
@@ -122,6 +126,26 @@ public class TicketWebhookEventListener {
         }
     }
 
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onTicketCommentMention(TicketCommentMentionEvent event) {
+        if (event == null || event.getTicketId() == null
+                || event.getMentionedUserIds() == null || event.getMentionedUserIds().isEmpty()) {
+            return;
+        }
+        try {
+            log.info("接收评论@事件并触发Webhook分发: ticketId={}, mentionedCount={}, authorId={}",
+                    event.getTicketId(), event.getMentionedUserIds().size(), event.getCommentAuthorUserId());
+            CommentMentionWebhookPayload payload = new CommentMentionWebhookPayload();
+            payload.setMentionedUserIds(new ArrayList<>(event.getMentionedUserIds()));
+            payload.setCommentAuthorUserId(event.getCommentAuthorUserId());
+            payload.setCommentPlainSummary(event.getCommentPlainSummary());
+            webhookDispatchService.dispatch(WebhookEventType.TICKET_COMMENT_MENTION, event.getTicketId(), payload);
+        } catch (Exception ex) {
+            log.error("处理评论@Webhook事件失败: ticketId={}", event != null ? event.getTicketId() : null, ex);
+        }
+    }
+
     @Data
     private static class TicketCreatedPayload {
         private Long categoryId;
@@ -141,5 +165,12 @@ public class TicketWebhookEventListener {
         private Long previousAssigneeId;
         private Long operatorId;
         private String assignType;
+    }
+
+    @Data
+    private static class CommentMentionWebhookPayload {
+        private List<Long> mentionedUserIds;
+        private Long commentAuthorUserId;
+        private String commentPlainSummary;
     }
 }

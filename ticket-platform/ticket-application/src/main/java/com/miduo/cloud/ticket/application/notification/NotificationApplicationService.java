@@ -145,7 +145,8 @@ public class NotificationApplicationService extends BaseApplicationService {
             } else {
                 output.setSiteEnabled(1);
                 output.setWecomEnabled(1);
-                output.setEmailEnabled(0);
+                // 评论 @ 默认同步邮件（需用户档案有邮箱且配置 spring.mail.*）
+                output.setEmailEnabled(type == NotificationType.COMMENT_MENTION ? 1 : 0);
             }
             result.add(output);
         }

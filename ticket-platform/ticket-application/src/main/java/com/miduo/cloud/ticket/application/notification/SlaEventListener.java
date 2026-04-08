@@ -4,6 +4,7 @@ import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.domain.common.event.SlaBreachedEvent;
 import com.miduo.cloud.ticket.domain.common.event.SlaWarningEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketUrgedEvent;
+import com.miduo.cloud.ticket.infrastructure.config.TicketLinkProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -36,17 +37,20 @@ public class SlaEventListener {
     private final TicketMapper ticketMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
     private final HandlerGroupMapper handlerGroupMapper;
+    private final TicketLinkProperties ticketLinkProperties;
 
     public SlaEventListener(NotificationOrchestrator orchestrator,
                             WecomGroupPushService wecomGroupPushService,
                             TicketMapper ticketMapper,
                             TicketCategoryMapper ticketCategoryMapper,
-                            HandlerGroupMapper handlerGroupMapper) {
+                            HandlerGroupMapper handlerGroupMapper,
+                            TicketLinkProperties ticketLinkProperties) {
         this.orchestrator = orchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.handlerGroupMapper = handlerGroupMapper;
+        this.ticketLinkProperties = ticketLinkProperties;
     }
 
     @Async
@@ -70,9 +74,10 @@ public class SlaEventListener {
                 event.getThresholdMinutes(),
                 event.getSlaLevel());
 
+        String detailLink = ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
         if (ticket.getAssigneeId() != null) {
             orchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
-                    NotificationType.SLA_WARNING, title, content);
+                    NotificationType.SLA_WARNING, title, content, detailLink);
         }
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
         if (ticket.getCreatorId() != null) {
@@ -113,8 +118,9 @@ public class SlaEventListener {
             receivers.add(groupLeaderId);
         }
         if (!receivers.isEmpty()) {
+            String detailLink = ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
             orchestrator.dispatchToUsers(new ArrayList<>(receivers), ticket.getId(), null,
-                    NotificationType.SLA_BREACHED, title, content);
+                    NotificationType.SLA_BREACHED, title, content, detailLink);
         }
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
         if (ticket.getCreatorId() != null) {
@@ -147,8 +153,11 @@ public class SlaEventListener {
         String title = String.format("工单催办 - 工单 %s", ticketRef);
         String content = String.format("工单 %s 被催办，请尽快处理", ticketRef);
 
+        String detailLink = ticket != null
+                ? ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo())
+                : "";
         orchestrator.dispatchToUsers(new ArrayList<>(event.getNotifyUserIds()), event.getTicketId(), null,
-                NotificationType.URGE, title, content);
+                NotificationType.URGE, title, content, detailLink);
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(event.getNotifyUserIds());
         if (ticket != null && ticket.getCreatorId() != null) {
             mentionUserIds.add(ticket.getCreatorId());

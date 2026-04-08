@@ -59,6 +59,14 @@ public class NotificationOrchestrator {
      */
     public void dispatch(Long userId, Long ticketId, Long reportId,
                          NotificationType type, String title, String content) {
+        dispatch(userId, ticketId, reportId, type, title, content, null);
+    }
+
+    /**
+     * @param detailLink 工单等业务详情 URL（可空）；评论 @ 等场景传入后企微卡片与邮件可直达详情
+     */
+    public void dispatch(Long userId, Long ticketId, Long reportId,
+                         NotificationType type, String title, String content, String detailLink) {
         if (userId == null) {
             log.warn("通知目标用户ID为空，跳过分发");
             return;
@@ -78,11 +86,11 @@ public class NotificationOrchestrator {
         }
 
         if (isWecomEnabled(preference)) {
-            sendByChannel(NotificationChannel.WECOM_APP, userId, title, content);
+            sendByChannel(NotificationChannel.WECOM_APP, userId, title, content, detailLink);
         }
 
         if (isEmailEnabled(preference)) {
-            sendByChannel(NotificationChannel.EMAIL, userId, title, content);
+            sendByChannel(NotificationChannel.EMAIL, userId, title, content, detailLink);
         }
 
         log.info("通知分发完成: userId={}, type={}, ticketId={}", userId, type.getCode(), ticketId);
@@ -93,11 +101,16 @@ public class NotificationOrchestrator {
      */
     public void dispatchToUsers(List<Long> userIds, Long ticketId, Long reportId,
                                 NotificationType type, String title, String content) {
+        dispatchToUsers(userIds, ticketId, reportId, type, title, content, null);
+    }
+
+    public void dispatchToUsers(List<Long> userIds, Long ticketId, Long reportId,
+                                NotificationType type, String title, String content, String detailLink) {
         if (userIds == null || userIds.isEmpty()) {
             return;
         }
         for (Long userId : userIds) {
-            dispatch(userId, ticketId, reportId, type, title, content);
+            dispatch(userId, ticketId, reportId, type, title, content, detailLink);
         }
     }
 
@@ -163,13 +176,13 @@ public class NotificationOrchestrator {
     }
 
     private void sendByChannel(NotificationChannel channel, Long userId,
-                               String title, String content) {
+                               String title, String content, String detailLink) {
         Map<NotificationChannel, NotificationSender> senderMap = senders.stream()
                 .collect(Collectors.toMap(NotificationSender::getChannel, s -> s));
         NotificationSender sender = senderMap.get(channel);
         if (sender != null) {
             try {
-                sender.send(userId, title, content);
+                sender.send(userId, title, content, detailLink);
             } catch (Exception e) {
                 log.warn("渠道发送失败，已跳过: channel={}, userId={}, error={}", channel, userId, e.getMessage());
             }

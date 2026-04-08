@@ -385,13 +385,18 @@ public class WebhookDispatchService extends BaseApplicationService {
             String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
             content.append("变更时间：").append(changeTimeLine).append("\n");
         }
+        if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
+            appendCommentMentionSection(content, data);
+        }
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
         if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
             content.append("【详情】").append(baseUrl).append("/").append(ticketNo);
         }
 
-        MentionTargets mentionTargets = collectMentionTargets(ticket, data);
+        MentionTargets mentionTargets = eventType == WebhookEventType.TICKET_COMMENT_MENTION
+                ? collectCommentMentionTargets(data)
+                : collectMentionTargets(ticket, data);
 
         String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
@@ -417,6 +422,90 @@ public class WebhookDispatchService extends BaseApplicationService {
      * 收集需要@的目标：优先企微 userId，同时补充手机号兜底。
      * 这么做是为了处理“系统里有处理人，但没同步到 wecom_userid”导致的漏@问题。
      */
+    private void appendCommentMentionSection(StringBuilder content, Object data) {
+        if (data == null) {
+            return;
+        }
+        try {
+            JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+            if (json == null) {
+                return;
+            }
+            content.append("【评论@】\n");
+            Long authorId = json.getLong("commentAuthorUserId");
+            content.append("评论人：").append(resolveUserNameById(authorId)).append("\n");
+            String summary = json.getString("commentPlainSummary");
+            if (summary == null || summary.trim().isEmpty()) {
+                summary = "（无文本摘要）";
+            }
+            content.append("摘要：").append(summary.trim()).append("\n");
+            JSONArray mentioned = json.getJSONArray("mentionedUserIds");
+            if (mentioned != null && !mentioned.isEmpty()) {
+                List<String> names = new ArrayList<>();
+                for (int i = 0; i < mentioned.size(); i++) {
+                    Long uid = mentioned.getLong(i);
+                    if (uid != null) {
+                        names.add(resolveUserNameById(uid));
+                    }
+                }
+                content.append("被@：").append(String.join("、", names)).append("\n");
+            }
+        } catch (Exception ex) {
+            log.warn("组装评论@Webhook正文失败: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * 评论@事件：仅 @ 被提及用户（企微机器人 mentioned_list / mentioned_mobile_list）
+     */
+    private MentionTargets collectCommentMentionTargets(Object data) {
+        MentionTargets targets = new MentionTargets();
+        if (data == null) {
+            return targets;
+        }
+        try {
+            JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+            if (json == null) {
+                return targets;
+            }
+            JSONArray arr = json.getJSONArray("mentionedUserIds");
+            if (arr == null || arr.isEmpty()) {
+                return targets;
+            }
+            Set<Long> userIds = new LinkedHashSet<>();
+            for (int i = 0; i < arr.size(); i++) {
+                Long id = arr.getLong(i);
+                if (id != null && id > 0) {
+                    userIds.add(id);
+                }
+            }
+            if (userIds.isEmpty()) {
+                return targets;
+            }
+            List<SysUserPO> users = sysUserMapper.selectBatchIds(new ArrayList<>(userIds));
+            if (users == null || users.isEmpty()) {
+                return targets;
+            }
+            for (SysUserPO user : users) {
+                if (user == null) {
+                    continue;
+                }
+                String wecomUserid = normalizeWecomUserid(user.getWecomUserid());
+                if (wecomUserid != null) {
+                    targets.getWecomUserids().add(wecomUserid);
+                    continue;
+                }
+                String normalizedMobile = normalizeMentionMobile(user.getPhone());
+                if (normalizedMobile != null) {
+                    targets.getMobileList().add(normalizedMobile);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("收集评论@Webhook mention 失败: {}", ex.getMessage());
+        }
+        return targets;
+    }
+
     private MentionTargets collectMentionTargets(JSONObject ticket, Object data) {
         MentionTargets targets = new MentionTargets();
         Set<Long> userIds = new LinkedHashSet<>();
@@ -595,6 +684,26 @@ public class WebhookDispatchService extends BaseApplicationService {
                 Long prevId = json.getLong("previousAssigneeId");
                 if (prevId != null) {
                     changeLines.add("原处理人：" + resolveUserNameById(prevId));
+                }
+            }
+            if (json.containsKey("commentPlainSummary")) {
+                String s = json.getString("commentPlainSummary");
+                changeLines.add("评论摘要：" + (s != null && !s.trim().isEmpty() ? s.trim() : "（空）"));
+            }
+            if (json.containsKey("commentAuthorUserId")) {
+                changeLines.add("评论人：" + resolveUserNameById(json.getLong("commentAuthorUserId")));
+            }
+            if (json.containsKey("mentionedUserIds")) {
+                JSONArray arr = json.getJSONArray("mentionedUserIds");
+                if (arr != null && !arr.isEmpty()) {
+                    List<String> names = new ArrayList<>();
+                    for (int i = 0; i < arr.size(); i++) {
+                        Long uid = arr.getLong(i);
+                        if (uid != null) {
+                            names.add(resolveUserNameById(uid));
+                        }
+                    }
+                    changeLines.add("被@用户：" + String.join("、", names));
                 }
             }
             return changeLines;
