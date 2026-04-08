@@ -21,6 +21,7 @@
 - 在编辑器中输入 `@` 可搜索并选择用户；展示头像、主行「姓名(工号)」、副行工号（无工号时副行显示用户 ID）。
 - **企微应用消息**：用户已绑定 `wecom_userid` 且偏好开启企微时收到卡片；「查看详情」跳转 `ticket.spa-detail-base-url` + `/ticket/detail/{id}`（未配置则回退 `ticket.detail-url` + `/{ticketNo}`）。
 - **邮件**：配置 `spring.mail.*` 且用户 `sys_user.email` 非空、偏好开启邮件时发送；正文含通知摘要 + 详情链接。
+- **Webhook**：订阅事件类型 `TICKET_COMMENT_MENTION` 后推送 JSON 负载（`data` 含 `mentionedUserIds`、`commentAuthorUserId`、`commentPlainSummary`）。若 URL 为企微群机器人（`qyapi.weixin.qq.com/cgi-bin/webhook/send`），正文含评论摘要且 **`mentioned_list` / `mentioned_mobile_list` 仅包含被 @ 用户**（非创建人/处理人全量 @）。
 
 ## 非目标
 

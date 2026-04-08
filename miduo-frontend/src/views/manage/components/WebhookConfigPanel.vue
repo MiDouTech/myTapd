@@ -25,6 +25,7 @@ const WEBHOOK_EVENT_OPTIONS = [
   { label: '工单分派', value: 'TICKET_ASSIGNED' },
   { label: '工单完结', value: 'TICKET_COMPLETED' },
   { label: '工单关闭', value: 'TICKET_CLOSED' },
+  { label: '评论@提醒', value: 'TICKET_COMMENT_MENTION' },
 ] as const
 
 const tableLoading = ref(false)
