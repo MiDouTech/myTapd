@@ -20,4 +20,11 @@ public interface NotificationSender {
      * @param content 通知内容
      */
     void send(Long userId, String title, String content);
+
+    /**
+     * 发送通知（可选业务详情链接，供企微卡片/邮件正文使用）
+     */
+    default void send(Long userId, String title, String content, String detailLink) {
+        send(userId, title, content);
+    }
 }

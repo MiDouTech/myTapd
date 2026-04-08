@@ -10,6 +10,7 @@ import com.miduo.cloud.ticket.domain.common.event.TicketCommentMentionEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
+import com.miduo.cloud.ticket.infrastructure.config.TicketLinkProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFollowerMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFollowerPO;
@@ -41,19 +42,22 @@ public class TicketEventNotificationListener {
     private final TicketFollowerMapper ticketFollowerMapper;
     private final SysUserMapper sysUserMapper;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
+    private final TicketLinkProperties ticketLinkProperties;
 
     public TicketEventNotificationListener(NotificationOrchestrator notificationOrchestrator,
                                            WecomGroupPushService wecomGroupPushService,
                                            TicketMapper ticketMapper,
                                            TicketFollowerMapper ticketFollowerMapper,
                                            SysUserMapper sysUserMapper,
-                                           TicketAssigneeSyncService ticketAssigneeSyncService) {
+                                           TicketAssigneeSyncService ticketAssigneeSyncService,
+                                           TicketLinkProperties ticketLinkProperties) {
         this.notificationOrchestrator = notificationOrchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.ticketMapper = ticketMapper;
         this.ticketFollowerMapper = ticketFollowerMapper;
         this.sysUserMapper = sysUserMapper;
         this.ticketAssigneeSyncService = ticketAssigneeSyncService;
+        this.ticketLinkProperties = ticketLinkProperties;
     }
 
     @Async
@@ -99,12 +103,13 @@ public class TicketEventNotificationListener {
         }
         String content = String.format("【%s】%s 在评论中@了你：%s。请到工单系统查看详情。",
                 ticketLabel, authorName, summary);
+        String detailLink = resolveTicketDetailLink(ticket);
         for (Long uid : event.getMentionedUserIds()) {
             if (uid == null) {
                 continue;
             }
             notificationOrchestrator.dispatch(uid, ticket.getId(), null,
-                    NotificationType.COMMENT_MENTION, title, content);
+                    NotificationType.COMMENT_MENTION, title, content, detailLink);
         }
     }
 
@@ -127,10 +132,11 @@ public class TicketEventNotificationListener {
                 "\n优先级：" + priorityLabel +
                 "\n创建人：" + safe(creatorName);
 
+        String detailLink = resolveTicketDetailLink(ticket);
         List<Long> assignees = collectAssigneeUserIds(ticket);
         for (Long uid : assignees) {
             notificationOrchestrator.dispatch(uid, ticket.getId(), null,
-                    NotificationType.TICKET_CREATED, title, content);
+                    NotificationType.TICKET_CREATED, title, content, detailLink);
         }
 
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(assignees);
@@ -170,9 +176,10 @@ public class TicketEventNotificationListener {
                 "\n创建人：" + safe(creatorName) +
                 "\n优先级：" + priorityLabel;
 
+        String detailLink = resolveTicketDetailLink(ticket);
         for (Long uid : assignees) {
             notificationOrchestrator.dispatch(uid, ticket.getId(), null,
-                    NotificationType.ASSIGNED, title, content);
+                    NotificationType.ASSIGNED, title, content, detailLink);
         }
 
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(assignees);
@@ -227,8 +234,9 @@ public class TicketEventNotificationListener {
                     .collect(Collectors.toList()));
         }
         if (!receiverIds.isEmpty()) {
+            String detailLink = resolveTicketDetailLink(ticket);
             notificationOrchestrator.dispatchToUsers(new ArrayList<>(receiverIds), ticket.getId(), null,
-                    NotificationType.STATUS_CHANGED, title, content);
+                    NotificationType.STATUS_CHANGED, title, content, detailLink);
         }
 
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(receiverIds);
@@ -236,6 +244,13 @@ public class TicketEventNotificationListener {
             mentionUserIds.add(event.getOperatorId());
         }
         wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
+    }
+
+    private String resolveTicketDetailLink(TicketPO ticket) {
+        if (ticket == null) {
+            return "";
+        }
+        return ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
     }
 
     private List<Long> collectAssigneeUserIds(TicketPO ticket) {
