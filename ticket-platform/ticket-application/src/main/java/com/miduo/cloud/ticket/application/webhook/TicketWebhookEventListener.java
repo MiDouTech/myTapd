@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.application.webhook;
 
+import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
@@ -23,9 +24,12 @@ public class TicketWebhookEventListener {
     private static final Logger log = LoggerFactory.getLogger(TicketWebhookEventListener.class);
 
     private final WebhookDispatchService webhookDispatchService;
+    private final TicketAssigneeSyncService ticketAssigneeSyncService;
 
-    public TicketWebhookEventListener(WebhookDispatchService webhookDispatchService) {
+    public TicketWebhookEventListener(WebhookDispatchService webhookDispatchService,
+                                      TicketAssigneeSyncService ticketAssigneeSyncService) {
         this.webhookDispatchService = webhookDispatchService;
+        this.ticketAssigneeSyncService = ticketAssigneeSyncService;
     }
 
     @Async
@@ -111,8 +115,11 @@ public class TicketWebhookEventListener {
             log.info("接收工单分派事件并触发Webhook分发: eventId={}, ticketId={}, assigneeId={}, previousAssigneeId={}, operatorId={}, assignType={}",
                     event.getEventId(), event.getTicketId(), event.getAssigneeId(),
                     event.getPreviousAssigneeId(), event.getOperatorId(), event.getAssignType());
+            // 读取工单当前有效处理人集合（主处理人 + 协同处理人），避免追加处理人场景只展示旧主处理人。
+            java.util.List<Long> currentAssigneeIds = ticketAssigneeSyncService.listActiveUserIds(event.getTicketId());
             TicketAssignedPayload payload = new TicketAssignedPayload();
             payload.setAssigneeId(event.getAssigneeId());
+            payload.setAssigneeIds(currentAssigneeIds);
             payload.setPreviousAssigneeId(event.getPreviousAssigneeId());
             payload.setOperatorId(event.getOperatorId());
             payload.setAssignType(event.getAssignType());
@@ -138,6 +145,7 @@ public class TicketWebhookEventListener {
     @Data
     private static class TicketAssignedPayload {
         private Long assigneeId;
+        private java.util.List<Long> assigneeIds;
         private Long previousAssigneeId;
         private Long operatorId;
         private String assignType;

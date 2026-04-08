@@ -376,7 +376,7 @@ public class WebhookDispatchService extends BaseApplicationService {
                 content.append("5) 当前处理人：").append(resolveUserNameById(assigneeId)).append("\n");
             }
         }
-        List<String> changeLines = buildChangeLines(data);
+        List<String> changeLines = buildChangeLines(data, eventType);
         if (!changeLines.isEmpty()) {
             content.append("【变更内容】\n");
             for (int i = 0; i < changeLines.size(); i++) {
@@ -439,6 +439,8 @@ public class WebhookDispatchService extends BaseApplicationService {
             try {
                 JSONObject json = JSON.parseObject(JSON.toJSONString(data));
                 if (json != null) {
+                    List<Long> assigneeIds = parseLongArrayFromJson(json, "assigneeIds");
+                    userIds.addAll(assigneeIds);
                     Long assigneeId = json.getLong("assigneeId");
                     if (assigneeId != null) {
                         userIds.add(assigneeId);
@@ -478,6 +480,24 @@ public class WebhookDispatchService extends BaseApplicationService {
             }
         }
         return targets;
+    }
+
+    private List<Long> parseLongArrayFromJson(JSONObject json, String key) {
+        if (json == null || key == null || key.trim().isEmpty() || !json.containsKey(key)) {
+            return new ArrayList<>();
+        }
+        JSONArray arr = json.getJSONArray(key);
+        if (arr == null || arr.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Set<Long> values = new LinkedHashSet<>();
+        for (int i = 0; i < arr.size(); i++) {
+            Long value = arr.getLong(i);
+            if (value != null) {
+                values.add(value);
+            }
+        }
+        return new ArrayList<>(values);
     }
 
     private String normalizeWecomUserid(String wecomUserid) {
@@ -556,7 +576,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         }
     }
 
-    private List<String> buildChangeLines(Object data) {
+    private List<String> buildChangeLines(Object data, WebhookEventType eventType) {
         List<String> changeLines = new ArrayList<>();
         if (data == null) {
             return changeLines;
@@ -581,8 +601,13 @@ public class WebhookDispatchService extends BaseApplicationService {
                 changeLines.add("新状态：" + resolveStatusLabel(json.getString("newStatus")));
             }
             if (json.containsKey("assigneeId")) {
-                Long assigneeId = json.getLong("assigneeId");
-                changeLines.add("指派给：" + resolveUserNameById(assigneeId));
+                List<Long> assigneeIds = parseLongArrayFromJson(json, "assigneeIds");
+                if (eventType == WebhookEventType.TICKET_ASSIGNED && !assigneeIds.isEmpty()) {
+                    changeLines.add("指派给：" + resolveUserNamesByIds(assigneeIds));
+                } else {
+                    Long assigneeId = json.getLong("assigneeId");
+                    changeLines.add("指派给：" + resolveUserNameById(assigneeId));
+                }
             }
             if (json.containsKey("assignType")) {
                 changeLines.add("分派类型：" + resolveAssignTypeLabel(json.getString("assignType")));
@@ -602,6 +627,43 @@ public class WebhookDispatchService extends BaseApplicationService {
             log.warn("解析变更数据失败: {}", ex.getMessage());
             return new ArrayList<>();
         }
+    }
+
+    private String resolveUserNamesByIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return "-";
+        }
+        Set<Long> deduped = new LinkedHashSet<>();
+        for (Long userId : userIds) {
+            if (userId != null) {
+                deduped.add(userId);
+            }
+        }
+        if (deduped.isEmpty()) {
+            return "-";
+        }
+        List<SysUserPO> users = sysUserMapper.selectBatchIds(new ArrayList<>(deduped));
+        if (users == null || users.isEmpty()) {
+            return "-";
+        }
+        java.util.Map<Long, String> nameMap = new java.util.HashMap<>();
+        for (SysUserPO user : users) {
+            if (user != null && user.getId() != null && user.getName() != null && !user.getName().trim().isEmpty()) {
+                nameMap.put(user.getId(), user.getName().trim());
+            }
+        }
+        StringBuilder names = new StringBuilder();
+        for (Long userId : deduped) {
+            String name = nameMap.get(userId);
+            if (name == null) {
+                continue;
+            }
+            if (names.length() > 0) {
+                names.append("、");
+            }
+            names.append(name);
+        }
+        return names.length() > 0 ? names.toString() : "-";
     }
 
     private String resolveUserNameById(Long userId) {
