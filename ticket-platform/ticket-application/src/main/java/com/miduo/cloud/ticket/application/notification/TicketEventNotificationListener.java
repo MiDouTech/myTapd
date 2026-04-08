@@ -74,7 +74,10 @@ public class TicketEventNotificationListener {
         sendTicketCreatedNotifications(event.getTicketId());
     }
 
-    @Async
+    /**
+     * 评论 @ 提醒必须在事务提交后同步分发：不可与 {@link Async} 叠在同类监听器上，
+     * 否则会在提交前进入代理逻辑，导致通知不可靠。
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCommentMention(TicketCommentMentionEvent event) {
         if (event == null || event.getTicketId() == null || event.getMentionedUserIds() == null

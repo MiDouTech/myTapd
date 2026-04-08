@@ -60,6 +60,12 @@ public class TicketApplicationService {
     private static final Pattern COMMENT_MENTION_DATA_USER_ID =
             Pattern.compile("(?i)data-user-id\\s*=\\s*[\"']?(\\d+)[\"']?");
 
+    /**
+     * 正文中的 @姓名(用户ID)（前端在富文本清洗掉 data-user-id 时的兜底，ID 必须为纯数字）
+     */
+    private static final Pattern COMMENT_MENTION_NAME_PAREN_ID =
+            Pattern.compile("@([^(\\s<]+)\\((\\d{1,19})\\)");
+
     @Resource
     private TicketMapper ticketMapper;
 
@@ -383,6 +389,17 @@ public class TicketApplicationService {
                 }
             } catch (NumberFormatException ignored) {
                 // skip malformed attribute
+            }
+        }
+        Matcher m2 = COMMENT_MENTION_NAME_PAREN_ID.matcher(html);
+        while (m2.find()) {
+            try {
+                long id = Long.parseLong(m2.group(2));
+                if (id > 0) {
+                    ids.add(id);
+                }
+            } catch (NumberFormatException ignored) {
+                // skip
             }
         }
         return new ArrayList<>(ids);
