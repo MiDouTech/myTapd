@@ -126,7 +126,11 @@ public class TicketWebhookEventListener {
         }
     }
 
-    @Async
+    /**
+     * 评论 @ 的 Webhook 必须在事务提交后分发；不可与本方法再叠加
+     * {@code org.springframework.scheduling.annotation.Async}，
+     * 否则异步代理可能在提交前介入，导致 {@link TransactionPhase#AFTER_COMMIT} 不可靠（与站内通知监听器同类处理一致）。
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCommentMention(TicketCommentMentionEvent event) {
         if (event == null || event.getTicketId() == null
