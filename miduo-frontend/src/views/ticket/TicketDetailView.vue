@@ -149,12 +149,25 @@ const mentionPanelAnchor = ref<MentionPanelAnchor | null>(null)
 /** 为 true 表示浮层由编辑器内 @ 触发，选人后需删掉 @关键词 */
 const mentionFromInlineEditor = ref(false)
 const mentionTab = ref<'people' | 'content'>('people')
+/** 编辑器内 @ 浮层与「@同事」弹层共用候选列表时的高亮下标（默认第一条） */
+const mentionActiveIndex = ref(0)
 let mentionSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(mentionCandidates, () => {
+  mentionActiveIndex.value = 0
+})
+
+watch(mentionTab, () => {
+  if (mentionPanelOpen.value && mentionTab.value === 'people') {
+    mentionActiveIndex.value = 0
+  }
+})
 
 function closeMentionFloatingPanel(): void {
   mentionPanelOpen.value = false
   mentionPanelAnchor.value = null
   mentionFromInlineEditor.value = false
+  mentionActiveIndex.value = 0
 }
 
 function onEditorMentionPanel(
@@ -181,6 +194,7 @@ watch(mentionPopoverVisible, (open) => {
     closeMentionFloatingPanel()
     mentionKeyword.value = ''
     mentionFromInlineEditor.value = false
+    mentionActiveIndex.value = 0
     void loadMentionUsers()
   }
 })
@@ -311,6 +325,46 @@ function onDocumentPointerDownMention(ev: MouseEvent): void {
 function onKeydownMention(ev: KeyboardEvent): void {
   if (ev.key === 'Escape' && mentionPanelOpen.value) {
     closeMentionFloatingPanel()
+    return
+  }
+
+  const list = mentionCandidates.value
+  const inlinePeoplePanel =
+    mentionPanelOpen.value && mentionTab.value === 'people' && mentionFromInlineEditor.value
+  const popoverPeopleList = mentionPopoverVisible.value && !mentionPanelOpen.value
+  const popoverPick = popoverPeopleList
+
+  if (mentionLoading.value || !list.length) {
+    return
+  }
+
+  const canArrowNav = inlinePeoplePanel || popoverPeopleList
+  if (canArrowNav) {
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault()
+      mentionActiveIndex.value = Math.min(list.length - 1, mentionActiveIndex.value + 1)
+      return
+    }
+    if (ev.key === 'ArrowUp') {
+      ev.preventDefault()
+      mentionActiveIndex.value = Math.max(0, mentionActiveIndex.value - 1)
+      return
+    }
+  }
+
+  if (ev.key !== 'Enter') {
+    return
+  }
+  if (!inlinePeoplePanel && !popoverPick) {
+    return
+  }
+
+  ev.preventDefault()
+  ev.stopPropagation()
+  const idx = Math.min(Math.max(0, mentionActiveIndex.value), list.length - 1)
+  const u = list[idx]
+  if (u) {
+    pickMentionUser(u)
   }
 }
 
@@ -1855,9 +1909,14 @@ watch(
                     <div v-if="mentionLoading" class="comment-mention-status">加载中…</div>
                     <template v-else>
                       <div
-                        v-for="u in mentionCandidates"
+                        v-for="(u, idx) in mentionCandidates"
                         :key="u.id"
-                        class="comment-mention-row comment-mention-row-rich"
+                        :class="[
+                          'comment-mention-row',
+                          'comment-mention-row-rich',
+                          idx === mentionActiveIndex ? 'is-active' : '',
+                        ]"
+                        @mouseenter="mentionActiveIndex = idx"
                         @mousedown.prevent
                         @click="pickMentionUser(u)"
                       >
@@ -1918,9 +1977,14 @@ watch(
                     <div v-if="mentionLoading" class="comment-mention-status">加载中…</div>
                     <template v-else>
                       <div
-                        v-for="u in mentionCandidates"
+                        v-for="(u, idx) in mentionCandidates"
                         :key="u.id"
-                        class="comment-mention-row comment-mention-row-rich"
+                        :class="[
+                          'comment-mention-row',
+                          'comment-mention-row-rich',
+                          idx === mentionActiveIndex ? 'is-active' : '',
+                        ]"
+                        @mouseenter="mentionActiveIndex = idx"
                         @click="pickMentionUser(u)"
                       >
                         <el-avatar :size="32" :src="u.avatarUrl || undefined" class="comment-mention-av">
@@ -2818,6 +2882,17 @@ watch(
   :deep(.rich-text-editor) {
     border-radius: 6px;
   }
+
+  :deep(.ticket-comment-mention) {
+    display: inline-block;
+    margin: 0 2px;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: #1675d1;
+    font-weight: 500;
+    background: #ecf5ff;
+    vertical-align: baseline;
+  }
 }
 
 .comment-submit-row {
@@ -2945,6 +3020,10 @@ watch(
   &:hover {
     background: #f0f9ff;
   }
+
+  &.is-active {
+    background: #e6f0fc;
+  }
 }
 
 .comment-mention-row-rich {
@@ -3028,8 +3107,14 @@ watch(
   padding: 12px 16px;
 
   :deep(.ticket-comment-mention) {
+    display: inline-block;
+    margin: 0 2px;
+    padding: 0 6px;
+    border-radius: 4px;
     color: #1675d1;
     font-weight: 500;
+    background: #ecf5ff;
+    vertical-align: baseline;
   }
 }
 
