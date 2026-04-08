@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { createEditor, createToolbar } from '@wangeditor/editor'
 import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor/editor'
+import { Editor as SlateEditor, Element as SlateElement, Range as SlateRange } from 'slate'
 import '@wangeditor/editor/dist/css/style.css'
 import request from '@/utils/request'
 import { notifyWarning } from '@/utils/feedback'
@@ -21,6 +22,8 @@ interface Props {
   /** 为 true 时编辑区随内容增高，直至 maxHeight */
   autoGrow?: boolean
   maxHeight?: number
+  /** 为 true 时在正文内输入 @ 可触发选人浮层（由父组件渲染） */
+  mentionTrigger?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -31,15 +34,112 @@ const props = withDefaults(defineProps<Props>(), {
   height: 220,
   autoGrow: false,
   maxHeight: 520,
+  mentionTrigger: false,
 })
+
+export interface MentionPanelAnchor {
+  top: number
+  left: number
+  width: number
+  height: number
+}
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'mention-panel': [
+    payload:
+      | { open: false }
+      | { open: true; keyword: string; anchor: MentionPanelAnchor },
+  ]
 }>()
 
 const toolbarContainer = ref<HTMLElement>()
 const editorContainer = useTemplateRef<HTMLElement>('editorContainer')
 let editorInstance: IDomEditor | null = null
+let unbindMentionListener: (() => void) | null = null
+
+function bindMentionChangeListener() {
+  if (!editorInstance || unbindMentionListener) {
+    return
+  }
+  const onEditorChange = () => {
+    void nextTick(() => syncMentionPanelFromEditor())
+  }
+  editorInstance.on('change', onEditorChange)
+  unbindMentionListener = () => {
+    editorInstance?.off('change', onEditorChange)
+    unbindMentionListener = null
+  }
+}
+
+function getTextInBlockBeforeCursor(editor: IDomEditor): string {
+  const { selection } = editor
+  if (!selection || !SlateRange.isCollapsed(selection)) {
+    return ''
+  }
+  const [cursor] = SlateRange.edges(selection)
+  const blockAbove = SlateEditor.above(editor, {
+    at: cursor,
+    match: (n) => SlateElement.isElement(n) && SlateEditor.isBlock(editor, n),
+  })
+  if (!blockAbove) {
+    return ''
+  }
+  const [, path] = blockAbove
+  const start = SlateEditor.start(editor, path)
+  return SlateEditor.string(editor, { anchor: start, focus: cursor })
+}
+
+function getSelectionAnchorRect(): MentionPanelAnchor | null {
+  try {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.rangeCount === 0) {
+      return null
+    }
+    const r = domSel.getRangeAt(0).cloneRange()
+    const rects = r.getClientRects()
+    const box = rects.length > 0 ? rects[rects.length - 1] : r.getBoundingClientRect()
+    if (!box || (box.width === 0 && box.height === 0)) {
+      return null
+    }
+    return { top: box.top, left: box.left, width: box.width, height: box.height }
+  } catch {
+    return null
+  }
+}
+
+function syncMentionPanelFromEditor() {
+  if (!props.mentionTrigger || !editorInstance || editorInstance.isDisabled()) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  const editor = editorInstance
+  const before = getTextInBlockBeforeCursor(editor)
+  const at = before.lastIndexOf('@')
+  if (at < 0) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  const afterAt = before.slice(at + 1)
+  if (afterAt.includes('\n')) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  if (afterAt.startsWith('@')) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  if (afterAt.length > 40) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  const anchor = getSelectionAnchorRect()
+  if (!anchor) {
+    emit('mention-panel', { open: false })
+    return
+  }
+  emit('mention-panel', { open: true, keyword: afterAt, anchor })
+}
 
 /** 在光标处插入 HTML（用于 @ 提及等）；依赖 wangEditor 内部 API */
 function insertHtml(html: string) {
@@ -53,8 +153,20 @@ function insertHtml(html: string) {
   }
 }
 
+/** 删除光标前的若干「字符」（用于去掉编辑器内输入的 @关键词） */
+function deleteBackwardChars(count: number) {
+  if (!editorInstance || count <= 0) {
+    return
+  }
+  editorInstance.focus()
+  for (let i = 0; i < count; i++) {
+    editorInstance.deleteBackward('character')
+  }
+}
+
 defineExpose({
   insertHtml,
+  deleteBackwardChars,
 })
 
 function applyAutoGrowLayout() {
@@ -170,6 +282,9 @@ function initEditor() {
   if (props.disabled) {
     editorInstance.disable()
   }
+  if (props.mentionTrigger) {
+    bindMentionChangeListener()
+  }
   scheduleAutoGrowLayout()
 }
 
@@ -206,11 +321,27 @@ watch(
   },
 )
 
+watch(
+  () => props.mentionTrigger,
+  (enabled) => {
+    if (!editorInstance) {
+      return
+    }
+    if (enabled) {
+      bindMentionChangeListener()
+    } else {
+      unbindMentionListener?.()
+      emit('mention-panel', { open: false })
+    }
+  },
+)
+
 onMounted(() => {
   initEditor()
 })
 
 onBeforeUnmount(() => {
+  unbindMentionListener?.()
   editorInstance?.destroy()
   editorInstance = null
 })

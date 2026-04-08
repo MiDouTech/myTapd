@@ -39,6 +39,7 @@ import {
 import { getUserList } from '@/api/user'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RichTextEditor from '@/components/common/RichTextEditor.vue'
+import type { MentionPanelAnchor } from '@/components/common/RichTextEditor.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
   BugChangeHistoryOutput,
@@ -142,12 +143,51 @@ const mentionPopoverVisible = ref(false)
 const mentionKeyword = ref('')
 const mentionCandidates = ref<UserListOutput[]>([])
 const mentionLoading = ref(false)
+const mentionPanelOpen = ref(false)
+const mentionPanelKeyword = ref('')
+const mentionPanelAnchor = ref<MentionPanelAnchor | null>(null)
+/** 为 true 表示浮层由编辑器内 @ 触发，选人后需删掉 @关键词 */
+const mentionFromInlineEditor = ref(false)
+const mentionTab = ref<'people' | 'content'>('people')
 let mentionSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+function closeMentionFloatingPanel(): void {
+  mentionPanelOpen.value = false
+  mentionPanelAnchor.value = null
+  mentionFromInlineEditor.value = false
+}
+
+function onEditorMentionPanel(
+  payload:
+    | { open: false }
+    | { open: true; keyword: string; anchor: MentionPanelAnchor },
+): void {
+  if (!payload.open) {
+    if (mentionFromInlineEditor.value) {
+      closeMentionFloatingPanel()
+    }
+    return
+  }
+  mentionFromInlineEditor.value = true
+  mentionTab.value = 'people'
+  mentionPanelKeyword.value = payload.keyword
+  mentionPanelAnchor.value = payload.anchor
+  mentionPanelOpen.value = true
+  scheduleMentionSearch()
+}
 
 watch(mentionPopoverVisible, (open) => {
   if (open) {
+    closeMentionFloatingPanel()
     mentionKeyword.value = ''
+    mentionFromInlineEditor.value = false
     void loadMentionUsers()
+  }
+})
+
+watch(mentionPanelKeyword, () => {
+  if (mentionPanelOpen.value) {
+    scheduleMentionSearch()
   }
 })
 
@@ -163,7 +203,9 @@ function scheduleMentionSearch() {
 async function loadMentionUsers() {
   mentionLoading.value = true
   try {
-    const kw = mentionKeyword.value.trim()
+    const kw = mentionPanelOpen.value
+      ? mentionPanelKeyword.value.trim()
+      : mentionKeyword.value.trim()
     const list = await getUserList({
       accountStatus: 1,
       ...(kw ? { keyword: kw } : {}),
@@ -176,13 +218,27 @@ async function loadMentionUsers() {
   }
 }
 
+function mentionDisplaySub(u: UserListOutput): string {
+  const no = u.employeeNo?.trim()
+  if (no) {
+    return no
+  }
+  return String(u.id)
+}
+
 function pickMentionUser(u: UserListOutput) {
   const editor = commentEditorRef.value
   if (!editor || u.id == null) {
     return
   }
+  if (mentionFromInlineEditor.value) {
+    const kw = mentionPanelKeyword.value
+    editor.deleteBackwardChars(1 + kw.length)
+    closeMentionFloatingPanel()
+  }
   const safeName = (u.name || '用户').replace(/</g, '').replace(/>/g, '')
-  const html = `<span data-comment-mention="1" data-user-id="${u.id}" style="color:#1675d1;font-weight:500;">@${safeName}</span>`
+  const sub = mentionDisplaySub(u)
+  const html = `<span data-comment-mention="1" data-user-id="${u.id}" class="ticket-comment-mention">@${safeName}(${sub})</span>`
   editor.insertHtml(html)
   if (!commentMentionUserIds.value.includes(u.id)) {
     commentMentionUserIds.value.push(u.id)
@@ -201,7 +257,61 @@ function extractMentionUserIdsFromCommentHtml(html: string): number[] {
       ids.add(n)
     }
   }
+  const reParen = /@([^(<\s]+)\((\d{1,19})\)/g
+  while ((m = reParen.exec(html)) !== null) {
+    const n = Number(m[2])
+    if (Number.isFinite(n) && n > 0) {
+      ids.add(n)
+    }
+  }
   return Array.from(ids)
+}
+
+const mentionFloatPanelStyle = computed(() => {
+  const a = mentionPanelAnchor.value
+  if (!a || !mentionPanelOpen.value) {
+    return {}
+  }
+  const panelW = 320
+  const margin = 8
+  const left = Math.min(window.innerWidth - panelW - margin, Math.max(margin, a.left))
+  const spaceAbove = a.top
+  const preferAbove = spaceAbove > 120
+  if (preferAbove) {
+    return {
+      position: 'fixed' as const,
+      left: `${left}px`,
+      top: `${a.top - margin}px`,
+      width: `${panelW}px`,
+      transform: 'translateY(-100%)',
+      zIndex: 3000,
+    }
+  }
+  return {
+    position: 'fixed' as const,
+    left: `${left}px`,
+    top: `${a.top + a.height + margin}px`,
+    width: `${panelW}px`,
+    zIndex: 3000,
+  }
+})
+
+function onDocumentPointerDownMention(ev: MouseEvent): void {
+  if (!mentionPanelOpen.value) {
+    return
+  }
+  const t = ev.target as Node | null
+  const floatEl = document.querySelector('.comment-mention-float')
+  if (t && floatEl?.contains(t)) {
+    return
+  }
+  closeMentionFloatingPanel()
+}
+
+function onKeydownMention(ev: KeyboardEvent): void {
+  if (ev.key === 'Escape' && mentionPanelOpen.value) {
+    closeMentionFloatingPanel()
+  }
 }
 
 function uniqStringList(values: string[]): string[] {
@@ -1029,6 +1139,8 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     updateViewportWidth()
     window.addEventListener('resize', updateViewportWidth, { passive: true })
+    document.addEventListener('pointerdown', onDocumentPointerDownMention, true)
+    document.addEventListener('keydown', onKeydownMention, true)
   }
   await Promise.all([loadAll(), trackReadSilently(), loadModules()])
 })
@@ -1036,6 +1148,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', updateViewportWidth)
+    document.removeEventListener('pointerdown', onDocumentPointerDownMention, true)
+    document.removeEventListener('keydown', onKeydownMention, true)
   }
   if (mentionSearchTimer) {
     clearTimeout(mentionSearchTimer)
@@ -1697,12 +1811,76 @@ watch(
             ref="commentEditorRef"
             v-model="commentInput"
             :ticket-id="ticketId"
-            placeholder="发表评论（支持粘贴图片、表格；可点下方「@同事」提醒对方）..."
+            placeholder="发表评论（支持粘贴图片、表格；输入 @ 可搜索同事）..."
             :height="180"
             :auto-grow="true"
             :max-height="480"
+            :mention-trigger="true"
             class="comment-editor"
+            @mention-panel="onEditorMentionPanel"
           />
+          <Teleport to="body">
+            <div
+              v-show="mentionPanelOpen"
+              class="comment-mention-float el-popper is-pure is-light"
+              :style="mentionFloatPanelStyle"
+              role="listbox"
+              aria-label="提及同事"
+            >
+              <div class="comment-mention-float-inner">
+                <div class="comment-mention-float-head">
+                  <span class="comment-mention-float-title">提及人或内容</span>
+                  <div class="comment-mention-float-tabs">
+                    <button
+                      type="button"
+                      :class="['cmt-tab', mentionTab === 'people' ? 'is-active' : '']"
+                      @mousedown.prevent
+                      @click="mentionTab = 'people'"
+                    >
+                      人
+                    </button>
+                    <span class="cmt-tab-sep" />
+                    <button
+                      type="button"
+                      :class="['cmt-tab', mentionTab === 'content' ? 'is-active' : '']"
+                      @mousedown.prevent
+                      @click="mentionTab = 'content'"
+                    >
+                      内容
+                    </button>
+                  </div>
+                </div>
+                <template v-if="mentionTab === 'people'">
+                  <el-scrollbar max-height="220px" class="comment-mention-scroll">
+                    <div v-if="mentionLoading" class="comment-mention-status">加载中…</div>
+                    <template v-else>
+                      <div
+                        v-for="u in mentionCandidates"
+                        :key="u.id"
+                        class="comment-mention-row comment-mention-row-rich"
+                        @mousedown.prevent
+                        @click="pickMentionUser(u)"
+                      >
+                        <el-avatar :size="32" :src="u.avatarUrl || undefined" class="comment-mention-av">
+                          {{ u.name?.charAt(0) || '?' }}
+                        </el-avatar>
+                        <div class="comment-mention-row-text">
+                          <div class="comment-mention-primary">
+                            {{ u.name }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
+                          </div>
+                          <div class="comment-mention-sub">{{ mentionDisplaySub(u) }}</div>
+                        </div>
+                      </div>
+                      <div v-if="!mentionCandidates.length" class="comment-mention-status">无匹配用户</div>
+                    </template>
+                  </el-scrollbar>
+                </template>
+                <div v-else class="comment-mention-status comment-mention-content-placeholder">
+                  内容提及（文档/工单链接）暂未开放，请使用「人」选择同事。
+                </div>
+              </div>
+            </div>
+          </Teleport>
           <div class="comment-submit-row">
             <div class="comment-submit-left">
               <span class="comment-hint">
@@ -1718,8 +1896,16 @@ watch(
                   <el-button type="primary" link size="small">@同事</el-button>
                 </template>
                 <div class="comment-mention-popover">
+                  <div class="comment-mention-float-head comment-mention-popover-head">
+                    <span class="comment-mention-float-title">提及人或内容</span>
+                    <div class="comment-mention-float-tabs">
+                      <span class="cmt-tab is-active">人</span>
+                      <span class="cmt-tab-sep" />
+                      <span class="cmt-tab is-muted">内容</span>
+                    </div>
+                  </div>
                   <p class="comment-mention-tip">
-                    选择同事后会在评论中插入蓝色 @ 昵称；发表后对方收到提醒（企微需在「通知偏好」中开启对应渠道）。
+                    选择后插入 @；也可在编辑框内直接输入 @ 搜索。发表后被 @ 同事会收到站内提醒。
                   </p>
                   <el-input
                     v-model="mentionKeyword"
@@ -1734,11 +1920,18 @@ watch(
                       <div
                         v-for="u in mentionCandidates"
                         :key="u.id"
-                        class="comment-mention-row"
+                        class="comment-mention-row comment-mention-row-rich"
                         @click="pickMentionUser(u)"
                       >
-                        <span>{{ u.name }}</span>
-                        <span v-if="u.employeeNo" class="comment-mention-sub">{{ u.employeeNo }}</span>
+                        <el-avatar :size="32" :src="u.avatarUrl || undefined" class="comment-mention-av">
+                          {{ u.name?.charAt(0) || '?' }}
+                        </el-avatar>
+                        <div class="comment-mention-row-text">
+                          <div class="comment-mention-primary">
+                            {{ u.name }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
+                          </div>
+                          <div class="comment-mention-sub">{{ mentionDisplaySub(u) }}</div>
+                        </div>
                       </div>
                       <div v-if="!mentionCandidates.length" class="comment-mention-status">无匹配用户</div>
                     </template>
@@ -2655,6 +2848,79 @@ watch(
   gap: 8px;
 }
 
+.comment-mention-popover-head {
+  margin-bottom: 0;
+}
+
+.comment-mention-float {
+  padding: 0;
+  border-radius: 8px;
+  box-shadow:
+    0 6px 16px 0 rgb(0 0 0 / 8%),
+    0 3px 6px -4px rgb(0 0 0 / 12%),
+    0 9px 28px 8px rgb(0 0 0 / 5%);
+}
+
+.comment-mention-float-inner {
+  padding: 10px 12px 12px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.comment-mention-float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-mention-float-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.comment-mention-float-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.cmt-tab {
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #909399;
+  font-size: 12px;
+
+  &.is-active {
+    color: #1675d1;
+    background: #ecf5ff;
+    font-weight: 500;
+  }
+
+  &.is-muted {
+    cursor: default;
+    color: #c0c4cc;
+  }
+}
+
+.cmt-tab-sep {
+  width: 1px;
+  height: 12px;
+  background: #e4e7ed;
+}
+
+.comment-mention-content-placeholder {
+  text-align: left;
+  padding: 8px 4px 4px;
+  line-height: 1.5;
+}
+
 .comment-mention-tip {
   margin: 0;
   font-size: 12px;
@@ -2681,9 +2947,36 @@ watch(
   }
 }
 
+.comment-mention-row-rich {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.comment-mention-av {
+  flex-shrink: 0;
+}
+
+.comment-mention-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-mention-primary {
+  font-size: 14px;
+  font-weight: 400;
+  color: #303133;
+  line-height: 1.4;
+}
+
+.comment-mention-id {
+  color: #606266;
+  font-weight: 400;
+}
+
 .comment-mention-sub {
   font-size: 12px;
   color: #909399;
+  margin-top: 2px;
 }
 
 .comment-mention-status {
@@ -2733,6 +3026,11 @@ watch(
   background: #f5f7fa;
   border-radius: 0 8px 8px 8px;
   padding: 12px 16px;
+
+  :deep(.ticket-comment-mention) {
+    color: #1675d1;
+    font-weight: 500;
+  }
 }
 
 .comment-header {
