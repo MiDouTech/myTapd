@@ -12,6 +12,7 @@ import {
   Fold,
   Grid,
   Histogram,
+  Key,
   Menu as MenuIcon,
   Notebook,
   Plus,
@@ -431,7 +432,9 @@ watch(
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item :icon="User">个人信息</el-dropdown-item>
+                <el-dropdown-item :icon="Key" @click="router.push('/account/api-keys')">
+                  个人 API 密钥
+                </el-dropdown-item>
                 <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>

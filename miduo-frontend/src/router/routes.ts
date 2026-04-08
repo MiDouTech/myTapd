@@ -124,6 +124,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'account/api-keys',
+        name: 'userApiKeys',
+        component: () => import('@/views/account/UserApiKeysView.vue'),
+        meta: {
+          title: '个人 API 密钥',
+        },
+      },
+      {
         path: 'manage/category',
         name: 'manageCategory',
         component: () => import('@/views/manage/CategoryManageView.vue'),
