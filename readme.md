@@ -1153,3 +1153,67 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.2.9-notification-refresh-pointerevent-fix` | 修复通知抽屉点击“刷新”触发 `BindException(pageSize=[object PointerEvent])`：按钮改用中间处理函数 + 通知 store 增加 pageSize 参数兜底校验 |
+
+---
+
+## 29. 追加处理人后工单通知“指派给”与@修复（后端）
+
+### 29.1 功能用途
+- **用途**：修复“追加处理人后，工单通知里‘指派给’没变、且没有@到新增处理人”的问题。  
+- **类比理解**：以前像“班级值日表加了新同学，但群通知还发旧名单，也没@新同学”；现在通知会按最新值日表发，并@到新加的人。
+
+### 29.2 根因说明（对应你反馈的现象）
+- 分派 Webhook 事件原先只带了单个 `assigneeId`（主处理人），没有“当前处理人列表”。
+- 追加处理人时，消息正文“指派给”仍按单人字段解析，导致看到旧值。
+- @名单也主要基于单人字段收集，新增协同处理人可能漏掉。
+
+### 29.3 本次修复内容
+1. `TicketWebhookEventListener` 在分派事件中补充 `assigneeIds`（当前有效处理人列表，来自 `ticket_assignee`）。
+2. `WebhookDispatchService` 在组装“变更内容”时：
+   - 分派事件优先使用 `assigneeIds` 生成“指派给：A、B、C”；
+   - 无列表时再回退旧逻辑（单个 `assigneeId`）。
+3. `collectMentionTargets(...)` 收集@对象时，新增读取 `assigneeIds`，把当前处理人都纳入@候选。
+
+### 29.4 使用方法（验收步骤）
+1. 先让工单有主处理人A。
+2. 在工单详情执行“追加处理人”，追加B。
+3. 到企业微信群查看“工单事件通知”。
+4. 预期结果：
+   - 变更内容中的“指派给”包含B（例如：`A、B`）；
+   - 群消息会真实@到B（若缺企微userid则走手机号兜底@）。
+
+### 29.5 参数说明（本次修复相关）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.assigneeIds` | `Long[]` | 工单当前处理人列表（主处理人 + 协同处理人） |
+| `data.assigneeId` | `Long` | 主处理人ID（保留兼容） |
+| `buildChangeLines(data, eventType)` | `Object, WebhookEventType -> List<String>` | 分派事件优先按 `assigneeIds` 组装“指派给”文案 |
+| `collectMentionTargets(ticket, data)` | `JSONObject, Object -> MentionTargets` | @对象收集，新增读取 `assigneeIds` |
+
+### 29.6 返回值说明（接口行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| 分派事件走企微机器人Webhook | `msgtype=text` JSON | 文案“指派给”展示最新处理人列表，@名单包含追加人 |
+| 分派事件无 `assigneeIds`（历史兼容） | `msgtype=text` JSON | 自动回退单人 `assigneeId`，保持老数据可用 |
+
+### 29.7 常见问题（新增）
+#### Q30：为什么“指派给”还是只显示1个人？
+- **检测**：查看 `webhook_dispatch_log` 请求体中的 `data.assigneeIds` 是否存在且有值。
+- **记录（错误类型）**：分派事件未携带处理人列表，或 `ticket_assignee` 明细未同步成功。
+- **恢复建议**：
+  1. 确认后端已升级到本次版本；
+  2. 复查该工单 `ticket_assignee` 明细是否包含新增处理人；
+  3. 重新执行一次“追加处理人”触发通知。
+
+#### Q31：为什么还是没有@到新增处理人？
+- **检测**：确认请求体是否包含新增人的 `mentioned_list` 或 `mentioned_mobile_list` 来源数据。
+- **记录（错误类型）**：用户资料缺少可用 `wecom_userid` 且手机号无效，导致无法命中@。
+- **恢复建议**：
+  1. 优先补齐新增处理人的 `wecom_userid`；
+  2. 或补齐合法手机号用于兜底@；
+  3. 再次触发分派通知验证。
+
+### 29.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.3.0-append-assignee-webhook-mention-fix` | 修复追加处理人后工单通知“指派给”不更新且未@新增处理人：分派Webhook补充 `assigneeIds`，文案与@名单统一按当前处理人列表生成 |
