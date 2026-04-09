@@ -2,7 +2,8 @@
 
 > **版本**：v1.0  
 > **日期**：2026-04-08  
-> **关联变更**：`openspec/changes/ticket-lobster-skills-api-keys`
+> **关联变更**：已归档 `openspec/changes/archive/2026-04-08-ticket-lobster-skills-api-keys`  
+> **安装培训**：[Cursor与龙虾技能安装上手.md](./Cursor与龙虾技能安装上手.md)
 
 ## 背景
 
@@ -33,6 +34,8 @@
 ## 技能包位置
 
 仓库内技能包目录：`ticket-platform/docs/lobster-skill/`（含 `README.md`、`SKILL.md`、`manifest.json`、`config.example.json`）。
+
+**安装与教学**：请阅读 [Cursor与龙虾技能安装上手.md](./Cursor与龙虾技能安装上手.md)（下载路径、Cursor 本地/云、龙虾、验收步骤）。
 
 ## 安全注意
 
