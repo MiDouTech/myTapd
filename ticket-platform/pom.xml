@@ -38,6 +38,8 @@
         <hutool.version>5.8.26</hutool.version>
         <jjwt.version>0.11.5</jjwt.version>
         <springdoc.version>1.8.0</springdoc.version>
+        <!-- 与 springdoc-openapi 1.8.0 自带的 swagger-core 2.2.x 对齐 -->
+        <swagger-annotations.version>2.2.20</swagger-annotations.version>
         <fastjson2.version>2.0.47</fastjson2.version>
         <minio.version>8.5.7</minio.version>
         <flyway.version>8.5.13</flyway.version>
@@ -121,6 +123,11 @@
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-ui</artifactId>
                 <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations</artifactId>
+                <version>${swagger-annotations.version}</version>
             </dependency>
 
             <!-- ==================== JSON ==================== -->
