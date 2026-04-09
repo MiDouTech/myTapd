@@ -47,5 +47,5 @@ export function disableUserApiKey(id: number): Promise<void> {
  * 接口编号：API000512
  */
 export function deleteUserApiKey(id: number): Promise<void> {
-  return request.delete<void>(`/user/api-key/delete/${id}`)
+  return request.del<void>(`/user/api-key/delete/${id}`)
 }
