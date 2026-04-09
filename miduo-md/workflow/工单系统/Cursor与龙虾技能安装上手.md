@@ -23,7 +23,13 @@
 
 ## 2. 技能包从哪里拿（下载）
 
-技能包**随代码仓库提供**，不在独立 CDN：
+### 2.1 工单站点（推荐）
+
+登录工单 Web → **个人 API 密钥**（`/account/api-keys`）→ **下载技能包**，得到静态资源 `lobster-skill.zip`（构建自 `ticket-platform/docs/lobster-skill/`，内含 `VERSION.txt` 记录打包时间与前端的 `package.json` 版本字段）。
+
+### 2.2 代码仓库
+
+技能包源文件仍**随代码仓库提供**：
 
 - **路径**：`ticket-platform/docs/lobster-skill/`
 - **建议用法**：Git 拉取后整目录复制到本机；或从 Git 托管网页进入该路径 **Download / 打包 zip**。
@@ -33,7 +39,7 @@
   - `manifest.json`：技能元数据
   - `config.example.json`：本地配置模板（勿提交真实 Key）
 
-> 若公司后续提供「Release zip 或站内下载按钮」，以运维公告为准；当前以**仓库目录**为唯一权威来源。
+> 站内 zip 与仓库目录内容应对齐；若不一致以**最新发版的前端构建产物**为准。
 
 ---
 
