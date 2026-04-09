@@ -33,7 +33,8 @@
 
 ## 技能包位置
 
-仓库内技能包目录：`ticket-platform/docs/lobster-skill/`（含 `README.md`、`SKILL.md`、`manifest.json`、`config.example.json`）。
+- **站内下载**：工单 Web → **个人 API 密钥**（`/account/api-keys`）→ **下载技能包**（`lobster-skill.zip`，由前端构建时从下方源目录打包）。
+- **仓库源目录**：`ticket-platform/docs/lobster-skill/`（含 `README.md`、`SKILL.md`、`manifest.json`、`config.example.json`）。
 
 **安装与教学**：请阅读 [Cursor与龙虾技能安装上手.md](./Cursor与龙虾技能安装上手.md)（下载路径、Cursor 本地/云、龙虾、验收步骤）。
 

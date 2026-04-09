@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DocumentCopy, Key, Plus } from '@element-plus/icons-vue'
+import { DocumentCopy, Download, Key, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
 
@@ -18,6 +18,11 @@ const createName = ref('')
 const createSubmitting = ref(false)
 const revealVisible = ref(false)
 const revealedKey = ref('')
+
+const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`
+const skillPackHref = `${baseUrl}lobster-skill.zip`
 
 async function loadList(): Promise<void> {
   loading.value = true
@@ -104,11 +109,27 @@ function statusTagType(status: number): 'success' | 'info' {
           </p>
         </div>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreate">新建密钥</el-button>
+      <div class="header-actions">
+        <el-button
+          tag="a"
+          :href="skillPackHref"
+          download="miduo-ticket-lobster-skill.zip"
+          :icon="Download"
+        >
+          下载技能包
+        </el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建密钥</el-button>
+      </div>
     </div>
 
     <el-alert type="info" :closable="false" show-icon class="tip-alert">
-      请求时在 HTTP 头携带 <code>X-Api-Key</code>（值为完整密钥）。与 JWT 二选一即可访问已授权接口。
+      <template #default>
+        <span>
+          请求时在 HTTP 头携带 <code>X-Api-Key</code>（值为完整密钥）。与 JWT 二选一即可访问已授权接口。
+          技能包为 zip（含 <code>README</code>、<code>SKILL.md</code>、示例配置），
+          <strong>不含</strong>密钥，请在本页创建后自行配置环境变量或 <code>config.json</code>。
+        </span>
+      </template>
     </el-alert>
 
     <el-table
@@ -187,6 +208,14 @@ function statusTagType(status: number): 'success' | 'info' {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .title-wrap {
