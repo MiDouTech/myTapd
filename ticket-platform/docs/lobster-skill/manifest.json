@@ -1,0 +1,16 @@
+{
+  "name": "miduo-ticket-lobster-skill",
+  "displayName": "米多工单 IDE 集成",
+  "version": "1.0.0",
+  "minApiVersion": "1.0.0",
+  "description": "使用个人 API 密钥从 IDE/Agent 访问工单：列表、详情、评论、流转。",
+  "configSchema": {
+    "baseUrl": "string",
+    "apiKey": "string"
+  },
+  "auth": {
+    "type": "header",
+    "headerName": "X-Api-Key",
+    "configField": "apiKey"
+  }
+}
