@@ -1,5 +1,5 @@
 -- ============================================================
--- V47__align_bugreport_defect_category_wording.sql
+-- V49__align_bugreport_defect_category_wording.sql
 -- 对齐 Bug 简报缺陷分类 16 类文案口径（增量兜底）
 -- ============================================================
 
