@@ -335,9 +335,18 @@ jobs:
             fi
           } > .cnb_version.yml
 
-          #sed -i "s|testVersion:.*|testVersion: ${VERSION}|" .cnb/web_trigger.yml
+          # 同步部署触发版本：优先更新 .cnb/web_trigger.yml 中的 testVersion
+          if [ -f .cnb/web_trigger.yml ]; then
+            if sed -n '/^[[:space:]]*testVersion[[:space:]]*:/p' .cnb/web_trigger.yml | sed -n '1p' >/dev/null; then
+              sed -i -E "s|^([[:space:]]*testVersion:[[:space:]]*).*$|\\1${VERSION}|" .cnb/web_trigger.yml
+            else
+              printf '\ntestVersion: %s\n' "${VERSION}" >> .cnb/web_trigger.yml
+            fi
+            git add .cnb/web_trigger.yml
+          else
+            echo "WARN: .cnb/web_trigger.yml not found, skip testVersion update."
+          fi
 
-          git add .cnb/web_trigger.yml
           git add .cnb_version.yml
           if git diff --staged --quiet; then
             echo ".cnb_version.yml 无变化，跳过提交。"

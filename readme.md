@@ -1394,7 +1394,7 @@ vite v7.3.1 building client environment for production...
 - **类比理解**：以前像“垃圾只分干湿两类”，很多东西会混在一起；现在像“可回收/厨余/有害/其他+细分”，分类更清楚，后续统计更有价值。
 
 ### 33.2 本次改动了什么
-1. 新增数据库迁移：`V46__expand_bugreport_defect_category_to_16.sql`。  
+1. 新增数据库迁移：`V48__expand_bugreport_defect_category_to_16.sql`。  
 2. 将旧的 7 个分类设置为停用（`is_active=0`）。  
 3. 新增并启用 16 个分类（`is_active=1`，`sort_order=1..16`）：
    - 页面异常
@@ -1458,7 +1458,7 @@ vite v7.3.1 building client environment for production...
 - **检测**：先查数据库 `dict_defect_category`，看新16类是否已写入并启用。  
 - **记录（错误类型）**：常见是迁移未执行、环境连接错库、前端缓存未刷新。  
 - **恢复建议**：
-  1. 确认后端启动日志里 `V46/V47` 已成功执行；
+  1. 确认后端启动日志里 `V48/V49` 已成功执行；
   2. 确认当前环境数据库与后端连接一致；
   3. 前端强刷（`Ctrl+F5`）后再进入编辑页。
 
@@ -1467,6 +1467,8 @@ vite v7.3.1 building client environment for production...
 |---|---|
 | `v1.3.4-bugreport-defect-category-16` | Bug简报缺陷分类从7类升级为16类（字典扩展）；旧分类停用，新分类按统一顺序返回，前端下拉与右侧说明自动同步 |
 | `v1.3.6-bugreport-defect-category-16-wording-align` | 缺陷分类16类描述文案与业务口径精确对齐（包含页面性错误、确认窗、基础设施等措辞），下拉与右侧说明同源一致 |
+| `v1.3.7-cd-deploy-trigger-flyway-version-fix` | 修复“构建成功但线上不生效”：恢复 CD `testVersion` 同步触发链路，并消除 Flyway 重复版本号冲突（Bug简报迁移改为 V48/V49） |
+| `v1.3.8-flyway-v44-sso-session-version-fix` | 继续消除 Flyway 版本冲突：将 `V44__init_sso_session.sql` 调整为 `V50__init_sso_session.sql`，避免与视频附件迁移重复编号导致启动迁移失败 |
 
 ---
 
@@ -1531,3 +1533,68 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.3.5-bugreport-logic-cause-12-sync` | 逻辑归因下拉与右侧说明统一为同源12类：页面选择项与说明口径一致，避免“选项/说明”漂移 |
+
+---
+
+## 35. 构建成功但线上未生效（CD触发链路 + Flyway版本冲突）修复说明
+
+### 35.1 功能用途
+- **用途**：修复“GitHub Actions 显示构建成功，但线上页面还是旧版本”的问题。  
+- **类比理解**：以前像“厨房把菜做好了，但服务员没端上桌”；这次把“端菜动作”补齐，同时修掉“后厨出餐编号冲突”。
+
+### 35.2 根因（两条主线）
+1. **CD 触发链路断点**：`cd.yml` 中 `testVersion` 同步逻辑曾被注释，导致部分环境只更新制品，不触发部署消费。  
+2. **Flyway 版本冲突**：迁移脚本存在重复版本号（`V44`、`V46`），新镜像启动时可能在迁移阶段失败，实例回不到新版本。
+
+### 35.3 本次修复内容
+1. **恢复并加固 CD 触发写入**（`.github/workflows/cd.yml`）  
+   - 恢复 `testVersion` 同步；  
+   - 增加“文件存在 / 键存在”兜底，避免不同仓库结构导致脚本报错；  
+   - 无 `.cnb/web_trigger.yml` 时仅告警并继续，不阻断 `.cnb_version.yml` 更新。
+2. **消除 Flyway 重复版本号**（`ticket-platform/.../db/migration`）  
+   - `V46__expand_bugreport_defect_category_to_16.sql` → `V48__...`  
+   - `V47__align_bugreport_defect_category_wording.sql` → `V49__...`  
+   - `V44__init_sso_session.sql` → `V50__...`
+
+### 35.4 使用方法（验收步骤）
+1. 合并代码后观察 `CD – Build & Push Docker Images`，确认 `Update CNB Version File` 成功。  
+2. 在版本仓库检查：
+   - `.cnb_version.yml` 的 `version` 是否为本次 `sha-xxxxxxx`；  
+   - `.cnb/web_trigger.yml` 的 `testVersion` 是否同步更新。  
+3. 在后端日志检查 Flyway：不再出现 duplicate version 报错。  
+4. 强刷前端页面（`Ctrl+F5`），确认业务改动可见。
+
+### 35.5 参数说明（本次修复相关）
+| 项 | 类型 | 说明 |
+|---|---|---|
+| `.cnb/web_trigger.yml testVersion` | `string` | 部署触发消费版本号，需与本次构建版本一致 |
+| `.cnb_version.yml version` | `string` | 制品版本索引（例如 `sha-8559782`） |
+| Flyway migration version | `int` | 必须全局唯一递增，禁止重复 |
+
+### 35.6 返回值说明（链路行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| CD 版本写入成功 | `git commit + push` | 版本仓库会新增提交，部署系统可感知新版本 |
+| 缺少 `.cnb/web_trigger.yml` | `WARN日志` | 不阻断流程，但不会更新 `testVersion` |
+| Flyway 启动迁移 | 启动成功/失败日志 | 本次修复后应避免重复版本导致的失败 |
+
+### 35.7 常见问题（新增）
+#### Q38：为什么 CD 成功了，页面还是旧的？
+- **检测**：先看版本仓库里的 `testVersion` 和 `.cnb_version.yml` 是否已更新到本次 SHA。  
+- **记录（错误类型）**：部署触发链路未消费新版本，或后端实例迁移失败回退旧版本。  
+- **恢复建议**：
+  1. 手动核对部署系统当前运行镜像 tag；
+  2. 查看后端启动日志中 Flyway 执行结果；
+  3. 前端强刷缓存后再验证页面。
+
+#### Q39：为什么后端启动时报 Flyway duplicate version？
+- **检测**：查看 `db/migration` 是否存在同一版本号多个脚本。  
+- **记录（错误类型）**：迁移脚本版本冲突。  
+- **恢复建议**：
+  1. 保证每个迁移版本号全局唯一；
+  2. 用新增版本号迁移替代，不要在已发布环境直接改历史脚本内容。
+
+### 35.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.3.7-cd-deploy-trigger-flyway-version-fix` | 修复“构建成功但线上不生效”：恢复 CD testVersion 同步触发链路，并消除 Flyway 重复版本号冲突（迁移改为 V48/V49/V50） |
