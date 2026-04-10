@@ -44,6 +44,12 @@ public class SysUserApiKeyPO implements Serializable {
     @TableField("last_used_at")
     private LocalDateTime lastUsedAt;
 
+    /**
+     * 累计鉴权成功次数（由 touchLastUsed 异步自增）
+     */
+    @TableField("invocation_count")
+    private Long invocationCount;
+
     @TableField("create_time")
     private LocalDateTime createTime;
 

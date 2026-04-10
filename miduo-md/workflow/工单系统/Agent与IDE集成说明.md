@@ -14,7 +14,8 @@
 1. 使用浏览器登录工单 Web。
 2. 右上角用户菜单 → **个人 API 密钥**（路径：`/account/api-keys`）。
 3. **新建密钥**，为设备起名（如「公司 Mac」）；创建成功后 **完整密钥仅显示一次**，请立即复制保存。
-4. **禁止**将密钥写入 Git 仓库、截图外传或提交到技能包 zip。
+4. 密钥列表展示 **累计调用次数**（每次 `X-Api-Key` 鉴权成功后异步自增，与「最后使用」同为近似实时，刷新列表即可查看）。
+5. **禁止**将密钥写入 Git 仓库、截图外传或提交到技能包 zip。
 
 ## 调用方式
 
@@ -27,7 +28,7 @@
 | 接口编号 | 方法 | 路径 | 说明 |
 |----------|------|------|------|
 | API000509 | POST | /api/user/api-key/create | 创建密钥 |
-| API000510 | GET | /api/user/api-key/list | 列表（脱敏） |
+| API000510 | GET | /api/user/api-key/list | 列表（脱敏，含 `invocationCount` 累计调用次数） |
 | API000511 | PUT | /api/user/api-key/disable/{id} | 禁用 |
 | API000512 | DELETE | /api/user/api-key/delete/{id} | 删除 |
 

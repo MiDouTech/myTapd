@@ -112,7 +112,7 @@ public class UserApiKeyApplicationService {
     }
 
     /**
-     * 异步更新最后使用时间，避免拖慢 Agent 请求主路径
+     * 异步更新最后使用时间与调用次数，避免拖慢 Agent 请求主路径
      */
     @Async
     @Transactional(rollbackFor = Exception.class)
@@ -123,6 +123,7 @@ public class UserApiKeyApplicationService {
         LambdaUpdateWrapper<SysUserApiKeyPO> u = new LambdaUpdateWrapper<>();
         u.eq(SysUserApiKeyPO::getId, keyId);
         u.set(SysUserApiKeyPO::getLastUsedAt, LocalDateTime.now());
+        u.setSql("invocation_count = invocation_count + 1");
         sysUserApiKeyMapper.update(null, u);
     }
 
@@ -143,6 +144,7 @@ public class UserApiKeyApplicationService {
         o.setKeyPrefixDisplay(AgentApiKeyConstants.KEY_PREFIX_LABEL + po.getKeyPrefix() + "…");
         o.setStatus(po.getStatus());
         o.setLastUsedAt(po.getLastUsedAt());
+        o.setInvocationCount(po.getInvocationCount() != null ? po.getInvocationCount() : 0L);
         o.setCreateTime(po.getCreateTime());
         return o;
     }

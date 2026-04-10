@@ -43,7 +43,7 @@ public class UserApiKeyController {
      * 接口编号：API000510
      */
     @GetMapping("/list")
-    @Operation(summary = "个人API密钥列表", description = "接口编号：API000510")
+    @Operation(summary = "个人API密钥列表", description = "接口编号：API000510；列表项含 invocationCount（X-Api-Key 鉴权成功累计次数，异步更新）")
     public ApiResult<List<UserApiKeyListOutput>> list() {
         List<UserApiKeyListOutput> list = userApiKeyApplicationService.listKeys(getCurrentUserId());
         return ApiResult.success(list);

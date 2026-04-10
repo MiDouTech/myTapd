@@ -30,6 +30,9 @@ public class UserApiKeyListOutput {
     @Schema(description = "最后使用时间")
     private LocalDateTime lastUsedAt;
 
+    @Schema(description = "累计鉴权成功次数（异步更新）")
+    private Long invocationCount;
+
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
 }
