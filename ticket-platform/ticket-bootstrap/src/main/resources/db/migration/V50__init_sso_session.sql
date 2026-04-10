@@ -1,3 +1,4 @@
+-- V50__init_sso_session.sql
 -- 米多星球 SSO 会话表：存储第三方 sessionToken（服务端管理，禁止暴露到前端）
 CREATE TABLE IF NOT EXISTS `sso_session` (
     `id`              bigint(20)   NOT NULL AUTO_INCREMENT COMMENT '主键ID',
