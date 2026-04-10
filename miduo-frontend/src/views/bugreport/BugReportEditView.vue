@@ -1144,7 +1144,7 @@ watch(useInstructionDrawer, (drawer) => {
           </div>
         </template>
 
-        <BugReportInstructionContent layout="sidebar" />
+        <BugReportInstructionContent layout="sidebar" :defect-categories="defectCategories" />
       </el-card>
     </div>
   </div>
@@ -1157,7 +1157,7 @@ watch(useInstructionDrawer, (drawer) => {
     append-to-body
     class="bug-report-instruction-drawer"
   >
-    <BugReportInstructionContent layout="drawer" />
+    <BugReportInstructionContent layout="drawer" :defect-categories="defectCategories" />
   </el-drawer>
 
   <!-- Mobile preview modal -->
