@@ -148,6 +148,11 @@ function statusTagType(status: number): 'success' | 'info' {
         </template>
       </el-table-column>
       <el-table-column prop="lastUsedAt" label="最后使用" min-width="160" align="center" />
+      <el-table-column label="调用次数" width="120" align="center">
+        <template #default="{ row }">
+          {{ row.invocationCount ?? 0 }}
+        </template>
+      </el-table-column>
       <el-table-column prop="createTime" label="创建时间" min-width="160" align="center" />
       <el-table-column label="操作" width="160" align="center" fixed="right">
         <template #default="{ row }">

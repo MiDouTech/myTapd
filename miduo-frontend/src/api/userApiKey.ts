@@ -15,6 +15,8 @@ export interface UserApiKeyListOutput {
   keyPrefixDisplay: string
   status: number
   lastUsedAt?: string
+  /** 累计鉴权成功次数（后端异步递增，列表可能略延迟） */
+  invocationCount?: number
   createTime?: string
 }
 
