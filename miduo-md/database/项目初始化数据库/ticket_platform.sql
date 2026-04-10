@@ -223,18 +223,27 @@ CREATE TABLE `dict_defect_category`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
   INDEX `idx_deleted`(`deleted` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '缺陷分类字典表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '缺陷分类字典表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of dict_defect_category
 -- ----------------------------
-INSERT INTO `dict_defect_category` VALUES (1, '功能异常', '功能逻辑不符合预期，操作无响应或结果错误', 1, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (2, '交互异常', '界面展示异常、控件行为不符合预期、页面空白/错位', 2, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (3, '性能问题', '响应缓慢、卡顿、超时、资源占用异常', 3, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (4, '数据异常', '数据丢失、数据错误、数据不一致', 4, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (5, '安全漏洞', '权限绕过、注入攻击、信息泄露', 5, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (6, '兼容性问题', '浏览器/设备/系统版本兼容性问题', 6, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
-INSERT INTO `dict_defect_category` VALUES (7, '接口异常', 'API返回异常、接口超时、参数校验失败', 7, 1, '2026-03-02 20:16:06', '2026-03-02 20:16:06', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (1, '页面异常', '由于页面排版不合理、样式、文案错误、页面显示重叠等导致的页面性质错误。', 1, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (2, '交互异常', '由于前端用户交互体验、接口调用导致的错误。', 2, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (3, '设计问题', '逻辑删除缺乏确认窗、注释描述错误、文案歧义、排版不整齐、相关功能场景未考虑等问题。', 3, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (4, '错误逻辑', '由于业务逻辑、代码逻辑异常导致的错误。', 4, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (5, '错误代码', '逻辑正确的情况下由于编码问题导致的错误。', 5, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (6, '错误数据', '由于数据与业务不兼容导致的错误。', 6, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (7, '错误配置', '由于配置文件异常导致（参数配置错误等）的错误。', 7, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (8, '错误发布', '由于灰度或线上发布流程异常导致的错误。', 8, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (9, '基础服务', '由于基础组件、服务网关、任务调度、ES搜索引擎等服务故障导致的错误。', 9, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (10, '基础设施', '数据库、Redis、Nginx、Web负载均衡等基础设施异常导致的错误。', 10, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (11, '兼容问题', '由于浏览器（不同浏览器、版本过低）、移动设备或数据库版本不兼容导致的错误。', 11, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (12, '架构问题', '由于架构不适用导致的问题，如无法支持大数据量存储、系统扩展性差等。', 12, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (13, '性能问题', '并发产生的问题、响应时长、资源占用过高、死锁、内存泄露等导致的性能问题。', 13, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (14, '安全问题', '账号越权、SQL注入漏洞、频率限制缺失（如短信发送次数、登录密码次数未限制）等。', 14, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (15, '安装部署', '服务器初始化（系统安装、基础环境支持）、软件安装（数据库管理系统、ES程序等）、编译/发布部署等产生的问题。', 15, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
+INSERT INTO `dict_defect_category` VALUES (16, '第三方原因', '由于第三方服务异常导致的错误，如腾讯云服务器网络、七牛云存储、SSL证书等。', 16, 1, '2026-04-10 00:00:00', '2026-04-10 00:00:00', 'system', 'system', 0);
 
 -- ----------------------------
 -- Table structure for dict_logic_cause

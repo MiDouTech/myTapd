@@ -16,24 +16,18 @@ import type {
   BugReportRelatedTicketOutput,
   BugReportUpdateInput,
   DefectCategoryOutput,
-  LogicCauseTreeOutput,
 } from '@/types/bugreport'
 import type { TicketListOutput } from '@/types/ticket'
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
-import { getCachedDefectCategoryDict, getCachedLogicCauseDict } from '@/utils/bugreport-dict-cache'
+import { getCachedDefectCategoryDict } from '@/utils/bugreport-dict-cache'
 import { getBugReportStatusLabel, getBugReportStatusTagType, isBugReportEditable } from '@/utils/bugreport'
 import BugReportInstructionContent from '@/views/bugreport/BugReportInstructionContent.vue'
+import { BUGREPORT_LOGIC_CAUSE_OPTIONS } from '@/constants/bugreport-logic-cause'
 
 interface TicketOption {
   value: number
   label: string
-}
-
-interface LogicCauseOption {
-  value: string
-  label: string
-  children?: LogicCauseOption[]
 }
 
 const route = useRoute()
@@ -43,7 +37,6 @@ const loading = ref(false)
 const submitLoading = ref(false)
 const users = ref<UserListOutput[]>([])
 const defectCategories = ref<DefectCategoryOutput[]>([])
-const logicCauseTree = ref<LogicCauseTreeOutput[]>([])
 const ticketOptions = ref<TicketOption[]>([])
 const ticketLoading = ref(false)
 const prefillLoading = ref(false)
@@ -141,22 +134,20 @@ const isEditMode = computed(() => Boolean(reportId.value))
 const canEdit = computed(() => !isEditMode.value || isBugReportEditable(currentStatus.value))
 
 
-const logicCauseOptions = computed<LogicCauseOption[]>(() => {
-  const convert = (nodes: LogicCauseTreeOutput[]): LogicCauseOption[] =>
-    nodes.map((item) => ({
-      value: item.name,
-      label: item.name,
-      children: item.children?.length ? convert(item.children) : undefined,
-    }))
-  return convert(logicCauseTree.value || [])
+const logicCauseOptions = computed(() => BUGREPORT_LOGIC_CAUSE_OPTIONS)
+const selectedLogicCause = computed<string | undefined>({
+  get: () => form.logicCausePath[0],
+  set: (value) => {
+    form.logicCausePath = value ? [value] : []
+  },
 })
 
 // Copy content
 const copyContent = computed(() => {
   const lines: string[] = []
   lines.push(`问题描述：${form.problemDesc || '-'}`)
-  if (form.logicCausePath.length > 0) {
-    lines.push(`逻辑归因：${form.logicCausePath.join(' / ')}`)
+  if (form.logicCausePath[0]) {
+    lines.push(`逻辑归因：${form.logicCausePath[0]}`)
   }
   if (form.logicCauseDetail) {
     lines.push(`归因明细：${form.logicCauseDetail}`)
@@ -246,7 +237,7 @@ function toDateOnlyText(input?: string): string {
 function fillFormByDetail(detail: BugReportDetailOutput): void {
   skipAutoFill = true
   form.problemDesc = detail.problemDesc || ''
-  form.logicCausePath = [detail.logicCauseLevel1, detail.logicCauseLevel2].filter(Boolean) as string[]
+  form.logicCausePath = detail.logicCauseLevel1 ? [detail.logicCauseLevel1] : []
   form.logicCauseDetail = detail.logicCauseDetail || ''
   form.defectCategory = detail.defectCategory || ''
   form.introducedProject = detail.introducedProject || ''
@@ -275,13 +266,11 @@ function fillFormByDetail(detail: BugReportDetailOutput): void {
 }
 
 async function loadBaseData(): Promise<void> {
-  const [userList, causeTree, categoryList] = await Promise.all([
+  const [userList, categoryList] = await Promise.all([
     getUserList({}),
-    getCachedLogicCauseDict(),
     getCachedDefectCategoryDict(),
   ])
   users.value = userList || []
-  logicCauseTree.value = causeTree || []
   defectCategories.value = categoryList || []
 }
 
@@ -504,10 +493,12 @@ function validateBeforeSave(): boolean {
 function buildPayload():
   | BugReportCreateInput
   | BugReportUpdateInput {
+  const selectedLogicCause = form.logicCausePath[0] || undefined
   return {
     problemDesc: form.problemDesc.trim(),
-    logicCauseLevel1: form.logicCausePath[0] || undefined,
-    logicCauseLevel2: form.logicCausePath[1] || undefined,
+    // 逻辑归因改为12类单选，所以只写一级，二级留空以保持接口兼容。
+    logicCauseLevel1: selectedLogicCause,
+    logicCauseLevel2: undefined,
     logicCauseDetail: form.logicCauseDetail.trim() || undefined,
     defectCategory: form.defectCategory || undefined,
     introducedProject: form.introducedProject.trim() || undefined,
@@ -807,21 +798,20 @@ watch(useInstructionDrawer, (drawer) => {
           </el-form-item>
 
           <el-form-item label="逻辑归因">
-            <el-cascader
-              v-model="form.logicCausePath"
-              :options="logicCauseOptions"
-              :props="{
-                checkStrictly: true,
-                emitPath: true,
-                value: 'value',
-                label: 'label',
-                children: 'children',
-              }"
+            <el-select
+              v-model="selectedLogicCause"
               clearable
               filterable
               class="w-520"
               placeholder="请选择逻辑归因（可选）"
-            />
+            >
+              <el-option
+                v-for="item in logicCauseOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="归因明细">
@@ -1180,9 +1170,9 @@ watch(useInstructionDrawer, (drawer) => {
               <div class="phone-field-label">问题描述</div>
               <div class="phone-field-value">{{ form.problemDesc }}</div>
             </div>
-            <div v-if="form.logicCausePath.length > 0" class="phone-field">
+            <div v-if="form.logicCausePath[0]" class="phone-field">
               <div class="phone-field-label">逻辑归因</div>
-              <div class="phone-field-value">{{ form.logicCausePath.join(' / ') }}</div>
+              <div class="phone-field-value">{{ form.logicCausePath[0] }}</div>
             </div>
             <div v-if="form.logicCauseDetail" class="phone-field">
               <div class="phone-field-label">归因明细</div>
