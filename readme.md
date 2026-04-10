@@ -1217,3 +1217,62 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.3.0-append-assignee-webhook-mention-fix` | 修复追加处理人后工单通知“指派给”不更新且未@新增处理人：分派Webhook补充 `assigneeIds`，文案与@名单统一按当前处理人列表生成 |
+
+---
+
+## 30. 企业微信日报“待解决有数量但明细全无”修复（后端）
+
+### 30.1 功能用途
+- **用途**：修复企业微信日报里“汇总显示待解决 10 个，但 1.1/1.2/1.3 都是无”的错位问题。  
+- **类比理解**：以前像“购物车角标写有 10 件，但点开列表一件都看不到”；现在改成“角标和列表用同一份数据”，数字和内容一定对得上。
+
+### 30.2 根因说明（对应你反馈的现象）
+- 日报顶部“待解决”数字，原来按“全量未关闭状态”在算；
+- 日报下方“待解决明细”，只展示了 3 个子分类（测试复现中/处理中/待简报）；
+- 两边不是同一口径，导致出现“有总数、没明细”。
+
+### 30.3 本次修复内容
+1. `DailyReportApplicationService` 中，`summary.pendingResolveCount` 改为直接使用 `pendingSection.count`（即 1.1 + 1.2 + 1.3 合计）。
+2. `DailyReportMapper.xml` 中，待简报查询从单状态 `pending_verify` 扩展为：
+   - `pending_verify`
+   - `pending_cs_confirm`（历史状态兼容）
+3. 不改接口结构，不改前端字段，管理端预览与企微推送直接受益。
+
+### 30.4 使用方法（验收步骤）
+1. 调用 `/api/daily-report/preview` 生成当天日报。
+2. 核对 `summary.pendingResolveCount` 与 `pendingSection.count`。
+3. 核对 markdown 文本里“待解决问题：X个”与 1.1/1.2/1.3 明细合计。
+4. 手动推送到企业微信群，确认群内文案与管理端预览一致。
+
+### 30.5 参数说明（本次修复相关）
+| 字段/查询 | 类型 | 说明 |
+|---|---|---|
+| `summary.pendingResolveCount` | `long` | 待解决汇总，现改为与待解决明细同口径 |
+| `pendingSection.count` | `long` | 待解决分区总数（测试复现中 + 处理中 + 待简报） |
+| `selectPendingVerifyTickets` | SQL 查询 | 待简报明细查询，兼容 `pending_verify` 与 `pending_cs_confirm` |
+
+### 30.6 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/daily-report/preview` | `ApiResult<DailyReportOutput>` | `summary.pendingResolveCount` 与 `pendingSection` 统计口径一致 |
+| `POST /api/daily-report/push` | `ApiResult<Void>` | 推送到企微的 markdown 与预览数据保持一致 |
+
+### 30.7 常见问题（新增）
+#### Q32：为什么以前显示待解决 10 个，现在变少了？
+- **检测**：查看 `pendingSection` 三个子分类合计是否与顶部一致。
+- **记录（错误类型）**：历史版本使用“汇总和明细不同口径”导致数字偏大。
+- **恢复建议**：
+  1. 以新版本的同口径统计为准；
+  2. 若需要扩展“待解决”分类（如待受理/待分派），单独做产品口径评审后再加。
+
+#### Q33：为什么待简报还是有漏单？
+- **检测**：确认工单状态是否为 `pending_verify` 或 `pending_cs_confirm`。
+- **记录（错误类型）**：状态不在当前日报“待简报”定义范围内。
+- **恢复建议**：
+  1. 先核对工单真实状态；
+  2. 如业务要纳入更多状态，走日报口径变更流程统一扩展。
+
+### 30.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.3.1-daily-report-pending-alignment-fix` | 修复企业微信日报“待解决汇总与明细不一致”：汇总改为明细同口径合计，并兼容待简报历史状态 `pending_cs_confirm` |

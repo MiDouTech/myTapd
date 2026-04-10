@@ -78,15 +78,8 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
         Long resolvedTodayCount = safeLong(dailyReportMapper.selectResolvedCountByDateRange(startOfDay, endOfDay));
         List<DailyReportStatusRow> closedByDefectType = dailyReportMapper.selectClosedByDefectType(startOfDay, endOfDay);
-        List<DailyReportStatusRow> openStatusCounts = dailyReportMapper.selectOpenStatusCounts();
-
-        long pendingResolveCount = 0;
-        for (DailyReportStatusRow row : openStatusCounts) {
-            String status = row.getStatus();
-            if (status != null && !status.equalsIgnoreCase("suspended") && !status.equalsIgnoreCase("temp_resolved")) {
-                pendingResolveCount += safeLong(row.getTotal());
-            }
-        }
+        DailyReportSection pendingSection = buildPendingSection(testingReproduceTickets, processingTickets, pendingVerifyTickets);
+        long pendingResolveCount = pendingSection.getCount();
 
         DailyReportOutput output = new DailyReportOutput();
         output.setReportDate(reportDate);
@@ -100,7 +93,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         summary.setSuspendedCount(suspendedTickets.size());
         output.setSummary(summary);
 
-        output.setPendingSection(buildPendingSection(testingReproduceTickets, processingTickets, pendingVerifyTickets));
+        output.setPendingSection(pendingSection);
         output.setTempResolvedSection(buildTempResolvedSection(tempResolvedTickets));
         output.setResolvedSection(buildResolvedSection(closedByDefectType, includeDefectDetail));
 
