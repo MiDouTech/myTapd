@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import type { DefectCategoryOutput } from '@/types/bugreport'
+
 /**
  * Bug 简报编辑页「填写说明」正文：桌面侧栏与移动端抽屉共用，避免重复维护。
  */
-defineProps<{
+const props = defineProps<{
   /** sidebar：与桌面侧栏一致（悬浮提示 + 标签预览）；drawer：移动端抽屉内展示（默认折叠区块、展示全部标签） */
   layout: 'sidebar' | 'drawer'
+  /** 缺陷分类字典：与编辑页下拉同源，避免“右侧说明”和“下拉选项”口径不一致 */
+  defectCategories?: DefectCategoryOutput[]
 }>()
 
 const LOGIC_CAUSE_ITEMS = [
@@ -70,24 +75,14 @@ const LOGIC_CAUSE_ITEMS = [
   },
 ]
 
-const DEFECT_CATEGORY_ITEMS = [
-  { no: '1', name: '页面异常', desc: '由于页面排版不合理、样式、文案错误，页面显示重叠等导致的页面性错误。' },
-  { no: '2', name: '交互异常', desc: '由于前端用户交互体验、接口调用导致的错误。' },
-  { no: '3', name: '设计问题', desc: '逻辑删除无"确认窗"、用户体验感低、注释描述有歧义或存在错别字等。' },
-  { no: '4', name: '错误逻辑', desc: '由于业务逻辑、代码逻辑异常导致的错误。' },
-  { no: '5', name: '错误代码', desc: '逻辑正确的情况下由于编码问题导致的错误。' },
-  { no: '6', name: '错误数据', desc: '由于数据与业务不兼容导致的错误。' },
-  { no: '7', name: '错误配置', desc: '由于配置文件异常导致（参数配置错误等）的错误。' },
-  { no: '8', name: '错误发布', desc: '由于灰度或线上发布流程异常导致的错误。' },
-  { no: '9', name: '基础服务', desc: '由于基础组件、服务网关、任务调度、ES搜索引擎等服务故障导致的错误。' },
-  { no: '10', name: '基础设施', desc: '数据库相关、缓存Redis相关、Nginx反向代理、web负载均衡等。' },
-  { no: '11', name: '兼容问题', desc: '由于浏览器、移动设备或数据库版本不兼容导致的错误。' },
-  { no: '12', name: '架构问题', desc: '由于架构不适用导致的错误，如无法支持大数据量存储、系统扩展性差等。' },
-  { no: '13', name: '性能问题', desc: '并发产生的问题、页面响应时间长、服务器资源耗用过高等。' },
-  { no: '14', name: '安全问题', desc: '账号越权、sql注入漏洞、频率未做限制等。' },
-  { no: '15', name: '安装部署', desc: '服务器初始化、软件安装、编译后代码部署等产生的问题。' },
-  { no: '16', name: '第三方原因', desc: '由于第三方服务异常导致的错误。如：腾讯云服务器网络、七牛云存储等。' },
-]
+const defectCategoryItems = computed(() => {
+  const source = props.defectCategories || []
+  return source.map((item, index) => ({
+    no: String(index + 1),
+    name: item.name,
+    desc: item.description || '暂无说明',
+  }))
+})
 </script>
 
 <template>
@@ -128,7 +123,7 @@ const DEFECT_CATEGORY_ITEMS = [
         <div class="inst-section inst-section--flat">
           <div class="defect-category-list defect-category-list--drawer">
             <div
-              v-for="item in DEFECT_CATEGORY_ITEMS"
+              v-for="item in defectCategoryItems"
               :key="item.no"
               class="defect-category-item defect-category-item--block"
             >
@@ -138,6 +133,7 @@ const DEFECT_CATEGORY_ITEMS = [
               </div>
               <p class="defect-desc">{{ item.desc }}</p>
             </div>
+            <div v-if="defectCategoryItems.length === 0" class="defect-category-empty">暂无缺陷分类说明</div>
           </div>
         </div>
       </el-collapse-item>
@@ -298,7 +294,7 @@ const DEFECT_CATEGORY_ITEMS = [
 
         <div class="defect-category-list">
           <el-tooltip
-            v-for="item in DEFECT_CATEGORY_ITEMS"
+            v-for="item in defectCategoryItems"
             :key="item.no"
             placement="left"
             effect="light"
@@ -315,6 +311,7 @@ const DEFECT_CATEGORY_ITEMS = [
               <span class="defect-name">{{ item.name }}</span>
             </div>
           </el-tooltip>
+          <div v-if="defectCategoryItems.length === 0" class="defect-category-empty">暂无缺陷分类说明</div>
         </div>
       </div>
 
@@ -621,6 +618,13 @@ const DEFECT_CATEGORY_ITEMS = [
   font-size: 12px;
   color: #303133;
   font-weight: 500;
+}
+
+.defect-category-empty {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #909399;
+  padding: 6px 8px;
 }
 
 .field-instructions {
