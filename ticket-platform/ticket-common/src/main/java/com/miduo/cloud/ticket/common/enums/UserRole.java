@@ -17,7 +17,8 @@ public enum UserRole {
     OBSERVER("observer", "观察者"),
     CUSTOMER_SERVICE("customer_service", "客服"),
     TESTER("tester", "测试"),
-    DEVELOPER("developer", "开发");
+    DEVELOPER("developer", "开发"),
+    GUEST("guest", "外部游客");
 
     private final String code;
     private final String label;

@@ -20,6 +20,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => Boolean(accessToken.value))
 
+  /** 当前用户是否为外部游客（角色含 GUEST） */
+  const isGuest = computed(() =>
+    (userInfo.value?.roleCodes ?? []).some(
+      (code) => String(code).toUpperCase() === 'GUEST',
+    ),
+  )
+
   function setLoginState(payload: LoginOutput): void {
     accessToken.value = payload.accessToken
     refreshToken.value = payload.refreshToken
@@ -57,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     userInfo,
     loginLoading,
     isLoggedIn,
+    isGuest,
     setLoginState,
     clearLoginState,
     loadCurrentUser,
