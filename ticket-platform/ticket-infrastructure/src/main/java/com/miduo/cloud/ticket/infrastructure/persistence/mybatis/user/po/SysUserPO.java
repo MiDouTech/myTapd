@@ -43,6 +43,9 @@ public class SysUserPO implements Serializable {
     @TableField("wecom_userid")
     private String wecomUserid;
 
+    @TableField("password_hash")
+    private String passwordHash;
+
     @TableField("account_status")
     private Integer accountStatus;
 

@@ -258,6 +258,7 @@ public class UserRepositoryImpl implements UserRepository {
         user.setGender(po.getGender());
         user.setAvatarUrl(po.getAvatarUrl());
         user.setWecomUserid(po.getWecomUserid());
+        user.setPasswordHash(po.getPasswordHash());
         user.setAccountStatus(po.getAccountStatus());
         user.setSyncStatus(po.getSyncStatus());
         user.setSyncTime(po.getSyncTime());
@@ -278,6 +279,7 @@ public class UserRepositoryImpl implements UserRepository {
         po.setGender(user.getGender());
         po.setAvatarUrl(user.getAvatarUrl());
         po.setWecomUserid(user.getWecomUserid());
+        po.setPasswordHash(user.getPasswordHash());
         po.setAccountStatus(user.getAccountStatus());
         po.setSyncStatus(user.getSyncStatus());
         po.setSyncTime(user.getSyncTime());

@@ -1,4 +1,4 @@
-import type { DevLoginInput, LoginOutput, RefreshTokenInput, WecomLoginInput } from '@/types/auth'
+import type { DevLoginInput, LocalLoginInput, LoginOutput, RefreshTokenInput, WecomLoginInput } from '@/types/auth'
 import request from '@/utils/request'
 
 /**
@@ -26,4 +26,13 @@ export function refreshToken(data: RefreshTokenInput): Promise<LoginOutput> {
  */
 export function devLogin(data: DevLoginInput): Promise<LoginOutput> {
   return request.post<LoginOutput>('/auth/dev/login', data)
+}
+
+/**
+ * 外部用户手机号+密码登录
+ * 接口编号：API000432
+ * 产品文档功能：外部上下游人员专属登录（无企微账号，手机号+个人密码）
+ */
+export function localLogin(data: LocalLoginInput): Promise<LoginOutput> {
+  return request.post<LoginOutput>('/auth/local/login', data)
 }

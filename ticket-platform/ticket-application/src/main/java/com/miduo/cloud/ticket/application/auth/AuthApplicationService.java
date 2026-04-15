@@ -9,9 +9,11 @@ import com.miduo.cloud.ticket.domain.user.model.User;
 import com.miduo.cloud.ticket.domain.user.repository.DepartmentRepository;
 import com.miduo.cloud.ticket.domain.user.repository.UserRepository;
 import com.miduo.cloud.ticket.entity.dto.auth.DevLoginInput;
+import com.miduo.cloud.ticket.entity.dto.auth.LocalLoginInput;
 import com.miduo.cloud.ticket.entity.dto.auth.LoginOutput;
 import com.miduo.cloud.ticket.entity.dto.auth.RefreshTokenInput;
 import com.miduo.cloud.ticket.entity.dto.auth.WecomLoginInput;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import com.miduo.cloud.ticket.infrastructure.external.wework.WecomClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -37,7 +39,10 @@ public class AuthApplicationService extends BaseApplicationService {
 
     private static final String PATH_WECOM_LOGIN = "/api/auth/wecom/login";
     private static final String PATH_DEV_LOGIN = "/api/auth/dev/login";
+    private static final String PATH_LOCAL_LOGIN = "/api/auth/local/login";
     private static final String PATH_REFRESH = "/api/auth/refresh";
+
+    private final BCryptPasswordEncoder bcryptEncoder = new BCryptPasswordEncoder();
 
     @Value("${dev-login.enabled:false}")
     private boolean devLoginEnabled;
@@ -235,6 +240,44 @@ public class AuthApplicationService extends BaseApplicationService {
         user.setRoleCodes(roleCodes);
         log.info("手机号临时登录成功: userId={}, name={}, phone={}", user.getId(), user.getName(), phone);
         return buildLoginOutput(user);
+    }
+
+    /**
+     * 外部用户手机号+密码登录
+     * 接口编号：API000432
+     */
+    @Transactional
+    public LoginOutput localLogin(LocalLoginInput input, String operatorIp, String userAgent) {
+        User user = userRepository.findByPhone(input.getPhone());
+        if (user == null) {
+            operationLogService.saveLoginLog(null, "", operatorIp, userAgent, PATH_LOCAL_LOGIN, "POST",
+                    "外部用户登录", false, "手机号未注册");
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED, "手机号或密码错误");
+        }
+        if (user.getPasswordHash() == null || user.getPasswordHash().isEmpty()) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_LOCAL_LOGIN, "POST",
+                    "外部用户登录", false, "该账号未设置密码，请联系管理员");
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED, "该账号未设置密码，请联系管理员");
+        }
+        if (!bcryptEncoder.matches(input.getPassword(), user.getPasswordHash())) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_LOCAL_LOGIN, "POST",
+                    "外部用户登录", false, "密码错误");
+            throw BusinessException.of(ErrorCode.UNAUTHORIZED, "手机号或密码错误");
+        }
+        if (user.getAccountStatus() != null && user.getAccountStatus() == 2) {
+            operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_LOCAL_LOGIN, "POST",
+                    "外部用户登录", false, "账号已被禁用");
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "账号已被禁用");
+        }
+
+        List<String> roleCodes = userRepository.findRoleCodes(user.getId());
+        user.setRoleCodes(roleCodes);
+
+        LoginOutput output = buildLoginOutput(user);
+        operationLogService.saveLoginLog(user.getId(), user.getName(), operatorIp, userAgent, PATH_LOCAL_LOGIN, "POST",
+                "外部用户登录", true, null);
+        log.info("外部用户登录成功: userId={}, name={}, phone={}", user.getId(), user.getName(), input.getPhone());
+        return output;
     }
 
     /**
