@@ -32,8 +32,11 @@ async function handleLogin(): Promise<void> {
         ? route.query.redirect
         : '/dashboard'
     await router.replace(redirect)
-  } catch {
-    notifyError('手机号或密码错误，请确认后重试')
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : ''
+    if (!msg || msg === 'Request failed') {
+      notifyError('手机号或密码错误，请确认后重试')
+    }
   } finally {
     loading.value = false
   }
