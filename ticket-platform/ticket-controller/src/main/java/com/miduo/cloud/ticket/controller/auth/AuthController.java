@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.controller.auth;
 import com.miduo.cloud.ticket.application.auth.AuthApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.entity.dto.auth.DevLoginInput;
+import com.miduo.cloud.ticket.entity.dto.auth.LocalLoginInput;
 import com.miduo.cloud.ticket.entity.dto.auth.LoginOutput;
 import com.miduo.cloud.ticket.entity.dto.auth.RefreshTokenInput;
 import com.miduo.cloud.ticket.entity.dto.auth.WecomLoginInput;
@@ -66,6 +67,19 @@ public class AuthController {
     public ApiResult<LoginOutput> devLogin(@Valid @RequestBody DevLoginInput input,
                                            HttpServletRequest request) {
         LoginOutput output = authApplicationService.devLogin(input, getClientIp(request), getUserAgent(request));
+        return ApiResult.success(output);
+    }
+
+    /**
+     * 外部用户手机号+密码登录
+     * 接口编号：API000432
+     * 产品文档功能：外部上下游人员专属登录（无企微账号，手机号+密码方式）
+     */
+    @Operation(summary = "外部用户手机号密码登录", description = "接口编号：API000432。供上下游无企微账号的外部人员使用，手机号+个人密码")
+    @PostMapping("/local/login")
+    public ApiResult<LoginOutput> localLogin(@Valid @RequestBody LocalLoginInput input,
+                                             HttpServletRequest request) {
+        LoginOutput output = authApplicationService.localLogin(input, getClientIp(request), getUserAgent(request));
         return ApiResult.success(output);
     }
 

@@ -7,6 +7,11 @@ export interface DevLoginInput {
   password: string
 }
 
+export interface LocalLoginInput {
+  phone: string
+  password: string
+}
+
 export interface RefreshTokenInput {
   refreshToken: string
 }

@@ -23,6 +23,7 @@ public class User implements Serializable {
     private Integer gender;
     private String avatarUrl;
     private String wecomUserid;
+    private String passwordHash;
     private Integer accountStatus;
     private Integer syncStatus;
     private Date syncTime;

@@ -20,6 +20,15 @@ export const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/ext-login',
+    name: 'extLogin',
+    component: () => import('@/views/auth/ExtLoginView.vue'),
+    meta: {
+      title: '外部访客登录',
+      requiresAuth: false,
+    },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/dashboard',
