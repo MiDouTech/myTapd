@@ -93,6 +93,13 @@ const menuItems: MenuItem[] = [
   },
 ]
 
+/** 游客（GUEST）不显示「管理」菜单 */
+const visibleMenuItems = computed(() =>
+  authStore.isGuest
+    ? menuItems.filter((item) => item.index !== 'manage')
+    : menuItems,
+)
+
 const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
 const activeMenu = computed(() => {
@@ -345,7 +352,7 @@ watch(
         class="menu"
         @select="handleMenuSelect"
       >
-        <template v-for="item in menuItems" :key="item.index">
+        <template v-for="item in visibleMenuItems" :key="item.index">
           <el-sub-menu v-if="item.children?.length" :index="item.index">
             <template #title>
               <el-icon><component :is="item.icon" /></el-icon>
@@ -375,7 +382,7 @@ watch(
       <div class="mobile-sidebar-panel">
         <div class="logo">米多工单系统</div>
         <el-menu :default-active="activeMenu" :unique-opened="true" class="menu" @select="handleMenuSelect">
-          <template v-for="item in menuItems" :key="item.index">
+          <template v-for="item in visibleMenuItems" :key="item.index">
             <el-sub-menu v-if="item.children?.length" :index="item.index">
               <template #title>
                 <el-icon><component :is="item.icon" /></el-icon>

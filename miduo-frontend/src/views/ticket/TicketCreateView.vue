@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getCategoryTree } from '@/api/category'
@@ -11,8 +11,13 @@ import type { TemplateFieldConfigItem, TemplateListOutput } from '@/types/templa
 import type { TicketCreateInput } from '@/types/ticket'
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
+
+/** 外部游客不允许指定处理人 */
+const isGuest = computed(() => authStore.isGuest)
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -36,9 +41,14 @@ const form = reactive({
 async function loadBaseData(): Promise<void> {
   loading.value = true
   try {
-    const [tree, userList] = await Promise.all([getCategoryTree(), getUserList({})])
-    categoryTree.value = tree
-    users.value = userList
+    if (isGuest.value) {
+      const tree = await getCategoryTree()
+      categoryTree.value = tree
+    } else {
+      const [tree, userList] = await Promise.all([getCategoryTree(), getUserList({})])
+      categoryTree.value = tree
+      users.value = userList
+    }
   } finally {
     loading.value = false
   }
@@ -184,7 +194,7 @@ onMounted(() => {
       </el-form-item>
 
       <div class="form-section-title">分派与时间</div>
-      <el-form-item label="处理人">
+      <el-form-item v-if="!isGuest" label="处理人">
         <el-select v-model="form.assigneeId" placeholder="请选择处理人" clearable class="w-420">
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>

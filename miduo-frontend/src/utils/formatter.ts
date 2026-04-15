@@ -51,6 +51,7 @@ const ROLE_LABEL_MAP: Record<string, string> = {
   CUSTOMER_SERVICE: '客服',
   TESTER: '测试',
   DEVELOPER: '开发',
+  GUEST: '外部游客',
   QA_MANAGER: '测试经理',
   QA_LEAD: '测试负责人',
   REPORT_REVIEWER: '简报审核人',
