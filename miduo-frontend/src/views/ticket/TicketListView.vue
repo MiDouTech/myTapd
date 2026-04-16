@@ -35,6 +35,7 @@ import {
   persistLayoutTicketSearch,
 } from '@/stores/layoutTicketSearch'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 const route = useRoute()
 const router = useRouter()
 
@@ -49,6 +50,10 @@ const previewDrawerVisible = ref(false)
 const previewLoading = ref(false)
 const previewDetail = ref<TicketDetailOutput | null>(null)
 const previewTicketId = ref<number | null>(null)
+
+const previewDescriptionHtml = computed(() =>
+  formatTicketDescriptionForDisplay(previewDetail.value?.description),
+)
 
 const previewTimeTrackItems = ref<TicketTimeTrackItem[]>([])
 const previewTimeTrackStandalone = ref<BugChangeHistoryOutput[]>([])
@@ -780,10 +785,10 @@ onUnmounted(() => {
         <template v-if="previewDetail">
           <div class="preview-layout">
             <div class="preview-main">
-              <div v-if="previewDetail.description" class="preview-block">
+              <div v-if="previewDescriptionHtml" class="preview-block">
                 <div class="preview-block-label">描述</div>
                 <!-- eslint-disable-next-line vue/no-v-html -->
-                <div class="preview-html" v-html="previewDetail.description" />
+                <div class="preview-html" v-html="previewDescriptionHtml" />
               </div>
 
               <el-tabs v-model="previewActiveMainTab" class="preview-tabs">
@@ -1367,6 +1372,7 @@ onUnmounted(() => {
   color: #303133;
   word-break: break-word;
   overflow: hidden;
+  white-space: pre-line;
 
   :deep(p),
   :deep(div) {

@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
 import type { TicketPublicDetailOutput } from '@/types/ticket'
+import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 
 const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 const detail = ref<TicketPublicDetailOutput>()
+
+const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
 
 const lightboxVisible = ref(false)
 const lightboxSrc = ref('')
@@ -253,10 +256,10 @@ onMounted(() => {
         </div>
 
         <!-- 工单描述 -->
-        <div v-if="detail.description" class="card desc-card">
+        <div v-if="descriptionDisplayHtml" class="card desc-card">
           <h2 class="card-title">工单描述</h2>
           <!-- eslint-disable-next-line vue/no-v-html -->
-          <div class="desc-content" v-html="detail.description" />
+          <div class="desc-content" v-html="descriptionDisplayHtml" />
         </div>
 
         <!-- 处理记录 -->
@@ -497,6 +500,7 @@ onMounted(() => {
   color: #303133;
   word-break: break-word;
   overflow: hidden;
+  white-space: pre-line;
 
   :deep(p) {
     margin: 0 0 8px;

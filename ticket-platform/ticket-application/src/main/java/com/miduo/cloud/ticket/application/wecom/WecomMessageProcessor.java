@@ -174,7 +174,7 @@ public class WecomMessageProcessor extends BaseApplicationService {
         draft.setTitle(title);
         draft.setCategoryPath(nlpResult.getCategoryPath());
         draft.setPriority(nlpResult.getPriority());
-        draft.setDescription(rawText);
+        draft.setDescription(formatNaturalLanguageDescriptionForStorage(rawText));
         draft.setNlpConfidence(nlpResult.getConfidence());
         draft.setChatId(chatId);
 
@@ -210,6 +210,20 @@ public class WecomMessageProcessor extends BaseApplicationService {
             log.warn("企微自然语言消息处理失败：发送人未关联系统账号: msgId={}, chatId={}, fromWecomUserId={}",
                     message.getMsgId(), chatId, fromWecomUserId);
         }
+    }
+
+    /**
+     * 企微自然语言建单常把多段「字段名：值」拼成一行，入库前插入换行便于详情页阅读。
+     */
+    private String formatNaturalLanguageDescriptionForStorage(String rawText) {
+        if (rawText == null || rawText.trim().isEmpty()) {
+            return rawText;
+        }
+        String text = rawText.trim().replace("\r\n", "\n");
+        text = text.replaceFirst("^机器人\\s+(?=(?:商户编号|公司名称|商户账号|场景码|问题描述|预期结果)\\s*[:：])",
+                "机器人\n");
+        return text.replaceAll("(?<!\\n)\\s+((?:商户编号|公司名称|商户账号|场景码|问题描述|预期结果)\\s*[:：])",
+                "\n$1");
     }
 
     /**
