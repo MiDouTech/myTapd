@@ -241,6 +241,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
     /**
      * 去除消息中的 @机器人 提及前缀（兼容普通@和 AI Bot 群聊格式）
      * 用于判断 mixed 消息中是否存在真实文本内容，而非仅含 @提及 token。
+     * \S* 匹配@工单助手后面可能跟随的任意非空白后缀（如"机器人"）。
      */
     private String stripBotMention(String content) {
         if (content == null) {
@@ -251,7 +252,7 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         do {
             stripped = false;
             String before = result;
-            result = result.replaceFirst("^@工单助手[\\s\u00a0]*", "");
+            result = result.replaceFirst("^@工单助手\\S*[\\s\u00a0]*", "");
             result = result.replaceFirst("^<@[^>]+>[\\s\u00a0]*", "");
             if (!result.equals(before)) {
                 stripped = true;
