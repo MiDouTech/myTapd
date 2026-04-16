@@ -71,6 +71,28 @@
         <if test="createTimeEnd != null and createTimeEnd != ''">
             AND t.create_time &lt;= #{createTimeEnd}
         </if>
+        <if test="slaStatus == 'BREACHED'">
+            AND EXISTS (
+                SELECT 1 FROM sla_timer st
+                WHERE st.ticket_id = t.id
+                  AND st.deleted = 0
+                  AND st.is_breached = 1
+            )
+        </if>
+        <if test="slaStatus == 'WARNING'">
+            AND EXISTS (
+                SELECT 1 FROM sla_timer st
+                WHERE st.ticket_id = t.id
+                  AND st.deleted = 0
+                  AND st.is_warned = 1
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM sla_timer st
+                WHERE st.ticket_id = t.id
+                  AND st.deleted = 0
+                  AND st.is_breached = 1
+            )
+        </if>
         <choose>
             <when test="orderBy == 'priority'">
                 ORDER BY FIELD(t.priority, 'urgent', 'high', 'medium', 'low')

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Grid } from '@element-plus/icons-vue'
 import VueDraggable from 'vuedraggable'
 
@@ -23,6 +24,8 @@ const emit = defineEmits<{
   'update:cardOrder': [value: OverviewCardKey[]]
 }>()
 
+const router = useRouter()
+
 const defaultOrder: OverviewCardKey[] = [
   'pending_accept',
   'processing',
@@ -42,6 +45,17 @@ const cardMap = computed(() =>
     total: { key: 'total', label: '工单总量', value: props.data.totalCount, color: 'blue' },
   }) as Record<OverviewCardKey, { key: OverviewCardKey; label: string; value: number; color: string }>,
 )
+
+function handleCardClick(key: OverviewCardKey): void {
+  if (props.editable) return
+  if (key === 'total') {
+    router.push({ path: '/ticket/all' })
+  } else if (key === 'sla_breached') {
+    router.push({ path: '/ticket/all', query: { slaStatus: 'BREACHED' } })
+  } else {
+    router.push({ path: '/ticket/all', query: { status: key } })
+  }
+}
 
 const normalizedOrder = computed<OverviewCardKey[]>(() => {
   const source = Array.isArray(props.cardOrder) ? props.cardOrder : defaultOrder
@@ -94,7 +108,14 @@ const draggableCards = computed({
     </template>
   </VueDraggable>
   <div v-else class="stat-grid">
-    <el-card v-for="card in topCards" :key="card.key" shadow="hover" class="stat-card" :class="`stat-card--${card.color}`">
+    <el-card
+      v-for="card in topCards"
+      :key="card.key"
+      shadow="hover"
+      class="stat-card stat-card--clickable"
+      :class="`stat-card--${card.color}`"
+      @click="handleCardClick(card.key)"
+    >
       <div class="stat-title">{{ card.label }}</div>
       <div class="stat-value">{{ card.value }}</div>
     </el-card>
@@ -134,6 +155,10 @@ const draggableCards = computed({
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  &--clickable {
+    cursor: pointer;
   }
 
   .card-head {
