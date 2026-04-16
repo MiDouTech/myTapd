@@ -3165,6 +3165,8 @@ watch(
   line-height: 1.6;
   word-break: break-word;
   overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 
   :deep(p) {
     margin: 0 0 8px;
@@ -3183,11 +3185,12 @@ watch(
   :deep(img) {
     display: block !important;
     max-width: 100% !important;
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
     border-radius: 4px;
     cursor: zoom-in;
     transition: opacity 0.15s;
+    object-fit: contain;
 
     &:hover {
       opacity: 0.85;
@@ -3197,16 +3200,18 @@ watch(
   :deep(figure) {
     display: block !important;
     max-width: 100% !important;
-    width: auto !important;
+    width: 100% !important;
     margin: 0 0 8px !important;
     overflow: hidden;
+    box-sizing: border-box;
   }
 
   :deep(figure img) {
     display: block !important;
     max-width: 100% !important;
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
+    object-fit: contain;
   }
 
   :deep(table) {
