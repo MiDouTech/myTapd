@@ -583,6 +583,7 @@ onMounted(() => {
   line-height: 1.6;
   word-break: break-word;
   overflow: hidden;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 
@@ -768,5 +769,15 @@ onMounted(() => {
 
 .lightbox-close:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+</style>
+
+<!-- 无 scoped：覆盖富文本里 img 的 width 等内联属性，避免评论图只占一窄条 -->
+<style>
+.public-ticket-page .comment-body img {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  box-sizing: border-box;
 }
 </style>
