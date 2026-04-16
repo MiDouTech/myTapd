@@ -225,12 +225,15 @@ function mergeTicketOptionsByDetail(items?: BugReportRelatedTicketOutput[]): voi
 }
 
 function mergeTicketOptionsBySearch(items?: TicketListOutput[]): void {
-  if (!items?.length) {
-    return
-  }
   const optionMap = new Map<number, TicketOption>()
-  ticketOptions.value.forEach((item) => optionMap.set(item.value, item))
-  items.forEach((item) => {
+  const selectedIds = new Set(form.ticketIds)
+  // 保留已选工单的展示文案，避免远程结果为空时下拉仍显示上一次未筛选列表
+  ticketOptions.value.forEach((item) => {
+    if (selectedIds.has(item.value)) {
+      optionMap.set(item.value, item)
+    }
+  })
+  items?.forEach((item) => {
     optionMap.set(item.id, {
       value: item.id,
       label: buildTicketLabel(item.ticketNo, item.title),
@@ -308,12 +311,12 @@ async function searchTickets(keyword: string): Promise<void> {
   ticketLoading.value = true
   try {
     const normalized = keyword.trim()
+    // 使用 keyword：后端对编号与标题做 OR 模糊匹配；勿同时传 ticketNo+title（会变成 AND，几乎搜不到）
     const result = await getTicketPage({
       pageNum: 1,
       pageSize: 20,
       view: 'all',
-      ticketNo: normalized || undefined,
-      title: normalized || undefined,
+      keyword: normalized || undefined,
     })
     if (currentToken !== ticketSearchToken) {
       return
