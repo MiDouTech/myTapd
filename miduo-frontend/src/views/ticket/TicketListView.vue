@@ -1354,9 +1354,19 @@ onUnmounted(() => {
   line-height: 1.6;
   color: #303133;
   word-break: break-word;
+  overflow: hidden;
+
+  :deep(p),
+  :deep(div) {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
 
   :deep(img) {
-    max-width: 100%;
+    display: block !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
     border-radius: 4px;
   }
 }
@@ -1681,9 +1691,11 @@ onUnmounted(() => {
   line-height: 1.6;
   color: #303133;
   word-break: break-word;
+  overflow: hidden;
 
   :deep(p) {
     margin: 0 0 6px;
+    max-width: 100%;
   }
 
   :deep(p:last-child) {
@@ -1691,7 +1703,10 @@ onUnmounted(() => {
   }
 
   :deep(img) {
-    max-width: 100%;
+    display: block !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
     border-radius: 4px;
   }
 }
