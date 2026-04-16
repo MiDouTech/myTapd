@@ -180,8 +180,8 @@ public class WecomBotMessageParser {
 
     private String stripBotMention(String content) {
         String result = content.trim();
-        // 兼容普通空格和不间断空格(\u00a0)
-        result = result.replaceFirst("^@工单助手[\\s\u00a0]*", "");
+        // 兼容普通空格和不间断空格(\u00a0)；\S* 匹配@工单助手后面可能跟随的任意非空白后缀（如"机器人"）
+        result = result.replaceFirst("^@工单助手\\S*[\\s\u00a0]*", "");
         result = result.replaceFirst("^<@[^>]+>[\\s\u00a0]*", "");
         return result;
     }
