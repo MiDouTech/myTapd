@@ -15,8 +15,14 @@ const service = axios.create({
 
 let isRedirecting = false
 
+/** 公开页（如企微外链工单）不应因 401 被拉去登录，否则用户只看到跳转/白屏 */
+function isNoLoginRedirectRoute(): boolean {
+  const path = router.currentRoute.value.path
+  return path.startsWith('/open/')
+}
+
 function redirectToLogin(): void {
-  if (isRedirecting || router.currentRoute.value.path === '/login') {
+  if (isNoLoginRedirectRoute() || isRedirecting || router.currentRoute.value.path === '/login') {
     return
   }
   isRedirecting = true
@@ -49,7 +55,7 @@ service.interceptors.response.use(
       if (payload.code === 200) {
         return payload.data
       }
-      if (payload.code === 401) {
+      if (payload.code === 401 && !isNoLoginRedirectRoute()) {
         redirectToLogin()
       }
       notifyError(payload.message || '请求失败')
@@ -58,7 +64,7 @@ service.interceptors.response.use(
     return response.data
   },
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !isNoLoginRedirectRoute()) {
       redirectToLogin()
       return Promise.reject(error)
     }
