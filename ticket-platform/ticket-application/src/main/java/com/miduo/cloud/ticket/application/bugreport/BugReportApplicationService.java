@@ -335,31 +335,68 @@ public class BugReportApplicationService extends BaseApplicationService {
         recordLog(id, currentUserId, "EDIT", report.getStatus(), report.getStatus(), "编辑Bug简报");
     }
 
+    /**
+     * P0/P1 严重级别需要审核流程（DRAFT → PENDING_REVIEW），
+     * P2 及以下直接归档（DRAFT → ARCHIVED），无需审核人。
+     */
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long id, BugReportSubmitInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
         if (!(BugReportStatus.DRAFT.getCode().equals(report.getStatus())
                 || BugReportStatus.REJECTED.getCode().equals(report.getStatus()))) {
-            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "当前状态不允许提交审核");
+            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "当前状态不允许提交");
         }
         if (input != null && input.getReviewerId() != null) {
             report.setReviewerId(input.getReviewerId());
         }
-        if (report.getReviewerId() == null) {
-            throw BusinessException.of(ErrorCode.PARAM_ERROR, "提交审核前请指定审核人");
-        }
 
+        boolean requiresReview = isHighSeverity(report.getSeverityLevel());
         String oldStatus = report.getStatus();
-        report.setStatus(BugReportStatus.PENDING_REVIEW.getCode());
-        report.setSubmittedAt(new Date());
-        bugReportMapper.updateById(report);
         String remark = input != null ? input.getRemark() : null;
-        recordLog(id, currentUserId, "SUBMIT", oldStatus, report.getStatus(), remark);
+        report.setSubmittedAt(new Date());
 
-        String title = String.format("Bug简报待审核 - %s", report.getReportNo());
-        String content = String.format("Bug简报 %s 已提交审核，请及时处理", report.getReportNo());
-        notificationOrchestrator.dispatch(report.getReviewerId(), null, report.getId(),
-                NotificationType.REPORT_SUBMITTED, title, content);
+        if (requiresReview) {
+            if (report.getReviewerId() == null) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "P0/P1级别简报提交前请指定审核人");
+            }
+            report.setStatus(BugReportStatus.PENDING_REVIEW.getCode());
+            bugReportMapper.updateById(report);
+            recordLog(id, currentUserId, "SUBMIT", oldStatus, report.getStatus(), remark);
+
+            String title = String.format("Bug简报待审核 - %s", report.getReportNo());
+            String content = String.format("Bug简报 %s 已提交审核，请及时处理", report.getReportNo());
+            notificationOrchestrator.dispatch(report.getReviewerId(), null, report.getId(),
+                    NotificationType.REPORT_SUBMITTED, title, content);
+        } else {
+            // P2及以下直接归档，无需审核
+            report.setStatus(BugReportStatus.ARCHIVED.getCode());
+            report.setReviewedAt(new Date());
+            bugReportMapper.updateById(report);
+            recordLog(id, currentUserId, "SUBMIT_ARCHIVED", oldStatus, report.getStatus(), remark);
+
+            // 通知简报责任人已归档
+            List<Long> responsibleUserIds = findResponsibleUserIds(id);
+            if (!responsibleUserIds.isEmpty()) {
+                String severity = StringUtils.hasText(report.getSeverityLevel()) ? report.getSeverityLevel() : "-";
+                String notifyTitle = String.format("Bug简报已归档 - %s", report.getReportNo());
+                String notifyContent = String.format("Bug简报 %s 已提交并直接归档（%s级别无需审核）",
+                        report.getReportNo(), severity);
+                notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
+                        NotificationType.REPORT_APPROVED, notifyTitle, notifyContent);
+            }
+        }
+    }
+
+    /**
+     * 判断是否属于高严重级别（P0/P1），需要走审核流程。
+     * P2 及以下（P2、P3、P4）提交后直接归档。
+     */
+    private boolean isHighSeverity(String severityLevel) {
+        if (!StringUtils.hasText(severityLevel)) {
+            return false;
+        }
+        String code = severityLevel.trim().toUpperCase(Locale.ROOT);
+        return "P0".equals(code) || "P1".equals(code);
     }
 
     @Transactional(rollbackFor = Exception.class)

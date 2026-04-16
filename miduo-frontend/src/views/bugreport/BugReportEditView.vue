@@ -134,6 +134,17 @@ const reportId = computed(() => {
 const isEditMode = computed(() => Boolean(reportId.value))
 const canEdit = computed(() => !isEditMode.value || isBugReportEditable(currentStatus.value))
 
+/** P0/P1 需要走审核流程；P2 及以下提交后直接归档 */
+const isHighSeverity = computed(() => {
+  const level = form.severityLevel?.toUpperCase()
+  return level === 'P0' || level === 'P1'
+})
+
+/** 底部主操作按钮文案 */
+const submitButtonLabel = computed(() =>
+  isHighSeverity.value ? '保存并提交审核' : '保存并提交归档'
+)
+
 
 const logicCauseOptions = computed(() => BUGREPORT_LOGIC_CAUSE_OPTIONS)
 const selectedLogicCause = computed<string | undefined>({
@@ -561,8 +572,9 @@ async function handleSaveAndSubmit(): Promise<void> {
   if (!valid) {
     return
   }
-  if (!form.reviewerId) {
-    notifyWarning('提交审核前请先选择审核人')
+  // P0/P1 必须指定审核人；P2 及以下直接归档，审核人可选
+  if (isHighSeverity.value && !form.reviewerId) {
+    notifyWarning('P0/P1 级别简报提交前请先选择审核人')
     return
   }
   submitLoading.value = true
@@ -577,7 +589,8 @@ async function handleSaveAndSubmit(): Promise<void> {
     await submitBugReport(targetId, {
       reviewerId: form.reviewerId,
     })
-    notifySuccess('简报提交审核成功')
+    const successMsg = isHighSeverity.value ? '简报已提交，等待审核' : '简报已提交并直接归档'
+    notifySuccess(successMsg)
     await router.push(`/bug-report/detail/${targetId}`)
   } finally {
     submitLoading.value = false
@@ -924,16 +937,22 @@ watch(useInstructionDrawer, (drawer) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="审核人">
-            <el-select
-              v-model="form.reviewerId"
-              clearable
-              filterable
-              class="w-420"
-              placeholder="请选择审核人"
-            >
-              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-            </el-select>
+          <el-form-item label="审核人" :required="isHighSeverity">
+            <div class="reviewer-wrap">
+              <el-select
+                v-model="form.reviewerId"
+                clearable
+                filterable
+                class="w-420"
+                :placeholder="isHighSeverity ? '请选择审核人（P0/P1 必填）' : '请选择审核人（可选）'"
+              >
+                <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+              </el-select>
+              <div class="reviewer-hint">
+                <el-tag v-if="isHighSeverity" type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
+                <el-tag v-else type="success" size="small" effect="plain">P2 及以下提交后直接归档，无需审核</el-tag>
+              </div>
+            </div>
           </el-form-item>
 
           <el-form-item label="责任人">
@@ -1031,16 +1050,22 @@ watch(useInstructionDrawer, (drawer) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="审核人">
-            <el-select
-              v-model="form.reviewerId"
-              clearable
-              filterable
-              class="w-420"
-              placeholder="请选择审核人"
-            >
-              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-            </el-select>
+          <el-form-item label="审核人" :required="isHighSeverity">
+            <div class="reviewer-wrap">
+              <el-select
+                v-model="form.reviewerId"
+                clearable
+                filterable
+                class="w-420"
+                :placeholder="isHighSeverity ? '请选择审核人（P0/P1 必填）' : '请选择审核人（可选）'"
+              >
+                <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+              </el-select>
+              <div class="reviewer-hint">
+                <el-tag v-if="isHighSeverity" type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
+                <el-tag v-else type="success" size="small" effect="plain">P2 及以下提交后直接归档，无需审核</el-tag>
+              </div>
+            </div>
           </el-form-item>
 
           <el-form-item label="责任人">
@@ -1110,7 +1135,7 @@ watch(useInstructionDrawer, (drawer) => {
           :loading="submitLoading"
           @click="handleSaveAndSubmit"
         >
-          保存并提交
+          {{ submitButtonLabel }}
         </el-button>
         <el-tag v-if="!canEdit" type="warning" effect="plain">当前状态不可编辑</el-tag>
       </div>
@@ -1504,6 +1529,17 @@ watch(useInstructionDrawer, (drawer) => {
   &--loading {
     color: #1675d1;
   }
+}
+
+.reviewer-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reviewer-hint {
+  display: flex;
+  align-items: center;
 }
 
 .btn-icon {
