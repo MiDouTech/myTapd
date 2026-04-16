@@ -3116,6 +3116,7 @@ watch(
 .comment-body {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   background: #f5f7fa;
   border-radius: 0 8px 8px 8px;
   padding: 12px 16px;
@@ -3179,6 +3180,18 @@ watch(
     &:hover {
       opacity: 0.85;
     }
+  }
+
+  :deep(figure) {
+    max-width: 100% !important;
+    margin: 0 0 8px !important;
+    overflow: hidden;
+  }
+
+  :deep(figure img) {
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
   }
 
   :deep(table) {
