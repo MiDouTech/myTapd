@@ -114,6 +114,7 @@ const query = reactive<TicketPageInput>({
   assigneeId: undefined,
   orderBy: undefined,
   asc: false,
+  slaStatus: '',
 })
 
 const timeRange = ref<string[]>([])
@@ -173,6 +174,7 @@ async function loadTickets(): Promise<void> {
     }
     if (query.categoryId) params.categoryId = query.categoryId
     if (query.status) params.status = query.status
+    if (query.slaStatus) params.slaStatus = query.slaStatus
     if (query.priority) params.priority = query.priority
     if (query.creatorId) params.creatorId = query.creatorId
     if (query.assigneeId) params.assigneeId = query.assigneeId
@@ -230,6 +232,7 @@ function handleReset(): void {
   query.categoryId = undefined
   query.status = ''
   query.priority = ''
+  query.slaStatus = ''
   query.creatorId = undefined
   query.assigneeId = undefined
   timeRange.value = []
@@ -238,6 +241,8 @@ function handleReset(): void {
   persistLayoutTicketSearch('')
   const next = { ...route.query }
   delete next.q
+  delete next.status
+  delete next.slaStatus
   void router.replace({ path: route.path, query: next })
 }
 
@@ -507,6 +512,13 @@ watch(
     const normalized = normalizeViewFromRoute()
     query.view = normalized
     query.pageNum = 1
+
+    // 从仪表盘卡片跳转时携带的状态/SLA过滤参数
+    const routeStatus = typeof route.query.status === 'string' ? route.query.status : ''
+    const routeSlaStatus = typeof route.query.slaStatus === 'string' ? route.query.slaStatus : ''
+    query.status = routeStatus
+    query.slaStatus = routeSlaStatus
+
     // 进入「我的工单」时补齐默认 view，避免仅路径 /ticket/mine、无 query 时刷新/分享链接与当前 Tab 不一致
     if (route.path === '/ticket/mine') {
       const raw = route.query.view

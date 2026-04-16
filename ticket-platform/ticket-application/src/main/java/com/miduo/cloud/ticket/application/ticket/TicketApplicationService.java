@@ -240,7 +240,8 @@ public class TicketApplicationService {
                 input.getCreateTimeStart(),
                 input.getCreateTimeEnd(),
                 input.getOrderBy(),
-                input.isAsc()
+                input.isAsc(),
+                input.getSlaStatus()
         );
 
         List<TicketPO> records = result.getRecords();

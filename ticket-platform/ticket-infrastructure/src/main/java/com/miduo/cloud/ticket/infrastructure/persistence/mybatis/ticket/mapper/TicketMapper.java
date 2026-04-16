@@ -27,7 +27,8 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("createTimeStart") String createTimeStart,
                                      @Param("createTimeEnd") String createTimeEnd,
                                      @Param("orderBy") String orderBy,
-                                     @Param("asc") boolean asc);
+                                     @Param("asc") boolean asc,
+                                     @Param("slaStatus") String slaStatus);
 
     List<Long> selectFollowedTicketIds(@Param("userId") Long userId);
 

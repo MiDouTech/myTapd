@@ -30,4 +30,10 @@ public class TicketPageInput extends PageInput {
     private String createTimeStart;
 
     private String createTimeEnd;
+
+    /**
+     * SLA状态过滤：BREACHED-已超时 / WARNING-预警中 / NORMAL-正常
+     * 仅传入时生效，用于仪表盘点击SLA超时卡片跳转过滤
+     */
+    private String slaStatus;
 }
