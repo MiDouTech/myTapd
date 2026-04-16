@@ -1704,6 +1704,8 @@ onUnmounted(() => {
   color: #303133;
   word-break: break-word;
   overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 
   :deep(p) {
     margin: 0 0 6px;
@@ -1717,9 +1719,27 @@ onUnmounted(() => {
   :deep(img) {
     display: block !important;
     max-width: 100% !important;
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
     border-radius: 4px;
+    object-fit: contain;
+  }
+
+  :deep(figure) {
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 0 8px !important;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  :deep(figure img) {
+    display: block !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
   }
 }
 
