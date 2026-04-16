@@ -13,6 +13,15 @@ const detail = ref<TicketPublicDetailOutput>()
 
 const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
 
+/** 与系统内工单详情同域，便于企微里一键打开处理页（需登录） */
+const internalTicketHref = computed(() => {
+  const id = detail.value?.id
+  if (id == null) return ''
+  if (typeof window === 'undefined') return `/ticket/detail/${id}`
+  const origin = window.location.origin.replace(/\/$/, '')
+  return `${origin}/ticket/detail/${id}`
+})
+
 const lightboxVisible = ref(false)
 const lightboxSrc = ref('')
 
@@ -127,6 +136,15 @@ onMounted(() => {
         <span class="brand-icon">🎫</span>
         <span class="brand-name">工单详情</span>
       </div>
+      <a
+        v-if="internalTicketHref"
+        class="internal-ticket-link"
+        :href="internalTicketHref"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        去系统处理
+      </a>
     </header>
 
     <main class="page-content">
@@ -329,12 +347,37 @@ onMounted(() => {
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 8px rgba(22, 117, 209, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.internal-ticket-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1675d1;
+  background: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.internal-ticket-link:active {
+  opacity: 0.92;
 }
 
 .brand-icon {
