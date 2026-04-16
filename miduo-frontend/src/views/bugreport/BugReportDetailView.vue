@@ -64,6 +64,12 @@ const roleCodes = computed(() =>
 
 const canEdit = computed(() => isBugReportEditable(detail.value?.status))
 const canSubmit = computed(() => canSubmitBugReport(detail.value?.status))
+
+/** P0/P1/P2 需要走审核流程；P3/P4 提交后直接归档 */
+const isHighSeverityDetail = computed(() => {
+  const level = detail.value?.severityLevel?.toUpperCase()
+  return level === 'P0' || level === 'P1' || level === 'P2'
+})
 const canVoid = computed(() => canVoidBugReport(detail.value?.status))
 const canReview = computed(() => {
   if (!canReviewBugReport(detail.value?.status)) {
@@ -138,8 +144,8 @@ async function handleSubmitReport(): Promise<void> {
     return
   }
   const reviewerId = submitForm.reviewerId || detail.value?.reviewerId
-  if (!reviewerId) {
-    notifyWarning('提交审核前请先选择审核人')
+  if (isHighSeverityDetail.value && !reviewerId) {
+    notifyWarning('P0/P1/P2 级别简报提交前请先选择审核人')
     return
   }
   submitLoading.value = true
@@ -148,7 +154,8 @@ async function handleSubmitReport(): Promise<void> {
       reviewerId,
       remark: submitForm.remark.trim() || undefined,
     })
-    notifySuccess('提交审核成功')
+    const successMsg = isHighSeverityDetail.value ? '简报已提交，等待审核' : '简报已提交并直接归档（P3/P4级别无需审核）'
+    notifySuccess(successMsg)
     submitDialogVisible.value = false
     await loadDetail()
   } finally {
@@ -667,12 +674,19 @@ watch(
     </el-space>
   </div>
 
-  <el-dialog v-model="submitDialogVisible" title="提交审核" :width="isMobile ? '92vw' : '520px'">
+  <el-dialog
+    v-model="submitDialogVisible"
+    :title="isHighSeverityDetail ? '提交审核' : '提交归档'"
+    :width="isMobile ? '92vw' : '520px'"
+  >
     <el-form :label-width="isMobile ? 'auto' : '90px'">
-      <el-form-item label="审核人" required>
+      <el-form-item :label="isHighSeverityDetail ? '审核人' : '审核人（可选）'" :required="isHighSeverityDetail">
         <el-select v-model="submitForm.reviewerId" placeholder="请选择审核人" filterable clearable>
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
+        <div v-if="!isHighSeverityDetail" style="font-size: 12px; color: #909399; margin-top: 4px;">
+          P3/P4级别简报提交后直接归档，无需审核
+        </div>
       </el-form-item>
       <el-form-item label="备注">
         <el-input

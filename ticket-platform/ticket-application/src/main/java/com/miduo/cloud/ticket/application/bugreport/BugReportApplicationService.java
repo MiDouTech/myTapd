@@ -336,8 +336,8 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     /**
-     * P0/P1 严重级别需要审核流程（DRAFT → PENDING_REVIEW），
-     * P2 及以下直接归档（DRAFT → ARCHIVED），无需审核人。
+     * P0/P1/P2 严重级别需要审核流程（DRAFT → PENDING_REVIEW），
+     * P3/P4 直接归档（DRAFT → ARCHIVED），无需审核人。
      */
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long id, BugReportSubmitInput input, Long currentUserId) {
@@ -357,7 +357,7 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         if (requiresReview) {
             if (report.getReviewerId() == null) {
-                throw BusinessException.of(ErrorCode.PARAM_ERROR, "P0/P1级别简报提交前请指定审核人");
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "P0/P1/P2级别简报提交前请指定审核人");
             }
             report.setStatus(BugReportStatus.PENDING_REVIEW.getCode());
             bugReportMapper.updateById(report);
@@ -368,7 +368,7 @@ public class BugReportApplicationService extends BaseApplicationService {
             notificationOrchestrator.dispatch(report.getReviewerId(), null, report.getId(),
                     NotificationType.REPORT_SUBMITTED, title, content);
         } else {
-            // P2及以下直接归档，无需审核
+            // P3/P4直接归档，无需审核
             report.setStatus(BugReportStatus.ARCHIVED.getCode());
             report.setReviewedAt(new Date());
             bugReportMapper.updateById(report);
@@ -379,7 +379,7 @@ public class BugReportApplicationService extends BaseApplicationService {
             if (!responsibleUserIds.isEmpty()) {
                 String severity = StringUtils.hasText(report.getSeverityLevel()) ? report.getSeverityLevel() : "-";
                 String notifyTitle = String.format("Bug简报已归档 - %s", report.getReportNo());
-                String notifyContent = String.format("Bug简报 %s 已提交并直接归档（%s级别无需审核）",
+                String notifyContent = String.format("Bug简报 %s 已提交并直接归档（%s级别（P3/P4）无需审核）",
                         report.getReportNo(), severity);
                 notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
                         NotificationType.REPORT_APPROVED, notifyTitle, notifyContent);
@@ -388,15 +388,15 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 判断是否属于高严重级别（P0/P1），需要走审核流程。
-     * P2 及以下（P2、P3、P4）提交后直接归档。
+     * 判断是否需要走审核流程（P0/P1/P2），需要审核人介入。
+     * P3/P4 提交后直接归档，无需审核。
      */
     private boolean isHighSeverity(String severityLevel) {
         if (!StringUtils.hasText(severityLevel)) {
             return false;
         }
         String code = severityLevel.trim().toUpperCase(Locale.ROOT);
-        return "P0".equals(code) || "P1".equals(code);
+        return "P0".equals(code) || "P1".equals(code) || "P2".equals(code);
     }
 
     @Transactional(rollbackFor = Exception.class)

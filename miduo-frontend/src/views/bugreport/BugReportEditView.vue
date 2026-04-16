@@ -134,10 +134,10 @@ const reportId = computed(() => {
 const isEditMode = computed(() => Boolean(reportId.value))
 const canEdit = computed(() => !isEditMode.value || isBugReportEditable(currentStatus.value))
 
-/** P0/P1 需要走审核流程；P2 及以下提交后直接归档 */
+/** P0/P1/P2 需要走审核流程；P3/P4 提交后直接归档 */
 const isHighSeverity = computed(() => {
   const level = form.severityLevel?.toUpperCase()
-  return level === 'P0' || level === 'P1'
+  return level === 'P0' || level === 'P1' || level === 'P2'
 })
 
 /** 底部主操作按钮文案 */
@@ -572,9 +572,9 @@ async function handleSaveAndSubmit(): Promise<void> {
   if (!valid) {
     return
   }
-  // P0/P1 必须指定审核人；P2 及以下直接归档，审核人可选
+  // P0/P1/P2 必须指定审核人；P3/P4 直接归档，审核人可选
   if (isHighSeverity.value && !form.reviewerId) {
-    notifyWarning('P0/P1 级别简报提交前请先选择审核人')
+    notifyWarning('P0/P1/P2 级别简报提交前请先选择审核人')
     return
   }
   submitLoading.value = true
@@ -589,7 +589,7 @@ async function handleSaveAndSubmit(): Promise<void> {
     await submitBugReport(targetId, {
       reviewerId: form.reviewerId,
     })
-    const successMsg = isHighSeverity.value ? '简报已提交，等待审核' : '简报已提交并直接归档'
+    const successMsg = isHighSeverity.value ? '简报已提交，等待审核' : '简报已提交并直接归档（P3/P4级别无需审核）'
     notifySuccess(successMsg)
     await router.push(`/bug-report/detail/${targetId}`)
   } finally {
