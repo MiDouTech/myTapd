@@ -574,6 +574,7 @@ onMounted(() => {
   color: #606266;
   line-height: 1.6;
   word-break: break-word;
+  overflow: hidden;
 
   :deep(p) {
     margin: 0 0 8px;
@@ -584,7 +585,10 @@ onMounted(() => {
   }
 
   :deep(img) {
-    max-width: 100%;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    display: block;
     border-radius: 4px;
     cursor: zoom-in;
     transition: opacity 0.15s;
@@ -592,6 +596,18 @@ onMounted(() => {
     &:hover {
       opacity: 0.85;
     }
+  }
+
+  :deep(figure) {
+    max-width: 100% !important;
+    margin: 0 0 8px !important;
+    overflow: hidden;
+  }
+
+  :deep(figure img) {
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
   }
 
   :deep(table) {
