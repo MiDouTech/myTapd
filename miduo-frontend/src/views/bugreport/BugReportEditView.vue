@@ -592,15 +592,6 @@ async function handleCopyContent(): Promise<void> {
   }
 }
 
-function handleMobileToolbarCommand(command: string): void {
-  if (command === 'preview') {
-    showMobilePreview.value = true
-    return
-  }
-  if (command === 'copy') {
-    void handleCopyContent()
-  }
-}
 
 onMounted(async () => {
   updateMobileEditLayout()
@@ -647,94 +638,41 @@ watch(useInstructionDrawer, (drawer) => {
                   {{ getBugReportStatusLabel(currentStatus) }}
                 </el-tag>
               </div>
+              <div v-else class="status-line">
+                <span class="new-report-hint">新建 Bug 简报</span>
+              </div>
             </div>
-            <template v-if="!isMobileNarrow">
-              <el-space wrap>
-                <el-button @click="handleCancel">取消</el-button>
-                <el-button
-                  v-if="useInstructionDrawer"
-                  type="info"
-                  plain
-                  @click="showInstructionDrawer = true"
-                >
-                  <el-icon class="btn-icon"><InfoFilled /></el-icon>
-                  填写说明
-                </el-button>
-                <el-button type="info" plain @click="showMobilePreview = true">
-                  <el-icon class="btn-icon"><Monitor /></el-icon>
-                  手机预览
-                </el-button>
-                <el-button type="success" plain @click="handleCopyContent">
-                  <el-icon class="btn-icon"><DocumentCopy /></el-icon>
-                  一键复制
-                </el-button>
-                <el-button
-                  v-if="canEdit"
-                  type="primary"
-                  plain
-                  :loading="submitLoading"
-                  @click="handleSaveDraft"
-                >
-                  保存草稿
-                </el-button>
-                <el-button
-                  v-if="canEdit"
-                  type="primary"
-                  :loading="submitLoading"
-                  @click="handleSaveAndSubmit"
-                >
-                  保存并提交
-                </el-button>
-              </el-space>
-            </template>
-            <div v-else class="mobile-toolbar">
-              <el-button size="small" @click="handleCancel">取消</el-button>
+            <!-- Header only shows auxiliary tools, primary actions moved to sticky footer -->
+            <el-space wrap>
               <el-button
                 v-if="useInstructionDrawer"
-                size="small"
-                type="default"
+                type="info"
+                plain
+                :size="isMobileNarrow ? 'small' : 'default'"
                 @click="showInstructionDrawer = true"
               >
-                说明
+                <el-icon class="btn-icon"><InfoFilled /></el-icon>
+                填写说明
               </el-button>
-              <el-dropdown trigger="click" @command="handleMobileToolbarCommand">
-                <el-button size="small" type="primary" plain>
-                  更多
-                  <el-icon class="btn-icon btn-icon--after"><ArrowDown /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="preview">
-                      <el-icon class="dropdown-item-icon"><Monitor /></el-icon>
-                      手机预览
-                    </el-dropdown-item>
-                    <el-dropdown-item command="copy">
-                      <el-icon class="dropdown-item-icon"><DocumentCopy /></el-icon>
-                      一键复制
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
               <el-button
-                v-if="canEdit"
-                size="small"
-                type="primary"
+                type="info"
                 plain
-                :loading="submitLoading"
-                @click="handleSaveDraft"
+                :size="isMobileNarrow ? 'small' : 'default'"
+                @click="showMobilePreview = true"
               >
-                草稿
+                <el-icon class="btn-icon"><Monitor /></el-icon>
+                <span v-if="!isMobileNarrow">手机预览</span>
               </el-button>
               <el-button
-                v-if="canEdit"
-                size="small"
-                type="primary"
-                :loading="submitLoading"
-                @click="handleSaveAndSubmit"
+                type="success"
+                plain
+                :size="isMobileNarrow ? 'small' : 'default'"
+                @click="handleCopyContent"
               >
-                提交
+                <el-icon class="btn-icon"><DocumentCopy /></el-icon>
+                <span v-if="!isMobileNarrow">一键复制</span>
               </el-button>
-            </div>
+            </el-space>
           </div>
         </template>
 
@@ -1139,6 +1077,37 @@ watch(useInstructionDrawer, (drawer) => {
     </div>
   </div>
 
+  <!-- Sticky bottom action bar — always visible, no need to scroll back to top -->
+  <div class="sticky-action-bar" :class="{ 'sticky-action-bar--mobile': isMobileNarrow }">
+    <div class="sticky-action-bar__inner">
+      <el-button :size="isMobileNarrow ? 'small' : 'default'" @click="handleCancel">
+        取消
+      </el-button>
+      <div class="sticky-action-bar__primary">
+        <el-button
+          v-if="canEdit"
+          :size="isMobileNarrow ? 'small' : 'default'"
+          type="primary"
+          plain
+          :loading="submitLoading"
+          @click="handleSaveDraft"
+        >
+          保存草稿
+        </el-button>
+        <el-button
+          v-if="canEdit"
+          :size="isMobileNarrow ? 'small' : 'default'"
+          type="primary"
+          :loading="submitLoading"
+          @click="handleSaveAndSubmit"
+        >
+          保存并提交
+        </el-button>
+        <el-tag v-if="!canEdit" type="warning" effect="plain">当前状态不可编辑</el-tag>
+      </div>
+    </div>
+  </div>
+
   <el-drawer
     v-model="showInstructionDrawer"
     title="填写说明"
@@ -1242,7 +1211,8 @@ watch(useInstructionDrawer, (drawer) => {
 
 <style scoped lang="scss">
 .bug-report-edit-root {
-  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  /* extra bottom padding so the sticky bar never overlaps the last form field */
+  padding-bottom: max(80px, calc(64px + env(safe-area-inset-bottom, 0px)));
   /* 表单项内容区占满主栏宽度，避免固定 px 宽度在「侧栏 + 中等视口」下右侧大块留白 */
   .edit-form {
     :deep(.el-form-item__content) {
@@ -1447,6 +1417,12 @@ watch(useInstructionDrawer, (drawer) => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.new-report-hint {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .status-alert {
@@ -1760,6 +1736,54 @@ watch(useInstructionDrawer, (drawer) => {
   .severity-desc-item {
     padding: 10px 12px;
     border-radius: 8px;
+  }
+}
+
+// ─── Sticky bottom action bar ────────────────────────────────────────────────
+.sticky-action-bar {
+  position: fixed;
+  bottom: 0;
+  // Align with the main content area; sidebar is 220px, layout has 20px padding each side.
+  // Use left: 220px so the bar starts right after the sidebar.
+  left: 220px;
+  right: 0;
+  z-index: 100;
+  background: #ffffff;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  padding: 12px 28px max(12px, env(safe-area-inset-bottom, 0px));
+  transition: left 0.2s ease;
+
+  &__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+  }
+
+  &__primary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
+.sticky-action-bar--mobile {
+  padding: 10px 14px max(10px, env(safe-area-inset-bottom, 0px));
+
+  .sticky-action-bar__inner {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .sticky-action-bar__primary {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 991px) {
+  .sticky-action-bar {
+    left: 0;
   }
 }
 </style>
