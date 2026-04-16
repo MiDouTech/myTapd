@@ -16,8 +16,10 @@ import org.xml.sax.InputSource;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -192,8 +194,10 @@ public final class WecomXmlParser {
                 }
             } else if ("mixed".equalsIgnoreCase(msgType)) {                // 群聊中 @机器人 同时附带图片时，msgtype 为 mixed
                 // mixed.msg_item 数组包含若干子消息（image / text），逐项提取
+                // 注意：msg_item 中可能包含多张图片，必须全部收集，不能只保留最后一张
                 result.put("Content", "");
                 result.put("DownloadUrl", "");
+                result.put("DownloadUrls", "");
                 result.put("MediaId", "");
                 result.put("PicUrl", "");
                 result.put("AesKey", "");
@@ -201,6 +205,7 @@ public final class WecomXmlParser {
                 if (mixedObj != null) {
                     JSONArray msgItems = mixedObj.getJSONArray("msg_item");
                     if (msgItems != null) {
+                        List<String> imageUrls = new ArrayList<>();
                         for (int i = 0; i < msgItems.size(); i++) {
                             JSONObject item = msgItems.getJSONObject(i);
                             if (item == null) {
@@ -211,9 +216,9 @@ public final class WecomXmlParser {
                                 JSONObject imageObj = item.getJSONObject("image");
                                 if (imageObj != null) {
                                     String imageUrl = nullToEmpty(imageObj.getStr("url"));
-                                    result.put("DownloadUrl", imageUrl);
                                     if (!imageUrl.isEmpty()) {
-                                        log.info("企微混合消息中图片解析成功: urlLength={}", imageUrl.length());
+                                        imageUrls.add(imageUrl);
+                                        log.info("企微混合消息中图片解析成功: index={}, urlLength={}", imageUrls.size(), imageUrl.length());
                                     } else {
                                         log.warn("企微混合消息中图片 url 为空，原始JSON: {}",
                                                 json.length() > 500 ? json.substring(0, 500) : json);
@@ -225,6 +230,12 @@ public final class WecomXmlParser {
                                     result.put("Content", nullToEmpty(textObj.getStr("content")));
                                 }
                             }
+                        }
+                        if (!imageUrls.isEmpty()) {
+                            // 第一张 URL 存入 DownloadUrl 保持向后兼容
+                            result.put("DownloadUrl", imageUrls.get(0));
+                            // 全量列表序列化为 JSON 数组字符串，供上层按需处理多图
+                            result.put("DownloadUrls", JSONUtil.toJsonStr(imageUrls));
                         }
                     }
                 }
