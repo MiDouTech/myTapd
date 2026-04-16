@@ -6,42 +6,43 @@
         SELECT t.*
         FROM ticket t
         WHERE t.deleted = 0
-        <if test="view == 'my_created'">
-            AND t.creator_id = #{currentUserId}
-        </if>
-        <!-- 我待办的：主处理人/协同处理人下的未完成单 + 创建人名下仍待认领（assignee 为空）的未完成单，避免「刚创建、尚在待分派池」从待办列表消失 -->
-        <if test="view == 'my_todo'">
-            AND t.status NOT IN ('completed', 'closed', 'rejected')
-            AND (
-                t.assignee_id = #{currentUserId}
-                OR t.id IN (
-                    SELECT ta.ticket_id FROM ticket_assignee ta
-                    WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
-                )
-                OR (t.creator_id = #{currentUserId} AND t.assignee_id IS NULL)
-            )
-        </if>
-        <if test="view == 'my_participated'">
-            AND (t.id IN (
-                    SELECT DISTINCT tl.ticket_id FROM ticket_log tl
-                    WHERE tl.user_id = #{currentUserId} AND tl.deleted = 0
-                 )
-                 OR t.id IN (
-                     SELECT ta.ticket_id FROM ticket_assignee ta
-                     WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
-                 ))
-        </if>
-        <if test="view == 'my_followed'">
-            AND t.id IN (
-                SELECT tf.ticket_id FROM ticket_follower tf
-                WHERE tf.user_id = #{currentUserId} AND tf.deleted = 0
-            )
-        </if>
         <choose>
+            <!-- 关键词搜索：全库按编号/标题匹配，不再叠加「我的」视图范围，便于关联任意工单 -->
             <when test="keyword != null and keyword != ''">
                 AND (t.ticket_no LIKE CONCAT('%', #{keyword}, '%') OR t.title LIKE CONCAT('%', #{keyword}, '%'))
             </when>
             <otherwise>
+                <if test="view == 'my_created'">
+                    AND t.creator_id = #{currentUserId}
+                </if>
+                <!-- 我待办的：主处理人/协同处理人下的未完成单 + 创建人名下仍待认领（assignee 为空）的未完成单，避免「刚创建、尚在待分派池」从待办列表消失 -->
+                <if test="view == 'my_todo'">
+                    AND t.status NOT IN ('completed', 'closed', 'rejected')
+                    AND (
+                        t.assignee_id = #{currentUserId}
+                        OR t.id IN (
+                            SELECT ta.ticket_id FROM ticket_assignee ta
+                            WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
+                        )
+                        OR (t.creator_id = #{currentUserId} AND t.assignee_id IS NULL)
+                    )
+                </if>
+                <if test="view == 'my_participated'">
+                    AND (t.id IN (
+                            SELECT DISTINCT tl.ticket_id FROM ticket_log tl
+                            WHERE tl.user_id = #{currentUserId} AND tl.deleted = 0
+                         )
+                         OR t.id IN (
+                             SELECT ta.ticket_id FROM ticket_assignee ta
+                             WHERE ta.user_id = #{currentUserId} AND ta.deleted = 0
+                         ))
+                </if>
+                <if test="view == 'my_followed'">
+                    AND t.id IN (
+                        SELECT tf.ticket_id FROM ticket_follower tf
+                        WHERE tf.user_id = #{currentUserId} AND tf.deleted = 0
+                    )
+                </if>
                 <if test="ticketNo != null and ticketNo != ''">
                     AND t.ticket_no LIKE CONCAT('%', #{ticketNo}, '%')
                 </if>

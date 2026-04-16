@@ -224,16 +224,32 @@ function mergeTicketOptionsByDetail(items?: BugReportRelatedTicketOutput[]): voi
   ticketOptions.value = Array.from(optionMap.values())
 }
 
-function mergeTicketOptionsBySearch(items?: TicketListOutput[]): void {
+function ticketListMatchesKeyword(item: TicketListOutput, keyword: string): boolean {
+  const needle = keyword.trim().toLowerCase()
+  if (!needle) {
+    return true
+  }
+  const no = (item.ticketNo ?? '').toLowerCase()
+  const title = (item.title ?? '').toLowerCase()
+  return no.includes(needle) || title.includes(needle)
+}
+
+function mergeTicketOptionsBySearch(items: TicketListOutput[] | undefined, keyword: string): void {
   const optionMap = new Map<number, TicketOption>()
   const selectedIds = new Set(form.ticketIds)
-  // 保留已选工单的展示文案，避免远程结果为空时下拉仍显示上一次未筛选列表
+  const needle = keyword.trim().toLowerCase()
+  // 无关键词时保留已选展示；有关键词时只保留「已选且文案仍匹配」的项，避免与搜索结果混在一起像未筛选
   ticketOptions.value.forEach((item) => {
-    if (selectedIds.has(item.value)) {
+    if (!selectedIds.has(item.value)) {
+      return
+    }
+    if (!needle || item.label.toLowerCase().includes(needle)) {
       optionMap.set(item.value, item)
     }
   })
-  items?.forEach((item) => {
+  const list = items ?? []
+  const filtered = keyword.trim() ? list.filter((row) => ticketListMatchesKeyword(row, keyword)) : list
+  filtered.forEach((item) => {
     optionMap.set(item.id, {
       value: item.id,
       label: buildTicketLabel(item.ticketNo, item.title),
@@ -321,7 +337,7 @@ async function searchTickets(keyword: string): Promise<void> {
     if (currentToken !== ticketSearchToken) {
       return
     }
-    mergeTicketOptionsBySearch(result.records || [])
+    mergeTicketOptionsBySearch(result.records || [], normalized)
   } finally {
     if (currentToken === ticketSearchToken) {
       ticketLoading.value = false
