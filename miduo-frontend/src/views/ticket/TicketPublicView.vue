@@ -496,9 +496,11 @@ onMounted(() => {
   line-height: 1.7;
   color: #303133;
   word-break: break-word;
+  overflow: hidden;
 
   :deep(p) {
     margin: 0 0 8px;
+    max-width: 100%;
   }
 
   :deep(p:last-child) {
@@ -506,7 +508,10 @@ onMounted(() => {
   }
 
   :deep(img) {
-    max-width: 100%;
+    display: block !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
     border-radius: 4px;
   }
 }
@@ -584,11 +589,17 @@ onMounted(() => {
     margin-bottom: 0;
   }
 
+  :deep(p),
+  :deep(div) {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
   :deep(img) {
+    display: block !important;
     max-width: 100% !important;
     width: auto !important;
     height: auto !important;
-    display: block;
     border-radius: 4px;
     cursor: zoom-in;
     transition: opacity 0.15s;
@@ -599,12 +610,15 @@ onMounted(() => {
   }
 
   :deep(figure) {
+    display: block !important;
     max-width: 100% !important;
+    width: auto !important;
     margin: 0 0 8px !important;
     overflow: hidden;
   }
 
   :deep(figure img) {
+    display: block !important;
     max-width: 100% !important;
     width: auto !important;
     height: auto !important;

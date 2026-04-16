@@ -2536,11 +2536,17 @@ watch(
   word-break: break-word;
   overflow: hidden;
 
+  :deep(p),
+  :deep(div) {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
   :deep(img) {
+    display: block !important;
     max-width: 100% !important;
     width: auto !important;
     height: auto !important;
-    display: block;
     border-radius: 4px;
   }
 }
@@ -3162,17 +3168,23 @@ watch(
 
   :deep(p) {
     margin: 0 0 8px;
+    max-width: 100%;
+    overflow-wrap: break-word;
   }
 
   :deep(p:last-child) {
     margin-bottom: 0;
   }
 
+  :deep(div) {
+    max-width: 100%;
+  }
+
   :deep(img) {
+    display: block !important;
     max-width: 100% !important;
     width: auto !important;
     height: auto !important;
-    display: block;
     border-radius: 4px;
     cursor: zoom-in;
     transition: opacity 0.15s;
@@ -3183,12 +3195,15 @@ watch(
   }
 
   :deep(figure) {
+    display: block !important;
     max-width: 100% !important;
+    width: auto !important;
     margin: 0 0 8px !important;
     overflow: hidden;
   }
 
   :deep(figure img) {
+    display: block !important;
     max-width: 100% !important;
     width: auto !important;
     height: auto !important;
