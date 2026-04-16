@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
@@ -9,6 +9,39 @@ const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 const detail = ref<TicketPublicDetailOutput>()
+
+const lightboxVisible = ref(false)
+const lightboxSrc = ref('')
+
+function openLightbox(src: string): void {
+  lightboxSrc.value = src
+  lightboxVisible.value = true
+}
+
+function closeLightbox(): void {
+  lightboxVisible.value = false
+  lightboxSrc.value = ''
+}
+
+function handleCommentImageClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (target.tagName === 'IMG') {
+    const src = (target as HTMLImageElement).src
+    if (src) {
+      openLightbox(src)
+    }
+  }
+}
+
+function handleLightboxKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && lightboxVisible.value) {
+    closeLightbox()
+  }
+}
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleLightboxKeydown)
+})
 
 const priorityColorMap: Record<string, string> = {
   urgent: '#f56c6c',
@@ -78,7 +111,10 @@ async function loadDetail(): Promise<void> {
   }
 }
 
-onMounted(loadDetail)
+onMounted(() => {
+  loadDetail()
+  document.addEventListener('keydown', handleLightboxKeydown)
+})
 </script>
 
 <template>
@@ -246,7 +282,7 @@ onMounted(loadDetail)
                 {{ comment.content }}
               </div>
               <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-else class="comment-body" v-html="comment.content || '-'" />
+              <div v-else class="comment-body" v-html="comment.content || '-'" @click="handleCommentImageClick" />
             </div>
           </div>
         </div>
@@ -257,6 +293,14 @@ onMounted(loadDetail)
       <p>米多工单系统 · 此页面无需登录即可访问</p>
     </footer>
   </div>
+
+  <!-- 图片预览灯箱 -->
+  <Teleport to="body">
+    <div v-if="lightboxVisible" class="lightbox-overlay" @click.self="closeLightbox">
+      <button class="lightbox-close" @click="closeLightbox">✕</button>
+      <img :src="lightboxSrc" class="lightbox-img" alt="图片预览" />
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -542,6 +586,12 @@ onMounted(loadDetail)
   :deep(img) {
     max-width: 100%;
     border-radius: 4px;
+    cursor: zoom-in;
+    transition: opacity 0.15s;
+
+    &:hover {
+      opacity: 0.85;
+    }
   }
 
   :deep(table) {
@@ -636,5 +686,49 @@ onMounted(loadDetail)
     grid-template-columns: 1fr;
     gap: 10px;
   }
+}
+
+/* 图片预览灯箱 */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+  user-select: none;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>

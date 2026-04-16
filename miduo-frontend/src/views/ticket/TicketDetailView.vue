@@ -1105,6 +1105,16 @@ function openAttachmentPreview(filePath?: string): void {
   attachmentPreviewVisible.value = true
 }
 
+function handleCommentImageClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (target.tagName === 'IMG') {
+    const src = (target as HTMLImageElement).src
+    if (src) {
+      openAttachmentPreview(src)
+    }
+  }
+}
+
 const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待处理',
   pending_assign: '待分派',
@@ -2043,7 +2053,7 @@ watch(
               {{ comment.content || '-' }}
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-else class="comment-content" v-html="comment.content || '-'" />
+            <div v-else class="comment-content" v-html="comment.content || '-'" @click="handleCommentImageClick" />
           </div>
         </div>
       </div>
@@ -3155,6 +3165,12 @@ watch(
   :deep(img) {
     max-width: 100%;
     border-radius: 4px;
+    cursor: zoom-in;
+    transition: opacity 0.15s;
+
+    &:hover {
+      opacity: 0.85;
+    }
   }
 
   :deep(table) {
