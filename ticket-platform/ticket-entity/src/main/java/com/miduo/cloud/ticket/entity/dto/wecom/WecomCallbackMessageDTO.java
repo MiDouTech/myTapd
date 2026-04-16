@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.entity.dto.wecom;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 企微回调消息异步载荷
@@ -47,8 +48,14 @@ public class WecomCallbackMessageDTO implements Serializable {
 
     /**
      * 企微智能机器人加密资源下载 URL：图片为 image.url，视频为 video.url（与图片相同，需 callbackAesKey 解密）
+     * mixed 消息中多张图片时，仅保存第一张 URL；全量列表见 {@link #downloadUrls}
      */
     private String downloadUrl;
+
+    /**
+     * mixed 消息中多张图片的全量下载 URL 列表（mixed 类型且含多张图片时有值，单图/视频场景为 null）
+     */
+    private List<String> downloadUrls;
 
     /**
      * 企微AI bot 历史字段（当前智能机器人图片/视频统一用回调 AESKey 解密，此字段通常为空）

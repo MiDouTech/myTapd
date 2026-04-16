@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.wecom;
 
 import cn.hutool.crypto.SecureUtil;
+import cn.hutool.json.JSONUtil;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.wecom.mq.WecomMessagePublisher;
 import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
@@ -15,6 +16,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomB
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -105,8 +107,19 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
             }
 
             if (hasImage) {
-                imageHandlerService.handleImageMessageAsync(message);
-                log.info("企微混合消息（含图片）已投递图片处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+                List<String> downloadUrls = message.getDownloadUrls();
+                if (downloadUrls != null && downloadUrls.size() > 1) {
+                    // 多图场景：为每张图片单独构造消息并投递，确保每张图片都能独立上传和关联
+                    for (int i = 0; i < downloadUrls.size(); i++) {
+                        WecomCallbackMessageDTO imgMessage = buildSingleImageMessage(message, downloadUrls.get(i), i);
+                        imageHandlerService.handleImageMessageAsync(imgMessage);
+                    }
+                    log.info("企微混合消息（含{}张图片）已分别投递图片处理: msgId={}, chatId={}",
+                            downloadUrls.size(), message.getMsgId(), message.getChatId());
+                } else {
+                    imageHandlerService.handleImageMessageAsync(message);
+                    log.info("企微混合消息（含图片）已投递图片处理: msgId={}, chatId={}", message.getMsgId(), message.getChatId());
+                }
             }
             if (hasText) {
                 messagePublisher.publish(message);
@@ -140,6 +153,19 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         message.setResponseUrl(safeValue(messageMap.get("ResponseUrl")));
         message.setChatType(safeValue(messageMap.get("ChatType")));
         message.setThumbMediaId(safeValue(messageMap.get("ThumbMediaId")));
+
+        // 解析 mixed 消息中的多图 URL 列表
+        String downloadUrlsJson = safeValue(messageMap.get("DownloadUrls"));
+        if (!downloadUrlsJson.isEmpty()) {
+            try {
+                List<String> urls = JSONUtil.toList(JSONUtil.parseArray(downloadUrlsJson), String.class);
+                if (urls != null && urls.size() > 1) {
+                    message.setDownloadUrls(urls);
+                }
+            } catch (Exception e) {
+                log.warn("DownloadUrls 反序列化失败，忽略多图列表: {}", e.getMessage());
+            }
+        }
 
         String msgId = safeValue(messageMap.get("MsgId"));
         if (msgId.isEmpty()) {
@@ -186,6 +212,30 @@ public class WecomCallbackApplicationService extends BaseApplicationService {
         logPO.setStatus(WecomBotMessageStatus.IGNORED.getCode());
         logPO.setErrorMsg(reason);
         botMessageLogMapper.insert(logPO);
+    }
+
+    /**
+     * 将 mixed 消息中的单张图片 URL 拆解为独立的图片消息 DTO。
+     * 每张图片使用原始 msgId + 序号作为唯一 ID，确保幂等去重不冲突。
+     */
+    private WecomCallbackMessageDTO buildSingleImageMessage(WecomCallbackMessageDTO original, String imageUrl, int index) {
+        WecomCallbackMessageDTO img = new WecomCallbackMessageDTO();
+        img.setMsgType("image");
+        img.setChatId(original.getChatId());
+        img.setFromWecomUserid(original.getFromWecomUserid());
+        img.setContent("");
+        img.setMediaId(original.getMediaId());
+        img.setPicUrl(original.getPicUrl());
+        img.setDownloadUrl(imageUrl);
+        img.setAesKey(original.getAesKey());
+        img.setRawXml(original.getRawXml());
+        img.setCreateTime(original.getCreateTime());
+        img.setResponseUrl(original.getResponseUrl());
+        img.setChatType(original.getChatType());
+        img.setThumbMediaId(original.getThumbMediaId());
+        // 用原始 msgId + 图片序号组成唯一 ID，避免幂等键冲突
+        img.setMsgId(original.getMsgId() + "_img" + index);
+        return img;
     }
 
     /**
