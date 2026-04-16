@@ -2534,9 +2534,13 @@ watch(
   color: #303133;
   line-height: 1.7;
   word-break: break-word;
+  overflow: hidden;
 
   :deep(img) {
-    max-width: 100%;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    display: block;
     border-radius: 4px;
   }
 }
@@ -3153,6 +3157,7 @@ watch(
   color: #303133;
   line-height: 1.6;
   word-break: break-word;
+  overflow: hidden;
 
   :deep(p) {
     margin: 0 0 8px;
@@ -3163,7 +3168,10 @@ watch(
   }
 
   :deep(img) {
-    max-width: 100%;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    display: block;
     border-radius: 4px;
     cursor: zoom-in;
     transition: opacity 0.15s;
