@@ -60,6 +60,7 @@ import type {
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyError } from '@/utils/feedback'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
 import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
@@ -73,6 +74,8 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const detail = ref<TicketDetailOutput>()
 const users = ref<UserListOutput[]>([])
+
+const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
 
 const activeBugTab = ref('customer')
 const timeTrackItems = ref<TicketTimeTrackItem[]>([])
@@ -1331,10 +1334,10 @@ watch(
         <!-- 左侧主区 -->
         <div class="detail-main">
           <!-- 工单描述 -->
-          <div v-if="detail?.description" class="description-block">
+          <div v-if="descriptionDisplayHtml" class="description-block">
             <div class="block-label">描述</div>
             <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="description-content" v-html="detail.description" />
+            <div class="description-content" v-html="descriptionDisplayHtml" />
           </div>
 
           <!-- 主 Tab -->
@@ -2535,6 +2538,7 @@ watch(
   line-height: 1.7;
   word-break: break-word;
   overflow: hidden;
+  white-space: pre-line;
 
   :deep(p),
   :deep(div) {
