@@ -46,6 +46,10 @@ public class BugReportPO extends BaseEntity {
     @TableField("resolve_date")
     private Date resolveDate;
 
+    /** 处理完成时的解决时间（含时分秒） */
+    @TableField("resolve_time")
+    private Date resolveTime;
+
     @TableField("temp_resolve_date")
     private Date tempResolveDate;
 

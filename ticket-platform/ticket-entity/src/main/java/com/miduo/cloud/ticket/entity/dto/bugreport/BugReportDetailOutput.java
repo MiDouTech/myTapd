@@ -36,6 +36,9 @@ public class BugReportDetailOutput implements Serializable {
 
     private Date resolveDate;
 
+    /** 处理完成时的解决时间（含时分秒） */
+    private Date resolveTime;
+
     private Date tempResolveDate;
 
     private String solution;

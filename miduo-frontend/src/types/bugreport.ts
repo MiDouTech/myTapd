@@ -34,6 +34,8 @@ export interface BugReportCreateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  /** 处理完成时的解决时间（含时分秒） */
+  resolveTime?: string
   tempResolveDate?: string
   solution?: string
   tempSolution?: string
@@ -56,6 +58,8 @@ export interface BugReportUpdateInput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  /** 处理完成时的解决时间（含时分秒） */
+  resolveTime?: string
   tempResolveDate?: string
   solution?: string
   tempSolution?: string
@@ -67,6 +71,10 @@ export interface BugReportUpdateInput {
   ticketIds?: number[]
   responsibleUserIds?: number[]
   autoPrefill?: boolean
+  /** 为 true 时后端清空「解决时间」字段 */
+  clearResolveTime?: boolean
+  /** 为 true 时后端清空临时/彻底解决四个字段 */
+  clearThoroughAndTempResolution?: boolean
 }
 
 export interface BugReportSubmitInput {
@@ -125,6 +133,8 @@ export interface BugReportDetailOutput {
   introducedProject?: string
   startDate?: string
   resolveDate?: string
+  /** 处理完成时的解决时间（含时分秒） */
+  resolveTime?: string
   tempResolveDate?: string
   solution?: string
   tempSolution?: string

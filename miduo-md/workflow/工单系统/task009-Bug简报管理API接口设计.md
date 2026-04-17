@@ -38,3 +38,7 @@
 2. 创建/更新支持多工单关联，并可按缺陷工单信息自动预填简报字段。  
 3. 提交审核时通知审核人；审核结果通知责任人；超期按 `bug_report_remind_days` 每日催促。  
 4. 统计默认排除 `VOIDED` 状态，及时率计算规则：`submitted_at <= create_time + remind_days`。  
+5. **解决信息字段（与缺陷工单状态联动）**  
+   - 数据库字段 `bug_report.resolve_time`（DATETIME）：工单「处理完成」场景下简报必填的**解决时间**（含时分秒）。  
+   - 工单处于 **临时解决**（`temp_resolved`）时：简报填写 `temp_resolve_date`、`temp_solution`、`resolve_date`、`solution`（四者必填）；更新时可传 `clearResolveTime=true` 清空 `resolve_time`。  
+   - 关联工单**全部**为 **已完成/已关闭**（`completed` / `closed`）时：简报仅填写 `resolve_time`；更新时可传 `clearThoroughAndTempResolution=true` 清空上述四个字段。  
