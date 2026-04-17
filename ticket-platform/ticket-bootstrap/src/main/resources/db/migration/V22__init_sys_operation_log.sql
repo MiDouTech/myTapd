@@ -4,8 +4,10 @@
 -- PRD：miduo-md/business/工单日志模块PRD.md
 -- API编号段：API000600–API000699
 -- ============================================================
+-- 使用 IF NOT EXISTS：部分环境表已由手工脚本或其它库同步创建，
+-- 但 flyway_schema_history 未记录 V22；repair 后重跑迁移时避免 1050 导致服务无法启动。
 
-CREATE TABLE `sys_operation_log` (
+CREATE TABLE IF NOT EXISTS `sys_operation_log` (
   `id`               bigint(20)   NOT NULL AUTO_INCREMENT                    COMMENT '主键ID',
   `account_id`       bigint(20)   NOT NULL DEFAULT 0                         COMMENT '操作账号ID（0表示系统自动操作）',
   `operator_name`    varchar(50)  NOT NULL DEFAULT ''                        COMMENT '操作人姓名',
