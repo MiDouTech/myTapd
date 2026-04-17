@@ -8,3 +8,8 @@ spring:
         server-addr: ${NACOS_SERVER_ADDR:http://10.0.4.4:8848}
         file-extension: yaml
         namespace: ${NACOS_NAMESPACE:e4479836-f77e-4b46-9e96-56179bdd6875}
+        # 敏感配置（库/Redis/JWT 等）放在独立 Data ID，避免与 profile 主配置混放；必须在 bootstrap 中显式拉取
+        shared-configs:
+          - data-id: ticket-platform-secrets.yaml
+            group: DEFAULT_GROUP
+            refresh: true
