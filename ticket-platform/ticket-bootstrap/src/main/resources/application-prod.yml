@@ -17,7 +17,7 @@ spring:
 
   flyway:
     # 与 dev 一致：发布新镜像时自动执行增量迁移，避免代码已引用新列而库未升级（如 bug_report.resolve_time）
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
