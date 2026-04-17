@@ -261,11 +261,17 @@ docker logs ticket-backend | grep -i "flyway\|migration"
 
 ### 前端页面空白 / API 请求 404
 
-- 确认 nginx.conf 中 `proxy_pass http://backend:8080/api/;` 配置正确
+- 确认 nginx.conf 中 API 反代指向后端（Compose 服务名 `backend`，端口 `8080`）
 - 在前端容器内测试连通性：
   ```bash
   docker exec ticket-frontend wget -qO- http://backend:8080/actuator/health
   ```
+
+### API 间歇性 502（Bad Gateway）
+
+- **常见原因**：前端 Nginx 在启动时解析 `backend` 得到容器 IP 并长期缓存；后端容器重建后 IP 变化，反代仍连旧地址即 502。
+- **仓库内修复**：`miduo-frontend/nginx.conf` 已使用 Docker 内置 DNS（`resolver 127.0.0.11`）与变量形式的 `proxy_pass`，每次请求重新解析上游。
+- **临时恢复**：`docker compose restart ticket-frontend`（或重启前端容器）可强制 Nginx 重新解析，但升级镜像后应使用上述配置。
 
 ### HTTPS 配置（可选）
 
