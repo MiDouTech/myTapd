@@ -16,7 +16,17 @@ spring:
       connection-test-query: SELECT 1
 
   flyway:
-    enabled: false
+    # 与 dev 一致：发布新镜像时自动执行增量迁移，避免代码已引用新列而库未升级（如 bug_report.resolve_time）
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    encoding: UTF-8
+    validate-on-migrate: true
+    ignore-migration-patterns: "*:missing"
+    out-of-order: false
+    table: flyway_schema_history
+    clean-disabled: true
 
   redis:
     database: 1
