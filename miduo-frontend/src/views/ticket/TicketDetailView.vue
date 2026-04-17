@@ -870,10 +870,11 @@ async function handleProcess(): Promise<void> {
         transitForm.plannedFullResolveAt?.trim() || devInfoForm.plannedFullResolveAt?.trim()
     }
     await transitTicket(ticketId.value, transitPayload)
-    notifySuccess('操作成功')
     processDialogVisible.value = false
     selectedAction.value = null
+    // 仅在详情刷新成功后再提示成功，避免流转已成功但详情接口失败时出现「操作成功」与报错并存
     await loadAll()
+    notifySuccess('操作成功')
   } finally {
     submitLoading.value = false
   }
