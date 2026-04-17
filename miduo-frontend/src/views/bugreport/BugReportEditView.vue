@@ -17,12 +17,13 @@ import type {
   BugReportUpdateInput,
   DefectCategoryOutput,
 } from '@/types/bugreport'
-import type { TicketListOutput } from '@/types/ticket'
+import type { TicketDetailOutput, TicketListOutput } from '@/types/ticket'
 import type { UserListOutput } from '@/types/user'
 import { notifySuccess, notifyWarning } from '@/utils/feedback'
 import { getCachedDefectCategoryDict } from '@/utils/bugreport-dict-cache'
 import { getBugReportStatusLabel, getBugReportStatusTagType, isBugReportEditable } from '@/utils/bugreport'
 import BugReportInstructionContent from '@/views/bugreport/BugReportInstructionContent.vue'
+import BugReportResolutionFields from '@/views/bugreport/components/BugReportResolutionFields.vue'
 import { BUGREPORT_LOGIC_CAUSE_OPTIONS } from '@/constants/bugreport-logic-cause'
 
 interface TicketOption {
@@ -40,6 +41,9 @@ const defectCategories = ref<DefectCategoryOutput[]>([])
 const ticketOptions = ref<TicketOption[]>([])
 const ticketLoading = ref(false)
 const prefillLoading = ref(false)
+/** 关联工单状态：用于判断简报应填「临时解决四件套」还是「处理完成解决时间」 */
+const linkedTicketStatusById = reactive<Record<number, string>>({})
+const ticketStatusLoading = ref(false)
 const currentStatus = ref('DRAFT')
 
 // Mobile preview modal
@@ -113,6 +117,8 @@ const form = reactive({
   introducedProject: '',
   startDate: '' as string,
   resolveDate: '' as string,
+  /** 处理完成时的解决时间（与工单「处理完成」对应，含时分秒） */
+  resolveTime: '' as string,
   tempResolveDate: '' as string,
   solution: '',
   tempSolution: '',
@@ -139,6 +145,81 @@ const isHighSeverity = computed(() => {
   const level = form.severityLevel?.toUpperCase()
   return level === 'P0' || level === 'P1' || level === 'P2'
 })
+
+const TICKET_STATUS_TEMP_RESOLVED = 'temp_resolved'
+const TICKET_STATUSES_RESOLVED_COMPLETE = new Set(['completed', 'closed'])
+
+/**
+ * 根据关联工单的当前状态，决定简报里该填哪一类「解决」信息：
+ * - 任一工单处于临时解决 → 填四件套，不填解决时间
+ * - 全部工单已处理完成或已关闭 → 只填解决时间（必填），不填四件套
+ */
+const resolutionMode = computed<'temp' | 'complete' | 'unknown' | 'none'>(() => {
+  const ids = form.ticketIds.filter((id) => Number.isFinite(id) && id > 0)
+  if (ids.length === 0) {
+    return 'none'
+  }
+  const missing = ids.some((id) => {
+    const s = linkedTicketStatusById[id]
+    return s == null || s === ''
+  })
+  if (missing) {
+    return 'unknown'
+  }
+  if (ids.some((id) => linkedTicketStatusById[id] === TICKET_STATUS_TEMP_RESOLVED)) {
+    return 'temp'
+  }
+  if (
+    ids.every((id) => {
+      const s = linkedTicketStatusById[id]
+      return s != null && TICKET_STATUSES_RESOLVED_COMPLETE.has(s)
+    })
+  ) {
+    return 'complete'
+  }
+  return 'unknown'
+})
+
+function toDateTimePickerValue(input?: string): string {
+  if (!input) {
+    return ''
+  }
+  const s = String(input).trim().replace(' ', 'T')
+  if (s.length >= 19 && s.charAt(10) === 'T') {
+    return s.slice(0, 19)
+  }
+  return s
+}
+
+async function refreshLinkedTicketStatuses(ticketIds: number[]): Promise<void> {
+  const uniq = [...new Set(ticketIds)].filter((id) => Number.isFinite(id) && id > 0)
+  for (const id of Object.keys(linkedTicketStatusById).map(Number)) {
+    if (!uniq.includes(id)) {
+      delete linkedTicketStatusById[id]
+    }
+  }
+  if (uniq.length === 0) {
+    return
+  }
+  ticketStatusLoading.value = true
+  try {
+    const results = await Promise.all(
+      uniq.map(async (id) => {
+        try {
+          const d: TicketDetailOutput = await getTicketDetail(id)
+          return { id, status: d?.status ?? '' }
+        } catch {
+          return { id, status: '' as string }
+        }
+      }),
+    )
+    for (const { id, status } of results) {
+      linkedTicketStatusById[id] = status
+    }
+  } finally {
+    ticketStatusLoading.value = false
+  }
+}
 
 /** 底部主操作按钮文案 */
 const submitButtonLabel = computed(() =>
@@ -175,17 +256,22 @@ const copyContent = computed(() => {
   if (form.impactScope) {
     lines.push(`影响范围：${form.impactScope}`)
   }
-  if (form.tempResolveDate) {
-    lines.push(`临时解决时间：${form.tempResolveDate}`)
+  if (resolutionMode.value === 'complete' && form.resolveTime) {
+    lines.push(`解决时间：${form.resolveTime}`)
   }
-  if (form.tempSolution) {
-    lines.push(`临时解决方案：${form.tempSolution}`)
-  }
-  if (form.resolveDate) {
-    lines.push(`彻底解决时间：${form.resolveDate}`)
-  }
-  if (form.solution) {
-    lines.push(`彻底解决方案：${form.solution}`)
+  if (resolutionMode.value === 'temp') {
+    if (form.tempResolveDate) {
+      lines.push(`临时解决时间：${form.tempResolveDate}`)
+    }
+    if (form.tempSolution) {
+      lines.push(`临时解决方案：${form.tempSolution}`)
+    }
+    if (form.resolveDate) {
+      lines.push(`彻底解决日期：${form.resolveDate}`)
+    }
+    if (form.solution) {
+      lines.push(`彻底解决方案：${form.solution}`)
+    }
   }
   if (form.remark) {
     lines.push(`备注：${form.remark}`)
@@ -274,6 +360,7 @@ function fillFormByDetail(detail: BugReportDetailOutput): void {
   form.introducedProject = detail.introducedProject || ''
   form.startDate = toDateOnlyText(detail.startDate)
   form.resolveDate = toDateOnlyText(detail.resolveDate)
+  form.resolveTime = toDateTimePickerValue(detail.resolveTime)
   form.tempResolveDate = toDateOnlyText(detail.tempResolveDate)
   form.solution = detail.solution || ''
   form.tempSolution = detail.tempSolution || ''
@@ -287,6 +374,7 @@ function fillFormByDetail(detail: BugReportDetailOutput): void {
   form.autoPrefill = false
   currentStatus.value = detail.status || 'DRAFT'
   mergeTicketOptionsByDetail(detail.tickets)
+  void refreshLinkedTicketStatuses(form.ticketIds)
   lastAutoGenerated.problemDesc = form.problemDesc
   lastAutoGenerated.impactScope = form.impactScope
   lastAutoGenerated.solution = form.solution
@@ -501,6 +589,7 @@ async function autoFillFromTickets(ticketIds: number[]): Promise<void> {
 watch(
   () => form.ticketIds.slice(),
   async (newIds, oldIds) => {
+    void refreshLinkedTicketStatuses(newIds)
     if (skipAutoFill) return
     if (!canEdit.value) return
     const addedIds = newIds.filter((id) => !oldIds?.includes(id))
@@ -522,8 +611,32 @@ function validateBeforeSave(): boolean {
     notifyWarning('请至少关联一个工单')
     return false
   }
+  if (resolutionMode.value === 'temp') {
+    if (!form.tempResolveDate?.trim()) {
+      notifyWarning('临时解决场景下请填写临时解决时间')
+      return false
+    }
+    if (!form.tempSolution?.trim()) {
+      notifyWarning('临时解决场景下请填写临时解决方案')
+      return false
+    }
+    if (!form.resolveDate?.trim()) {
+      notifyWarning('临时解决场景下请填写彻底解决日期')
+      return false
+    }
+    if (!form.solution?.trim()) {
+      notifyWarning('临时解决场景下请填写彻底解决方案')
+      return false
+    }
+  }
+  if (resolutionMode.value === 'complete') {
+    if (!form.resolveTime?.trim()) {
+      notifyWarning('处理完成场景下请填写解决时间')
+      return false
+    }
+  }
   if (form.startDate && form.resolveDate && form.startDate > form.resolveDate) {
-    notifyWarning('开始日期不能晚于解决日期')
+    notifyWarning('开始日期不能晚于彻底解决日期')
     return false
   }
   return true
@@ -533,7 +646,11 @@ function buildPayload():
   | BugReportCreateInput
   | BugReportUpdateInput {
   const selectedLogicCause = form.logicCausePath[0] || undefined
-  return {
+  const resolveTimeForApi =
+    resolutionMode.value === 'complete' && form.resolveTime?.trim()
+      ? form.resolveTime.trim().replace('T', ' ')
+      : undefined
+  const base: BugReportCreateInput | BugReportUpdateInput = {
     problemDesc: form.problemDesc.trim(),
     // 逻辑归因改为12类单选，所以只写一级，二级留空以保持接口兼容。
     logicCauseLevel1: selectedLogicCause,
@@ -542,10 +659,13 @@ function buildPayload():
     defectCategory: form.defectCategory || undefined,
     introducedProject: form.introducedProject.trim() || undefined,
     startDate: form.startDate || undefined,
-    resolveDate: form.resolveDate || undefined,
-    tempResolveDate: form.tempResolveDate || undefined,
-    solution: form.solution.trim() || undefined,
-    tempSolution: form.tempSolution.trim() || undefined,
+    resolveDate:
+      resolutionMode.value === 'temp' ? form.resolveDate || undefined : undefined,
+    resolveTime: resolveTimeForApi,
+    tempResolveDate:
+      resolutionMode.value === 'temp' ? form.tempResolveDate || undefined : undefined,
+    solution: resolutionMode.value === 'temp' ? form.solution.trim() || undefined : undefined,
+    tempSolution: resolutionMode.value === 'temp' ? form.tempSolution.trim() || undefined : undefined,
     impactScope: form.impactScope.trim() || undefined,
     severityLevel: form.severityLevel || undefined,
     reporterId: form.reporterId,
@@ -555,6 +675,13 @@ function buildPayload():
     responsibleUserIds: [...form.responsibleUserIds],
     autoPrefill: form.autoPrefill,
   }
+  if (isEditMode.value) {
+    const u = base as BugReportUpdateInput
+    u.clearResolveTime = resolutionMode.value === 'temp'
+    u.clearThoroughAndTempResolution = resolutionMode.value === 'complete'
+    return u
+  }
+  return base as BugReportCreateInput
 }
 
 async function handleSaveDraft(): Promise<void> {
@@ -661,6 +788,18 @@ watch(
 watch(useInstructionDrawer, (drawer) => {
   if (!drawer) {
     showInstructionDrawer.value = false
+  }
+})
+
+watch(resolutionMode, (mode) => {
+  if (mode === 'complete') {
+    form.tempResolveDate = ''
+    form.tempSolution = ''
+    form.resolveDate = ''
+    form.solution = ''
+  }
+  if (mode === 'temp') {
+    form.resolveTime = ''
   }
 })
 </script>
@@ -901,48 +1040,17 @@ watch(useInstructionDrawer, (drawer) => {
             />
           </el-form-item>
 
-          <!-- Solution fields - flat layout per PRD F2.1 -->
-          <el-form-item label="临时解决时间">
-            <el-date-picker
-              v-model="form.tempResolveDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="请选择临时解决日期（可选）"
-            />
-          </el-form-item>
-
-          <el-form-item label="临时解决方案">
-            <el-input
-              v-model="form.tempSolution"
-              type="textarea"
-              :autosize="{ minRows: 4, maxRows: 18 }"
-              maxlength="1000"
-              show-word-limit
-              placeholder="请输入临时解决方案（权宜之计，可选）"
-              class="textarea-autosize"
-            />
-          </el-form-item>
-
-          <el-form-item label="彻底解决日期">
-            <el-date-picker
-              v-model="form.resolveDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="请选择彻底解决日期（可选）"
-            />
-          </el-form-item>
-
-          <el-form-item label="彻底解决方案">
-            <el-input
-              v-model="form.solution"
-              type="textarea"
-              :autosize="{ minRows: 5, maxRows: 22 }"
-              maxlength="1000"
-              show-word-limit
-              placeholder="请输入彻底解决方案（根本性修复，可选）"
-              class="textarea-autosize"
-            />
-          </el-form-item>
+          <BugReportResolutionFields
+            :mode="resolutionMode"
+            :disabled="!canEdit"
+            :ticket-status-loading="ticketStatusLoading"
+            compact
+            v-model:temp-resolve-date="form.tempResolveDate"
+            v-model:temp-solution="form.tempSolution"
+            v-model:resolve-date="form.resolveDate"
+            v-model:solution="form.solution"
+            v-model:resolve-time="form.resolveTime"
+          />
 
           <el-form-item label="反馈人">
             <el-select
@@ -1014,48 +1122,16 @@ watch(useInstructionDrawer, (drawer) => {
             />
           </el-form-item>
 
-          <!-- Solution fields - flat layout per PRD F2.1 -->
-          <el-form-item label="临时解决时间">
-            <el-date-picker
-              v-model="form.tempResolveDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="请选择临时解决日期（可选）"
-            />
-          </el-form-item>
-
-          <el-form-item label="临时解决方案">
-            <el-input
-              v-model="form.tempSolution"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 14 }"
-              maxlength="1000"
-              show-word-limit
-              placeholder="请输入临时解决方案（权宜之计，可选）"
-              class="textarea-autosize"
-            />
-          </el-form-item>
-
-          <el-form-item label="彻底解决日期">
-            <el-date-picker
-              v-model="form.resolveDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="请选择彻底解决日期（可选）"
-            />
-          </el-form-item>
-
-          <el-form-item label="彻底解决方案">
-            <el-input
-              v-model="form.solution"
-              type="textarea"
-              :autosize="{ minRows: 4, maxRows: 16 }"
-              maxlength="1000"
-              show-word-limit
-              placeholder="请输入彻底解决方案（根本性修复，可选）"
-              class="textarea-autosize"
-            />
-          </el-form-item>
+          <BugReportResolutionFields
+            :mode="resolutionMode"
+            :disabled="!canEdit"
+            :ticket-status-loading="ticketStatusLoading"
+            v-model:temp-resolve-date="form.tempResolveDate"
+            v-model:temp-solution="form.tempSolution"
+            v-model:resolve-date="form.resolveDate"
+            v-model:solution="form.solution"
+            v-model:resolve-time="form.resolveTime"
+          />
 
           <el-form-item label="反馈人">
             <el-select
@@ -1224,22 +1300,28 @@ watch(useInstructionDrawer, (drawer) => {
               <div class="phone-field-label">影响范围</div>
               <div class="phone-field-value">{{ form.impactScope }}</div>
             </div>
-            <div v-if="form.tempResolveDate" class="phone-field">
-              <div class="phone-field-label">临时解决时间</div>
-              <div class="phone-field-value">{{ form.tempResolveDate }}</div>
+            <div v-if="resolutionMode === 'complete' && form.resolveTime" class="phone-field">
+              <div class="phone-field-label">解决时间</div>
+              <div class="phone-field-value">{{ form.resolveTime }}</div>
             </div>
-            <div v-if="form.tempSolution" class="phone-field">
-              <div class="phone-field-label">临时解决方案</div>
-              <div class="phone-field-value">{{ form.tempSolution }}</div>
-            </div>
-            <div v-if="form.resolveDate" class="phone-field">
-              <div class="phone-field-label">彻底解决时间</div>
-              <div class="phone-field-value">{{ form.resolveDate }}</div>
-            </div>
-            <div v-if="form.solution" class="phone-field">
-              <div class="phone-field-label">彻底解决方案</div>
-              <div class="phone-field-value">{{ form.solution }}</div>
-            </div>
+            <template v-if="resolutionMode === 'temp'">
+              <div v-if="form.tempResolveDate" class="phone-field">
+                <div class="phone-field-label">临时解决时间</div>
+                <div class="phone-field-value">{{ form.tempResolveDate }}</div>
+              </div>
+              <div v-if="form.tempSolution" class="phone-field">
+                <div class="phone-field-label">临时解决方案</div>
+                <div class="phone-field-value">{{ form.tempSolution }}</div>
+              </div>
+              <div v-if="form.resolveDate" class="phone-field">
+                <div class="phone-field-label">彻底解决日期</div>
+                <div class="phone-field-value">{{ form.resolveDate }}</div>
+              </div>
+              <div v-if="form.solution" class="phone-field">
+                <div class="phone-field-label">彻底解决方案</div>
+                <div class="phone-field-value">{{ form.solution }}</div>
+              </div>
+            </template>
             <div v-if="form.remark" class="phone-field">
               <div class="phone-field-label">备注</div>
               <div class="phone-field-value">{{ form.remark }}</div>

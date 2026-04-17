@@ -81,6 +81,36 @@ const canReview = computed(() => {
   return Boolean(authStore.userInfo?.id && authStore.userInfo.id === detail.value?.reviewerId)
 })
 
+/** 与编辑页一致：根据关联工单状态判断展示哪一类解决信息 */
+const bugReportResolutionMode = computed<'temp' | 'complete' | 'unknown'>(() => {
+  const tickets = detail.value?.tickets ?? []
+  if (tickets.length === 0) {
+    return 'unknown'
+  }
+  if (tickets.some((t) => t.status === 'temp_resolved')) {
+    return 'temp'
+  }
+  if (tickets.every((t) => t.status && ['completed', 'closed'].includes(String(t.status)))) {
+    return 'complete'
+  }
+  return 'unknown'
+})
+
+const bugReportResolutionDisplayMode = computed<'temp' | 'complete' | 'unknown'>(() => {
+  const m = bugReportResolutionMode.value
+  if (m !== 'unknown') {
+    return m
+  }
+  const d = detail.value
+  if (d?.resolveTime) {
+    return 'complete'
+  }
+  if (d?.tempResolveDate || d?.tempSolution || (d?.resolveDate && d?.solution)) {
+    return 'temp'
+  }
+  return 'unknown'
+})
+
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
 }
@@ -287,16 +317,27 @@ function buildCopyText(): string {
     `缺陷分类：${d.defectCategory || '-'}`,
     `引入项目：${d.introducedProject || '-'}`,
     `开始时间：${formatDateDisplay(d.startDate)}`,
-    `临时解决时间：${formatDateDisplay(d.tempResolveDate)}`,
-    `临时解决方案：${d.tempSolution || '-'}`,
-    `彻底解决时间：${formatDateDisplay(d.resolveDate)}`,
-    `彻底解决方案：${d.solution || '-'}`,
+  ]
+  if (bugReportResolutionDisplayMode.value === 'complete') {
+    lines.push(`解决时间：${d.resolveTime ? formatDateTime(d.resolveTime) : '-'}`)
+  } else if (bugReportResolutionDisplayMode.value === 'temp') {
+    lines.push(`临时解决时间：${formatDateDisplay(d.tempResolveDate)}`)
+    lines.push(`临时解决方案：${d.tempSolution || '-'}`)
+    lines.push(`彻底解决日期：${formatDateDisplay(d.resolveDate)}`)
+    lines.push(`彻底解决方案：${d.solution || '-'}`)
+  } else {
+    lines.push(`临时解决时间：${formatDateDisplay(d.tempResolveDate)}`)
+    lines.push(`临时解决方案：${d.tempSolution || '-'}`)
+    lines.push(`彻底解决时间：${formatDateDisplay(d.resolveDate)}`)
+    lines.push(`彻底解决方案：${d.solution || '-'}`)
+  }
+  lines.push(
     `影响范围：${d.impactScope || '-'}`,
     `缺陷等级：${d.severityLevel || '-'}`,
     `反馈人：${d.reporterName || '-'}`,
     `审核人：${d.reviewerName || '-'}`,
     `责任人：${responsibleNames}`,
-  ]
+  )
   return lines.join('\n')
 }
 
@@ -425,14 +466,30 @@ watch(
             <span class="mobile-detail-label">开始时间</span>
             <span class="mobile-detail-value">{{ formatDateDisplay(detail?.startDate) }}</span>
           </div>
-          <div class="mobile-detail-row">
-            <span class="mobile-detail-label">临时解决时间</span>
-            <span class="mobile-detail-value">{{ formatDateDisplay(detail?.tempResolveDate) }}</span>
+          <div v-if="bugReportResolutionDisplayMode === 'complete'" class="mobile-detail-row">
+            <span class="mobile-detail-label">解决时间</span>
+            <span class="mobile-detail-value">{{ detail?.resolveTime ? formatDateTime(detail.resolveTime) : '-' }}</span>
           </div>
-          <div class="mobile-detail-row">
-            <span class="mobile-detail-label">彻底解决时间</span>
-            <span class="mobile-detail-value">{{ formatDateDisplay(detail?.resolveDate) }}</span>
-          </div>
+          <template v-else-if="bugReportResolutionDisplayMode === 'temp'">
+            <div class="mobile-detail-row">
+              <span class="mobile-detail-label">临时解决时间</span>
+              <span class="mobile-detail-value">{{ formatDateDisplay(detail?.tempResolveDate) }}</span>
+            </div>
+            <div class="mobile-detail-row">
+              <span class="mobile-detail-label">彻底解决日期</span>
+              <span class="mobile-detail-value">{{ formatDateDisplay(detail?.resolveDate) }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div class="mobile-detail-row">
+              <span class="mobile-detail-label">临时解决时间</span>
+              <span class="mobile-detail-value">{{ formatDateDisplay(detail?.tempResolveDate) }}</span>
+            </div>
+            <div class="mobile-detail-row">
+              <span class="mobile-detail-label">彻底解决时间</span>
+              <span class="mobile-detail-value">{{ formatDateDisplay(detail?.resolveDate) }}</span>
+            </div>
+          </template>
           <div class="mobile-detail-row">
             <span class="mobile-detail-label">提交时间</span>
             <span class="mobile-detail-value">{{ formatDateTime(detail?.submittedAt) }}</span>
@@ -459,14 +516,30 @@ watch(
             <div class="mobile-detail-block-title">问题描述</div>
             <div class="pre-wrap">{{ detail?.problemDesc || '-' }}</div>
           </div>
-          <div v-if="detail?.tempSolution" class="mobile-detail-block">
-            <div class="mobile-detail-block-title">临时解决方案</div>
-            <div class="pre-wrap">{{ detail.tempSolution }}</div>
+          <template v-if="bugReportResolutionDisplayMode === 'temp'">
+            <div v-if="detail?.tempSolution" class="mobile-detail-block">
+              <div class="mobile-detail-block-title">临时解决方案</div>
+              <div class="pre-wrap">{{ detail.tempSolution }}</div>
+            </div>
+            <div class="mobile-detail-block">
+              <div class="mobile-detail-block-title">彻底解决方案</div>
+              <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
+            </div>
+          </template>
+          <div v-else-if="bugReportResolutionDisplayMode === 'complete'" class="mobile-detail-block">
+            <div class="mobile-detail-block-title">说明</div>
+            <div class="pre-wrap">本简报按「处理完成」归档：仅记录解决时间，不展示临时/彻底方案栏位。</div>
           </div>
-          <div class="mobile-detail-block">
-            <div class="mobile-detail-block-title">彻底解决方案</div>
-            <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
-          </div>
+          <template v-else>
+            <div v-if="detail?.tempSolution" class="mobile-detail-block">
+              <div class="mobile-detail-block-title">临时解决方案</div>
+              <div class="pre-wrap">{{ detail.tempSolution }}</div>
+            </div>
+            <div class="mobile-detail-block">
+              <div class="mobile-detail-block-title">彻底解决方案</div>
+              <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
+            </div>
+          </template>
           <div class="mobile-detail-block">
             <div class="mobile-detail-block-title">备注</div>
             <div class="pre-wrap">{{ detail?.remark || '-' }}</div>
@@ -502,12 +575,25 @@ watch(
           <el-descriptions-item label="开始时间">
             {{ formatDateDisplay(detail?.startDate) }}
           </el-descriptions-item>
-          <el-descriptions-item label="临时解决时间">
-            {{ formatDateDisplay(detail?.tempResolveDate) }}
+          <el-descriptions-item v-if="bugReportResolutionDisplayMode === 'complete'" label="解决时间">
+            {{ detail?.resolveTime ? formatDateTime(detail.resolveTime) : '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="彻底解决时间">
-            {{ formatDateDisplay(detail?.resolveDate) }}
-          </el-descriptions-item>
+          <template v-else-if="bugReportResolutionDisplayMode === 'temp'">
+            <el-descriptions-item label="临时解决时间">
+              {{ formatDateDisplay(detail?.tempResolveDate) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="彻底解决日期">
+              {{ formatDateDisplay(detail?.resolveDate) }}
+            </el-descriptions-item>
+          </template>
+          <template v-else>
+            <el-descriptions-item label="临时解决时间">
+              {{ formatDateDisplay(detail?.tempResolveDate) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="彻底解决时间">
+              {{ formatDateDisplay(detail?.resolveDate) }}
+            </el-descriptions-item>
+          </template>
           <el-descriptions-item label="提交时间">
             {{ formatDateTime(detail?.submittedAt) }}
           </el-descriptions-item>
@@ -526,12 +612,29 @@ watch(
           <el-descriptions-item label="问题描述" :span="2">
             <span class="pre-wrap">{{ detail?.problemDesc || '-' }}</span>
           </el-descriptions-item>
-          <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
-            <span class="pre-wrap">{{ detail.tempSolution }}</span>
+          <template v-if="bugReportResolutionDisplayMode === 'temp'">
+            <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
+              <span class="pre-wrap">{{ detail.tempSolution }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="彻底解决方案" :span="2">
+              <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
+            </el-descriptions-item>
+          </template>
+          <el-descriptions-item
+            v-else-if="bugReportResolutionDisplayMode === 'complete'"
+            label="说明"
+            :span="2"
+          >
+            本简报按「处理完成」归档：仅记录解决时间，不展示临时/彻底方案栏位。
           </el-descriptions-item>
-          <el-descriptions-item label="彻底解决方案" :span="2">
-            <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
-          </el-descriptions-item>
+          <template v-else>
+            <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
+              <span class="pre-wrap">{{ detail.tempSolution }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="彻底解决方案" :span="2">
+              <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
+            </el-descriptions-item>
+          </template>
           <el-descriptions-item label="备注" :span="2">{{ detail?.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>

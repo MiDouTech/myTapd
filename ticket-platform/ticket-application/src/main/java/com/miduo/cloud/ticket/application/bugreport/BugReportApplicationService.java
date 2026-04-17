@@ -167,6 +167,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         output.setIntroducedProject(report.getIntroducedProject());
         output.setStartDate(report.getStartDate());
         output.setResolveDate(report.getResolveDate());
+        output.setResolveTime(report.getResolveTime());
         output.setTempResolveDate(report.getTempResolveDate());
         output.setSolution(report.getSolution());
         output.setTempSolution(report.getTempSolution());
@@ -755,6 +756,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         report.setIntroducedProject(input.getIntroducedProject());
         report.setStartDate(input.getStartDate());
         report.setResolveDate(input.getResolveDate());
+        report.setResolveTime(input.getResolveTime());
         report.setTempResolveDate(input.getTempResolveDate());
         report.setSolution(input.getSolution());
         report.setTempSolution(input.getTempSolution());
@@ -766,6 +768,15 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     private void applyUpdateInput(BugReportPO report, BugReportUpdateInput input) {
+        if (Boolean.TRUE.equals(input.getClearResolveTime())) {
+            report.setResolveTime(null);
+        }
+        if (Boolean.TRUE.equals(input.getClearThoroughAndTempResolution())) {
+            report.setTempResolveDate(null);
+            report.setTempSolution(null);
+            report.setResolveDate(null);
+            report.setSolution(null);
+        }
         if (input.getProblemDesc() != null) {
             report.setProblemDesc(input.getProblemDesc());
         }
@@ -789,6 +800,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         }
         if (input.getResolveDate() != null) {
             report.setResolveDate(input.getResolveDate());
+        }
+        if (input.getResolveTime() != null) {
+            report.setResolveTime(input.getResolveTime());
         }
         if (input.getTempResolveDate() != null) {
             report.setTempResolveDate(input.getTempResolveDate());

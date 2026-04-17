@@ -31,6 +31,9 @@ public class BugReportUpdateInput implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date resolveDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
+    private Date resolveTime;
+
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Shanghai")
     private Date tempResolveDate;
 
@@ -56,4 +59,14 @@ public class BugReportUpdateInput implements Serializable {
      * 是否自动预填，默认 false
      */
     private Boolean autoPrefill;
+
+    /**
+     * 为 true 时清空「解决时间」，用于关联工单进入临时解决后保存
+     */
+    private Boolean clearResolveTime;
+
+    /**
+     * 为 true 时清空临时/彻底解决相关四个字段，用于关联工单已处理完成且只保留解决时间
+     */
+    private Boolean clearThoroughAndTempResolution;
 }
