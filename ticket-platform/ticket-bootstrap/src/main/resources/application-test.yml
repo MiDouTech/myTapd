@@ -17,7 +17,7 @@ spring:
 
   flyway:
     # 与 dev/prod 对齐：测试环境启动时同样执行迁移，避免与生产库结构漂移
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
