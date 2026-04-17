@@ -40,10 +40,20 @@ public class DailyReportApplicationService extends BaseApplicationService {
     private static final String BASIC_CONFIG_KEY_TIMEZONE = "timezone";
     private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
     private static final String CRON_SEPARATOR = ";";
+    /**
+     * 日报调度每 30 秒轮询配置；缓存可避免对 system_config 的重复全量扫描，减轻库压与连接占用（降低网关 502 风险）。
+     */
+    private static final long DAILY_REPORT_CONFIG_CACHE_TTL_MS = 60_000L;
 
     private final DailyReportMapper dailyReportMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
+
+    private volatile Map<String, String> dailyReportConfigCache;
+    private volatile long dailyReportConfigCacheExpiresAtMs;
+
+    private volatile String scheduleTimezoneCache;
+    private volatile long scheduleTimezoneCacheExpiresAtMs;
 
     public DailyReportApplicationService(DailyReportMapper dailyReportMapper,
                                          SystemConfigMapper systemConfigMapper,
@@ -63,7 +73,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         String reportDate = sdf.format(now);
 
-        Map<String, String> configMap = loadConfigMap();
+        Map<String, String> configMap = loadDailyReportConfigMap();
         boolean includeDefectDetail = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_DEFECT_DETAIL, "true"));
         boolean includeSuspended = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true"));
 
@@ -110,7 +120,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
      * 推送日报到企微群
      */
     public void pushDailyReport() {
-        Map<String, String> configMap = loadConfigMap();
+        Map<String, String> configMap = loadDailyReportConfigMap();
         boolean enabled = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
         if (!enabled) {
             log.info("日报自动推送已关闭，跳过推送");
@@ -149,7 +159,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
      * 查询日报配置
      */
     public DailyReportConfigOutput getConfig() {
-        Map<String, String> configMap = loadConfigMap();
+        Map<String, String> configMap = loadDailyReportConfigMap();
 
         DailyReportConfigOutput output = new DailyReportConfigOutput();
         output.setEnabled("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false")));
@@ -201,13 +211,14 @@ public class DailyReportApplicationService extends BaseApplicationService {
         if (input.getIncludeSuspended() != null) {
             upsertConfig(CONFIG_KEY_INCLUDE_SUSPENDED, String.valueOf(input.getIncludeSuspended()));
         }
+        invalidateDailyReportRelatedCaches();
     }
 
     /**
      * 获取推送 Cron 表达式列表
      */
     public List<String> getPushCronList() {
-        Map<String, String> configMap = loadConfigMap();
+        Map<String, String> configMap = loadDailyReportConfigMap();
         return parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?"));
     }
 
@@ -215,7 +226,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
      * 是否启用日报推送
      */
     public boolean isEnabled() {
-        Map<String, String> configMap = loadConfigMap();
+        Map<String, String> configMap = loadDailyReportConfigMap();
         return "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
     }
 
@@ -223,21 +234,19 @@ public class DailyReportApplicationService extends BaseApplicationService {
      * 获取日报调度时区
      */
     public String getScheduleTimezone() {
-        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, BASIC_CONFIG_GROUP)
-                .eq(SystemConfigPO::getConfigKey, BASIC_CONFIG_KEY_TIMEZONE)
-                .eq(SystemConfigPO::getDeleted, 0);
-        SystemConfigPO timezoneConfig = systemConfigMapper.selectOne(wrapper);
-        if (timezoneConfig == null || timezoneConfig.getConfigValue() == null || timezoneConfig.getConfigValue().trim().isEmpty()) {
-            return DEFAULT_TIMEZONE;
+        long now = System.currentTimeMillis();
+        String cached = scheduleTimezoneCache;
+        if (cached != null && now < scheduleTimezoneCacheExpiresAtMs) {
+            return cached;
         }
-        String timezone = timezoneConfig.getConfigValue().trim();
-        try {
-            ZoneId.of(timezone);
-            return timezone;
-        } catch (DateTimeException ex) {
-            log.warn("日报推送：读取到非法时区配置，timezone={}，回退默认时区={}", timezone, DEFAULT_TIMEZONE);
-            return DEFAULT_TIMEZONE;
+        synchronized (this) {
+            if (scheduleTimezoneCache != null && System.currentTimeMillis() < scheduleTimezoneCacheExpiresAtMs) {
+                return scheduleTimezoneCache;
+            }
+            String resolved = resolveScheduleTimezoneFromDb();
+            scheduleTimezoneCache = resolved;
+            scheduleTimezoneCacheExpiresAtMs = System.currentTimeMillis() + DAILY_REPORT_CONFIG_CACHE_TTL_MS;
+            return resolved;
         }
     }
 
@@ -509,7 +518,34 @@ public class DailyReportApplicationService extends BaseApplicationService {
         return ticketStatus != null ? ticketStatus.getLabel() : statusCode;
     }
 
-    private Map<String, String> loadConfigMap() {
+    /**
+     * 带短期 TTL 的日报配置读取，供定时任务高频轮询使用。
+     */
+    private Map<String, String> loadDailyReportConfigMap() {
+        long now = System.currentTimeMillis();
+        Map<String, String> cached = dailyReportConfigCache;
+        if (cached != null && now < dailyReportConfigCacheExpiresAtMs) {
+            return cached;
+        }
+        synchronized (this) {
+            if (dailyReportConfigCache != null && System.currentTimeMillis() < dailyReportConfigCacheExpiresAtMs) {
+                return dailyReportConfigCache;
+            }
+            Map<String, String> fresh = fetchDailyReportConfigMapFromDb();
+            dailyReportConfigCache = fresh;
+            dailyReportConfigCacheExpiresAtMs = System.currentTimeMillis() + DAILY_REPORT_CONFIG_CACHE_TTL_MS;
+            return fresh;
+        }
+    }
+
+    private void invalidateDailyReportRelatedCaches() {
+        dailyReportConfigCache = null;
+        dailyReportConfigCacheExpiresAtMs = 0L;
+        scheduleTimezoneCache = null;
+        scheduleTimezoneCacheExpiresAtMs = 0L;
+    }
+
+    private Map<String, String> fetchDailyReportConfigMapFromDb() {
         LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SystemConfigPO::getConfigGroup, CONFIG_GROUP)
                 .eq(SystemConfigPO::getDeleted, 0);
@@ -523,6 +559,25 @@ public class DailyReportApplicationService extends BaseApplicationService {
             }
         }
         return map;
+    }
+
+    private String resolveScheduleTimezoneFromDb() {
+        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SystemConfigPO::getConfigGroup, BASIC_CONFIG_GROUP)
+                .eq(SystemConfigPO::getConfigKey, BASIC_CONFIG_KEY_TIMEZONE)
+                .eq(SystemConfigPO::getDeleted, 0);
+        SystemConfigPO timezoneConfig = systemConfigMapper.selectOne(wrapper);
+        if (timezoneConfig == null || timezoneConfig.getConfigValue() == null || timezoneConfig.getConfigValue().trim().isEmpty()) {
+            return DEFAULT_TIMEZONE;
+        }
+        String timezone = timezoneConfig.getConfigValue().trim();
+        try {
+            ZoneId.of(timezone);
+            return timezone;
+        } catch (DateTimeException ex) {
+            log.warn("日报推送：读取到非法时区配置，timezone={}，回退默认时区={}", timezone, DEFAULT_TIMEZONE);
+            return DEFAULT_TIMEZONE;
+        }
     }
 
     private void upsertConfig(String key, String value) {
