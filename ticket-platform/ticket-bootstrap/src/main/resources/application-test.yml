@@ -1,7 +1,7 @@
 # ============================================================
 # TEST 环境配置
 # 敏感配置（数据库/Redis/JWT/七牛/企微/SSO）全部由 Nacos 注入
-# Nacos Data ID: ticket-platform-secrets.yml
+# Nacos Data ID（敏感）: ticket-platform-secrets.yaml（bootstrap shared-configs）
 # ============================================================
 
 spring:
