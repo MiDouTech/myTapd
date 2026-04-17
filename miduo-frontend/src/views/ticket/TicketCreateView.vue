@@ -195,7 +195,13 @@ onMounted(() => {
 
       <div class="form-section-title">分派与时间</div>
       <el-form-item v-if="!isGuest" label="处理人">
-        <el-select v-model="form.assigneeId" placeholder="请选择处理人" clearable class="w-420">
+        <el-select
+          v-model="form.assigneeId"
+          placeholder="请选择处理人"
+          clearable
+          filterable
+          class="w-420"
+        >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
