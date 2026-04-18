@@ -17,6 +17,8 @@ export interface TicketPageInput extends PageQuery {
   createTimeEnd?: string
   /** SLA状态过滤：BREACHED-已超时 / WARNING-预警中，来自仪表盘卡片跳转 */
   slaStatus?: string
+  /** 为 true 时仅返回可关联 Bug 简报的工单（临时解决、已完成；不含非缺陷关闭的已关闭） */
+  linkableForBugReport?: boolean
 }
 
 export interface TicketListOutput {

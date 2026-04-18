@@ -147,7 +147,8 @@ const isHighSeverity = computed(() => {
 })
 
 const TICKET_STATUS_TEMP_RESOLVED = 'temp_resolved'
-const TICKET_STATUSES_RESOLVED_COMPLETE = new Set(['completed', 'closed'])
+/** 缺陷处理完成：仅「已完成」；「已关闭」多为非缺陷关闭，不写此类简报 */
+const TICKET_STATUSES_RESOLVED_COMPLETE = new Set(['completed'])
 
 /** 与后端 TicketStatus 及历史数据对齐，避免大小写/空格导致误判为「处理完成」表单 */
 function normalizeTicketStatusCode(raw?: string | null): string {
@@ -180,7 +181,7 @@ function applyTicketStatusesFromDetail(
 /**
  * 根据关联工单的当前状态，决定简报里该填哪一类「解决」信息：
  * - 任一工单处于临时解决 → 填四件套，不填解决时间
- * - 全部工单已处理完成或已关闭 → 只填解决时间（必填），不填四件套
+ * - 全部工单已处理完成（已完成）→ 只填解决时间（必填），不填四件套
  */
 const resolutionMode = computed<'temp' | 'complete' | 'unknown' | 'none'>(() => {
   const ids = form.ticketIds.filter((id) => Number.isFinite(id) && id > 0)
@@ -450,6 +451,8 @@ async function searchTickets(keyword: string): Promise<void> {
       pageSize: 20,
       view: 'all',
       keyword: normalized || undefined,
+      // 这里用后端过滤：简报只能关联「临时解决」或已结单类状态，避免下拉出现进行中工单
+      linkableForBugReport: true,
       // 无关键词时按最近更新排序，避免首屏被大量历史「已完成」占满导致其它状态工单不可见
       orderBy: 'update_time',
       asc: false,

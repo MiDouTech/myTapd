@@ -9,6 +9,7 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.BugReportStatus;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.NotificationType;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.entity.dto.bugreport.*;
@@ -837,6 +838,18 @@ public class BugReportApplicationService extends BaseApplicationService {
         List<TicketPO> tickets = ticketMapper.selectBatchIds(ticketIds);
         if (CollectionUtils.isEmpty(tickets) || tickets.size() != ticketIds.size()) {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND, "存在无效工单ID");
+        }
+        for (TicketPO ticket : tickets) {
+            if (ticket == null || !StringUtils.hasText(ticket.getStatus())) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "关联工单状态异常，请刷新后重试");
+            }
+            String code = ticket.getStatus().trim().toLowerCase(Locale.ROOT);
+            if (!TicketStatus.TEMP_RESOLVED.getCode().equals(code)
+                    && !TicketStatus.COMPLETED.getCode().equals(code)) {
+                throw BusinessException.of(
+                        ErrorCode.PARAM_ERROR,
+                        "关联工单仅可选择状态为「临时解决」或「已完成」的工单（非缺陷关闭的工单不可关联）");
+            }
         }
         return tickets;
     }
