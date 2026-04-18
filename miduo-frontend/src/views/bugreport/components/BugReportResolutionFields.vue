@@ -52,7 +52,7 @@ const textareaRows = computed(() =>
         @update:model-value="emit('update:tempSolution', $event)"
       />
     </el-form-item>
-    <el-form-item label="彻底解决日期" required>
+    <el-form-item label="彻底解决时间" required>
       <el-date-picker
         :model-value="resolveDate"
         type="date"
