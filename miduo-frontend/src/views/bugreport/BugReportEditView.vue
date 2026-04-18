@@ -1106,20 +1106,15 @@ watch(isHighSeverity, (high) => {
           </el-form-item>
 
           <el-form-item v-if="isHighSeverity" label="审核人" required>
-            <div class="reviewer-wrap">
-              <el-select
-                v-model="form.reviewerId"
-                clearable
-                filterable
-                class="w-420"
-                placeholder="请选择审核人（P0/P1/P2 必填）"
-              >
-                <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-              </el-select>
-              <div class="reviewer-hint">
-                <el-tag type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
-              </div>
-            </div>
+            <el-select
+              v-model="form.reviewerId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择审核人（P0/P1/P2 必填）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="责任人">
@@ -1186,20 +1181,15 @@ watch(isHighSeverity, (high) => {
           </el-form-item>
 
           <el-form-item v-if="isHighSeverity" label="审核人" required>
-            <div class="reviewer-wrap">
-              <el-select
-                v-model="form.reviewerId"
-                clearable
-                filterable
-                class="w-420"
-                placeholder="请选择审核人（P0/P1/P2 必填）"
-              >
-                <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
-              </el-select>
-              <div class="reviewer-hint">
-                <el-tag type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
-              </div>
-            </div>
+            <el-select
+              v-model="form.reviewerId"
+              clearable
+              filterable
+              class="w-420"
+              placeholder="请选择审核人（P0/P1/P2 必填）"
+            >
+              <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
+            </el-select>
           </el-form-item>
 
           <el-form-item label="责任人">
@@ -1669,17 +1659,6 @@ watch(isHighSeverity, (high) => {
   &--loading {
     color: #1675d1;
   }
-}
-
-.reviewer-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.reviewer-hint {
-  display: flex;
-  align-items: center;
 }
 
 .btn-icon {
