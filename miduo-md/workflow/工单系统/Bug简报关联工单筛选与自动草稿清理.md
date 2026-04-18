@@ -19,6 +19,7 @@
 
 - `TicketMapper.xml`：在 `linkableForBugReport` 条件下增加 `NOT EXISTS`：该工单在 `bug_report_ticket` 与 `bug_report` 中存在 `status = ARCHIVED` 的关联则排除。
 - `BugReportApplicationService`：`create` 与 `update`（当传入 `ticketIds` 时）在写入手动关联后，按工单批量查询 `is_auto_created=1` 的关联，对 `status=DRAFT` 且 `remark=系统自动创建` 的简报执行子表硬删后主表硬删；`update` 时排除当前简报 id。
+- **关联方式（`is_auto_created`）**：`update` 仅在「关联工单 id 集合相对库中该简报原有关联发生变化」时重写 `bug_report_ticket`；重写时对仍在列表中的工单保留原 `is_auto_created`，新加入的工单记为手动（0）。仅保存简报字段而工单列表不变时，不触碰关联表，避免关单自动草稿在填写、审核通过后误显示为「手动」。
 
 ## 验收
 
