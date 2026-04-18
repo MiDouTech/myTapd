@@ -16,6 +16,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.Sys
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -128,7 +129,11 @@ public class WecomBotCommandService {
 
         TicketCreateInput input = new TicketCreateInput();
         input.setTitle(parseResult.getTitle());
-        input.setDescription(parseResult.getDescription());
+        String description = parseResult.getDescription();
+        if (!StringUtils.hasText(description)) {
+            description = parseResult.getTitle();
+        }
+        input.setDescription(description);
         input.setCategoryId(categoryId);
         input.setPriority(parseResult.getPriority() == null ? "medium" : parseResult.getPriority());
         input.setSource(TicketSource.WECOM_BOT.getCode());

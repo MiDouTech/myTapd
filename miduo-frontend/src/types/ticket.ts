@@ -51,7 +51,7 @@ export interface TicketListOutput {
 
 export interface TicketCreateInput {
   title: string
-  description?: string
+  description: string
   categoryId: number
   priority: string
   expectedTime?: string
