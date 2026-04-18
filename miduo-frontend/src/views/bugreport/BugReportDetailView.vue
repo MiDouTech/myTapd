@@ -20,6 +20,7 @@ import type {
 import type { UserListOutput } from '@/types/user'
 import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
+import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticketStatus'
 import {
   canReviewBugReport,
   canSubmitBugReport,
@@ -87,10 +88,10 @@ const bugReportResolutionMode = computed<'temp' | 'complete' | 'unknown'>(() => 
   if (tickets.length === 0) {
     return 'unknown'
   }
-  if (tickets.some((t) => t.status === 'temp_resolved')) {
+  if (tickets.some((t) => normalizeTicketStatusCode(t.status) === 'temp_resolved')) {
     return 'temp'
   }
-  if (tickets.every((t) => t.status && String(t.status).toLowerCase() === 'completed')) {
+  if (tickets.every((t) => normalizeTicketStatusCode(t.status) === 'completed')) {
     return 'complete'
   }
   return 'unknown'
@@ -660,7 +661,7 @@ watch(
           <div v-for="row in detail.tickets" :key="row.ticketId" class="mobile-block-item">
             <div class="mobile-block-head">
               <div class="mobile-block-title">{{ row.ticketNo || '-' }}</div>
-              <el-tag size="small">{{ row.status || '-' }}</el-tag>
+              <el-tag size="small">{{ getTicketStatusLabel(row.status) }}</el-tag>
             </div>
             <div class="mobile-block-desc">{{ row.title || '-' }}</div>
             <div class="mobile-block-meta">来源：{{ getTicketSourceLabel(row.isAutoCreated) }}</div>
@@ -678,7 +679,11 @@ watch(
         >
           <el-table-column prop="ticketNo" label="工单编号" min-width="180" align="center" />
           <el-table-column prop="title" label="工单标题" min-width="260" align="center" />
-          <el-table-column prop="status" label="工单状态" width="130" align="center" />
+          <el-table-column label="工单状态" width="130" align="center">
+            <template #default="{ row }">
+              {{ getTicketStatusLabel(row.status) }}
+            </template>
+          </el-table-column>
           <el-table-column label="来源" width="120" align="center">
             <template #default="{ row }">
               {{ getTicketSourceLabel(row.isAutoCreated) }}
