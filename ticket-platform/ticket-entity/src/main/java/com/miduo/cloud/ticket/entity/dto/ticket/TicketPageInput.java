@@ -36,4 +36,9 @@ public class TicketPageInput extends PageInput {
      * 仅传入时生效，用于仪表盘点击SLA超时卡片跳转过滤
      */
     private String slaStatus;
+
+    /**
+     * 为 true 时仅返回可关联 Bug 简报的工单：临时解决、已完成、已关闭（与简报「解决信息」口径一致）
+     */
+    private Boolean linkableForBugReport;
 }

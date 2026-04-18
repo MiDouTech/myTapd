@@ -450,6 +450,8 @@ async function searchTickets(keyword: string): Promise<void> {
       pageSize: 20,
       view: 'all',
       keyword: normalized || undefined,
+      // 这里用后端过滤：简报只能关联「临时解决」或已结单类状态，避免下拉出现进行中工单
+      linkableForBugReport: true,
       // 无关键词时按最近更新排序，避免首屏被大量历史「已完成」占满导致其它状态工单不可见
       orderBy: 'update_time',
       asc: false,

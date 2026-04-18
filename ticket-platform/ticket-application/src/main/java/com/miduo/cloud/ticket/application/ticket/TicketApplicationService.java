@@ -241,7 +241,8 @@ public class TicketApplicationService {
                 input.getCreateTimeEnd(),
                 input.getOrderBy(),
                 input.isAsc(),
-                input.getSlaStatus()
+                input.getSlaStatus(),
+                input.getLinkableForBugReport()
         );
 
         List<TicketPO> records = result.getRecords();

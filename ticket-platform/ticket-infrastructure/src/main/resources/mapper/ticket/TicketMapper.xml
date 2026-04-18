@@ -57,6 +57,9 @@
         <if test="status != null and status != ''">
             AND t.status = #{status}
         </if>
+        <if test="linkableForBugReport != null and linkableForBugReport == true">
+            AND LOWER(t.status) IN ('temp_resolved', 'completed', 'closed')
+        </if>
         <if test="priority != null and priority != ''">
             AND t.priority = #{priority}
         </if>
