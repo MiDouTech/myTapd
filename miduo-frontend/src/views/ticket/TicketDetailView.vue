@@ -1896,7 +1896,7 @@ watch(
           <template #default="{ row }">
             <el-button
               type="primary"
-              link
+              size="small"
               :class="{ 'bug-brief-link--pulse': highlightedBugReportId === row.id }"
               @click="openBugReportDetail(row.id)"
             >查看简报</el-button>
@@ -2799,7 +2799,7 @@ watch(
   }
 }
 
-:deep(.bug-brief-link--pulse.el-button.is-link) {
+:deep(.bug-brief-link--pulse.el-button) {
   position: relative;
   z-index: 1;
   border-radius: 4px;
