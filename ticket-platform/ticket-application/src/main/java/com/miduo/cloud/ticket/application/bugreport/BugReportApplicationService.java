@@ -318,9 +318,13 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         List<TicketPO> tickets = Collections.emptyList();
         List<Long> ticketIds = null;
+        List<BugReportTicketPO> previousTicketLinks = null;
         if (!CollectionUtils.isEmpty(input.getTicketIds())) {
             ticketIds = distinctIds(input.getTicketIds());
             tickets = fetchAndValidateTickets(ticketIds);
+            previousTicketLinks = bugReportTicketMapper.selectList(
+                    new LambdaQueryWrapper<BugReportTicketPO>()
+                            .eq(BugReportTicketPO::getReportId, id));
         }
 
         applyUpdateInput(report, input);
@@ -330,8 +334,17 @@ public class BugReportApplicationService extends BaseApplicationService {
         bugReportMapper.updateById(report);
 
         if (ticketIds != null) {
-            syncReportTickets(id, ticketIds, 0);
-            removeAutoDraftReportsOnManualLink(ticketIds, id);
+            Set<Long> previousIds = CollectionUtils.isEmpty(previousTicketLinks)
+                    ? Collections.emptySet()
+                    : previousTicketLinks.stream()
+                    .map(BugReportTicketPO::getTicketId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            Set<Long> newIds = new HashSet<>(ticketIds);
+            if (!newIds.equals(previousIds)) {
+                syncReportTicketsPreservingAutoFlags(id, ticketIds, previousTicketLinks);
+                removeAutoDraftReportsOnManualLink(ticketIds, id);
+            }
         }
         if (input.getResponsibleUserIds() != null) {
             syncResponsibleUsers(id, distinctIds(input.getResponsibleUserIds()));
@@ -1048,6 +1061,43 @@ public class BugReportApplicationService extends BaseApplicationService {
                     relation.setReportId(reportId);
                     relation.setTicketId(ticketId);
                     relation.setIsAutoCreated(autoCreatedVal);
+                    return relation;
+                })
+                .collect(Collectors.toList());
+        if (!batchList.isEmpty()) {
+            bugReportTicketMapper.batchInsert(batchList);
+        }
+    }
+
+    /**
+     * 同步简报与工单关联，并按「本条关联是否曾为自动」保留 is_auto_created：
+     * 仍在列表中的工单沿用更新前的标记；新加入的工单视为手动（0）。
+     * 这样编辑简报正文/保存草稿不会把关单自动草稿的「自动关联」误写成手动。
+     */
+    private void syncReportTicketsPreservingAutoFlags(Long reportId, List<Long> newTicketIds,
+                                                      List<BugReportTicketPO> previousLinks) {
+        bugReportTicketMapper.hardDeleteByReportId(reportId);
+        if (CollectionUtils.isEmpty(newTicketIds)) {
+            return;
+        }
+        Map<Long, Integer> prevAutoByTicketId = new HashMap<>();
+        if (!CollectionUtils.isEmpty(previousLinks)) {
+            for (BugReportTicketPO po : previousLinks) {
+                if (po == null || po.getTicketId() == null) {
+                    continue;
+                }
+                int v = po.getIsAutoCreated() == null ? 0 : po.getIsAutoCreated();
+                prevAutoByTicketId.put(po.getTicketId(), v);
+            }
+        }
+        List<BugReportTicketPO> batchList = newTicketIds.stream()
+                .filter(Objects::nonNull)
+                .map(ticketId -> {
+                    BugReportTicketPO relation = new BugReportTicketPO();
+                    relation.setReportId(reportId);
+                    relation.setTicketId(ticketId);
+                    int isAuto = prevAutoByTicketId.containsKey(ticketId) ? prevAutoByTicketId.get(ticketId) : 0;
+                    relation.setIsAutoCreated(isAuto);
                     return relation;
                 })
                 .collect(Collectors.toList());
