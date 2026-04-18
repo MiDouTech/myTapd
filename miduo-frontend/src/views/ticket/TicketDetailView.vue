@@ -1877,6 +1877,8 @@ watch(
             <el-button
               type="primary"
               size="small"
+              plain
+              class="bug-report-view-btn"
               @click="openBugReportDetail(row.id)"
             >查看简报</el-button>
           </template>
@@ -2766,6 +2768,21 @@ watch(
   background: #f5f7fa;
   padding: 2px 8px;
   border-radius: 10px;
+}
+
+/* 关联 Bug 简报「查看简报」：与详情页其他 plain 主按钮一致，对比度高于默认实心 */
+.bug-report-view-btn {
+  font-weight: 500;
+  color: var(--md-primary-color) !important;
+  border-color: rgba(22, 117, 209, 0.45) !important;
+  background-color: var(--md-primary-light) !important;
+
+  &:hover,
+  &:focus {
+    color: #fff !important;
+    border-color: var(--md-primary-color) !important;
+    background-color: var(--md-primary-color) !important;
+  }
 }
 
 // ===== 附件 =====
