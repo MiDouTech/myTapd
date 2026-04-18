@@ -302,6 +302,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         bugReportMapper.insert(report);
 
         syncReportTickets(report.getId(), ticketIds, 0);
+        removeAutoDraftReportsOnManualLink(ticketIds, null);
         List<Long> responsibleUserIds = mergeResponsibleUserIds(input.getResponsibleUserIds(), tickets);
         syncResponsibleUsers(report.getId(), responsibleUserIds);
         recordLog(report.getId(), currentUserId, "CREATE", null, report.getStatus(), "创建Bug简报");
@@ -330,6 +331,7 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         if (ticketIds != null) {
             syncReportTickets(id, ticketIds, 0);
+            removeAutoDraftReportsOnManualLink(ticketIds, id);
         }
         if (input.getResponsibleUserIds() != null) {
             syncResponsibleUsers(id, distinctIds(input.getResponsibleUserIds()));
@@ -976,6 +978,61 @@ public class BugReportApplicationService extends BaseApplicationService {
             return "P3";
         }
         return source;
+    }
+
+    /**
+     * 手动关联工单保存后：清理同一工单上关单自动生成的「待填写」草稿简报，避免工单详情同时出现手动简报与自动草稿两行。
+     * 仅删除 DRAFT 且备注为「系统自动创建」的简报，避免误删用户自建草稿。
+     */
+    private void removeAutoDraftReportsOnManualLink(List<Long> ticketIds, Long excludeReportId) {
+        if (CollectionUtils.isEmpty(ticketIds)) {
+            return;
+        }
+        List<Long> distinctTicketIds = ticketIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (distinctTicketIds.isEmpty()) {
+            return;
+        }
+        List<BugReportTicketPO> autoLinks = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .in(BugReportTicketPO::getTicketId, distinctTicketIds)
+                        .eq(BugReportTicketPO::getIsAutoCreated, 1));
+        if (CollectionUtils.isEmpty(autoLinks)) {
+            return;
+        }
+        Set<Long> candidateReportIds = autoLinks.stream()
+                .map(BugReportTicketPO::getReportId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (excludeReportId != null) {
+            candidateReportIds.remove(excludeReportId);
+        }
+        if (candidateReportIds.isEmpty()) {
+            return;
+        }
+        List<BugReportPO> reports = bugReportMapper.selectBatchIds(new ArrayList<>(candidateReportIds));
+        if (CollectionUtils.isEmpty(reports)) {
+            return;
+        }
+        for (BugReportPO r : reports) {
+            if (r == null || r.getId() == null) {
+                continue;
+            }
+            if (!BugReportStatus.DRAFT.getCode().equals(r.getStatus())) {
+                continue;
+            }
+            if (!"系统自动创建".equals(r.getRemark())) {
+                continue;
+            }
+            Long rid = r.getId();
+            bugReportAttachmentMapper.hardDeleteByReportId(rid);
+            bugReportLogMapper.hardDeleteByReportId(rid);
+            bugReportResponsibleMapper.hardDeleteByReportId(rid);
+            bugReportTicketMapper.hardDeleteByReportId(rid);
+            bugReportMapper.hardDeleteById(rid);
+        }
     }
 
     private void syncReportTickets(Long reportId, List<Long> ticketIds, Integer isAutoCreated) {
