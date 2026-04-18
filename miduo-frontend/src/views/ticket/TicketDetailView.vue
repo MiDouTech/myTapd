@@ -1170,10 +1170,11 @@ async function runBriefingGuidanceIfNeeded(targetStatusRaw?: string): Promise<vo
   }
   const rows = detail.value?.bugReports ?? []
   const pending = rows.filter(isBugReportPendingFill)
-  if (!pending.length) {
+  const firstPending = pending[0]
+  if (!firstPending) {
     return
   }
-  highlightedBugReportId.value = pending[0].id
+  highlightedBugReportId.value = firstPending.id
   await nextTick()
   const anchor = bugBriefingSectionRef.value
   if (anchor) {
