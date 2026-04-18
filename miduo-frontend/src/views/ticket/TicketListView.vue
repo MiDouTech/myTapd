@@ -1080,9 +1080,15 @@ onUnmounted(() => {
                   {{ formatDateTime(row.createTime) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100" align="center" fixed="right">
+              <el-table-column label="操作" width="112" align="center" fixed="right">
                 <template #default="{ row }">
-                  <el-button type="primary" link @click="openBugReportDetail(row.id)">查看简报</el-button>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    plain
+                    class="bug-report-view-btn"
+                    @click="openBugReportDetail(row.id)"
+                  >查看简报</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -1482,6 +1488,21 @@ onUnmounted(() => {
   background: #f0f2f5;
   padding: 2px 10px;
   border-radius: 10px;
+}
+
+/* 关联 Bug 简报「查看简报」：浅色底 + 主色字，避免表格内像禁用态 */
+.bug-report-view-btn {
+  font-weight: 500;
+  color: var(--md-primary-color) !important;
+  border-color: rgba(22, 117, 209, 0.45) !important;
+  background-color: var(--md-primary-light) !important;
+
+  &:hover,
+  &:focus {
+    color: #fff !important;
+    border-color: var(--md-primary-color) !important;
+    background-color: var(--md-primary-color) !important;
+  }
 }
 
 // ===== 问题截图 =====
