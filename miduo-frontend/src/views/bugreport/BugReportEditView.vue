@@ -837,6 +837,12 @@ watch(resolutionMode, (mode) => {
     form.resolveTime = ''
   }
 })
+
+watch(isHighSeverity, (high) => {
+  if (!high) {
+    form.reviewerId = undefined
+  }
+})
 </script>
 
 <template>
@@ -1060,7 +1066,7 @@ watch(resolutionMode, (mode) => {
             <el-collapse-item title="更多字段（选填）" name="more">
               <template #title>
                 <span class="collapse-title-text">更多字段（选填）</span>
-                <span class="collapse-title-hint">影响范围、解决方案、审核人等</span>
+                <span class="collapse-title-hint">影响范围、解决方案{{ isHighSeverity ? '、审核人' : '' }}等</span>
               </template>
 
           <el-form-item label="影响范围">
@@ -1099,20 +1105,19 @@ watch(resolutionMode, (mode) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="审核人" :required="isHighSeverity">
+          <el-form-item v-if="isHighSeverity" label="审核人" required>
             <div class="reviewer-wrap">
               <el-select
                 v-model="form.reviewerId"
                 clearable
                 filterable
                 class="w-420"
-                :placeholder="isHighSeverity ? '请选择审核人（P0/P1 必填）' : '请选择审核人（可选）'"
+                placeholder="请选择审核人（P0/P1/P2 必填）"
               >
                 <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
               </el-select>
               <div class="reviewer-hint">
-                <el-tag v-if="isHighSeverity" type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
-                <el-tag v-else type="success" size="small" effect="plain">P2 及以下提交后直接归档，无需审核</el-tag>
+                <el-tag type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
               </div>
             </div>
           </el-form-item>
@@ -1180,20 +1185,19 @@ watch(resolutionMode, (mode) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="审核人" :required="isHighSeverity">
+          <el-form-item v-if="isHighSeverity" label="审核人" required>
             <div class="reviewer-wrap">
               <el-select
                 v-model="form.reviewerId"
                 clearable
                 filterable
                 class="w-420"
-                :placeholder="isHighSeverity ? '请选择审核人（P0/P1 必填）' : '请选择审核人（可选）'"
+                placeholder="请选择审核人（P0/P1/P2 必填）"
               >
                 <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
               </el-select>
               <div class="reviewer-hint">
-                <el-tag v-if="isHighSeverity" type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
-                <el-tag v-else type="success" size="small" effect="plain">P2 及以下提交后直接归档，无需审核</el-tag>
+                <el-tag type="danger" size="small" effect="plain">P0/P1 必须审核</el-tag>
               </div>
             </div>
           </el-form-item>
