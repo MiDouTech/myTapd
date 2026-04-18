@@ -1658,3 +1658,61 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `cursor/bug-report-reviewer-ui-6c51` | 移除审核人下方提示标签；去掉多余包裹层，统一审核人下拉宽度表现 |
+
+---
+
+## 38. 企业微信公开工单页：归档 Bug 简报首屏高亮（前后端）
+
+### 38.1 功能用途
+- **用途**：企业微信创建工单后返回的公开链接（无需登录）中，如果该工单已有“已归档”Bug简报，就在页面最显眼位置首屏展示；没有归档简报则完全不显示该区域。  
+- **类比理解**：像医院检查单首页的“重点结论卡片”——有结果就放最上面一眼看到，没有结果就不占地方。
+
+### 38.2 本次改动了什么
+1. 后端 `API000417`（`GET /api/open/ticket/{ticketNo}`）补充返回字段 `archivedBugReport`。  
+2. 仅返回该工单“最新一条已归档简报”摘要，避免公开页信息过载。  
+3. 前端公开详情页 `TicketPublicView.vue` 在工单头部前增加“归档 Bug 简报”高亮卡片：  
+   - 有数据：首屏展示（不需要下滑）  
+   - 无数据：该卡片区域不渲染（不留空白）
+
+### 38.3 使用方法（验收步骤）
+1. 通过企业微信创建一条工单，打开机器人返回的公开详情链接。  
+2. 场景A：该工单关联了**已归档**Bug简报。  
+   - 预期：页面顶部第一屏显示“归档 Bug 简报”高亮卡片，包含简报编号、分类、严重级别、责任人、关键摘要。  
+3. 场景B：该工单没有归档简报。  
+   - 预期：页面不显示“归档 Bug 简报”区域，直接展示工单头部卡片。  
+4. 验证公开链接仍可匿名访问（无需登录）。
+
+### 38.4 参数说明（本次新增字段）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `archivedBugReport` | `object \| null` | 最新已归档简报摘要；无归档简报时为 `null` |
+| `archivedBugReport.reportNo` | `string` | 简报编号 |
+| `archivedBugReport.status/statusLabel` | `string` | 简报状态（已归档） |
+| `archivedBugReport.defectCategory` | `string` | 缺陷分类 |
+| `archivedBugReport.severityLevel` | `string` | 严重级别 |
+| `archivedBugReport.logicCauseLevel1/2/detail` | `string` | 逻辑归因信息 |
+| `archivedBugReport.problemDesc` | `string` | 问题描述 |
+| `archivedBugReport.impactScope` | `string` | 影响范围 |
+| `archivedBugReport.solution` | `string` | 解决方案 |
+| `archivedBugReport.tempSolution` | `string` | 临时方案 |
+| `archivedBugReport.responsibleUserNames` | `string` | 责任人（多名用“、”连接） |
+| `archivedBugReport.reviewedAt/updateTime` | `string` | 归档/更新时间（前端优先展示归档时间） |
+
+### 38.5 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/open/ticket/{ticketNo}`（API000417） | `ApiResult<TicketPublicDetailOutput>` | 原有公开工单详情 + `archivedBugReport` 摘要字段 |
+
+### 38.6 常见问题（新增）
+#### Q40：为什么我打开公开链接没看到“归档 Bug 简报”卡片？
+- **检测**：先确认该工单是否真的关联了“已归档（ARCHIVED）”状态的简报。  
+- **记录（错误类型）**：常见是工单只关联了草稿/待审核简报，或简报已作废。  
+- **恢复建议**：
+  1. 到 Bug简报详情确认状态为“已归档”；
+  2. 确认该简报已关联当前工单；
+  3. 刷新公开详情页重试。
+
+### 38.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.3.9-public-ticket-archived-bug-brief-highlight` | 企业微信公开工单页新增“归档 Bug 简报”首屏高亮展示：有简报即显、无简报不占位，公开链接继续保持免登录访问 |

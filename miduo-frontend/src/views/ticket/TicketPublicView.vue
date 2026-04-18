@@ -12,6 +12,7 @@ const error = ref('')
 const detail = ref<TicketPublicDetailOutput>()
 
 const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
+const archivedBugReport = computed(() => detail.value?.archivedBugReport)
 
 /** 与系统内工单详情同域，便于企微里一键打开处理页（需登录） */
 const internalTicketHref = computed(() => {
@@ -101,6 +102,46 @@ function formatDate(dateStr?: string): string {
   }
 }
 
+function hasText(value?: string | null): boolean {
+  return value != null && value.trim().length > 0
+}
+
+const visibleArchivedBugSections = computed(() => {
+  const summary = archivedBugReport.value
+  if (!summary) {
+    return []
+  }
+  return [
+    {
+      key: 'problemDesc',
+      title: '问题描述',
+      value: summary.problemDesc,
+    },
+    {
+      key: 'logicCause',
+      title: '逻辑归因',
+      value: [summary.logicCauseLevel1, summary.logicCauseLevel2, summary.logicCauseDetail]
+        .filter(hasText)
+        .join(' / '),
+    },
+    {
+      key: 'impactScope',
+      title: '影响范围',
+      value: summary.impactScope,
+    },
+    {
+      key: 'solution',
+      title: '解决方案',
+      value: summary.solution,
+    },
+    {
+      key: 'tempSolution',
+      title: '临时方案',
+      value: summary.tempSolution,
+    },
+  ].filter((item) => hasText(item.value))
+})
+
 function isOperationLog(type?: string): boolean {
   return type === 'OPERATION'
 }
@@ -160,6 +201,36 @@ onMounted(() => {
       </div>
 
       <template v-else-if="detail">
+        <div v-if="archivedBugReport" class="card archived-bug-report-card">
+          <div class="archived-bug-report-head">
+            <div class="archived-bug-report-title-wrap">
+              <div class="archived-bug-report-label">归档 Bug 简报</div>
+              <h2 class="archived-bug-report-title">
+                {{ archivedBugReport.reportNo || '已归档简报' }}
+              </h2>
+            </div>
+            <span class="archived-bug-report-status">
+              {{ archivedBugReport.statusLabel || archivedBugReport.status || '已归档' }}
+            </span>
+          </div>
+          <div class="archived-bug-report-meta">
+            <span v-if="archivedBugReport.defectCategory">缺陷分类：{{ archivedBugReport.defectCategory }}</span>
+            <span v-if="archivedBugReport.severityLevel">严重级别：{{ archivedBugReport.severityLevel }}</span>
+            <span v-if="archivedBugReport.responsibleUserNames">责任人：{{ archivedBugReport.responsibleUserNames }}</span>
+            <span>归档时间：{{ formatDate(archivedBugReport.reviewedAt || archivedBugReport.updateTime) }}</span>
+          </div>
+          <div class="archived-bug-report-body">
+            <div
+              v-for="section in visibleArchivedBugSections"
+              :key="section.key"
+              class="archived-bug-report-section"
+            >
+              <span class="archived-bug-report-section-title">{{ section.title }}</span>
+              <p class="archived-bug-report-section-value">{{ section.value }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- 工单头部信息卡片 -->
         <div class="card ticket-header-card">
           <div class="ticket-badges">
@@ -406,6 +477,86 @@ onMounted(() => {
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.archived-bug-report-card {
+  border: 2px solid #1675d1;
+  box-shadow: 0 8px 20px rgba(22, 117, 209, 0.16);
+  background: linear-gradient(145deg, #eef6ff 0%, #ffffff 60%);
+}
+
+.archived-bug-report-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.archived-bug-report-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1675d1;
+  background: rgba(22, 117, 209, 0.12);
+  margin-bottom: 6px;
+}
+
+.archived-bug-report-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+  color: #0f3f7a;
+}
+
+.archived-bug-report-status {
+  align-self: flex-start;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #1675d1;
+}
+
+.archived-bug-report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.archived-bug-report-body {
+  display: grid;
+  gap: 8px;
+}
+
+.archived-bug-report-section {
+  background: #f7fbff;
+  border: 1px solid #d5e9ff;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.archived-bug-report-section-title {
+  display: inline-block;
+  color: #1675d1;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.archived-bug-report-section-value {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .card-title {
@@ -766,6 +917,15 @@ onMounted(() => {
 
   .ticket-title {
     font-size: 16px;
+  }
+
+  .archived-bug-report-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .archived-bug-report-title {
+    font-size: 18px;
   }
 
   .info-grid {

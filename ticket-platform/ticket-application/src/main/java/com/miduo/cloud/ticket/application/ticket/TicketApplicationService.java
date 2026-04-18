@@ -540,6 +540,7 @@ public class TicketApplicationService {
             bugCustomerInfo.setProblemScreenshot(customerInfoOutput.getProblemScreenshot());
             output.setBugCustomerInfo(bugCustomerInfo);
         }
+        output.setArchivedBugReport(buildArchivedBugReportSummary(ticket.getId()));
 
         List<TicketCommentPO> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<TicketCommentPO>()
@@ -586,6 +587,98 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    /**
+     * 构建公开详情页的归档 Bug 简报摘要（仅返回最新一条已归档简报）
+     */
+    private TicketPublicDetailOutput.ArchivedBugReportSummary buildArchivedBugReportSummary(Long ticketId) {
+        if (ticketId == null) {
+            return null;
+        }
+        List<BugReportTicketPO> reportLinks = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getTicketId, ticketId)
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+        );
+        if (reportLinks == null || reportLinks.isEmpty()) {
+            return null;
+        }
+
+        Set<Long> reportIds = reportLinks.stream()
+                .map(BugReportTicketPO::getReportId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (reportIds.isEmpty()) {
+            return null;
+        }
+
+        List<BugReportPO> reports = bugReportMapper.selectBatchIds(reportIds);
+        if (reports == null || reports.isEmpty()) {
+            return null;
+        }
+        Map<Long, BugReportPO> reportMap = reports.stream()
+                .filter(r -> r.getId() != null)
+                .collect(Collectors.toMap(BugReportPO::getId, r -> r));
+
+        BugReportPO latestArchivedReport = null;
+        for (BugReportTicketPO link : reportLinks) {
+            BugReportPO report = reportMap.get(link.getReportId());
+            if (report != null && BugReportStatus.ARCHIVED.getCode().equals(report.getStatus())) {
+                latestArchivedReport = report;
+                break;
+            }
+        }
+        if (latestArchivedReport == null) {
+            return null;
+        }
+
+        TicketPublicDetailOutput.ArchivedBugReportSummary summary =
+                new TicketPublicDetailOutput.ArchivedBugReportSummary();
+        summary.setId(latestArchivedReport.getId());
+        summary.setReportNo(latestArchivedReport.getReportNo());
+        summary.setStatus(latestArchivedReport.getStatus());
+        BugReportStatus status = BugReportStatus.fromCode(latestArchivedReport.getStatus());
+        summary.setStatusLabel(status != null ? status.getLabel() : latestArchivedReport.getStatus());
+        summary.setDefectCategory(latestArchivedReport.getDefectCategory());
+        summary.setSeverityLevel(latestArchivedReport.getSeverityLevel());
+        summary.setLogicCauseLevel1(latestArchivedReport.getLogicCauseLevel1());
+        summary.setLogicCauseLevel2(latestArchivedReport.getLogicCauseLevel2());
+        summary.setLogicCauseDetail(latestArchivedReport.getLogicCauseDetail());
+        summary.setProblemDesc(latestArchivedReport.getProblemDesc());
+        summary.setImpactScope(latestArchivedReport.getImpactScope());
+        summary.setSolution(latestArchivedReport.getSolution());
+        summary.setTempSolution(latestArchivedReport.getTempSolution());
+        summary.setReviewedAt(latestArchivedReport.getReviewedAt());
+        summary.setUpdateTime(latestArchivedReport.getUpdateTime());
+
+        List<BugReportResponsiblePO> responsibles = bugReportResponsibleMapper.selectList(
+                new LambdaQueryWrapper<BugReportResponsiblePO>()
+                        .eq(BugReportResponsiblePO::getReportId, latestArchivedReport.getId())
+                        .orderByAsc(BugReportResponsiblePO::getCreateTime)
+        );
+        if (responsibles != null && !responsibles.isEmpty()) {
+            Set<Long> userIds = responsibles.stream()
+                    .map(BugReportResponsiblePO::getUserId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            if (!userIds.isEmpty()) {
+                List<SysUserPO> users = userMapper.selectBatchIds(userIds);
+                if (users != null && !users.isEmpty()) {
+                    Map<Long, String> userNameMap = users.stream()
+                            .filter(u -> u.getId() != null)
+                            .collect(Collectors.toMap(SysUserPO::getId, SysUserPO::getName));
+                    String names = responsibles.stream()
+                            .map(BugReportResponsiblePO::getUserId)
+                            .map(userNameMap::get)
+                            .filter(Objects::nonNull)
+                            .filter(name -> !name.trim().isEmpty())
+                            .collect(Collectors.joining("、"));
+                    summary.setResponsibleUserNames(names);
+                }
+            }
+        }
+        return summary;
     }
 
     @Transactional(rollbackFor = Exception.class)

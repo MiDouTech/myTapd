@@ -352,6 +352,25 @@ export interface TicketPublicBugCustomerInfo {
   problemScreenshot?: string
 }
 
+export interface TicketPublicArchivedBugReportSummary {
+  id: number
+  reportNo?: string
+  status?: string
+  statusLabel?: string
+  defectCategory?: string
+  severityLevel?: string
+  logicCauseLevel1?: string
+  logicCauseLevel2?: string
+  logicCauseDetail?: string
+  problemDesc?: string
+  impactScope?: string
+  solution?: string
+  tempSolution?: string
+  responsibleUserNames?: string
+  reviewedAt?: string
+  updateTime?: string
+}
+
 export interface TicketPublicDetailOutput {
   id: number
   ticketNo: string
@@ -373,5 +392,7 @@ export interface TicketPublicDetailOutput {
   createTime?: string
   updateTime?: string
   bugCustomerInfo?: TicketPublicBugCustomerInfo
+  /** 最新归档简报摘要，无归档简报时为空 */
+  archivedBugReport?: TicketPublicArchivedBugReportSummary
   comments?: TicketPublicCommentOutput[]
 }
