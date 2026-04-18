@@ -1679,12 +1679,19 @@ watch(isHighSeverity, (high) => {
 }
 
 .ticket-select-wrap {
+  /* 占满表单项内容区：否则作为 flex 子项会随内部 inline-block 的 el-select 收缩，看起来比其它字段窄 */
+  flex: 1;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .severity-wrap {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
