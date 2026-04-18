@@ -63,8 +63,9 @@ public class TicketController {
     @Operation(summary = "分页查询工单列表", description = "接口编号：API000007")
     public ApiResult<PageOutput<TicketListOutput>> getTicketPage(@Valid TicketPageInput input) {
         Long currentUserId = getCurrentUserId();
+        // 未显式传 view 时按「全库」查询，避免调用方漏传时误用「我创建的」导致列表/搜索只见本人已结单（如 Bug 简报关联工单）
         if (!StringUtils.hasText(input.getView())) {
-            input.setView(TicketView.MY_CREATED.getCode());
+            input.setView(TicketView.ALL.getCode());
         }
         PageOutput<TicketListOutput> page = ticketService.getTicketPage(input, currentUserId);
         return ApiResult.success(page);
