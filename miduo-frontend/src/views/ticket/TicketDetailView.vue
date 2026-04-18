@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -106,12 +106,6 @@ const availableActions = ref<AvailableActionOutput | null>(null)
 const selectedAction = ref<TicketActionItem | null>(null)
 const flowHistory = ref<TicketFlowRecordOutput[]>([])
 const flowHistoryLoading = ref(false)
-
-/** 关联简报区块锚点：流转到临时解决/已完成后滚动定位用 */
-const bugBriefingSectionRef = ref<HTMLElement | null>(null)
-/** 高亮「查看简报」对应行，引导用户补填简报 */
-const highlightedBugReportId = ref<number | null>(null)
-let clearBriefHighlightTimer: ReturnType<typeof setTimeout> | null = null
 
 const transitForm = reactive({
   transitionId: '',
@@ -803,6 +797,7 @@ function openTransitDialog(action: TicketActionItem): void {
 async function handleProcess(): Promise<void> {
   submitLoading.value = true
   const guidedTargetStatus = transitForm.targetStatus
+  const guidedActionName = selectedAction.value?.actionName
   try {
     if (!selectedAction.value) {
       notifyError('请选择操作')
@@ -873,7 +868,7 @@ async function handleProcess(): Promise<void> {
     // 仅在详情刷新成功后再提示成功，避免流转已成功但详情接口失败时出现「操作成功」与报错并存
     await loadAll()
     notifySuccess('操作成功')
-    await runBriefingGuidanceIfNeeded(guidedTargetStatus)
+    await redirectToBugReportEditIfNeeded(guidedTargetStatus, guidedActionName)
   } finally {
     submitLoading.value = false
   }
@@ -1130,61 +1125,48 @@ function isBugReportPendingFill(row: TicketBugReportOutput): boolean {
   return (row.statusLabel || '').trim() === '待填写'
 }
 
-function getLayoutMainScrollEl(): HTMLElement | null {
-  if (typeof document === 'undefined') {
-    return null
+function shouldRedirectToBugReportEdit(targetStatusRaw?: string, actionNameRaw?: string): boolean {
+  const normalized = normalizeTicketStatusCode(targetStatusRaw)
+  const actionName = (actionNameRaw || '').trim()
+  // 需求指定的两个动作：处理完成 / 临时解决确认（兼容历史动作名“验证完成”）。
+  if (
+    actionName.includes('处理完成') ||
+    actionName.includes('临时解决确认') ||
+    actionName.includes('验证完成')
+  ) {
+    return true
   }
-  return document.querySelector('.layout-root .el-main.main') as HTMLElement | null
+  // 若后端未返回动作名称，降级按终态判断，避免因数据缺失导致不跳转。
+  if (!actionName) {
+    return normalized === 'temp_resolved' || normalized === 'completed'
+  }
+  return false
 }
 
 /**
- * 主布局里滚动容器是 el-main，这里用 scrollTo 保证一定能滚到关联简报区块。
- * 这里用 scrollTo 是因为部分环境下子节点 scrollIntoView 对非 window 滚动表现不稳定。
+ * 处理完成链路后直接进入简报编辑：
+ * - 优先打开已自动生成的「待填写」简报草稿
+ * - 若暂无草稿，则跳到新建页并把当前工单ID带过去
  */
-function scrollBriefingSectionIntoView(anchor: HTMLElement): void {
-  const scroller = getLayoutMainScrollEl()
-  if (!scroller) {
-    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+async function redirectToBugReportEditIfNeeded(
+  targetStatusRaw?: string,
+  actionNameRaw?: string,
+): Promise<void> {
+  if (!isDefectWorkflow.value) {
     return
   }
-  const anchorRect = anchor.getBoundingClientRect()
-  const scrollerRect = scroller.getBoundingClientRect()
-  const delta =
-    anchorRect.top - scrollerRect.top - (scroller.clientHeight / 2 - anchorRect.height / 2)
-  const top = scroller.scrollTop + delta
-  scroller.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
-}
-
-function clearBugBriefHighlightTimer(): void {
-  if (clearBriefHighlightTimer) {
-    clearTimeout(clearBriefHighlightTimer)
-    clearBriefHighlightTimer = null
-  }
-}
-
-/** 流转到临时解决/已完成后：有待填写简报则滚到区块并短暂高亮「查看简报」入口 */
-async function runBriefingGuidanceIfNeeded(targetStatusRaw?: string): Promise<void> {
-  const normalized = normalizeTicketStatusCode(targetStatusRaw)
-  if (normalized !== 'temp_resolved' && normalized !== 'completed') {
+  if (!shouldRedirectToBugReportEdit(targetStatusRaw, actionNameRaw)) {
     return
   }
-  const rows = detail.value?.bugReports ?? []
-  const pending = rows.filter(isBugReportPendingFill)
-  const firstPending = pending[0]
-  if (!firstPending) {
+  const pendingReportId = (detail.value?.bugReports ?? []).find(isBugReportPendingFill)?.id
+  if (pendingReportId && pendingReportId > 0) {
+    await router.push(`/bug-report/edit/${pendingReportId}`)
     return
   }
-  highlightedBugReportId.value = firstPending.id
-  await nextTick()
-  const anchor = bugBriefingSectionRef.value
-  if (anchor) {
-    scrollBriefingSectionIntoView(anchor)
-  }
-  clearBugBriefHighlightTimer()
-  clearBriefHighlightTimer = setTimeout(() => {
-    highlightedBugReportId.value = null
-    clearBriefHighlightTimer = null
-  }, 3800)
+  await router.push({
+    path: '/bug-report/edit',
+    query: { ticketId: String(ticketId.value) },
+  })
 }
 
 // 优先级标签与样式
@@ -1258,7 +1240,6 @@ onBeforeUnmount(() => {
     clearTimeout(mentionSearchTimer)
     mentionSearchTimer = null
   }
-  clearBugBriefHighlightTimer()
 })
 
 watch(
@@ -1861,7 +1842,6 @@ watch(
     <el-card
       v-if="detail?.bugReports?.length"
       id="ticket-related-briefing"
-      ref="bugBriefingSectionRef"
       shadow="never"
       class="section-card"
     >
@@ -1897,7 +1877,6 @@ watch(
             <el-button
               type="primary"
               size="small"
-              :class="{ 'bug-brief-link--pulse': highlightedBugReportId === row.id }"
               @click="openBugReportDetail(row.id)"
             >查看简报</el-button>
           </template>
@@ -2787,26 +2766,6 @@ watch(
   background: #f5f7fa;
   padding: 2px 8px;
   border-radius: 10px;
-}
-
-@keyframes bug-brief-link-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(22, 117, 209, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(22, 117, 209, 0.1);
-  }
-}
-
-:deep(.bug-brief-link--pulse.el-button) {
-  position: relative;
-  z-index: 1;
-  border-radius: 4px;
-  outline: 2px solid rgba(22, 117, 209, 0.45);
-  outline-offset: 2px;
-  background-color: rgba(255, 249, 196, 0.75);
-  animation: bug-brief-link-pulse 1.1s ease-in-out 2;
 }
 
 // ===== 附件 =====
