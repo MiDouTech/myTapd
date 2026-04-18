@@ -115,6 +115,10 @@ async function handleCreateTicket(): Promise<void> {
     notifyWarning('请先完善标题、分类和优先级')
     return
   }
+  if (!String(form.description || '').trim()) {
+    notifyWarning('请填写问题描述')
+    return
+  }
   const missingRequiredField = dynamicFields.value.find(
     (field) => field.required && !String(customFields[field.key] || '').trim(),
   )
@@ -223,7 +227,7 @@ onMounted(() => {
       </el-form-item>
 
       <div class="form-section-title">问题详情</div>
-      <el-form-item label="问题描述">
+      <el-form-item label="问题描述" required>
         <el-input
           v-model="form.description"
           type="textarea"

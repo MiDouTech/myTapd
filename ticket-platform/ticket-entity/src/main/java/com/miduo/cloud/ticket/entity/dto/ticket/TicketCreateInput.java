@@ -16,6 +16,7 @@ public class TicketCreateInput implements Serializable {
     @Size(max = 300, message = "工单标题长度不能超过300个字符")
     private String title;
 
+    @NotBlank(message = "问题描述不能为空")
     private String description;
 
     @NotNull(message = "工单分类不能为空")
