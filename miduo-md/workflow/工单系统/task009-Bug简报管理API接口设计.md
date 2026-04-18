@@ -41,4 +41,4 @@
 5. **解决信息字段（与缺陷工单状态联动）**  
    - 数据库字段 `bug_report.resolve_time`（DATETIME）：工单「处理完成」场景下简报必填的**解决时间**（含时分秒）。  
    - 工单处于 **临时解决**（`temp_resolved`）时：简报填写 `temp_resolve_date`、`temp_solution`、`resolve_date`、`solution`（四者必填）；更新时可传 `clearResolveTime=true` 清空 `resolve_time`。  
-   - 关联工单**全部**为 **已完成/已关闭**（`completed` / `closed`）时：简报仅填写 `resolve_time`；更新时可传 `clearThoroughAndTempResolution=true` 清空上述四个字段。  
+   - 关联工单**全部**为 **已完成**（`completed`）时：简报仅填写 `resolve_time`；**已关闭**（非缺陷关闭等）不作为可关联状态。更新时可传 `clearThoroughAndTempResolution=true` 清空上述四个字段。  

@@ -147,7 +147,8 @@ const isHighSeverity = computed(() => {
 })
 
 const TICKET_STATUS_TEMP_RESOLVED = 'temp_resolved'
-const TICKET_STATUSES_RESOLVED_COMPLETE = new Set(['completed', 'closed'])
+/** 缺陷处理完成：仅「已完成」；「已关闭」多为非缺陷关闭，不写此类简报 */
+const TICKET_STATUSES_RESOLVED_COMPLETE = new Set(['completed'])
 
 /** 与后端 TicketStatus 及历史数据对齐，避免大小写/空格导致误判为「处理完成」表单 */
 function normalizeTicketStatusCode(raw?: string | null): string {
@@ -180,7 +181,7 @@ function applyTicketStatusesFromDetail(
 /**
  * 根据关联工单的当前状态，决定简报里该填哪一类「解决」信息：
  * - 任一工单处于临时解决 → 填四件套，不填解决时间
- * - 全部工单已处理完成或已关闭 → 只填解决时间（必填），不填四件套
+ * - 全部工单已处理完成（已完成）→ 只填解决时间（必填），不填四件套
  */
 const resolutionMode = computed<'temp' | 'complete' | 'unknown' | 'none'>(() => {
   const ids = form.ticketIds.filter((id) => Number.isFinite(id) && id > 0)

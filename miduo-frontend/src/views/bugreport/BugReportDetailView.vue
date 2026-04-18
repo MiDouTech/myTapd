@@ -90,7 +90,7 @@ const bugReportResolutionMode = computed<'temp' | 'complete' | 'unknown'>(() => 
   if (tickets.some((t) => t.status === 'temp_resolved')) {
     return 'temp'
   }
-  if (tickets.every((t) => t.status && ['completed', 'closed'].includes(String(t.status)))) {
+  if (tickets.every((t) => t.status && String(t.status).toLowerCase() === 'completed')) {
     return 'complete'
   }
   return 'unknown'

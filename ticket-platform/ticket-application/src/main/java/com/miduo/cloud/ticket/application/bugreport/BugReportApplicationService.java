@@ -845,11 +845,10 @@ public class BugReportApplicationService extends BaseApplicationService {
             }
             String code = ticket.getStatus().trim().toLowerCase(Locale.ROOT);
             if (!TicketStatus.TEMP_RESOLVED.getCode().equals(code)
-                    && !TicketStatus.COMPLETED.getCode().equals(code)
-                    && !TicketStatus.CLOSED.getCode().equals(code)) {
+                    && !TicketStatus.COMPLETED.getCode().equals(code)) {
                 throw BusinessException.of(
                         ErrorCode.PARAM_ERROR,
-                        "关联工单仅可选择状态为「临时解决」「已完成」或「已关闭」的工单");
+                        "关联工单仅可选择状态为「临时解决」或「已完成」的工单（非缺陷关闭的工单不可关联）");
             }
         }
         return tickets;

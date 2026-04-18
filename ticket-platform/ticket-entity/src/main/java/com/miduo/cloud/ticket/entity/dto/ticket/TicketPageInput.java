@@ -38,7 +38,7 @@ public class TicketPageInput extends PageInput {
     private String slaStatus;
 
     /**
-     * 为 true 时仅返回可关联 Bug 简报的工单：临时解决、已完成、已关闭（与简报「解决信息」口径一致）
+     * 为 true 时仅返回可关联 Bug 简报的工单：临时解决、已完成（不含非缺陷关闭的已关闭）
      */
     private Boolean linkableForBugReport;
 }

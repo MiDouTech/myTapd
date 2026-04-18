@@ -1617,8 +1617,8 @@ vite v7.3.1 building client environment for production...
 ## 36. Bug 简报「关联工单」仅展示可写简报的工单（前后端）
 
 ### 36.1 功能用途
-- **用途**：在 Bug 简报新建/编辑页，「关联工单」搜索下拉只出现**临时解决**或**已结单类**（**已完成 / 已关闭**）工单；保存简报时也会拒绝其它状态的工单 ID，避免接口被绕过。
-- **类比**：以前像「通讯录里所有人都能被选为紧急联系人」；现在只有「已经谈妥或暂时稳住局面」的人才能被选。
+- **用途**：在 Bug 简报新建/编辑页，「关联工单」搜索下拉只出现**临时解决**或**已完成**工单；**已关闭**（多指非缺陷关闭）不出现在列表中且保存时不可关联。保存简报时也会拒绝其它状态的工单 ID，避免接口被绕过。
+- **类比**：以前像「通讯录里所有人都能被选为紧急联系人」；现在只有「缺陷已临时稳住」或「缺陷已真正修完结单」的人才能被选。
 
 ### 36.2 使用方法（验收步骤）
 1. 打开「新建 Bug 简报」或编辑草稿；
@@ -1629,10 +1629,10 @@ vite v7.3.1 building client environment for production...
 ### 36.3 参数说明
 | 参数 | 类型 | 说明 |
 |---|---|---|
-| `GET /api/ticket/page` 查询参数 `linkableForBugReport` | `boolean` | 传 `true` 时仅返回 `temp_resolved`、`completed`、`closed` 工单 |
-| Bug 简报 `ticketIds` | `number[]` | 每个 ID 对应工单状态须为上述三种之一 |
+| `GET /api/ticket/page` 查询参数 `linkableForBugReport` | `boolean` | 传 `true` 时仅返回 `temp_resolved`、`completed` 工单 |
+| Bug 简报 `ticketIds` | `number[]` | 每个 ID 对应工单状态须为上述两种之一 |
 
 ### 36.4 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
-| `cursor/bug-report-ticket-status-filter-8653` | 工单分页支持 `linkableForBugReport`；简报保存校验关联工单状态；编辑页搜索传该参数 |
+| `cursor/bug-report-ticket-status-filter-8653` | 工单分页支持 `linkableForBugReport`（仅 `temp_resolved`/`completed`）；简报保存校验；编辑/详情/提示文案与「非缺陷关闭不写简报」口径一致 |
