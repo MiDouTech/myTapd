@@ -343,7 +343,7 @@ watch(
 <template>
   <el-container class="layout-root">
     <el-aside v-if="!isMobile" class="sidebar" :width="collapsed ? '64px' : '220px'">
-      <div class="logo">{{ collapsed ? 'MD' : '米多工单系统' }}</div>
+      <div class="logo">{{ collapsed ? 'MTS' : '米多工单系统' }}</div>
       <el-menu
         :default-active="activeMenu"
         :collapse="collapsed"
