@@ -55,6 +55,11 @@ public class TicketPublicDetailOutput implements Serializable {
      */
     private BugCustomerInfo bugCustomerInfo;
 
+    /**
+     * 归档后的 Bug 简报摘要（无归档简报时为 null）
+     */
+    private ArchivedBugReportSummary archivedBugReport;
+
     private List<CommentOutput> comments;
 
     @Data
@@ -75,5 +80,25 @@ public class TicketPublicDetailOutput implements Serializable {
         private String content;
         private String type;
         private Date createTime;
+    }
+
+    @Data
+    public static class ArchivedBugReportSummary implements Serializable {
+        private Long id;
+        private String reportNo;
+        private String status;
+        private String statusLabel;
+        private String defectCategory;
+        private String severityLevel;
+        private String logicCauseLevel1;
+        private String logicCauseLevel2;
+        private String logicCauseDetail;
+        private String problemDesc;
+        private String impactScope;
+        private String solution;
+        private String tempSolution;
+        private String responsibleUserNames;
+        private Date reviewedAt;
+        private Date updateTime;
     }
 }
