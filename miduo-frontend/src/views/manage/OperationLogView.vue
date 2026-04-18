@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -75,6 +76,9 @@ function formatDateTime(d: Date): string {
 
 const searchForm = reactive<OperationLogPageInput>(defaultSearchForm())
 const dateRange = ref<[string, string] | null>(null)
+
+/** 为 true 时只显示常用筛选项，避免一屏堆满表单项 */
+const filterCollapsed = ref(false)
 
 function onDateRangeChange(val: [string, string] | null) {
   if (val && val.length === 2) {
@@ -274,37 +278,39 @@ onMounted(() => {
           />
         </el-form-item>
 
-        <el-form-item label="日志级别">
-          <el-select
-            v-model="searchForm.logLevel"
-            placeholder="请选择内容"
-            clearable
-            style="width: 120px"
-          >
-            <el-option label="系统级" value="SYSTEM" />
-            <el-option label="业务级" value="BUSINESS" />
-            <el-option label="安全级" value="SECURITY" />
-            <el-option label="错误级" value="ERROR" />
-          </el-select>
-        </el-form-item>
+        <template v-if="!filterCollapsed">
+          <el-form-item label="日志级别">
+            <el-select
+              v-model="searchForm.logLevel"
+              placeholder="请选择内容"
+              clearable
+              style="width: 120px"
+            >
+              <el-option label="系统级" value="SYSTEM" />
+              <el-option label="业务级" value="BUSINESS" />
+              <el-option label="安全级" value="SECURITY" />
+              <el-option label="错误级" value="ERROR" />
+            </el-select>
+          </el-form-item>
 
-        <el-form-item label="操作模块">
-          <el-input
-            v-model="searchForm.moduleName"
-            placeholder="模糊匹配"
-            clearable
-            style="width: 140px"
-          />
-        </el-form-item>
+          <el-form-item label="操作模块">
+            <el-input
+              v-model="searchForm.moduleName"
+              placeholder="模糊匹配"
+              clearable
+              style="width: 140px"
+            />
+          </el-form-item>
 
-        <el-form-item label="操作项">
-          <el-input
-            v-model="searchForm.operationItem"
-            placeholder="模糊匹配"
-            clearable
-            style="width: 160px"
-          />
-        </el-form-item>
+          <el-form-item label="操作项">
+            <el-input
+              v-model="searchForm.operationItem"
+              placeholder="模糊匹配"
+              clearable
+              style="width: 160px"
+            />
+          </el-form-item>
+        </template>
 
         <el-form-item label="操作详情">
           <el-input
@@ -330,6 +336,21 @@ onMounted(() => {
         <el-form-item>
           <el-button type="primary" native-type="submit" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button
+            link
+            type="primary"
+            class="filter-collapse-toggle"
+            @click="filterCollapsed = !filterCollapsed"
+          >
+            <template v-if="filterCollapsed">
+              展开
+              <el-icon class="filter-collapse-toggle__icon"><ArrowDown /></el-icon>
+            </template>
+            <template v-else>
+              MTS
+              <el-icon class="filter-collapse-toggle__icon"><ArrowUp /></el-icon>
+            </template>
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -614,6 +635,16 @@ onMounted(() => {
     margin-bottom: 16px;
     margin-right: 16px;
   }
+}
+
+.filter-collapse-toggle {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.filter-collapse-toggle__icon {
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 // ─── 表格区 ───────────────────────────────
