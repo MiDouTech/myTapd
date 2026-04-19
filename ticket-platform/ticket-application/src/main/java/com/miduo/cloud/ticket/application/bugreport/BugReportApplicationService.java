@@ -1045,6 +1045,25 @@ public class BugReportApplicationService extends BaseApplicationService {
         return tickets;
     }
 
+    /**
+     * 关联工单是否全部为「已完成」（与前端「处理完成」场景一致：只维护 resolveTime，不预填彻底解决日期）。
+     */
+    private boolean allLinkedTicketsCompleted(List<TicketPO> tickets) {
+        if (CollectionUtils.isEmpty(tickets)) {
+            return false;
+        }
+        for (TicketPO ticket : tickets) {
+            if (ticket == null || !StringUtils.hasText(ticket.getStatus())) {
+                return false;
+            }
+            String code = ticket.getStatus().trim().toLowerCase(Locale.ROOT);
+            if (!TicketStatus.COMPLETED.getCode().equals(code)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void applyAutoPrefill(BugReportPO report, List<TicketPO> tickets, List<Long> ticketIds) {
         if (CollectionUtils.isEmpty(tickets) || CollectionUtils.isEmpty(ticketIds)) {
             return;
@@ -1083,7 +1102,9 @@ public class BugReportApplicationService extends BaseApplicationService {
             report.setStartDate(startDate);
         }
 
-        if (report.getResolveDate() == null) {
+        // 关联工单均为「已完成」时，简报走「仅解决时间」口径（resolveTime），不应从工单关单/解决时间反写 resolveDate，
+        // 否则用户未填彻底解决日期也会在保存/归档后详情里出现日期。
+        if (report.getResolveDate() == null && !allLinkedTicketsCompleted(tickets)) {
             Date resolveDate = null;
             for (TicketPO ticket : tickets) {
                 Date candidate = ticket.getResolvedAt() != null ? ticket.getResolvedAt() : ticket.getClosedAt();
