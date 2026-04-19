@@ -126,6 +126,16 @@ const visibleArchivedBugSections = computed(() => {
   }
   return [
     {
+      key: 'introducedProject',
+      title: '引入项目',
+      value: summary.introducedProject,
+    },
+    {
+      key: 'impactScope',
+      title: '影响范围',
+      value: summary.impactScope,
+    },
+    {
       key: 'problemDesc',
       title: '问题描述',
       value: summary.problemDesc,
@@ -226,8 +236,6 @@ onMounted(() => {
             <span v-if="archivedBugReport.severityLevel">严重级别：{{ archivedBugReport.severityLevel }}</span>
             <span v-if="archivedBugReport.responsibleUserNames">责任人：{{ archivedBugReport.responsibleUserNames }}</span>
             <span v-if="hasText(archivedBugReport.reporterName)">反馈人：{{ archivedBugReport.reporterName }}</span>
-            <span v-if="hasText(archivedBugReport.introducedProject)">引入项目：{{ archivedBugReport.introducedProject }}</span>
-            <span v-if="hasText(archivedBugReport.impactScope)">影响范围：{{ archivedBugReport.impactScope }}</span>
             <span v-if="archivedBugReport.startDate">开始时间：{{ formatDateOnly(archivedBugReport.startDate) }}</span>
             <span v-if="archivedBugReport.tempResolveDate">临时解决时间：{{ formatDateOnly(archivedBugReport.tempResolveDate) }}</span>
             <span v-if="archivedBugReport.resolveDate">彻底解决日期：{{ formatDateOnly(archivedBugReport.resolveDate) }}</span>
