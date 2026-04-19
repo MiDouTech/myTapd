@@ -401,6 +401,8 @@ public class BugReportApplicationService extends BaseApplicationService {
                 notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
                         NotificationType.REPORT_APPROVED, notifyTitle, notifyContent);
             }
+            // P3/P4 与审核通过一致：向问题所在企微群推送简报全文并优先 @ 反馈人
+            sendArchivedBugReportGroupNotice(report);
         }
     }
 
@@ -475,73 +477,163 @@ public class BugReportApplicationService extends BaseApplicationService {
                         NotificationType.REPORT_APPROVED, notifyTitle, content);
             }
 
-            // 企微群 Webhook @mention 通知（所有工单相关人员）
-            Set<Long> allMentionUserIds = new LinkedHashSet<>(ticketStakeholderIds);
-            allMentionUserIds.addAll(responsibleUserIds);
-            if (!relatedTicketIds.isEmpty()) {
-                // 批量查用户名：reporter + reviewer + 责任人 + 待@人
-                Set<Long> allUserIds = new LinkedHashSet<>(allMentionUserIds);
-                if (report.getReporterId() != null) {
-                    allUserIds.add(report.getReporterId());
-                }
-                if (report.getReviewerId() != null) {
-                    allUserIds.add(report.getReviewerId());
-                }
-                allUserIds.addAll(responsibleUserIds);
-                Map<Long, String> userNameMap = getUserNameMap(allUserIds);
-
-                List<String> mentionWecomUserIds = Collections.emptyList();
-                if (!allMentionUserIds.isEmpty()) {
-                    List<SysUserPO> mentionUsers = sysUserMapper.selectBatchIds(new ArrayList<>(allMentionUserIds));
-                    mentionWecomUserIds = mentionUsers.stream()
-                            .map(SysUserPO::getWecomUserid)
-                            .filter(StringUtils::hasText)
-                            .collect(Collectors.toList());
-                }
-
-                String markdownBody = buildApproveGroupNoticeMarkdown(report, userNameMap, responsibleUserIds);
-                wecomGroupPushService.pushReportNoticeByTickets(relatedTicketIds, markdownBody, mentionWecomUserIds);
-            }
+            // 企微群 Webhook：简报 Markdown + @反馈人及工单干系人
+            sendArchivedBugReportGroupNotice(report);
         }
     }
 
     /**
-     * 按照团队既有格式组装 Bug 简报归档群通知 Markdown 正文
-     * 格式参考：问题描述：xxx\n逻辑归因：xxx\n缺陷分类：xxx\n...
+     * 简报归档后向关联工单所在企微群推送 Markdown 简报，并 @ 反馈人及工单创建人/处理人/责任人。
      */
-    private String buildApproveGroupNoticeMarkdown(BugReportPO report,
-                                                    Map<Long, String> userNameMap,
-                                                    List<Long> responsibleUserIds) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("**[Bug简报归档] ").append(report.getReportNo()).append("**\n");
+    private void sendArchivedBugReportGroupNotice(BugReportPO report) {
+        if (report == null || report.getId() == null) {
+            return;
+        }
+        Long reportId = report.getId();
+        List<BugReportTicketPO> reportTicketLinks = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .eq(BugReportTicketPO::getReportId, reportId));
+        if (CollectionUtils.isEmpty(reportTicketLinks)) {
+            return;
+        }
+        List<Long> relatedTicketIds = reportTicketLinks.stream()
+                .map(BugReportTicketPO::getTicketId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (relatedTicketIds.isEmpty()) {
+            return;
+        }
 
-        appendNoticeField(sb, "问题描述", report.getProblemDesc());
-        appendNoticeField(sb, "逻辑归因", buildLogicCauseText(report));
-        appendNoticeField(sb, "缺陷分类", report.getDefectCategory());
-        appendNoticeField(sb, "引入项目", report.getIntroducedProject());
-        appendNoticeField(sb, "开始时间", formatDateOnly(report.getStartDate()));
-        appendNoticeField(sb, "解决时间", formatDateOnly(report.getResolveDate()));
-        appendNoticeField(sb, "解决方案", report.getSolution());
-        appendNoticeField(sb, "影响范围", report.getImpactScope());
-        appendNoticeField(sb, "缺陷等级", report.getSeverityLevel());
-        appendNoticeField(sb, "反馈人", userNameMap.get(report.getReporterId()));
-        appendNoticeField(sb, "审核人", userNameMap.get(report.getReviewerId()));
+        List<Long> responsibleUserIds = findResponsibleUserIds(reportId);
+        Set<Long> ticketStakeholderIds = new LinkedHashSet<>();
+        List<TicketPO> relatedTickets = ticketMapper.selectBatchIds(relatedTicketIds);
+        if (!CollectionUtils.isEmpty(relatedTickets)) {
+            for (TicketPO ticket : relatedTickets) {
+                if (ticket != null && ticket.getCreatorId() != null) {
+                    ticketStakeholderIds.add(ticket.getCreatorId());
+                }
+                if (ticket != null && ticket.getAssigneeId() != null) {
+                    ticketStakeholderIds.add(ticket.getAssigneeId());
+                }
+            }
+        }
+
+        Set<Long> allMentionUserIds = new LinkedHashSet<>();
+        if (report.getReporterId() != null) {
+            allMentionUserIds.add(report.getReporterId());
+        }
+        allMentionUserIds.addAll(ticketStakeholderIds);
+        allMentionUserIds.addAll(responsibleUserIds);
+
+        Set<Long> allUserIds = new LinkedHashSet<>(allMentionUserIds);
+        if (report.getReviewerId() != null) {
+            allUserIds.add(report.getReviewerId());
+        }
+        Map<Long, String> userNameMap = getUserNameMap(allUserIds);
+
+        List<String> mentionWecomUserIds = Collections.emptyList();
+        if (!allMentionUserIds.isEmpty()) {
+            List<SysUserPO> mentionUsers = sysUserMapper.selectBatchIds(new ArrayList<>(allMentionUserIds));
+            if (!CollectionUtils.isEmpty(mentionUsers)) {
+                mentionWecomUserIds = mentionUsers.stream()
+                        .map(SysUserPO::getWecomUserid)
+                        .filter(StringUtils::hasText)
+                        .map(String::trim)
+                        .distinct()
+                        .collect(Collectors.toList());
+            }
+        }
+
+        String markdownBody = buildArchivedBugReportGroupNoticeMarkdown(report, userNameMap, responsibleUserIds,
+                relatedTickets);
+        wecomGroupPushService.pushReportNoticeByTickets(relatedTicketIds, markdownBody, mentionWecomUserIds);
+    }
+
+    /**
+     * 组装企微群机器人可渲染的 Markdown：分区标题 + 引用块字段，避免特殊字符破坏展示。
+     */
+    private String buildArchivedBugReportGroupNoticeMarkdown(BugReportPO report,
+                                                             Map<Long, String> userNameMap,
+                                                             List<Long> responsibleUserIds,
+                                                             List<TicketPO> relatedTickets) {
+        StringBuilder sb = new StringBuilder();
+        // 企微群机器人 Markdown 子集与日报一致：分区用加粗标题，正文用引用行
+        sb.append("**Bug 简报已归档**\n");
+        sb.append("> **编号** ").append(escapeWecomMarkdown(report.getReportNo())).append("\n\n");
+
+        sb.append("**关联工单**\n");
+        if (CollectionUtils.isEmpty(relatedTickets)) {
+            sb.append("> （无）\n\n");
+        } else {
+            for (TicketPO t : relatedTickets) {
+                if (t == null) {
+                    continue;
+                }
+                String no = escapeWecomMarkdown(t.getTicketNo());
+                String title = escapeWecomMarkdown(t.getTitle());
+                sb.append("> ").append(no).append(" ｜ ").append(title).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        sb.append("**简报内容**\n");
+        appendNoticeMdLine(sb, "问题描述", report.getProblemDesc());
+        appendNoticeMdLine(sb, "逻辑归因", buildLogicCauseText(report));
+        appendNoticeMdLine(sb, "缺陷分类", report.getDefectCategory());
+        appendNoticeMdLine(sb, "引入项目", report.getIntroducedProject());
+        appendNoticeMdLine(sb, "开始日期", formatDateOnly(report.getStartDate()));
+        appendNoticeMdLine(sb, "临时解决日期", formatDateOnly(report.getTempResolveDate()));
+        appendNoticeMdLine(sb, "临时解决方案", report.getTempSolution());
+        appendNoticeMdLine(sb, "彻底解决日期", formatDateOnly(report.getResolveDate()));
+        appendNoticeMdLine(sb, "解决时间", formatDateTime(report.getResolveTime()));
+        appendNoticeMdLine(sb, "最终解决方案", report.getSolution());
+        appendNoticeMdLine(sb, "影响范围", report.getImpactScope());
+        appendNoticeMdLine(sb, "缺陷等级", report.getSeverityLevel());
+        appendNoticeMdLine(sb, "备注", report.getRemark());
+        appendNoticeMdLine(sb, "审核意见", report.getReviewComment());
+        appendNoticeMdLine(sb, "提交时间", formatDateTime(report.getSubmittedAt()));
+        appendNoticeMdLine(sb, "归档时间", formatDateTime(report.getReviewedAt()));
+
+        String reporterName = userNameMap != null ? userNameMap.get(report.getReporterId()) : null;
+        appendNoticeMdLine(sb, "反馈人", reporterName);
+        appendNoticeMdLine(sb, "审核人", userNameMap != null ? userNameMap.get(report.getReviewerId()) : null);
 
         if (!CollectionUtils.isEmpty(responsibleUserIds)) {
             String responsibleNames = responsibleUserIds.stream()
-                    .map(userNameMap::get)
+                    .map(id -> userNameMap != null ? userNameMap.get(id) : null)
                     .filter(StringUtils::hasText)
                     .collect(Collectors.joining("、"));
-            appendNoticeField(sb, "责任人", responsibleNames);
+            appendNoticeMdLine(sb, "责任人", responsibleNames);
         }
 
+        sb.append("\n**提示** 请关注下方 @ 提醒。\n");
         return sb.toString().trim();
     }
 
-    private void appendNoticeField(StringBuilder sb, String label, String value) {
-        if (StringUtils.hasText(value)) {
-            sb.append(label).append("：").append(value.trim()).append("\n");
+    private void appendNoticeMdLine(StringBuilder sb, String label, String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
         }
+        sb.append("> **").append(label).append("** ").append(escapeWecomMarkdown(value.trim())).append("\n");
+    }
+
+    /**
+     * 企微 Markdown 中 *、` 等会破坏渲染或截断消息，对正文做轻量转义。
+     */
+    private String escapeWecomMarkdown(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        return raw.replace("`", "'")
+                .replace("*", "＊");
+    }
+
+    private String formatDateTime(Date date) {
+        if (date == null) {
+            return null;
+        }
+        return new SimpleDateFormat(DATETIME_PATTERN).format(date);
     }
 
     private String buildLogicCauseText(BugReportPO report) {
