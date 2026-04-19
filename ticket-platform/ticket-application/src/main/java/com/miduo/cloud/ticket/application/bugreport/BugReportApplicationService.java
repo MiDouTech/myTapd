@@ -536,12 +536,20 @@ public class BugReportApplicationService extends BaseApplicationService {
         if (!allMentionUserIds.isEmpty()) {
             List<SysUserPO> mentionUsers = sysUserMapper.selectBatchIds(new ArrayList<>(allMentionUserIds));
             if (!CollectionUtils.isEmpty(mentionUsers)) {
-                mentionWecomUserIds = mentionUsers.stream()
-                        .map(SysUserPO::getWecomUserid)
-                        .filter(StringUtils::hasText)
-                        .map(String::trim)
-                        .distinct()
-                        .collect(Collectors.toList());
+                Map<Long, SysUserPO> byId = mentionUsers.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toMap(SysUserPO::getId, u -> u, (a, b) -> a));
+                LinkedHashSet<String> orderedWecom = new LinkedHashSet<>();
+                for (Long uid : allMentionUserIds) {
+                    if (uid == null) {
+                        continue;
+                    }
+                    SysUserPO u = byId.get(uid);
+                    if (u != null && StringUtils.hasText(u.getWecomUserid())) {
+                        orderedWecom.add(u.getWecomUserid().trim());
+                    }
+                }
+                mentionWecomUserIds = new ArrayList<>(orderedWecom);
             }
         }
 
