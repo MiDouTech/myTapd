@@ -112,6 +112,26 @@ public class WebhookDispatchService extends BaseApplicationService {
         }
     }
 
+    /**
+     * Bug 简报归档：推送到已订阅 {@link WebhookEventType#BUG_REPORT_ARCHIVED} 的 Webhook（含企微机器人 URL）。
+     *
+     * @param ticketId 用于日志与负载中的工单快照；取关联工单中的主工单 ID（可为空则快照为空）
+     */
+    public void dispatchBugReportArchived(Long reportId,
+                                          Long ticketId,
+                                          String reportNo,
+                                          List<Long> mentionedUserIds,
+                                          String detailText) {
+        BugReportArchivedWebhookPayload payload = new BugReportArchivedWebhookPayload();
+        payload.setReportId(reportId);
+        payload.setReportNo(reportNo);
+        if (mentionedUserIds != null && !mentionedUserIds.isEmpty()) {
+            payload.getMentionedUserIds().addAll(mentionedUserIds);
+        }
+        payload.setDetailText(detailText);
+        dispatch(WebhookEventType.BUG_REPORT_ARCHIVED, ticketId, payload);
+    }
+
     private List<WebhookConfigPO> filterSubscribedConfigs(List<WebhookConfigPO> configs, WebhookEventType eventType) {
         if (configs == null || configs.isEmpty() || eventType == null) {
             return new ArrayList<>();
@@ -122,9 +142,27 @@ public class WebhookDispatchService extends BaseApplicationService {
             Set<String> subscribedEventTypes = parseEventTypes(config.getEventTypes());
             if (subscribedEventTypes.contains(targetEventType)) {
                 result.add(config);
+                continue;
+            }
+            // 企微群机器人 Webhook 常与工单事件共用一条 URL：未显式订阅简报归档时，若已订阅任一工单类事件则一并推送
+            if (eventType == WebhookEventType.BUG_REPORT_ARCHIVED
+                    && isWecomRobotWebhook(config.getUrl())
+                    && containsAnyTicketLifecycleEvent(subscribedEventTypes)) {
+                result.add(config);
             }
         }
         return result;
+    }
+
+    private boolean containsAnyTicketLifecycleEvent(Set<String> subscribedEventTypes) {
+        if (subscribedEventTypes == null || subscribedEventTypes.isEmpty()) {
+            return false;
+        }
+        return subscribedEventTypes.contains(WebhookEventType.TICKET_CREATED.getCode())
+                || subscribedEventTypes.contains(WebhookEventType.TICKET_STATUS_CHANGED.getCode())
+                || subscribedEventTypes.contains(WebhookEventType.TICKET_ASSIGNED.getCode())
+                || subscribedEventTypes.contains(WebhookEventType.TICKET_COMPLETED.getCode())
+                || subscribedEventTypes.contains(WebhookEventType.TICKET_CLOSED.getCode());
     }
 
     /**
@@ -366,6 +404,10 @@ public class WebhookDispatchService extends BaseApplicationService {
         JSONObject ticket = sourcePayload == null ? null : sourcePayload.getJSONObject("ticket");
         Object data = sourcePayload == null ? null : sourcePayload.get("data");
 
+        if (eventType == WebhookEventType.BUG_REPORT_ARCHIVED) {
+            return buildWecomRobotBugReportArchivedPayload(ticket, eventTime, data);
+        }
+
         StringBuilder content = new StringBuilder();
         content.append("【工单事件通知】\n");
         content.append("────────────────\n");
@@ -428,6 +470,136 @@ public class WebhookDispatchService extends BaseApplicationService {
         payload.put("msgtype", "text");
         payload.put("text", text);
         return JSON.toJSONString(payload);
+    }
+
+    /**
+     * Bug 简报归档：与工单通知相同的企微机器人 text 形态，便于复用已配置的工单 Webhook URL。
+     */
+    private String buildWecomRobotBugReportArchivedPayload(JSONObject ticket, String eventTime, Object data) {
+        JSONObject d = null;
+        try {
+            if (data != null) {
+                d = JSON.parseObject(JSON.toJSONString(data));
+            }
+        } catch (Exception ex) {
+            log.warn("解析Bug简报归档Webhook data失败: {}", ex.getMessage());
+        }
+        String reportNo = "-";
+        if (d != null) {
+            String rn = d.getString("reportNo");
+            if (rn != null && !rn.trim().isEmpty()) {
+                reportNo = rn.trim();
+            }
+        }
+        String detail = "";
+        if (d != null) {
+            String dt = d.getString("detailText");
+            if (dt != null) {
+                detail = dt;
+            }
+        }
+
+        StringBuilder content = new StringBuilder();
+        content.append("【Bug简报归档】\n");
+        content.append("────────────────\n");
+        content.append("【事件】Bug简报归档\n");
+        if (eventTime != null && !eventTime.isEmpty()) {
+            content.append("【时间】").append(eventTime).append("\n");
+        }
+        content.append("【简报编号】").append(reportNo).append("\n");
+        if (ticket != null) {
+            content.append("【关联工单】\n");
+            content.append("1) 工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
+            content.append("2) 标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
+            String statusCode = safeJsonString(ticket, "status", "-");
+            content.append("3) 状态：").append(resolveStatusLabel(statusCode)).append("\n");
+            String priorityCode = safeJsonString(ticket, "priority", "-");
+            content.append("4) 优先级：").append(resolvePriorityDisplay(priorityCode)).append("\n");
+        }
+        if (!detail.trim().isEmpty()) {
+            content.append("【简报摘要】\n").append(detail.trim());
+            if (!detail.endsWith("\n")) {
+                content.append("\n");
+            }
+        }
+        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
+        if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+            String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
+            content.append("【详情】").append(baseUrl).append("/").append(ticketNo);
+        }
+
+        MentionTargets mentionTargets = collectBugReportArchivedMentionTargets(ticket, d);
+
+        String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
+        JSONObject text = new JSONObject();
+        text.put("content", normalizedContent);
+        if (!mentionTargets.getWecomUserids().isEmpty()) {
+            JSONArray mentionedList = new JSONArray();
+            mentionedList.addAll(mentionTargets.getWecomUserids());
+            text.put("mentioned_list", mentionedList);
+        }
+        if (!mentionTargets.getMobileList().isEmpty()) {
+            JSONArray mentionedMobileList = new JSONArray();
+            mentionedMobileList.addAll(mentionTargets.getMobileList());
+            text.put("mentioned_mobile_list", mentionedMobileList);
+        }
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "text");
+        payload.put("text", text);
+        return JSON.toJSONString(payload);
+    }
+
+    private MentionTargets collectBugReportArchivedMentionTargets(JSONObject ticket, JSONObject data) {
+        MentionTargets targets = new MentionTargets();
+        LinkedHashSet<Long> userIds = new LinkedHashSet<>();
+        if (data != null && data.containsKey("mentionedUserIds")) {
+            JSONArray arr = data.getJSONArray("mentionedUserIds");
+            if (arr != null) {
+                for (int i = 0; i < arr.size(); i++) {
+                    Long uid = arr.getLong(i);
+                    if (uid != null) {
+                        userIds.add(uid);
+                    }
+                }
+            }
+        }
+        if (ticket != null) {
+            String creatorWecomUserid = normalizeWecomUserid(safeJsonString(ticket, "creatorWecomUserid", null));
+            if (creatorWecomUserid != null) {
+                targets.getWecomUserids().add(creatorWecomUserid);
+            }
+            Long creatorId = ticket.getLong("creatorId");
+            if (creatorId != null) {
+                userIds.add(creatorId);
+            }
+            Long assigneeId = ticket.getLong("assigneeId");
+            if (assigneeId != null) {
+                userIds.add(assigneeId);
+            }
+        }
+        if (userIds.isEmpty()) {
+            return targets;
+        }
+        List<SysUserPO> users = sysUserMapper.selectBatchIds(new ArrayList<>(userIds));
+        if (users == null || users.isEmpty()) {
+            return targets;
+        }
+        for (SysUserPO user : users) {
+            if (user == null) {
+                continue;
+            }
+            String wecomUserid = normalizeWecomUserid(user.getWecomUserid());
+            if (wecomUserid != null) {
+                targets.getWecomUserids().add(wecomUserid);
+                continue;
+            }
+            String normalizedMobile = normalizeMentionMobile(user.getPhone());
+            if (normalizedMobile != null) {
+                targets.getMobileList().add(normalizedMobile);
+            }
+        }
+        return targets;
     }
 
     /**

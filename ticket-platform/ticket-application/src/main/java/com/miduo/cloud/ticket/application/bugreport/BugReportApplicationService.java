@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.NotificationOrchestrator;
 import com.miduo.cloud.ticket.application.notification.WecomGroupPushService;
+import com.miduo.cloud.ticket.application.webhook.WebhookDispatchService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.BugReportStatus;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -52,6 +53,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     private final SysUserMapper sysUserMapper;
     private final NotificationOrchestrator notificationOrchestrator;
     private final WecomGroupPushService wecomGroupPushService;
+    private final WebhookDispatchService webhookDispatchService;
     private final SystemConfigMapper systemConfigMapper;
 
     public BugReportApplicationService(BugReportMapper bugReportMapper,
@@ -66,6 +68,7 @@ public class BugReportApplicationService extends BaseApplicationService {
                                        SysUserMapper sysUserMapper,
                                        NotificationOrchestrator notificationOrchestrator,
                                        WecomGroupPushService wecomGroupPushService,
+                                       WebhookDispatchService webhookDispatchService,
                                        SystemConfigMapper systemConfigMapper) {
         this.bugReportMapper = bugReportMapper;
         this.bugReportResponsibleMapper = bugReportResponsibleMapper;
@@ -79,6 +82,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         this.sysUserMapper = sysUserMapper;
         this.notificationOrchestrator = notificationOrchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
+        this.webhookDispatchService = webhookDispatchService;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -556,6 +560,19 @@ public class BugReportApplicationService extends BaseApplicationService {
         String markdownBody = buildArchivedBugReportGroupNoticeMarkdown(report, userNameMap, responsibleUserIds,
                 relatedTickets);
         wecomGroupPushService.pushReportNoticeByTickets(relatedTicketIds, markdownBody, mentionWecomUserIds);
+
+        // 与群内「工单事件通知」同源：走 Webhook 配置的企微机器人 URL（多数环境未单独配置 wecom_group_binding）
+        Long primaryTicketId = relatedTicketIds.get(0);
+        List<Long> mentionUserIdsForWebhook = new ArrayList<>(allMentionUserIds);
+        String detailPlain = buildArchivedBugReportPlainDetailForWebhook(report, userNameMap, responsibleUserIds,
+                relatedTickets);
+        try {
+            webhookDispatchService.dispatchBugReportArchived(report.getId(), primaryTicketId, report.getReportNo(),
+                    mentionUserIdsForWebhook, detailPlain);
+        } catch (Exception ex) {
+            log.warn("Bug简报归档Webhook分发异常（不影响归档主流程）: reportId={}, reason={}",
+                    report.getId(), ex.getMessage());
+        }
     }
 
     /**
@@ -624,6 +641,65 @@ public class BugReportApplicationService extends BaseApplicationService {
             return;
         }
         sb.append("> **").append(label).append("** ").append(escapeWecomMarkdown(value.trim())).append("\n");
+    }
+
+    /**
+     * Webhook 企微 text 正文中的「简报摘要」：纯文本键值行，与简报表单字段一致。
+     */
+    private String buildArchivedBugReportPlainDetailForWebhook(BugReportPO report,
+                                                               Map<Long, String> userNameMap,
+                                                               List<Long> responsibleUserIds,
+                                                               List<TicketPO> relatedTickets) {
+        StringJoiner joiner = new StringJoiner("\n");
+        if (!CollectionUtils.isEmpty(relatedTickets)) {
+            List<String> lines = new ArrayList<>();
+            for (TicketPO t : relatedTickets) {
+                if (t == null) {
+                    continue;
+                }
+                String no = t.getTicketNo() != null ? t.getTicketNo().trim() : "";
+                String title = t.getTitle() != null ? t.getTitle().trim() : "";
+                if (StringUtils.hasText(no) || StringUtils.hasText(title)) {
+                    lines.add(no + " ｜ " + title);
+                }
+            }
+            if (!lines.isEmpty()) {
+                joiner.add("关联工单：" + String.join("；", lines));
+            }
+        }
+        appendPlainLine(joiner, "问题描述", report.getProblemDesc());
+        appendPlainLine(joiner, "逻辑归因", buildLogicCauseText(report));
+        appendPlainLine(joiner, "缺陷分类", report.getDefectCategory());
+        appendPlainLine(joiner, "引入项目", report.getIntroducedProject());
+        appendPlainLine(joiner, "开始日期", formatDateOnly(report.getStartDate()));
+        appendPlainLine(joiner, "临时解决日期", formatDateOnly(report.getTempResolveDate()));
+        appendPlainLine(joiner, "临时解决方案", report.getTempSolution());
+        appendPlainLine(joiner, "彻底解决日期", formatDateOnly(report.getResolveDate()));
+        appendPlainLine(joiner, "解决时间", formatDateTime(report.getResolveTime()));
+        appendPlainLine(joiner, "最终解决方案", report.getSolution());
+        appendPlainLine(joiner, "影响范围", report.getImpactScope());
+        appendPlainLine(joiner, "缺陷等级", report.getSeverityLevel());
+        appendPlainLine(joiner, "备注", report.getRemark());
+        appendPlainLine(joiner, "审核意见", report.getReviewComment());
+        appendPlainLine(joiner, "提交时间", formatDateTime(report.getSubmittedAt()));
+        appendPlainLine(joiner, "归档时间", formatDateTime(report.getReviewedAt()));
+        appendPlainLine(joiner, "反馈人", userNameMap != null ? userNameMap.get(report.getReporterId()) : null);
+        appendPlainLine(joiner, "审核人", userNameMap != null ? userNameMap.get(report.getReviewerId()) : null);
+        if (!CollectionUtils.isEmpty(responsibleUserIds)) {
+            String responsibleNames = responsibleUserIds.stream()
+                    .map(id -> userNameMap != null ? userNameMap.get(id) : null)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.joining("、"));
+            appendPlainLine(joiner, "责任人", responsibleNames);
+        }
+        return joiner.toString();
+    }
+
+    private void appendPlainLine(StringJoiner joiner, String label, String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+        joiner.add(label + "：" + value.trim());
     }
 
     /**
