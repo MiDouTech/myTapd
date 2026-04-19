@@ -98,7 +98,17 @@ public class TicketPublicDetailOutput implements Serializable {
         private String solution;
         private String tempSolution;
         private String responsibleUserNames;
+        /** 反馈人姓名 */
+        private String reporterName;
         private Date reviewedAt;
         private Date updateTime;
+        /** 引入项目 */
+        private String introducedProject;
+        /** 开始时间（简报内填写的开始日期） */
+        private Date startDate;
+        /** 临时解决时间 */
+        private Date tempResolveDate;
+        /** 彻底解决日期 */
+        private Date resolveDate;
     }
 }

@@ -367,6 +367,11 @@ export interface TicketPublicArchivedBugReportSummary {
   solution?: string
   tempSolution?: string
   responsibleUserNames?: string
+  reporterName?: string
+  introducedProject?: string
+  startDate?: string
+  tempResolveDate?: string
+  resolveDate?: string
   reviewedAt?: string
   updateTime?: string
 }

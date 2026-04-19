@@ -102,6 +102,19 @@ function formatDate(dateStr?: string): string {
   }
 }
 
+/** Bug 简报内「开始/临时解决/彻底解决」为日期口径，只展示到日，避免 00:00 造成误解 */
+function formatDateOnly(dateStr?: string): string {
+  if (!dateStr) return '-'
+  try {
+    const d = new Date(dateStr)
+    if (Number.isNaN(d.getTime())) return '-'
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  } catch {
+    return '-'
+  }
+}
+
 function hasText(value?: string | null): boolean {
   return value != null && value.trim().length > 0
 }
@@ -123,11 +136,6 @@ const visibleArchivedBugSections = computed(() => {
       value: [summary.logicCauseLevel1, summary.logicCauseLevel2, summary.logicCauseDetail]
         .filter(hasText)
         .join(' / '),
-    },
-    {
-      key: 'impactScope',
-      title: '影响范围',
-      value: summary.impactScope,
     },
     {
       key: 'solution',
@@ -217,6 +225,12 @@ onMounted(() => {
             <span v-if="archivedBugReport.defectCategory">缺陷分类：{{ archivedBugReport.defectCategory }}</span>
             <span v-if="archivedBugReport.severityLevel">严重级别：{{ archivedBugReport.severityLevel }}</span>
             <span v-if="archivedBugReport.responsibleUserNames">责任人：{{ archivedBugReport.responsibleUserNames }}</span>
+            <span v-if="hasText(archivedBugReport.reporterName)">反馈人：{{ archivedBugReport.reporterName }}</span>
+            <span v-if="hasText(archivedBugReport.introducedProject)">引入项目：{{ archivedBugReport.introducedProject }}</span>
+            <span v-if="hasText(archivedBugReport.impactScope)">影响范围：{{ archivedBugReport.impactScope }}</span>
+            <span v-if="archivedBugReport.startDate">开始时间：{{ formatDateOnly(archivedBugReport.startDate) }}</span>
+            <span v-if="archivedBugReport.tempResolveDate">临时解决时间：{{ formatDateOnly(archivedBugReport.tempResolveDate) }}</span>
+            <span v-if="archivedBugReport.resolveDate">彻底解决日期：{{ formatDateOnly(archivedBugReport.resolveDate) }}</span>
             <span>归档时间：{{ formatDate(archivedBugReport.reviewedAt || archivedBugReport.updateTime) }}</span>
           </div>
           <div class="archived-bug-report-body">

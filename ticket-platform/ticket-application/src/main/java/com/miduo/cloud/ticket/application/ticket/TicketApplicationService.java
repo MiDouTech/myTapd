@@ -649,8 +649,19 @@ public class TicketApplicationService {
         summary.setImpactScope(latestArchivedReport.getImpactScope());
         summary.setSolution(latestArchivedReport.getSolution());
         summary.setTempSolution(latestArchivedReport.getTempSolution());
+        summary.setIntroducedProject(latestArchivedReport.getIntroducedProject());
+        summary.setStartDate(latestArchivedReport.getStartDate());
+        summary.setTempResolveDate(latestArchivedReport.getTempResolveDate());
+        summary.setResolveDate(latestArchivedReport.getResolveDate());
         summary.setReviewedAt(latestArchivedReport.getReviewedAt());
         summary.setUpdateTime(latestArchivedReport.getUpdateTime());
+
+        if (latestArchivedReport.getReporterId() != null) {
+            SysUserPO reporter = userMapper.selectById(latestArchivedReport.getReporterId());
+            if (reporter != null && reporter.getName() != null && !reporter.getName().trim().isEmpty()) {
+                summary.setReporterName(reporter.getName().trim());
+            }
+        }
 
         List<BugReportResponsiblePO> responsibles = bugReportResponsibleMapper.selectList(
                 new LambdaQueryWrapper<BugReportResponsiblePO>()
