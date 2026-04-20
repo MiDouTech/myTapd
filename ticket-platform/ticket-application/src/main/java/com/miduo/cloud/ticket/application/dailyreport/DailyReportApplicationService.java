@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
+import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigUpdateInput;
 import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportOutput;
@@ -70,7 +71,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         Date now = new Date();
         Date startOfDay = startOfDay(now);
         Date endOfDay = addDays(startOfDay, 1);
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat sdf = DisplayTimeFormat.newFormatter("yyyy-MM-dd");
         String reportDate = sdf.format(now);
 
         Map<String, String> configMap = loadDailyReportConfigMap();
@@ -603,7 +604,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
     }
 
     private Date startOfDay(Date date) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
         calendar.setTime(date);
         calendar.set(Calendar.HOUR_OF_DAY, 0);
         calendar.set(Calendar.MINUTE, 0);
@@ -613,7 +614,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
     }
 
     private Date addDays(Date date, int days) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
         calendar.setTime(date);
         calendar.add(Calendar.DAY_OF_MONTH, days);
         return calendar.getTime();
