@@ -421,10 +421,10 @@ public class WebhookDispatchService extends BaseApplicationService {
             content.append("\n");
         }
         if (eventType != WebhookEventType.TICKET_COMMENT_MENTION) {
-            appendWecomTicketChangeSection(content, data, eventType, eventTime);
+            appendWecomTicketChangeSection(content, data, eventType);
         }
         if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
-            appendCommentMentionSection(content, data, eventTime);
+            appendCommentMentionSection(content, data);
         }
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
         if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
@@ -587,15 +587,11 @@ public class WebhookDispatchService extends BaseApplicationService {
     }
 
     /**
-     * 收集需要@的目标：优先企微 userId，同时补充手机号兜底。
-     * 这么做是为了处理“系统里有处理人，但没同步到 wecom_userid”导致的漏@问题。
-     */
-    /**
      * 企微机器人 text 形态：【变更内容】区块（工单类事件，不含评论@）。
-     * 状态类事件将「原/新状态 + 操作人」合并为一行，与产品模板一致。
+     * 状态类事件将「原/新状态 + 操作人」合并为一行；变更时间不重复输出（与顶部【时间】一致）。
+     * 区块末尾不换行，由调用方拼接「\n【详情】」保证与详情之间仅一空行。
      */
-    private void appendWecomTicketChangeSection(StringBuilder content, Object data, WebhookEventType eventType,
-                                                String eventTime) {
+    private void appendWecomTicketChangeSection(StringBuilder content, Object data, WebhookEventType eventType) {
         if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
             return;
         }
@@ -657,9 +653,6 @@ public class WebhookDispatchService extends BaseApplicationService {
         for (String line : bullets) {
             content.append(WECOM_LIST_BULLET).append(toWecomListLabelColon(line)).append("\n");
         }
-        String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
-        content.append(WECOM_LIST_BULLET).append("变更时间: ").append(changeTimeLine).append("\n");
-        content.append("\n");
     }
 
     /**
@@ -676,7 +669,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         return line.substring(0, idx) + ": " + line.substring(idx + 1);
     }
 
-    private void appendCommentMentionSection(StringBuilder content, Object data, String eventTime) {
+    private void appendCommentMentionSection(StringBuilder content, Object data) {
         if (data == null) {
             return;
         }
@@ -704,9 +697,6 @@ public class WebhookDispatchService extends BaseApplicationService {
                 }
                 content.append(WECOM_LIST_BULLET).append("被@: ").append(String.join("、", names)).append("\n");
             }
-            String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
-            content.append(WECOM_LIST_BULLET).append("变更时间: ").append(changeTimeLine).append("\n");
-            content.append("\n");
         } catch (Exception ex) {
             log.warn("组装评论@Webhook正文失败: {}", ex.getMessage());
         }
