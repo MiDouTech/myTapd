@@ -12,6 +12,7 @@ import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.entity.dto.bugreport.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.*;
@@ -30,6 +31,7 @@ import org.springframework.util.StringUtils;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.TimeZone;
 import java.util.stream.Collectors;
 
 /**
@@ -714,10 +716,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     private String formatDateTime(Date date) {
-        if (date == null) {
-            return null;
-        }
-        return new SimpleDateFormat(DATETIME_PATTERN).format(date);
+        return DisplayTimeFormat.formatDateTime(date);
     }
 
     private String buildLogicCauseText(BugReportPO report) {
@@ -740,10 +739,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     private String formatDateOnly(Date date) {
-        if (date == null) {
-            return null;
-        }
-        return new SimpleDateFormat(DATE_PATTERN).format(date);
+        return DisplayTimeFormat.formatDate(date);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -1471,12 +1467,12 @@ public class BugReportApplicationService extends BaseApplicationService {
         String text = value.trim();
         try {
             if (text.length() <= 10) {
-                SimpleDateFormat sdf = new SimpleDateFormat(DATE_PATTERN);
+                SimpleDateFormat sdf = DisplayTimeFormat.newFormatter(DATE_PATTERN);
                 Date date = sdf.parse(text);
                 if (date == null) {
                     return null;
                 }
-                Calendar calendar = Calendar.getInstance();
+                Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
                 calendar.setTime(date);
                 if (endOfDay) {
                     calendar.set(Calendar.HOUR_OF_DAY, 23);
@@ -1490,7 +1486,7 @@ public class BugReportApplicationService extends BaseApplicationService {
                 calendar.set(Calendar.MILLISECOND, 0);
                 return calendar.getTime();
             }
-            SimpleDateFormat sdf = new SimpleDateFormat(DATETIME_PATTERN);
+            SimpleDateFormat sdf = DisplayTimeFormat.newFormatter(DATETIME_PATTERN);
             return sdf.parse(text);
         } catch (ParseException e) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "时间格式错误，需为yyyy-MM-dd或yyyy-MM-dd HH:mm:ss");

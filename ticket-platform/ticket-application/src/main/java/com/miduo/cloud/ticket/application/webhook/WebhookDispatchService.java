@@ -3,17 +3,14 @@ package com.miduo.cloud.ticket.application.webhook;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
-import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
 import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
+import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -34,16 +31,12 @@ import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.time.DateTimeException;
-import java.time.ZoneId;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.TimeZone;
 
 /**
  * Webhook事件推送服务
@@ -56,9 +49,6 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int MAX_REQUEST_BODY_LENGTH = 8000;
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
-    private static final String BASIC_CONFIG_GROUP = "BASIC";
-    private static final String BASIC_CONFIG_KEY_TIMEZONE = "timezone";
-    private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
 
     @Value("${ticket.detail-url:}")
     private String ticketDetailUrl;
@@ -68,20 +58,17 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final TicketMapper ticketMapper;
     private final SysUserMapper sysUserMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
-    private final SystemConfigMapper systemConfigMapper;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper,
                                   SysUserMapper sysUserMapper,
-                                  TicketCategoryMapper ticketCategoryMapper,
-                                  SystemConfigMapper systemConfigMapper) {
+                                  TicketCategoryMapper ticketCategoryMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
-        this.systemConfigMapper = systemConfigMapper;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -1106,28 +1093,7 @@ public class WebhookDispatchService extends BaseApplicationService {
     }
 
     private String formatNow() {
-        SimpleDateFormat sdf = new SimpleDateFormat(AppConstants.DATETIME_FORMAT);
-        sdf.setTimeZone(TimeZone.getTimeZone(getWebhookDisplayTimezone()));
-        return sdf.format(new Date());
-    }
-
-    private String getWebhookDisplayTimezone() {
-        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, BASIC_CONFIG_GROUP)
-                .eq(SystemConfigPO::getConfigKey, BASIC_CONFIG_KEY_TIMEZONE)
-                .eq(SystemConfigPO::getDeleted, 0);
-        SystemConfigPO timezoneConfig = systemConfigMapper.selectOne(wrapper);
-        if (timezoneConfig == null || timezoneConfig.getConfigValue() == null || timezoneConfig.getConfigValue().trim().isEmpty()) {
-            return DEFAULT_TIMEZONE;
-        }
-        String timezone = timezoneConfig.getConfigValue().trim();
-        try {
-            ZoneId.of(timezone);
-            return timezone;
-        } catch (DateTimeException ex) {
-            log.warn("Webhook推送：读取到非法时区配置，timezone={}，回退默认时区={}", timezone, DEFAULT_TIMEZONE);
-            return DEFAULT_TIMEZONE;
-        }
+        return DisplayTimeFormat.formatDateTime(new Date());
     }
 
     private String sanitizeWebhookUrl(String webhookUrl) {

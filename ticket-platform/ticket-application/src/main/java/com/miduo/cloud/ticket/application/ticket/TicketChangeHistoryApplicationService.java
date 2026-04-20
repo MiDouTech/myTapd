@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
+import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.common.enums.TicketAction;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.entity.dto.ticket.BugChangeHistoryOutput;
@@ -16,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,8 +26,6 @@ import java.util.stream.Collectors;
  */
 @Service
 public class TicketChangeHistoryApplicationService extends BaseApplicationService {
-
-    private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
     private final TicketLogMapper ticketLogMapper;
     private final SysUserMapper sysUserMapper;
@@ -337,9 +335,6 @@ public class TicketChangeHistoryApplicationService extends BaseApplicationServic
     }
 
     private String formatDate(Date date) {
-        if (date == null) {
-            return null;
-        }
-        return new SimpleDateFormat(DATE_FORMAT).format(date);
+        return DisplayTimeFormat.formatDateTime(date);
     }
 }

@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.dashboard;
 
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.entity.dto.dashboard.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.mapper.TicketDashboardMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyCountRow;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.TimeZone;
 
 /**
  * 数据看板应用服务
@@ -61,7 +63,7 @@ public class DashboardApplicationService extends BaseApplicationService {
         long backlog = safeLong(dashboardMapper.countOpenBefore(startDay));
 
         List<DashboardTrendPointOutput> outputs = new ArrayList<>();
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat sdf = DisplayTimeFormat.newFormatter("yyyy-MM-dd");
         for (int i = 0; i < trendDays; i++) {
             Date currentDay = addDays(startDay, i);
             String day = sdf.format(currentDay);
@@ -173,14 +175,14 @@ public class DashboardApplicationService extends BaseApplicationService {
     }
 
     private Date addDays(Date date, int days) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
         calendar.setTime(date);
         calendar.add(Calendar.DAY_OF_MONTH, days);
         return calendar.getTime();
     }
 
     private Date startOfDay(Date date) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
         calendar.setTime(date);
         calendar.set(Calendar.HOUR_OF_DAY, 0);
         calendar.set(Calendar.MINUTE, 0);
