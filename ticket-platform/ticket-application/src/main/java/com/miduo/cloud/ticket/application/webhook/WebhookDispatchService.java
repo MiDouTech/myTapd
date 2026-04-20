@@ -46,6 +46,8 @@ public class WebhookDispatchService extends BaseApplicationService {
 
     private static final int DEFAULT_TIMEOUT_MS = 5000;
     private static final int WECOM_TEXT_MAX_BYTES = 1900;
+    /** 企微群机器人 text 工单通知正文列表符号（与产品模板一致） */
+    private static final String WECOM_LIST_BULLET = "• ";
     private static final int MAX_REQUEST_BODY_LENGTH = 8000;
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
@@ -396,43 +398,38 @@ public class WebhookDispatchService extends BaseApplicationService {
         }
 
         StringBuilder content = new StringBuilder();
-        content.append("【工单事件通知】\n");
-        content.append("────────────────\n");
+        content.append("【工单事件通知】\n\n");
         content.append("【事件】")
                 .append(eventName == null || eventName.isEmpty() ? eventType.getLabel() : eventName)
                 .append("\n");
         if (eventTime != null && !eventTime.isEmpty()) {
             content.append("【时间】").append(eventTime).append("\n");
         }
+        content.append("\n");
         if (ticket != null) {
             content.append("【工单信息】\n");
-            content.append("1) 工单编号：").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
-            content.append("2) 标题：").append(safeJsonString(ticket, "title", "-")).append("\n");
+            content.append(WECOM_LIST_BULLET).append("工单编号: ").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
+            content.append(WECOM_LIST_BULLET).append("标题: ").append(safeJsonString(ticket, "title", "-")).append("\n");
             String statusCode = safeJsonString(ticket, "status", "-");
-            content.append("3) 状态：").append(resolveStatusLabel(statusCode)).append("\n");
+            content.append(WECOM_LIST_BULLET).append("状态: ").append(resolveStatusLabel(statusCode)).append("\n");
             String priorityCode = safeJsonString(ticket, "priority", "-");
-            content.append("4) 优先级：").append(resolvePriorityDisplay(priorityCode)).append("\n");
+            content.append(WECOM_LIST_BULLET).append("优先级: ").append(resolvePriorityDisplay(priorityCode)).append("\n");
             if (eventType == WebhookEventType.TICKET_STATUS_CHANGED && isPendingAcceptanceStatusCode(statusCode)) {
                 Long assigneeId = ticket.getLong("assigneeId");
-                content.append("5) 当前处理人：").append(resolveUserNameById(assigneeId)).append("\n");
+                content.append(WECOM_LIST_BULLET).append("当前处理人: ").append(resolveUserNameById(assigneeId)).append("\n");
             }
+            content.append("\n");
         }
-        List<String> changeLines = buildChangeLines(data, eventType);
-        if (!changeLines.isEmpty()) {
-            content.append("【变更内容】\n");
-            for (int i = 0; i < changeLines.size(); i++) {
-                content.append(i + 1).append(") ").append(changeLines.get(i)).append("\n");
-            }
-            String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
-            content.append("变更时间：").append(changeTimeLine).append("\n");
+        if (eventType != WebhookEventType.TICKET_COMMENT_MENTION) {
+            appendWecomTicketChangeSection(content, data, eventType, eventTime);
         }
         if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
-            appendCommentMentionSection(content, data);
+            appendCommentMentionSection(content, data, eventTime);
         }
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
         if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
-            content.append("【详情】").append(baseUrl).append("/").append(ticketNo);
+            content.append("\n【详情】").append(baseUrl).append("/").append(ticketNo);
         }
 
         MentionTargets mentionTargets = eventType == WebhookEventType.TICKET_COMMENT_MENTION
@@ -593,7 +590,93 @@ public class WebhookDispatchService extends BaseApplicationService {
      * 收集需要@的目标：优先企微 userId，同时补充手机号兜底。
      * 这么做是为了处理“系统里有处理人，但没同步到 wecom_userid”导致的漏@问题。
      */
-    private void appendCommentMentionSection(StringBuilder content, Object data) {
+    /**
+     * 企微机器人 text 形态：【变更内容】区块（工单类事件，不含评论@）。
+     * 状态类事件将「原/新状态 + 操作人」合并为一行，与产品模板一致。
+     */
+    private void appendWecomTicketChangeSection(StringBuilder content, Object data, WebhookEventType eventType,
+                                                String eventTime) {
+        if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
+            return;
+        }
+        JSONObject json = null;
+        if (data != null) {
+            try {
+                json = JSON.parseObject(JSON.toJSONString(data));
+            } catch (Exception ex) {
+                log.warn("解析Webhook data失败: {}", ex.getMessage());
+            }
+        }
+        List<String> rawLines = buildChangeLines(data, eventType);
+        boolean statusMergeEligible = (eventType == WebhookEventType.TICKET_STATUS_CHANGED
+                || eventType == WebhookEventType.TICKET_COMPLETED
+                || eventType == WebhookEventType.TICKET_CLOSED)
+                && json != null
+                && (json.containsKey("oldStatus") || json.containsKey("newStatus"));
+        String mergeStatusLine = null;
+        if (statusMergeEligible) {
+            String oldCode = json.getString("oldStatus");
+            String newCode = json.getString("newStatus");
+            boolean hasOld = oldCode != null && !oldCode.trim().isEmpty();
+            boolean hasNew = newCode != null && !newCode.trim().isEmpty();
+            if (hasOld || hasNew) {
+                StringBuilder statusSb = new StringBuilder();
+                statusSb.append("状态: ");
+                if (hasOld && hasNew) {
+                    statusSb.append(resolveStatusLabel(oldCode)).append(" → ").append(resolveStatusLabel(newCode));
+                } else if (hasNew) {
+                    statusSb.append(resolveStatusLabel(newCode));
+                } else {
+                    statusSb.append(resolveStatusLabel(oldCode));
+                }
+                if (json.containsKey("operatorId")) {
+                    Long operatorId = json.getLong("operatorId");
+                    String opName = resolveUserNameById(operatorId);
+                    if (opName != null && !opName.isEmpty() && !"-".equals(opName)) {
+                        statusSb.append("（操作人：").append(opName).append("）");
+                    }
+                }
+                mergeStatusLine = statusSb.toString();
+            }
+        }
+        List<String> bullets = new ArrayList<>();
+        if (mergeStatusLine != null) {
+            bullets.add(mergeStatusLine);
+        }
+        for (String line : rawLines) {
+            if (mergeStatusLine != null
+                    && (line.startsWith("原状态：") || line.startsWith("新状态：") || line.startsWith("操作人："))) {
+                continue;
+            }
+            bullets.add(line);
+        }
+        if (bullets.isEmpty()) {
+            return;
+        }
+        content.append("【变更内容】\n");
+        for (String line : bullets) {
+            content.append(WECOM_LIST_BULLET).append(toWecomListLabelColon(line)).append("\n");
+        }
+        String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
+        content.append(WECOM_LIST_BULLET).append("变更时间: ").append(changeTimeLine).append("\n");
+        content.append("\n");
+    }
+
+    /**
+     * 列表项「标签: 值」：将首个全角冒号改为半角冒号+空格，与企微通知模板一致。
+     */
+    private static String toWecomListLabelColon(String line) {
+        if (line == null || line.isEmpty()) {
+            return "";
+        }
+        int idx = line.indexOf('：');
+        if (idx < 0) {
+            return line;
+        }
+        return line.substring(0, idx) + ": " + line.substring(idx + 1);
+    }
+
+    private void appendCommentMentionSection(StringBuilder content, Object data, String eventTime) {
         if (data == null) {
             return;
         }
@@ -602,14 +685,14 @@ public class WebhookDispatchService extends BaseApplicationService {
             if (json == null) {
                 return;
             }
-            content.append("【评论@】\n");
+            content.append("【变更内容】\n");
             Long authorId = json.getLong("commentAuthorUserId");
-            content.append("评论人：").append(resolveUserNameById(authorId)).append("\n");
+            content.append(WECOM_LIST_BULLET).append("评论人: ").append(resolveUserNameById(authorId)).append("\n");
             String summary = json.getString("commentPlainSummary");
             if (summary == null || summary.trim().isEmpty()) {
                 summary = "（无文本摘要）";
             }
-            content.append("摘要：").append(summary.trim()).append("\n");
+            content.append(WECOM_LIST_BULLET).append("摘要: ").append(summary.trim()).append("\n");
             JSONArray mentioned = json.getJSONArray("mentionedUserIds");
             if (mentioned != null && !mentioned.isEmpty()) {
                 List<String> names = new ArrayList<>();
@@ -619,8 +702,11 @@ public class WebhookDispatchService extends BaseApplicationService {
                         names.add(resolveUserNameById(uid));
                     }
                 }
-                content.append("被@：").append(String.join("、", names)).append("\n");
+                content.append(WECOM_LIST_BULLET).append("被@: ").append(String.join("、", names)).append("\n");
             }
+            String changeTimeLine = (eventTime != null && !eventTime.isEmpty()) ? eventTime : formatNow();
+            content.append(WECOM_LIST_BULLET).append("变更时间: ").append(changeTimeLine).append("\n");
+            content.append("\n");
         } catch (Exception ex) {
             log.warn("组装评论@Webhook正文失败: {}", ex.getMessage());
         }
