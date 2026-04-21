@@ -585,15 +585,6 @@ function handleTicketRemoteSearch(keyword: string): void {
   }, 260)
 }
 
-function normalizeStepsToOneLine(raw: string): string {
-  const lines = raw
-    .split(/\n/)
-    .map((line) => line.replace(/^\s*\d+\s*[.、)）]\s*/, '').trim())
-    .filter(Boolean)
-  const joined = lines.join(' → ')
-  return joined.length > 120 ? joined.slice(0, 117) + '…' : joined
-}
-
 function trimTrailingPunct(text: string): string {
   return text.replace(/[，。！？,.!?\s]+$/, '').trim()
 }
@@ -601,15 +592,14 @@ function trimTrailingPunct(text: string): string {
 type TicketSummarySource = {
   ticketNo?: string
   title?: string
-  description?: string
-  bugCustomerInfo?: { problemDesc?: string; expectedResult?: string } | null
-  bugTestInfo?: { actualResult?: string; reproduceSteps?: string } | null
+  bugCustomerInfo?: { problemDesc?: string } | null
 }
 
+/**
+ * 简报「问题描述」只同步工单客服信息里的「问题描述」，不包含测试信息（实际结果、复现步骤等）。
+ */
 function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
-  const valid = tickets.filter(
-    (t) => t.title || t.description || t.bugCustomerInfo?.problemDesc || t.bugTestInfo?.actualResult,
-  )
+  const valid = tickets.filter((t) => ticketRichTextToPlainLine(t.bugCustomerInfo?.problemDesc || ''))
   if (valid.length === 0) return ''
 
   const sections: string[] = []
@@ -624,45 +614,15 @@ function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
 
   valid.forEach((ticket, idx) => {
     const ref = [ticket.ticketNo, ticket.title].filter(Boolean).join(' ')
-    const sentences: string[] = []
-
-    const problem = trimTrailingPunct(
-      ticketRichTextToPlainLine(ticket.bugCustomerInfo?.problemDesc || ticket.description || ''),
-    )
-    if (problem) {
-      sentences.push(problem)
+    const problem = trimTrailingPunct(ticketRichTextToPlainLine(ticket.bugCustomerInfo?.problemDesc || ''))
+    if (!problem) {
+      return
     }
-
-    const actual = trimTrailingPunct(ticketRichTextToPlainLine(ticket.bugTestInfo?.actualResult || ''))
-    const expected = trimTrailingPunct(
-      ticketRichTextToPlainLine(ticket.bugCustomerInfo?.expectedResult || ''),
-    )
-    if (actual && expected) {
-      sentences.push(`实际${actual}，与预期（${expected}）不符`)
-    } else if (actual && !problem.includes(actual.slice(0, 12))) {
-      sentences.push(`实际现象为${actual}`)
-    }
-
-    const rawSteps = ticketRichTextToPlainLine(ticket.bugTestInfo?.reproduceSteps || '')
-    if (rawSteps) {
-      const stepsLine = normalizeStepsToOneLine(rawSteps)
-      if (stepsLine) {
-        sentences.push(`复现路径：${stepsLine}`)
-      }
-    }
-
-    if (sentences.length === 0) {
-      if (ref) sentences.push(`相关工单：${ref}`)
-      else return
-    }
-
-    let para = sentences.join('，') + '。'
-    para = para.replace(/[，。！？]+([，。！？])/g, '$1')
 
     if (valid.length > 1) {
-      sections.push(`${idx + 1}. 【${ref}】${para}`)
+      sections.push(`${idx + 1}. 【${ref}】${problem}`)
     } else {
-      sections.push(para)
+      sections.push(problem)
     }
   })
 
@@ -1056,8 +1016,8 @@ watch(isHighSeverity, (high) => {
               </el-select>
               <div class="prefill-hint">
                 <span v-if="prefillLoading" class="prefill-hint--loading">正在自动填充相关字段…</span>
-                <span v-else-if="form.ticketIds.length > 0">已根据关联工单自动预填部分字段，可手动修改</span>
-                <span v-else>选择工单后将自动预填问题描述及相关字段</span>
+                <span v-else-if="form.ticketIds.length > 0">已从客服问题描述等预填部分字段，可手动修改</span>
+                <span v-else>选择工单后将从客服信息预填问题描述，并预填严重级别等字段</span>
               </div>
             </div>
           </el-form-item>
