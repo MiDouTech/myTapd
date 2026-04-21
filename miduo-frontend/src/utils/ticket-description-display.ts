@@ -33,6 +33,34 @@ function stripHtmlToPlain(html: string): string {
   return doc.body?.textContent ?? ''
 }
 
+/**
+ * 将工单内富文本（客服/测试等字段）转为单行纯文本，避免简报「问题描述」自动拼接时出现裸 HTML 标签。
+ */
+export function ticketRichTextToPlainLine(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === '') {
+    return ''
+  }
+  const text = stripHtmlToPlain(String(raw))
+    .replace(/\r\n/g, '\n')
+    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text
+}
+
+/**
+ * 富文本转纯文本并保留换行，供 `pre-wrap` 展示（简报详情「问题描述」等）。
+ */
+export function ticketRichTextToPlainMultiline(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === '') {
+    return ''
+  }
+  return stripHtmlToPlain(String(raw))
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')

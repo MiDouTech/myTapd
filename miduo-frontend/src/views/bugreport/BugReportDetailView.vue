@@ -20,6 +20,7 @@ import type {
 import type { UserListOutput } from '@/types/user'
 import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime, formatFileSize } from '@/utils/formatter'
+import { ticketRichTextToPlainLine, ticketRichTextToPlainMultiline } from '@/utils/ticket-description-display'
 import { getTicketStatusLabel } from '@/utils/ticket-status'
 import {
   canReviewBugReport,
@@ -72,6 +73,15 @@ const isHighSeverityDetail = computed(() => {
   return level === 'P0' || level === 'P1' || level === 'P2'
 })
 const canVoid = computed(() => canVoidBugReport(detail.value?.status))
+/** 历史数据可能含富文本 HTML，展示时转为纯文本，避免页面上出现裸标签 */
+const problemDescDisplay = computed(() => {
+  const raw = detail.value?.problemDesc
+  if (raw == null || String(raw).trim() === '') {
+    return '-'
+  }
+  return ticketRichTextToPlainMultiline(raw)
+})
+
 const canReview = computed(() => {
   if (!canReviewBugReport(detail.value?.status)) {
     return false
@@ -307,7 +317,7 @@ function buildCopyText(): string {
   if (!d) return ''
   const responsibleNames = (d.responsibleUsers || []).map((u) => u.userName || String(u.userId)).join('、') || '-'
   const lines: string[] = [
-    `问题描述：${d.problemDesc || '-'}`,
+    `问题描述：${ticketRichTextToPlainLine(d.problemDesc) || '-'}`,
     `逻辑归因：${[d.logicCauseLevel1, d.logicCauseLevel2].filter(Boolean).join(' / ') || '-'}`,
     `缺陷分类：${d.defectCategory || '-'}`,
     `引入项目：${d.introducedProject || '-'}`,
@@ -495,7 +505,7 @@ watch(
           </div>
           <div class="mobile-detail-block">
             <div class="mobile-detail-block-title">问题描述</div>
-            <div class="pre-wrap">{{ detail?.problemDesc || '-' }}</div>
+            <div class="pre-wrap">{{ problemDescDisplay }}</div>
           </div>
           <template v-if="hasBugReportTempResolutionTrack">
             <div v-if="detail?.tempSolution" class="mobile-detail-block">
@@ -569,7 +579,7 @@ watch(
             {{ detail?.reviewComment || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="问题描述" :span="2">
-            <span class="pre-wrap">{{ detail?.problemDesc || '-' }}</span>
+            <span class="pre-wrap">{{ problemDescDisplay }}</span>
           </el-descriptions-item>
           <template v-if="hasBugReportTempResolutionTrack">
             <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
