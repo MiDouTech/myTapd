@@ -611,11 +611,15 @@ public class BugReportApplicationService extends BaseApplicationService {
         appendNoticeMdLine(sb, "引入项目", report.getIntroducedProject());
         appendNoticeMdLine(sb, "开始日期", formatDateOnly(report.getStartDate()));
         appendNoticeMdLine(sb, "临时解决日期", formatDateOnly(report.getTempResolveDate()));
-        appendNoticeMdLine(sb, "临时解决方案", report.getTempSolution());
         appendNoticeMdLine(sb, "彻底解决日期", formatDateOnly(report.getResolveDate()));
         appendNoticeMdLine(sb, "解决时间", formatDateTime(report.getResolveTime()));
-        appendNoticeMdLine(sb, "最终解决方案", report.getSolution());
         appendNoticeMdLine(sb, "影响范围", report.getImpactScope());
+        if (isBugReportTempTrack(report)) {
+            appendNoticeMdLine(sb, "彻底解决方案", report.getSolution());
+            appendNoticeMdLine(sb, "临时解决方案", report.getTempSolution());
+        } else {
+            appendNoticeMdLine(sb, "解决方案", report.getSolution());
+        }
         appendNoticeMdLine(sb, "缺陷等级", report.getSeverityLevel());
         appendNoticeMdLine(sb, "备注", report.getRemark());
         appendNoticeMdLine(sb, "审核意见", report.getReviewComment());
@@ -636,6 +640,19 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         sb.append("\n**提示** 请关注下方 @ 提醒。\n");
         return sb.toString().trim();
+    }
+
+    /**
+     * 是否与前端「临时解决」四件套同口径：存在临时解决日期或临时解决说明时走 tempSolution 摘要标签。
+     */
+    private boolean isBugReportTempTrack(BugReportPO report) {
+        if (report == null) {
+            return false;
+        }
+        if (report.getTempResolveDate() != null) {
+            return true;
+        }
+        return StringUtils.hasText(report.getTempSolution());
     }
 
     private void appendNoticeMdLine(StringBuilder sb, String label, String value) {
@@ -675,11 +692,15 @@ public class BugReportApplicationService extends BaseApplicationService {
         appendPlainLine(joiner, "引入项目", report.getIntroducedProject());
         appendPlainLine(joiner, "开始日期", formatDateOnly(report.getStartDate()));
         appendPlainLine(joiner, "临时解决日期", formatDateOnly(report.getTempResolveDate()));
-        appendPlainLine(joiner, "临时解决方案", report.getTempSolution());
         appendPlainLine(joiner, "彻底解决日期", formatDateOnly(report.getResolveDate()));
         appendPlainLine(joiner, "解决时间", formatDateTime(report.getResolveTime()));
-        appendPlainLine(joiner, "最终解决方案", report.getSolution());
         appendPlainLine(joiner, "影响范围", report.getImpactScope());
+        if (isBugReportTempTrack(report)) {
+            appendPlainLine(joiner, "彻底解决方案", report.getSolution());
+            appendPlainLine(joiner, "临时解决方案", report.getTempSolution());
+        } else {
+            appendPlainLine(joiner, "解决方案", report.getSolution());
+        }
         appendPlainLine(joiner, "缺陷等级", report.getSeverityLevel());
         appendPlainLine(joiner, "备注", report.getRemark());
         appendPlainLine(joiner, "审核意见", report.getReviewComment());
