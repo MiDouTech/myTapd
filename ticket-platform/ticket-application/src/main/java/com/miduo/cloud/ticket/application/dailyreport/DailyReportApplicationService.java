@@ -428,17 +428,18 @@ public class DailyReportApplicationService extends BaseApplicationService {
             DailyReportSection tempResolved = report.getTempResolvedSection();
             md.append("\n**").append(sectionIndex).append("、临时解决**\n");
             if (tempResolved.getSubSections() != null) {
-                int subIndex = 1;
+                // 每条工单一行序号（2.1、2.2…），与挂起区一致；不在行首加「>」以免出现「2.1 >」观感
+                int lineNo = 1;
                 for (DailyReportSubSection sub : tempResolved.getSubSections()) {
-                    md.append("\n").append(sectionIndex).append(".").append(subIndex).append(" ");
-                    if (sub.getTickets() != null && !sub.getTickets().isEmpty()) {
-                        for (DailyReportTicketItem ticket : sub.getTickets()) {
-                            // 临时解决小节序号与工单同一行，不再使用引用块前缀「>」，避免出现「2.1 >」观感
-                            appendTicketLineBody(md, ticket);
-                            md.append("\n");
-                        }
+                    if (sub.getTickets() == null || sub.getTickets().isEmpty()) {
+                        continue;
                     }
-                    subIndex++;
+                    for (DailyReportTicketItem ticket : sub.getTickets()) {
+                        md.append("\n").append(sectionIndex).append(".").append(lineNo).append(" ");
+                        appendTicketLineBody(md, ticket);
+                        md.append("\n");
+                        lineNo++;
+                    }
                 }
             }
             if (tempResolved.getCount() == 0) {
