@@ -112,6 +112,28 @@ const hasBugReportTempResolutionTrack = computed(() => {
   )
 })
 
+/** 与编辑页影响范围下字段一致：仅当走「临时解决」四件套时（有临时侧日期/说明）用 tempSolution 展示为「临时解决方案」 */
+const showImpactAdjacentAsTemp = computed(() => {
+  const d = detail.value
+  if (!d) {
+    return false
+  }
+  return d.tempResolveDate != null || hasNonEmptyText(d.tempSolution)
+})
+const impactAdjacentSolutionLabel = computed(() =>
+  showImpactAdjacentAsTemp.value ? '临时解决方案' : '解决方案',
+)
+const impactAdjacentSolutionText = computed(() => {
+  const d = detail.value
+  if (!d) {
+    return '-'
+  }
+  if (showImpactAdjacentAsTemp.value) {
+    return hasNonEmptyText(d.tempSolution) ? String(d.tempSolution) : '-'
+  }
+  return hasNonEmptyText(d.solution) ? String(d.solution) : '-'
+})
+
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
 }
@@ -328,12 +350,20 @@ function buildCopyText(): string {
   }
   if (hasBugReportTempResolutionTrack.value) {
     lines.push(`临时解决时间：${formatDateDisplay(d.tempResolveDate)}`)
-    lines.push(`临时解决方案：${d.tempSolution || '-'}`)
     lines.push(`彻底解决日期：${formatDateDisplay(d.resolveDate)}`)
     lines.push(`彻底解决方案：${d.solution || '-'}`)
   }
   lines.push(
     `影响范围：${d.impactScope || '-'}`,
+  )
+  const tempAdjacent =
+    d.tempResolveDate != null || hasNonEmptyText(d.tempSolution)
+  lines.push(
+    `${tempAdjacent ? '临时解决方案' : '解决方案'}：${
+      tempAdjacent ? d.tempSolution || '-' : d.solution || '-'
+    }`,
+  )
+  lines.push(
     `缺陷等级：${d.severityLevel || '-'}`,
     `反馈人：${d.reporterName || '-'}`,
     `审核人：${d.reviewerName || '-'}`,
@@ -464,6 +494,10 @@ watch(
             <span class="mobile-detail-value">{{ detail?.impactScope || '-' }}</span>
           </div>
           <div class="mobile-detail-row">
+            <span class="mobile-detail-label">{{ impactAdjacentSolutionLabel }}</span>
+            <span class="mobile-detail-value pre-wrap">{{ impactAdjacentSolutionText }}</span>
+          </div>
+          <div class="mobile-detail-row">
             <span class="mobile-detail-label">开始时间</span>
             <span class="mobile-detail-value">{{ formatDateDisplay(detail?.startDate) }}</span>
           </div>
@@ -508,10 +542,6 @@ watch(
             <div class="pre-wrap">{{ problemDescDisplay }}</div>
           </div>
           <template v-if="hasBugReportTempResolutionTrack">
-            <div v-if="detail?.tempSolution" class="mobile-detail-block">
-              <div class="mobile-detail-block-title">临时解决方案</div>
-              <div class="pre-wrap">{{ detail.tempSolution }}</div>
-            </div>
             <div class="mobile-detail-block">
               <div class="mobile-detail-block-title">彻底解决方案</div>
               <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
@@ -549,6 +579,9 @@ watch(
           <el-descriptions-item label="影响范围">
             {{ detail?.impactScope || '-' }}
           </el-descriptions-item>
+          <el-descriptions-item :label="impactAdjacentSolutionLabel">
+            <span class="pre-wrap">{{ impactAdjacentSolutionText }}</span>
+          </el-descriptions-item>
           <el-descriptions-item label="开始时间">
             {{ formatDateDisplay(detail?.startDate) }}
           </el-descriptions-item>
@@ -582,9 +615,6 @@ watch(
             <span class="pre-wrap">{{ problemDescDisplay }}</span>
           </el-descriptions-item>
           <template v-if="hasBugReportTempResolutionTrack">
-            <el-descriptions-item v-if="detail?.tempSolution" label="临时解决方案" :span="2">
-              <span class="pre-wrap">{{ detail.tempSolution }}</span>
-            </el-descriptions-item>
             <el-descriptions-item label="彻底解决方案" :span="2">
               <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
             </el-descriptions-item>

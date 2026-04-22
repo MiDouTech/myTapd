@@ -22,9 +22,7 @@ const emit = defineEmits<{
   'update:resolveTime': [value: string]
 }>()
 
-const textareaRows = computed(() =>
-  props.compact ? { temp: 4, perm: 5 } : { temp: 3, perm: 4 },
-)
+const permTextareaRows = computed(() => (props.compact ? 5 : 4))
 </script>
 
 <template>
@@ -37,19 +35,6 @@ const textareaRows = computed(() =>
         placeholder="请选择临时解决日期"
         :disabled="disabled"
         @update:model-value="emit('update:tempResolveDate', $event ?? '')"
-      />
-    </el-form-item>
-    <el-form-item label="临时解决方案" required>
-      <el-input
-        :model-value="tempSolution"
-        type="textarea"
-        :autosize="{ minRows: textareaRows.temp, maxRows: 18 }"
-        maxlength="1000"
-        show-word-limit
-        placeholder="请输入临时解决方案（权宜之计）"
-        class="textarea-autosize"
-        :disabled="disabled"
-        @update:model-value="emit('update:tempSolution', $event)"
       />
     </el-form-item>
     <el-form-item label="彻底解决时间" required>
@@ -66,7 +51,7 @@ const textareaRows = computed(() =>
       <el-input
         :model-value="solution"
         type="textarea"
-        :autosize="{ minRows: textareaRows.perm, maxRows: 22 }"
+        :autosize="{ minRows: permTextareaRows, maxRows: 22 }"
         maxlength="1000"
         show-word-limit
         placeholder="请输入彻底解决方案（根本性修复）"
