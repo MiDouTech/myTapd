@@ -433,7 +433,9 @@ public class DailyReportApplicationService extends BaseApplicationService {
                     md.append("\n").append(sectionIndex).append(".").append(subIndex).append(" ");
                     if (sub.getTickets() != null && !sub.getTickets().isEmpty()) {
                         for (DailyReportTicketItem ticket : sub.getTickets()) {
-                            appendTicketLine(md, ticket);
+                            // 临时解决小节序号与工单同一行，不再使用引用块前缀「>」，避免出现「2.1 >」观感
+                            appendTicketLineBody(md, ticket);
+                            md.append("\n");
                         }
                     }
                     subIndex++;
@@ -487,6 +489,14 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
     private void appendTicketLine(StringBuilder md, DailyReportTicketItem ticket) {
         md.append("> ");
+        appendTicketLineBody(md, ticket);
+        md.append("\n");
+    }
+
+    /**
+     * 工单明细行正文（不含引用块前缀「>」与换行），与 {@link #appendTicketLine} 字段一致。
+     */
+    private void appendTicketLineBody(StringBuilder md, DailyReportTicketItem ticket) {
         if (ticket.getTicketNo() != null) {
             md.append("[").append(ticket.getTicketNo()).append("] ");
         }
@@ -497,7 +507,6 @@ public class DailyReportApplicationService extends BaseApplicationService {
         if (ticket.getSeverityLevel() != null && !ticket.getSeverityLevel().isEmpty()) {
             md.append(" (").append(ticket.getSeverityLevel()).append(")");
         }
-        md.append("\n");
     }
 
     private void appendTicketLineInline(StringBuilder md, DailyReportTicketItem ticket) {
