@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.application.ticket;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketAttachmentSaveInput;
@@ -44,13 +45,15 @@ public class TicketImageUploadApplicationService {
      * @return 图片上传结果
      */
     @Transactional(rollbackFor = Exception.class)
-    public ImageUploadOutput uploadTicketImage(Long ticketId, MultipartFile file, Long userId) {
+    public ImageUploadOutput uploadTicketImage(Long ticketId, MultipartFile file, Long userId,
+                                               TicketUploadPurpose purpose) {
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
 
-        String imageUrl = qiniuUploadService.uploadImage(file);
+        TicketUploadPurpose uploadPurpose = purpose != null ? purpose : TicketUploadPurpose.SCREENSHOT;
+        String imageUrl = qiniuUploadService.uploadForTicket(file, uploadPurpose);
 
         TicketAttachmentPO attachment = new TicketAttachmentPO();
         attachment.setTicketId(ticketId);
@@ -61,7 +64,8 @@ public class TicketImageUploadApplicationService {
         attachment.setUploadedBy(userId);
         attachmentMapper.insert(attachment);
 
-        log.info("工单图片上传成功: ticketId={}, url={}, uploadedBy={}", ticketId, imageUrl, userId);
+        log.info("工单文件上传成功: ticketId={}, purpose={}, url={}, uploadedBy={}",
+                ticketId, uploadPurpose, imageUrl, userId);
 
         ImageUploadOutput output = new ImageUploadOutput();
         output.setUrl(imageUrl);

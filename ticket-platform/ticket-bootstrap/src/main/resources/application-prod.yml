@@ -51,7 +51,10 @@ qiniu:
   zone: z2
   token-expire-seconds: 3600
   image-path-prefix: ticket/images/
+  video-path-prefix: ticket/videos/
+  attachment-path-prefix: ticket/attachments/
   max-file-size-mb: 10
+  attachment-max-file-size-mb: 200
 
 dev-login:
   enabled: false

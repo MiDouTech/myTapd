@@ -54,7 +54,17 @@ public class QiniuProperties {
     private String videoPathPrefix = "ticket/videos/";
 
     /**
+     * 工单附件（非截图）上传路径前缀
+     */
+    private String attachmentPathPrefix = "ticket/attachments/";
+
+    /**
      * 允许上传的最大文件大小（MB，默认 10MB）
      */
     private Long maxFileSizeMb = 10L;
+
+    /**
+     * 附件区允许的最大文件大小（MB，默认 200MB，用于视频等大文件）
+     */
+    private Long attachmentMaxFileSizeMb = 200L;
 }
