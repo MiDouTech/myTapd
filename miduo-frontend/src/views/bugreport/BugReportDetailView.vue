@@ -134,6 +134,17 @@ const impactAdjacentSolutionText = computed(() => {
   return hasNonEmptyText(d.solution) ? String(d.solution) : '-'
 })
 
+/** 底部「彻底解决方案」：与库字段 solution 对应；临时四件套时展示；非临时时有解决时间或已填 solution 也展示 */
+const showThoroughSolutionSection = computed(() => {
+  if (showImpactAdjacentAsTemp.value) {
+    return true
+  }
+  if (hasBugReportResolveTime.value) {
+    return true
+  }
+  return hasNonEmptyText(detail.value?.solution)
+})
+
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
 }
@@ -541,12 +552,10 @@ watch(
             <div class="mobile-detail-block-title">问题描述</div>
             <div class="pre-wrap">{{ problemDescDisplay }}</div>
           </div>
-          <template v-if="hasBugReportTempResolutionTrack">
-            <div class="mobile-detail-block">
-              <div class="mobile-detail-block-title">彻底解决方案</div>
-              <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
-            </div>
-          </template>
+          <div v-if="showThoroughSolutionSection" class="mobile-detail-block">
+            <div class="mobile-detail-block-title">彻底解决方案</div>
+            <div class="pre-wrap">{{ detail?.solution || '-' }}</div>
+          </div>
           <div class="mobile-detail-block">
             <div class="mobile-detail-block-title">备注</div>
             <div class="pre-wrap">{{ detail?.remark || '-' }}</div>
@@ -614,11 +623,9 @@ watch(
           <el-descriptions-item label="问题描述" :span="2">
             <span class="pre-wrap">{{ problemDescDisplay }}</span>
           </el-descriptions-item>
-          <template v-if="hasBugReportTempResolutionTrack">
-            <el-descriptions-item label="彻底解决方案" :span="2">
-              <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
-            </el-descriptions-item>
-          </template>
+          <el-descriptions-item v-if="showThoroughSolutionSection" label="彻底解决方案" :span="2">
+            <span class="pre-wrap">{{ detail?.solution || '-' }}</span>
+          </el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ detail?.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
