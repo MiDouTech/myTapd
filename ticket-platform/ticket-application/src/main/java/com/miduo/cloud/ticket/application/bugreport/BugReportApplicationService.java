@@ -365,6 +365,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long id, BugReportSubmitInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
+        backfillSolutionFromLinkedTicketsIfEmpty(report, id);
         if (!(BugReportStatus.DRAFT.getCode().equals(report.getStatus())
                 || BugReportStatus.REJECTED.getCode().equals(report.getStatus()))) {
             throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "当前状态不允许提交");
@@ -427,6 +428,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id, BugReportApproveInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
+        backfillSolutionFromLinkedTicketsIfEmpty(report, id);
         if (!BugReportStatus.PENDING_REVIEW.getCode().equals(report.getStatus())) {
             throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "当前状态不允许审核通过");
         }
@@ -653,6 +655,33 @@ public class BugReportApplicationService extends BaseApplicationService {
             return true;
         }
         return StringUtils.hasText(report.getTempSolution());
+    }
+
+    /**
+     * 处理完成场景下「彻底解决方案」与表单项「解决方案」同库；若未写入简报但工单开发信息有修复说明，在提交/审核落库前补全。
+     * 不覆盖已填的 solution，临时解决四件套不从此处写 solution（避免与权宜说明混淆）。
+     */
+    private void backfillSolutionFromLinkedTicketsIfEmpty(BugReportPO report, long reportId) {
+        if (report == null || StringUtils.hasText(report.getSolution()) || isBugReportTempTrack(report)) {
+            return;
+        }
+        List<BugReportTicketPO> links = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>().eq(BugReportTicketPO::getReportId, reportId));
+        if (CollectionUtils.isEmpty(links)) {
+            return;
+        }
+        for (BugReportTicketPO link : links) {
+            if (link == null || link.getTicketId() == null) {
+                continue;
+            }
+            TicketBugDevInfoPO dev = ticketBugDevInfoMapper.selectOne(
+                    new LambdaQueryWrapper<TicketBugDevInfoPO>().eq(TicketBugDevInfoPO::getTicketId, link.getTicketId()));
+            if (dev != null && StringUtils.hasText(dev.getFixSolution())) {
+                report.setSolution(dev.getFixSolution().trim());
+                bugReportMapper.updateById(report);
+                return;
+            }
+        }
     }
 
     private void appendNoticeMdLine(StringBuilder sb, String label, String value) {
