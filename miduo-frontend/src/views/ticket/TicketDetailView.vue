@@ -117,8 +117,8 @@ const transitForm = reactive({
   plannedFullResolveAt: '' as string,
 })
 
-const imageUploadLoading = ref(false)
-const imageUploadRef = ref()
+const attachmentUploadLoading = ref(false)
+const attachmentUploadRef = ref()
 const customerScreenshotUploadLoading = ref(false)
 const customerScreenshotUploadRef = ref()
 const customerProblemScreenshots = ref<string[]>([])
@@ -1016,19 +1016,22 @@ async function refreshTicketAttachmentsOnly(): Promise<void> {
   }
 }
 
-async function handleImageUpload(uploadFile: { raw: File }): Promise<void> {
+const ATTACHMENT_ACCEPT =
+  'image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,.xls,.xlsx,.txt,.csv,.pdf,.doc,.docx,.zip,.rar,.7z,.mp4,.mov,.avi,.webm,.mkv,.wmv,.m4v'
+
+async function handleAttachmentUpload(uploadFile: { raw: File }): Promise<void> {
   if (!uploadFile?.raw) {
     return
   }
-  imageUploadLoading.value = true
+  attachmentUploadLoading.value = true
   try {
-    await uploadTicketImage(ticketId.value, uploadFile.raw)
-    notifySuccess('图片上传成功')
+    await uploadTicketImage(ticketId.value, uploadFile.raw, 'attachment')
+    notifySuccess('附件上传成功')
     await refreshTicketAttachmentsOnly()
   } finally {
-    imageUploadLoading.value = false
-    if (imageUploadRef.value) {
-      ;(imageUploadRef.value as { clearFiles: () => void }).clearFiles()
+    attachmentUploadLoading.value = false
+    if (attachmentUploadRef.value) {
+      ;(attachmentUploadRef.value as { clearFiles: () => void }).clearFiles()
     }
   }
 }
@@ -1739,24 +1742,29 @@ watch(
         </div>
       </template>
       <el-upload
-        ref="imageUploadRef"
+        ref="attachmentUploadRef"
         class="attachment-upload-dropzone"
         drag
         :show-file-list="false"
-        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
-        :on-change="handleImageUpload"
+        :accept="ATTACHMENT_ACCEPT"
+        :on-change="handleAttachmentUpload"
         :auto-upload="false"
       >
         <div class="upload-drag-content">
           <el-icon class="upload-drag-icon"><Plus /></el-icon>
           <div class="upload-drag-text">将文件拖到此处触发上传</div>
-          <div class="upload-drag-subtext">或点击按钮上传附件图片</div>
-          <el-button type="primary" size="small" plain :loading="imageUploadLoading">
+          <div class="upload-drag-subtext">
+            或点击按钮上传附件（图片、Excel、文本、PDF、Word、压缩包、视频等，单文件最大 200MB）
+          </div>
+          <el-button type="primary" size="small" plain :loading="attachmentUploadLoading">
             点击上传
           </el-button>
         </div>
       </el-upload>
-      <EmptyState v-if="!detail?.attachments?.length" description="暂无附件，可拖拽或点击上方区域上传图片" />
+      <EmptyState
+        v-if="!detail?.attachments?.length"
+        description="暂无附件，可拖拽或点击上方区域上传文件"
+      />
       <div v-else class="attachment-list">
         <div
           v-for="attachment in detail.attachments"
@@ -1801,6 +1809,20 @@ watch(
                   size="small"
                   @click="openVideoInNewTab(attachment.filePath)"
                 >播放</el-button>
+                <el-button
+                  v-if="
+                    attachment.filePath &&
+                    !isImageFile(attachment.fileType) &&
+                    !isVideoFile(attachment.fileType)
+                  "
+                  type="primary"
+                  link
+                  size="small"
+                  tag="a"
+                  :href="attachment.filePath"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >下载</el-button>
                 <el-popconfirm
                   title="确认删除此附件？"
                   @confirm="handleDeleteAttachment(attachment.id)"

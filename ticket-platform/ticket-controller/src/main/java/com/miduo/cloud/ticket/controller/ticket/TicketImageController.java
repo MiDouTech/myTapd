@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.controller.ticket;
 import com.miduo.cloud.ticket.application.ticket.TicketImageUploadApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.controller.annotation.OperationLog;
@@ -32,18 +33,21 @@ public class TicketImageController {
      * 接口编号：API000502
      * 产品文档功能：工单处理 - 上传图片到七牛云并保存附件记录
      *
-     * @param ticketId 工单ID
-     * @param file     图片文件（JPG/PNG/GIF/WEBP/BMP，最大10MB）
-     * @return 图片访问URL及文件信息
+     * @param ticketId       工单ID
+     * @param file           上传文件
+     * @param uploadPurpose  可选：screenshot（默认，仅图片）；attachment（附件区：Excel/文本/视频等）
+     * @return 文件访问URL及文件信息
      */
-    @OperationLog(moduleName = "工单管理", operationItem = "上传工单图片", recordParams = false)
+    @OperationLog(moduleName = "工单管理", operationItem = "上传工单文件", recordParams = false)
     @PostMapping("/{ticketId}/image/upload")
-    @Operation(summary = "上传工单图片", description = "接口编号：API000502")
+    @Operation(summary = "上传工单图片", description = "接口编号：API000502；uploadPurpose=attachment 时支持附件格式")
     public ApiResult<ImageUploadOutput> uploadTicketImage(
             @PathVariable Long ticketId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "uploadPurpose", required = false) String uploadPurpose) {
         Long currentUserId = getCurrentUserId();
-        ImageUploadOutput output = imageUploadService.uploadTicketImage(ticketId, file, currentUserId);
+        TicketUploadPurpose purpose = TicketUploadPurpose.fromRequestParam(uploadPurpose);
+        ImageUploadOutput output = imageUploadService.uploadTicketImage(ticketId, file, currentUserId, purpose);
         return ApiResult.success(output);
     }
 

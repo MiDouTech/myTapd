@@ -174,17 +174,27 @@ export function getTicketChangeHistory(
   return request.get<BugChangeHistoryOutput[]>(`/ticket/${ticketId}/change-history`, { params })
 }
 
+export type TicketUploadPurpose = 'screenshot' | 'attachment'
+
 /**
- * 上传工单图片到七牛云
+ * 上传工单文件到七牛云
  * 接口编号：API000502
- * 产品文档功能：工单处理 - 上传图片到七牛云并保存附件记录
+ * 产品文档功能：工单处理 - 上传文件到七牛云并保存附件记录
  *
- * @param ticketId 工单ID
- * @param file     图片文件
+ * @param ticketId      工单ID
+ * @param file          上传文件
+ * @param uploadPurpose screenshot：仅图片（问题截图）；attachment：附件区（Excel/文本/视频等）
  */
-export function uploadTicketImage(ticketId: number, file: File): Promise<ImageUploadOutput> {
+export function uploadTicketImage(
+  ticketId: number,
+  file: File,
+  uploadPurpose?: TicketUploadPurpose,
+): Promise<ImageUploadOutput> {
   const formData = new FormData()
   formData.append('file', file)
+  if (uploadPurpose) {
+    formData.append('uploadPurpose', uploadPurpose)
+  }
   return request.post<ImageUploadOutput>(`/ticket/${ticketId}/image/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })

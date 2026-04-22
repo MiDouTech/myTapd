@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.infrastructure.external.qiniu;
 
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.qiniu.http.Response;
 import com.qiniu.storage.Configuration;
@@ -39,6 +40,15 @@ public class QiniuUploadService {
 
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = new HashSet<>(Arrays.asList(
             ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"
+    ));
+
+    private static final Set<String> ALLOWED_ATTACHMENT_EXTRA_EXTENSIONS = new HashSet<>(Arrays.asList(
+            ".xls", ".xlsx", ".txt", ".csv", ".pdf", ".doc", ".docx", ".zip", ".rar", ".7z",
+            ".mp4", ".mov", ".avi", ".webm", ".mkv", ".wmv", ".m4v"
+    ));
+
+    private static final Set<String> BLOCKED_ATTACHMENT_EXTENSIONS = new HashSet<>(Arrays.asList(
+            ".exe", ".bat", ".cmd", ".com", ".msi", ".scr", ".pif", ".dll", ".jar", ".vbs", ".ps1"
     ));
 
     @Resource
@@ -146,16 +156,31 @@ public class QiniuUploadService {
     }
 
     /**
-     * 上传图片文件到七牛云
+     * 上传图片文件到七牛云（问题截图等场景，仅允许图片）
      *
-     * @param file       图片文件
+     * @param file 图片文件
      * @return 可访问的图片 URL
      */
     public String uploadImage(MultipartFile file) {
-        validateUploadReady();
-        validateImageFile(file);
+        return uploadForTicket(file, TicketUploadPurpose.SCREENSHOT);
+    }
 
-        String key = buildObjectKey(file.getOriginalFilename(), qiniuProperties.getImagePathPrefix());
+    /**
+     * 按场景上传工单文件到七牛云并返回访问 URL
+     *
+     * @param file    上传文件
+     * @param purpose 截图场景仅图片；附件场景允许 Excel、文本、视频等
+     */
+    public String uploadForTicket(MultipartFile file, TicketUploadPurpose purpose) {
+        validateUploadReady();
+        if (purpose == TicketUploadPurpose.ATTACHMENT) {
+            validateAttachmentFile(file);
+        } else {
+            validateImageFile(file);
+        }
+
+        String pathPrefix = resolveStoragePrefix(file, purpose);
+        String key = buildObjectKey(file.getOriginalFilename(), pathPrefix);
         String token = auth.uploadToken(qiniuProperties.getBucket(), null,
                 qiniuProperties.getTokenExpireSeconds(), new StringMap());
 
@@ -165,15 +190,41 @@ public class QiniuUploadService {
             if (putRet == null || !StringUtils.hasText(putRet.key)) {
                 throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "七牛云返回结果异常");
             }
-            String imageUrl = buildAccessUrl(putRet.key);
-            log.info("图片上传成功: key={}, url={}", putRet.key, imageUrl);
-            return imageUrl;
+            String fileUrl = buildAccessUrl(putRet.key);
+            log.info("工单文件上传成功: purpose={}, key={}, url={}", purpose, putRet.key, fileUrl);
+            return fileUrl;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("图片上传失败: originalFilename={}", file.getOriginalFilename(), e);
-            throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "图片上传失败: " + e.getMessage());
+            log.error("工单文件上传失败: purpose={}, originalFilename={}", purpose, file.getOriginalFilename(), e);
+            throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "文件上传失败: " + e.getMessage());
         }
+    }
+
+    private String resolveStoragePrefix(MultipartFile file, TicketUploadPurpose purpose) {
+        if (purpose != TicketUploadPurpose.ATTACHMENT) {
+            return qiniuProperties.getImagePathPrefix();
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && contentType.startsWith("video/")) {
+            return qiniuProperties.getVideoPathPrefix();
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (StringUtils.hasText(originalFilename) && originalFilename.contains(".")) {
+            String ext = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
+            if (isVideoExtension(ext)) {
+                return qiniuProperties.getVideoPathPrefix();
+            }
+            if (ALLOWED_IMAGE_EXTENSIONS.contains(ext)) {
+                return qiniuProperties.getImagePathPrefix();
+            }
+        }
+        return qiniuProperties.getAttachmentPathPrefix();
+    }
+
+    private boolean isVideoExtension(String ext) {
+        return ".mp4".equals(ext) || ".mov".equals(ext) || ".avi".equals(ext) || ".webm".equals(ext)
+                || ".mkv".equals(ext) || ".wmv".equals(ext) || ".m4v".equals(ext);
     }
 
     /**
@@ -216,6 +267,35 @@ public class QiniuUploadService {
                         "仅支持上传图片文件（jpg/jpeg/png/gif/webp/bmp）");
             }
         }
+    }
+
+    private void validateAttachmentFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_INVALID, "上传文件不能为空");
+        }
+
+        long maxMb = qiniuProperties.getAttachmentMaxFileSizeMb() != null
+                ? qiniuProperties.getAttachmentMaxFileSizeMb()
+                : 200L;
+        long maxBytes = maxMb * 1024 * 1024;
+        if (file.getSize() > maxBytes) {
+            throw BusinessException.of(ErrorCode.PARAM_INVALID,
+                    "附件大小超过限制，最大允许 " + maxMb + "MB");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (!StringUtils.hasText(originalFilename) || !originalFilename.contains(".")) {
+            throw BusinessException.of(ErrorCode.PARAM_INVALID, "文件名需包含扩展名");
+        }
+        String ext = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
+        if (BLOCKED_ATTACHMENT_EXTENSIONS.contains(ext)) {
+            throw BusinessException.of(ErrorCode.PARAM_INVALID, "不支持上传该类型的可执行文件");
+        }
+        if (ALLOWED_IMAGE_EXTENSIONS.contains(ext) || ALLOWED_ATTACHMENT_EXTRA_EXTENSIONS.contains(ext)) {
+            return;
+        }
+        throw BusinessException.of(ErrorCode.PARAM_INVALID,
+                "不支持的附件格式，允许：图片、Excel(xls/xlsx)、文本(txt/csv)、PDF、Word、常见视频(mp4/mov 等)、zip/rar/7z");
     }
 
     private String buildObjectKey(String originalFilename, String prefix) {
