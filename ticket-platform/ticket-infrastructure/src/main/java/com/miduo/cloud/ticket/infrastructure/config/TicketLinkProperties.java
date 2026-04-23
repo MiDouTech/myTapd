@@ -36,6 +36,16 @@ public class TicketLinkProperties {
         return "";
     }
 
+    /**
+     * 生成 Bug 简报详情 SPA 链接（与 {@link #buildDetailLink} 使用同一前端根地址）
+     */
+    public String buildBugReportDetailLink(Long reportId) {
+        if (reportId != null && reportId > 0 && StringUtils.hasText(spaDetailBaseUrl)) {
+            return stripTrailingSlash(spaDetailBaseUrl.trim()) + "/bug-report/detail/" + reportId;
+        }
+        return "";
+    }
+
     private static String stripTrailingSlash(String s) {
         if (s == null || s.isEmpty()) {
             return "";

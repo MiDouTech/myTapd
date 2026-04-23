@@ -17,6 +17,7 @@ import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.entity.dto.bugreport.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.*;
+import com.miduo.cloud.ticket.infrastructure.config.TicketLinkProperties;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
@@ -57,6 +58,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     private final WecomGroupPushService wecomGroupPushService;
     private final WebhookDispatchService webhookDispatchService;
     private final SystemConfigMapper systemConfigMapper;
+    private final TicketLinkProperties ticketLinkProperties;
 
     public BugReportApplicationService(BugReportMapper bugReportMapper,
                                        BugReportResponsibleMapper bugReportResponsibleMapper,
@@ -71,7 +73,8 @@ public class BugReportApplicationService extends BaseApplicationService {
                                        NotificationOrchestrator notificationOrchestrator,
                                        WecomGroupPushService wecomGroupPushService,
                                        WebhookDispatchService webhookDispatchService,
-                                       SystemConfigMapper systemConfigMapper) {
+                                       SystemConfigMapper systemConfigMapper,
+                                       TicketLinkProperties ticketLinkProperties) {
         this.bugReportMapper = bugReportMapper;
         this.bugReportResponsibleMapper = bugReportResponsibleMapper;
         this.bugReportTicketMapper = bugReportTicketMapper;
@@ -86,6 +89,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         this.wecomGroupPushService = wecomGroupPushService;
         this.webhookDispatchService = webhookDispatchService;
         this.systemConfigMapper = systemConfigMapper;
+        this.ticketLinkProperties = ticketLinkProperties;
     }
 
     public PageOutput<BugReportPageOutput> page(BugReportPageInput input) {
@@ -807,10 +811,28 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         List<Long> responsibleUserIds = findResponsibleUserIds(id);
         if (!responsibleUserIds.isEmpty()) {
-            String title = String.format("Bug简报审核驳回 - %s", report.getReportNo());
-            String content = String.format("Bug简报 %s 审核未通过，请根据意见修改后重新提交", report.getReportNo());
+            String title = String.format("Bug简报审核驳回 - %s", safeNotificationText(report.getReportNo()));
+            String rejectReason = input != null && StringUtils.hasText(input.getReviewComment())
+                    ? input.getReviewComment().trim() : "-";
+            String problemTitle = StringUtils.hasText(report.getProblemDesc())
+                    ? report.getProblemDesc().trim() : "-";
+            String severity = StringUtils.hasText(report.getSeverityLevel())
+                    ? report.getSeverityLevel().trim() : "-";
+            String oldStatusLabel = BugReportStatus.PENDING_REVIEW.getLabel();
+            String newStatusLabel = BugReportStatus.REJECTED.getLabel();
+            String reviewerName = resolveNotificationUserName(report.getReviewerId());
+            String reporterName = resolveNotificationUserName(report.getReporterId());
+            StringBuilder content = new StringBuilder();
+            content.append("简报编号：").append(safeNotificationText(report.getReportNo())).append('\n');
+            content.append("问题标题：").append(safeNotificationText(problemTitle)).append('\n');
+            content.append("状态：").append(oldStatusLabel).append(" → ").append(newStatusLabel).append('\n');
+            content.append("严重级别：").append(safeNotificationText(severity)).append('\n');
+            content.append("审核人：").append(safeNotificationText(reviewerName)).append('\n');
+            content.append("反馈人：").append(safeNotificationText(reporterName)).append('\n');
+            content.append("驳回原因：").append(safeNotificationText(rejectReason));
+            String detailLink = ticketLinkProperties.buildBugReportDetailLink(report.getId());
             notificationOrchestrator.dispatchToUsers(responsibleUserIds, null, report.getId(),
-                    NotificationType.REPORT_REJECTED, title, content);
+                    NotificationType.REPORT_REJECTED, title, content.toString(), detailLink);
         }
     }
 
@@ -1493,6 +1515,27 @@ public class BugReportApplicationService extends BaseApplicationService {
                     item.setCount(entry.getValue());
                     return item;
                 }).collect(Collectors.toList());
+    }
+
+    private String resolveNotificationUserName(Long userId) {
+        if (userId == null) {
+            return "-";
+        }
+        SysUserPO user = sysUserMapper.selectById(userId);
+        if (user == null || !StringUtils.hasText(user.getName())) {
+            return "-";
+        }
+        return user.getName().trim();
+    }
+
+    /**
+     * 通知正文单行展示：去掉换行，避免企微/站内卡片字段错位
+     */
+    private String safeNotificationText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "-";
+        }
+        return value.trim().replace("\r", " ").replace("\n", " ");
     }
 
     private String buildLogicCauseKey(BugReportPO report) {
