@@ -21,11 +21,16 @@ export function tryParseNotificationKeyValueContent(
     if (!line) {
       continue
     }
-    const m = line.match(kvPattern)
-    if (!m) {
+    const match = line.match(kvPattern)
+    if (!match) {
       return null
     }
-    lines.push({ label: m[1].trim(), value: (m[2] ?? '').trim() || '-' })
+    const labelRaw = match[1]
+    if (labelRaw === undefined) {
+      return null
+    }
+    const valueRaw = match[2]
+    lines.push({ label: labelRaw.trim(), value: (valueRaw ?? '').trim() || '-' })
   }
   return lines.length > 0 ? lines : null
 }
