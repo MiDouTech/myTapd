@@ -13,6 +13,6 @@ import java.io.Serializable;
 public class BugReportReviewInput implements Serializable {
 
     @NotBlank(message = "审核意见不能为空")
-    @Size(min = 10, message = "审核意见不能少于10个字符")
+    @Size(max = 2000, message = "审核意见不能超过2000个字符")
     private String reviewComment;
 }

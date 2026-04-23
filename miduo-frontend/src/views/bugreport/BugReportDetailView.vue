@@ -234,6 +234,10 @@ async function handleReview(): Promise<void> {
     notifyWarning('请输入审核意见')
     return
   }
+  if (reviewAction.value === 'reject' && reviewComment.length > 2000) {
+    notifyWarning('驳回原因不能超过2000个字符')
+    return
+  }
   submitLoading.value = true
   try {
     if (reviewAction.value === 'approve') {
@@ -804,7 +808,9 @@ watch(
           v-model="reviewForm.reviewComment"
           type="textarea"
           :rows="4"
-          :placeholder="reviewAction === 'approve' ? '请输入通过意见' : '请输入驳回原因'"
+          maxlength="2000"
+          show-word-limit
+          :placeholder="reviewAction === 'approve' ? '请输入通过意见' : '请输入驳回原因（1～2000字）'"
         />
       </el-form-item>
     </el-form>
