@@ -208,6 +208,14 @@ onMounted(async () => {
           </el-space>
         </div>
 
+        <el-alert
+          class="preference-scope-tip"
+          type="info"
+          :closable="false"
+          show-icon
+          title="此处为当前登录账号的通知偏好；简报提审等消息按「接收人」各自账号的偏好投递，请让审核人在其账号下核对。"
+        />
+
         <EmptyState v-if="!preferenceLoading && preferenceTotal === 0" description="暂无通知偏好数据" />
         <template v-else>
           <BaseTable :data="pagedPreferenceList" :loading="preferenceLoading">
@@ -257,6 +265,10 @@ onMounted(async () => {
 .action-row {
   display: flex;
   justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.preference-scope-tip {
   margin-bottom: 12px;
 }
 

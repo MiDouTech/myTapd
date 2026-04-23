@@ -376,6 +376,14 @@ onMounted(async () => {
         class="tip-alert"
       />
 
+      <el-alert
+        title="以下为当前登录账号的通知偏好；他人（如简报审核人）能否收到简报类通知，取决于其本人账号在此处的开关。"
+        type="info"
+        :closable="false"
+        show-icon
+        class="tip-alert tip-alert--secondary"
+      />
+
       <EmptyState v-if="!preferenceLoading && preferenceList.length === 0" description="暂无通知偏好配置" />
       <BaseTable v-else :data="preferenceList" :loading="preferenceLoading">
         <el-table-column label="通知类型" min-width="180">
@@ -493,6 +501,10 @@ onMounted(async () => {
 .tip-alert {
   margin-bottom: 14px;
   border-radius: 8px;
+}
+
+.tip-alert--secondary {
+  margin-top: -6px;
 }
 
 .notification-table-content-wrap {
