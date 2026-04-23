@@ -393,8 +393,10 @@ public class BugReportApplicationService extends BaseApplicationService {
 
             String title = String.format("Bug简报待审核 - %s", report.getReportNo());
             String content = String.format("Bug简报 %s 已提交审核，请及时处理", report.getReportNo());
-            notificationOrchestrator.dispatch(report.getReviewerId(), null, report.getId(),
-                    NotificationType.REPORT_SUBMITTED, title, content);
+            String detailLink = ticketLinkProperties.buildBugReportDetailLink(report.getId());
+            List<Long> submitNotifyUserIds = buildSubmitReviewNotifyRecipientIds(id, report.getReviewerId());
+            notificationOrchestrator.dispatchToUsers(submitNotifyUserIds, null, report.getId(),
+                    NotificationType.REPORT_SUBMITTED, title, content, detailLink);
         } else {
             // P3/P4直接归档，无需审核
             report.setStatus(BugReportStatus.ARCHIVED.getCode());
@@ -1449,6 +1451,23 @@ public class BugReportApplicationService extends BaseApplicationService {
                 new LambdaQueryWrapper<BugReportResponsiblePO>().eq(BugReportResponsiblePO::getReportId, reportId)
         );
         return links.stream().map(BugReportResponsiblePO::getUserId).distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * 简报提交审核后的通知接收人：审核人 + 所有责任人（去重）。
+     * 每人仍按各自「简报提审」通知偏好投递，避免仅发给审核人时因偏好不一致导致漏收。
+     */
+    private List<Long> buildSubmitReviewNotifyRecipientIds(Long reportId, Long reviewerId) {
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        if (reviewerId != null) {
+            ids.add(reviewerId);
+        }
+        for (Long uid : findResponsibleUserIds(reportId)) {
+            if (uid != null) {
+                ids.add(uid);
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     private List<Long> mergeResponsibleUserIds(List<Long> inputUserIds, List<TicketPO> tickets) {
