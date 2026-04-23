@@ -11,6 +11,7 @@ import {
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import NotificationContentBody from '@/components/notification/NotificationContentBody.vue'
 import { useNotificationStore } from '@/stores/notification'
 import type {
   NotificationOutput,
@@ -309,7 +310,13 @@ onMounted(async () => {
             </template>
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="220" :show-overflow-tooltip="true" />
-          <el-table-column prop="content" label="内容" min-width="280" :show-overflow-tooltip="true" />
+          <el-table-column label="内容" min-width="300">
+            <template #default="{ row }">
+              <div class="notification-table-content-wrap">
+                <NotificationContentBody :content="row.content" />
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="渠道" min-width="130">
             <template #default="{ row }">
               {{ row.channelLabel || row.channel || '-' }}
@@ -333,7 +340,7 @@ onMounted(async () => {
                 <el-button v-if="row.isRead !== 1" type="primary" link @click="handleMarkAsRead(row)">
                   标记已读
                 </el-button>
-                <el-button type="primary" link @click="handleOpenNotification(row)">查看</el-button>
+                <el-button type="primary" link @click="handleOpenNotification(row)">查看详情</el-button>
               </el-space>
             </template>
           </el-table-column>
@@ -486,6 +493,10 @@ onMounted(async () => {
 .tip-alert {
   margin-bottom: 14px;
   border-radius: 8px;
+}
+
+.notification-table-content-wrap {
+  padding: 2px 0;
 }
 
 @media (max-width: 991px) {

@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import {
   ArrowDown,
+  ArrowRight,
   Bell,
   Calendar,
   Connection,
@@ -26,6 +27,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
+import NotificationContentBody from '@/components/notification/NotificationContentBody.vue'
 import {
   layoutTicketSearchKeyword,
   markTicketListKeywordClearFromHeader,
@@ -479,7 +481,7 @@ watch(
               </el-tag>
             </div>
             <div class="notification-item-content">
-              {{ item.content || '-' }}
+              <NotificationContentBody :content="item.content" />
             </div>
             <div class="notification-item-footer">
               <span>{{ formatDateTime(item.createTime) }}</span>
@@ -492,7 +494,10 @@ watch(
                 >
                   标记已读
                 </el-button>
-                <el-button type="primary" link @click="handleOpenNotification(item)">查看</el-button>
+                <el-button type="primary" link @click="handleOpenNotification(item)">
+                  查看详情
+                  <el-icon class="notification-detail-chevron"><ArrowRight /></el-icon>
+                </el-button>
               </el-space>
             </div>
           </div>
@@ -730,6 +735,12 @@ watch(
   font-size: 13px;
   line-height: 20px;
   color: #606266;
+}
+
+.notification-detail-chevron {
+  margin-left: 2px;
+  vertical-align: middle;
+  font-size: 12px;
 }
 
 .notification-item-footer {
