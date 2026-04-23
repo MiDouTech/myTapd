@@ -80,16 +80,28 @@ public class NotificationOrchestrator {
 
         NotificationPreferencePO preference = getUserPreference(userId, type.getCode());
 
-        if (isSiteEnabled(preference)) {
+        boolean siteOn = isSiteEnabled(preference);
+        boolean wecomOn = isWecomEnabled(preference);
+        boolean emailOn = isEmailEnabled(preference);
+
+        // 简报提审：审核人必须收到提醒；若用户曾把该类型「站内+企微+邮件」全部关掉，则仍发站内信，避免漏审
+        if (!siteOn && !wecomOn && !emailOn && type == NotificationType.REPORT_SUBMITTED) {
+            log.warn("简报提审通知全部渠道已关闭，已强制发送站内信: userId={}", userId);
+            siteNotificationSender.send(userId, ticketId, reportId, type.getCode(), title, content);
+            log.info("通知分发完成: userId={}, type={}, ticketId={}", userId, type.getCode(), ticketId);
+            return;
+        }
+
+        if (siteOn) {
             siteNotificationSender.send(userId, ticketId, reportId,
                     type.getCode(), title, content);
         }
 
-        if (isWecomEnabled(preference)) {
+        if (wecomOn) {
             sendByChannel(NotificationChannel.WECOM_APP, userId, title, content, detailLink);
         }
 
-        if (isEmailEnabled(preference)) {
+        if (emailOn) {
             sendByChannel(NotificationChannel.EMAIL, userId, title, content, detailLink);
         }
 

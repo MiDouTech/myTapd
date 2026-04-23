@@ -393,8 +393,9 @@ public class BugReportApplicationService extends BaseApplicationService {
 
             String title = String.format("Bug简报待审核 - %s", report.getReportNo());
             String content = String.format("Bug简报 %s 已提交审核，请及时处理", report.getReportNo());
+            String detailLink = ticketLinkProperties.buildBugReportDetailLink(report.getId());
             notificationOrchestrator.dispatch(report.getReviewerId(), null, report.getId(),
-                    NotificationType.REPORT_SUBMITTED, title, content);
+                    NotificationType.REPORT_SUBMITTED, title, content, detailLink);
         } else {
             // P3/P4直接归档，无需审核
             report.setStatus(BugReportStatus.ARCHIVED.getCode());
