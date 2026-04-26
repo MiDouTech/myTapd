@@ -747,8 +747,44 @@ function validateBeforeSave(): boolean {
     notifyWarning('请选择缺陷分类')
     return false
   }
+  if (!form.logicCausePath[0]) {
+    notifyWarning('请选择逻辑归因')
+    return false
+  }
+  if (!form.logicCauseDetail.trim()) {
+    notifyWarning('请填写归因明细')
+    return false
+  }
+  if (!form.introducedProject.trim()) {
+    notifyWarning('请填写引入项目')
+    return false
+  }
+  if (!form.startDate?.trim()) {
+    notifyWarning('请选择开始时间')
+    return false
+  }
+  if (!form.severityLevel?.trim()) {
+    notifyWarning('请选择严重级别')
+    return false
+  }
   if (form.ticketIds.length === 0) {
     notifyWarning('请至少关联一个工单')
+    return false
+  }
+  if (resolutionMode.value === 'unknown') {
+    notifyWarning('关联工单状态需为「临时解决」或「已完成」，请刷新或调整工单后再保存')
+    return false
+  }
+  if (!form.impactScope.trim()) {
+    notifyWarning('请填写影响范围')
+    return false
+  }
+  if (form.reporterId == null || !Number.isFinite(Number(form.reporterId)) || Number(form.reporterId) <= 0) {
+    notifyWarning('请选择反馈人')
+    return false
+  }
+  if (form.responsibleUserIds.length === 0) {
+    notifyWarning('请至少选择一位责任人')
     return false
   }
   if (resolutionMode.value === 'temp') {
@@ -774,6 +810,19 @@ function validateBeforeSave(): boolean {
       notifyWarning('处理完成场景下请填写解决时间')
       return false
     }
+    if (!form.solution?.trim()) {
+      notifyWarning('处理完成场景下请填写解决方案')
+      return false
+    }
+  }
+  if (
+    resolutionMode.value === 'complete' &&
+    form.startDate &&
+    form.resolveTime?.trim() &&
+    form.startDate > String(form.resolveTime).slice(0, 10)
+  ) {
+    notifyWarning('开始日期不能晚于解决时间')
+    return false
   }
   if (form.startDate && form.resolveDate && form.startDate > form.resolveDate) {
     notifyWarning('开始日期不能晚于彻底解决时间')
@@ -1063,13 +1112,13 @@ watch(isHighSeverity, (high) => {
             />
           </el-form-item>
 
-          <el-form-item label="逻辑归因">
+          <el-form-item label="逻辑归因" required>
             <el-select
               v-model="selectedLogicCause"
               clearable
               filterable
               class="w-520"
-              placeholder="请选择逻辑归因（可选）"
+              placeholder="请选择逻辑归因"
             >
               <el-option
                 v-for="item in logicCauseOptions"
@@ -1080,14 +1129,14 @@ watch(isHighSeverity, (high) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="归因明细">
+          <el-form-item label="归因明细" required>
             <el-input
               v-model="form.logicCauseDetail"
               type="textarea"
               :autosize="{ minRows: isMobileNarrow ? 3 : 2, maxRows: isMobileNarrow ? 14 : 12 }"
               maxlength="500"
               show-word-limit
-              placeholder="请输入归因补充说明（可选）"
+              placeholder="请输入归因补充说明"
               class="textarea-autosize"
             />
           </el-form-item>
@@ -1109,26 +1158,26 @@ watch(isHighSeverity, (high) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="引入项目">
+          <el-form-item label="引入项目" required>
             <el-input
               v-model="form.introducedProject"
               maxlength="100"
               show-word-limit
-              placeholder="请输入引入项目（可选）"
+              placeholder="请输入引入项目"
               class="w-420"
             />
           </el-form-item>
 
-          <el-form-item label="开始时间">
+          <el-form-item label="开始时间" required>
             <el-date-picker
               v-model="form.startDate"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="请选择开始日期（可选）"
+              placeholder="请选择开始日期"
             />
           </el-form-item>
 
-          <el-form-item label="严重级别">
+          <el-form-item label="严重级别" required>
             <div class="severity-wrap">
               <el-select
                 v-model="form.severityLevel"
@@ -1170,20 +1219,20 @@ watch(isHighSeverity, (high) => {
             v-model="advancedCollapseActive"
             class="advanced-fields-collapse"
           >
-            <el-collapse-item title="更多字段（选填）" name="more">
+            <el-collapse-item title="更多字段" name="more">
               <template #title>
-                <span class="collapse-title-text">更多字段（选填）</span>
-                <span class="collapse-title-hint">影响范围、解决方案{{ isHighSeverity ? '、审核人' : '' }}等</span>
+                <span class="collapse-title-text">更多字段</span>
+                <span class="collapse-title-hint">除备注外均为必填；含影响范围、解决方案{{ isHighSeverity ? '、审核人' : '' }}等</span>
               </template>
 
-          <el-form-item label="影响范围">
+          <el-form-item label="影响范围" required>
             <el-input
               v-model="form.impactScope"
               type="textarea"
               :autosize="{ minRows: 3, maxRows: 14 }"
               maxlength="500"
               show-word-limit
-              placeholder="请输入影响范围（可选）"
+              placeholder="请输入影响范围"
               class="textarea-autosize"
             />
           </el-form-item>
@@ -1203,6 +1252,7 @@ watch(isHighSeverity, (high) => {
           <el-form-item
             v-else-if="resolutionMode === 'complete' || resolutionMode === 'none'"
             :label="solutionFormLabel"
+            :required="resolutionMode === 'complete'"
           >
             <el-input
               v-model="form.solution"
@@ -1212,8 +1262,8 @@ watch(isHighSeverity, (high) => {
               show-word-limit
               :placeholder="
                 resolutionMode === 'none'
-                  ? '关联工单后填写；临时解决为临时解决方案，处理完成为可选说明'
-                  : '请输入解决方案（可选）'
+                  ? '关联工单后填写；临时解决为临时解决方案，处理完成为解决方案说明'
+                  : '请输入解决方案'
               "
               class="textarea-autosize"
               :disabled="!canEdit"
@@ -1243,13 +1293,13 @@ watch(isHighSeverity, (high) => {
             v-model:resolve-time="form.resolveTime"
           />
 
-          <el-form-item label="反馈人">
+          <el-form-item label="反馈人" required>
             <el-select
               v-model="form.reporterId"
               clearable
               filterable
               class="w-420"
-              placeholder="请选择反馈人（可选）"
+              placeholder="请选择反馈人"
             >
               <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
             </el-select>
@@ -1267,14 +1317,14 @@ watch(isHighSeverity, (high) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="责任人">
+          <el-form-item label="责任人" required>
             <el-select
               v-model="form.responsibleUserIds"
               multiple
               clearable
               filterable
               class="w-520"
-              placeholder="请选择责任人（可多选）"
+              placeholder="请选择责任人（可多选，至少一位）"
             >
               <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
             </el-select>
@@ -1287,7 +1337,7 @@ watch(isHighSeverity, (high) => {
               :autosize="{ minRows: isMobileNarrow ? 4 : 3, maxRows: isMobileNarrow ? 16 : 12 }"
               maxlength="500"
               show-word-limit
-              placeholder="请输入备注（可选）"
+              placeholder="请输入备注（选填）"
               class="textarea-autosize"
             />
           </el-form-item>
@@ -1295,14 +1345,14 @@ watch(isHighSeverity, (high) => {
           </el-collapse>
 
           <template v-if="!isMobileNarrow">
-          <el-form-item label="影响范围">
+          <el-form-item label="影响范围" required>
             <el-input
               v-model="form.impactScope"
               type="textarea"
               :autosize="{ minRows: 2, maxRows: 12 }"
               maxlength="500"
               show-word-limit
-              placeholder="请输入影响范围（可选）"
+              placeholder="请输入影响范围"
               class="textarea-autosize"
             />
           </el-form-item>
@@ -1322,6 +1372,7 @@ watch(isHighSeverity, (high) => {
           <el-form-item
             v-else-if="resolutionMode === 'complete' || resolutionMode === 'none'"
             :label="solutionFormLabel"
+            :required="resolutionMode === 'complete'"
           >
             <el-input
               v-model="form.solution"
@@ -1331,8 +1382,8 @@ watch(isHighSeverity, (high) => {
               show-word-limit
               :placeholder="
                 resolutionMode === 'none'
-                  ? '关联工单后填写；临时解决为临时解决方案，处理完成为可选说明'
-                  : '请输入解决方案（可选）'
+                  ? '关联工单后填写；临时解决为临时解决方案，处理完成为解决方案说明'
+                  : '请输入解决方案'
               "
               class="textarea-autosize"
               :disabled="!canEdit"
@@ -1361,13 +1412,13 @@ watch(isHighSeverity, (high) => {
             v-model:resolve-time="form.resolveTime"
           />
 
-          <el-form-item label="反馈人">
+          <el-form-item label="反馈人" required>
             <el-select
               v-model="form.reporterId"
               clearable
               filterable
               class="w-420"
-              placeholder="请选择反馈人（可选）"
+              placeholder="请选择反馈人"
             >
               <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
             </el-select>
@@ -1385,14 +1436,14 @@ watch(isHighSeverity, (high) => {
             </el-select>
           </el-form-item>
 
-          <el-form-item label="责任人">
+          <el-form-item label="责任人" required>
             <el-select
               v-model="form.responsibleUserIds"
               multiple
               clearable
               filterable
               class="w-520"
-              placeholder="请选择责任人（可多选）"
+              placeholder="请选择责任人（可多选，至少一位）"
             >
               <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
             </el-select>
@@ -1405,7 +1456,7 @@ watch(isHighSeverity, (high) => {
               :autosize="{ minRows: 3, maxRows: 12 }"
               maxlength="500"
               show-word-limit
-              placeholder="请输入备注（可选）"
+              placeholder="请输入备注（选填）"
               class="textarea-autosize"
             />
           </el-form-item>
