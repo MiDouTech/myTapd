@@ -108,7 +108,7 @@ const STATUS_LABEL_MAP: Record<string, string> = {
 const query = reactive<TicketPageInput>({
   pageNum: 1,
   pageSize: 20,
-  view: 'my_created',
+  view: 'my_todo',
   keyword: '',
   ticketNo: '',
   title: '',
@@ -125,8 +125,8 @@ const query = reactive<TicketPageInput>({
 const timeRange = ref<string[]>([])
 
 const viewTabs: Array<{ label: string; value: TicketView }> = [
-  { label: '我创建的', value: 'my_created' },
   { label: '我待办的', value: 'my_todo' },
+  { label: '我创建的', value: 'my_created' },
   { label: '我参与的', value: 'my_participated' },
   { label: '我关注的', value: 'my_followed' },
   { label: '所有工单', value: 'all' },
@@ -156,7 +156,7 @@ function normalizeViewFromRoute(): TicketView {
   if (typeof routeView === 'string' && values.includes(routeView as TicketView)) {
     return routeView as TicketView
   }
-  return 'my_created'
+  return 'my_todo'
 }
 
 async function loadCategoryTree(): Promise<void> {
