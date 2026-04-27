@@ -264,6 +264,13 @@ onBeforeUnmount(() => {
               </el-button>
             </template>
           </el-table-column>
+          <el-table-column
+            prop="problemDesc"
+            label="标题"
+            min-width="220"
+            align="center"
+            :show-overflow-tooltip="true"
+          />
           <el-table-column label="状态" min-width="120">
             <template #default="{ row }">
               <el-tag :type="getBugReportStatusTagType(row.status)">
