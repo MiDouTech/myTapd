@@ -20,7 +20,7 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("ticketNo") String ticketNo,
                                      @Param("title") String title,
                                      @Param("categoryId") Long categoryId,
-                                     @Param("status") String status,
+                                     @Param("statusList") List<String> statusList,
                                      @Param("priority") String priority,
                                      @Param("creatorId") Long creatorId,
                                      @Param("assigneeId") Long assigneeId,

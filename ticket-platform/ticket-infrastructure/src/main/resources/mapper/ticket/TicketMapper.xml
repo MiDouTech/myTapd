@@ -54,8 +54,11 @@
         <if test="categoryId != null">
             AND t.category_id = #{categoryId}
         </if>
-        <if test="status != null and status != ''">
-            AND t.status = #{status}
+        <if test="statusList != null and statusList.size() &gt; 0">
+            AND t.status IN
+            <foreach collection="statusList" item="st" open="(" separator="," close=")">
+                #{st}
+            </foreach>
         </if>
         <if test="linkableForBugReport != null and linkableForBugReport == true">
             AND LOWER(t.status) IN ('temp_resolved', 'completed')

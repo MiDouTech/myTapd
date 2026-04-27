@@ -4,6 +4,8 @@ import com.miduo.cloud.ticket.common.dto.common.PageInput;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class TicketPageInput extends PageInput {
@@ -20,6 +22,12 @@ public class TicketPageInput extends PageInput {
     private Long categoryId;
 
     private String status;
+
+    /**
+     * 多状态筛选（与 {@link #status} 合并去重）；任一匹配即命中（SQL IN）。
+     * 兼容 OpenAPI 等仍传单个 {@code status} 的调用方。
+     */
+    private List<String> statuses;
 
     private String priority;
 

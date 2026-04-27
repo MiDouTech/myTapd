@@ -152,7 +152,8 @@
 | ticketNo | String | 否 | 工单编号（前缀匹配） |
 | title | String | 否 | 标题关键词 |
 | categoryId | Long | 否 | 分类ID |
-| status | String | 否 | 状态 |
+| status | String | 否 | 状态（单值，与开放接口等旧入参兼容） |
+| statuses | String[] | 否 | 多状态筛选（OR，与 status 同时传时合并去重） |
 | priority | String | 否 | 优先级 |
 | creatorId | Long | 否 | 创建人ID |
 | assigneeId | Long | 否 | 处理人ID |

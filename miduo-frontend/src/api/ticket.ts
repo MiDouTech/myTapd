@@ -39,7 +39,11 @@ export function createTicket(data: TicketCreateInput): Promise<number> {
  * 产品文档功能：4.2.2 工单列表与筛选 - 多视图+筛选+排序+分页
  */
 export function getTicketPage(params: TicketPageInput): Promise<PageOutput<TicketListOutput>> {
-  return request.get<PageOutput<TicketListOutput>>('/ticket/page', { params })
+  // 多状态 statuses 需重复键 status=a&status=b，避免 Spring 收不到 status[] 数组
+  return request.get<PageOutput<TicketListOutput>>('/ticket/page', {
+    params,
+    paramsSerializer: { indexes: null },
+  })
 }
 
 /**

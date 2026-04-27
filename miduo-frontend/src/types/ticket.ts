@@ -10,6 +10,8 @@ export interface TicketPageInput extends PageQuery {
   title?: string
   categoryId?: number
   status?: string
+  /** 多状态筛选（OR）；与 status 二选一或并存时由后端合并 */
+  statuses?: string[]
   priority?: string
   creatorId?: number
   assigneeId?: number

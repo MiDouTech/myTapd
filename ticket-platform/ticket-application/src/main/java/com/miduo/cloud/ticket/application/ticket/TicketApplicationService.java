@@ -225,6 +225,8 @@ public class TicketApplicationService {
             keyword = null;
         }
 
+        List<String> statusFilterList = mergeStatusFilter(input.getStatus(), input.getStatuses());
+
         IPage<TicketPO> result = ticketMapper.selectTicketPage(
                 page,
                 viewCode,
@@ -233,7 +235,7 @@ public class TicketApplicationService {
                 keyword != null ? null : input.getTicketNo(),
                 keyword != null ? null : input.getTitle(),
                 input.getCategoryId(),
-                input.getStatus(),
+                statusFilterList,
                 input.getPriority(),
                 input.getCreatorId(),
                 input.getAssigneeId(),
@@ -1358,6 +1360,27 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    /**
+     * 合并单状态与多状态入参，去空去重，保持插入顺序；无有效值时返回 null（Mapper 不追加状态条件）。
+     */
+    private static List<String> mergeStatusFilter(String singleStatus, List<String> multiStatuses) {
+        LinkedHashSet<String> ordered = new LinkedHashSet<>();
+        if (singleStatus != null && !singleStatus.trim().isEmpty()) {
+            ordered.add(singleStatus.trim());
+        }
+        if (multiStatuses != null) {
+            for (String s : multiStatuses) {
+                if (s != null && !s.trim().isEmpty()) {
+                    ordered.add(s.trim());
+                }
+            }
+        }
+        if (ordered.isEmpty()) {
+            return null;
+        }
+        return new ArrayList<>(ordered);
     }
 
     private boolean isTerminalStatus(String status) {
