@@ -113,7 +113,7 @@ const query = reactive<TicketPageInput>({
   ticketNo: '',
   title: '',
   categoryId: undefined,
-  status: '',
+  statuses: [],
   priority: '',
   creatorId: undefined,
   assigneeId: undefined,
@@ -178,7 +178,9 @@ async function loadTickets(): Promise<void> {
       if (query.title?.trim()) params.title = query.title.trim()
     }
     if (query.categoryId) params.categoryId = query.categoryId
-    if (query.status) params.status = query.status
+    if (query.statuses?.length) {
+      params.statuses = query.statuses
+    }
     if (query.slaStatus) params.slaStatus = query.slaStatus
     if (query.priority) params.priority = query.priority
     if (query.creatorId) params.creatorId = query.creatorId
@@ -235,7 +237,7 @@ function handleReset(): void {
   query.ticketNo = ''
   query.title = ''
   query.categoryId = undefined
-  query.status = ''
+  query.statuses = []
   query.priority = ''
   query.slaStatus = ''
   query.creatorId = undefined
@@ -518,10 +520,15 @@ watch(
     query.view = normalized
     query.pageNum = 1
 
-    // 从仪表盘卡片跳转时携带的状态/SLA过滤参数
-    const routeStatus = typeof route.query.status === 'string' ? route.query.status : ''
+    // 从仪表盘卡片跳转时携带的状态/SLA过滤参数（status 支持单值或多值 query）
+    const rawStatusQ = route.query.status
+    const routeStatuses: string[] = Array.isArray(rawStatusQ)
+      ? rawStatusQ.filter((s): s is string => typeof s === 'string').map((s) => s.trim()).filter(Boolean)
+      : typeof rawStatusQ === 'string' && rawStatusQ.trim()
+        ? [rawStatusQ.trim()]
+        : []
     const routeSlaStatus = typeof route.query.slaStatus === 'string' ? route.query.slaStatus : ''
-    query.status = routeStatus
+    query.statuses = routeStatuses
     query.slaStatus = routeSlaStatus
 
     // 进入「我的工单」时补齐默认 view，避免仅路径 /ticket/mine、无 query 时刷新/分享链接与当前 Tab 不一致
@@ -613,7 +620,15 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item label="状态" class="query-form-item">
-          <el-select v-model="query.status" class="query-input" placeholder="请选择内容" clearable>
+          <el-select
+            v-model="query.statuses"
+            class="query-input"
+            placeholder="请选择内容"
+            clearable
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+          >
             <!-- 通用工单状态 -->
             <el-option label="待分派" value="pending_assign" />
             <el-option label="待受理" value="pending_accept" />
