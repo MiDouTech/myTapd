@@ -1419,6 +1419,7 @@ public class BugReportApplicationService extends BaseApplicationService {
         BugReportPageOutput output = new BugReportPageOutput();
         output.setId(item.getId());
         output.setReportNo(item.getReportNo());
+        output.setProblemDesc(item.getProblemDesc());
         output.setStatus(item.getStatus());
         BugReportStatus status = BugReportStatus.fromCode(item.getStatus());
         output.setStatusLabel(status != null ? status.getLabel() : item.getStatus());

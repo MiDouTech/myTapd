@@ -14,6 +14,8 @@ export interface BugReportPageInput extends PageQuery {
 export interface BugReportPageOutput {
   id: number
   reportNo: string
+  /** 问题描述，列表中作为标题展示 */
+  problemDesc?: string
   status?: string
   statusLabel?: string
   defectCategory?: string

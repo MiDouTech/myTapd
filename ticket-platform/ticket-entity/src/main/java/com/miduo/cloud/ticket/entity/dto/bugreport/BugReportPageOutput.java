@@ -15,6 +15,9 @@ public class BugReportPageOutput implements Serializable {
 
     private String reportNo;
 
+    /** 问题描述，列表中作为标题展示 */
+    private String problemDesc;
+
     private String status;
 
     private String statusLabel;
