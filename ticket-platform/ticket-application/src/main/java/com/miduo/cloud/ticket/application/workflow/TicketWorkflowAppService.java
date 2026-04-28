@@ -20,6 +20,10 @@ import com.miduo.cloud.ticket.entity.dto.workflow.ReturnInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TicketFlowRecordOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TransferInput;
 import com.miduo.cloud.ticket.entity.dto.workflow.TransitInput;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mapper.BugReportTicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFlowRecordMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
@@ -33,6 +37,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,6 +80,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final ApplicationEventPublisher eventPublisher;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
     private final TicketBugApplicationService ticketBugApplicationService;
+    private final BugReportTicketMapper bugReportTicketMapper;
+    private final BugReportMapper bugReportMapper;
 
     /** 内置缺陷工单工作流 ID（与 Flyway 初始化一致） */
     private static final long DEFECT_WORKFLOW_ID = 3L;
@@ -92,7 +99,9 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      SlaTimerService slaTimerService,
                                      ApplicationEventPublisher eventPublisher,
                                      TicketAssigneeSyncService ticketAssigneeSyncService,
-                                     TicketBugApplicationService ticketBugApplicationService) {
+                                     TicketBugApplicationService ticketBugApplicationService,
+                                     BugReportTicketMapper bugReportTicketMapper,
+                                     BugReportMapper bugReportMapper) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.flowRecordMapper = flowRecordMapper;
@@ -104,6 +113,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         this.eventPublisher = eventPublisher;
         this.ticketAssigneeSyncService = ticketAssigneeSyncService;
         this.ticketBugApplicationService = ticketBugApplicationService;
+        this.bugReportTicketMapper = bugReportTicketMapper;
+        this.bugReportMapper = bugReportMapper;
     }
 
     /**
@@ -405,7 +416,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     }
 
     /**
-     * 退回上一节点（由工作流定义中 isReturn=true 的流转驱动，不再硬编码）
+     * 退回上一节点（优先走工作流 isReturn=true；终态支持误操作回退上一步）
      * 接口编号：API000017
      */
     @Transactional(rollbackFor = Exception.class)
@@ -415,38 +426,52 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         String userRole = resolveUserRole(operatorId, ticket);
         String currentStatus = ticket.getStatus();
+        String oldStatus = currentStatus;
+        Long oldAssigneeId = ticket.getAssigneeId();
 
-        // 从工作流配置中查找退回流转（isReturn=true）
+        // 1) 常规路径：从工作流配置中查找退回流转（isReturn=true）
         List<WorkflowTransition> returnTransitions = workflowEngine.getAvailableActions(
                         workflow.getStates(), workflow.getTransitions(), currentStatus, userRole)
                 .stream()
                 .filter(WorkflowTransition::isReturnTransition)
                 .collect(Collectors.toList());
 
-        if (returnTransitions.isEmpty()) {
-            String currentStatusLabel = resolveStatusLabel(currentStatus);
-            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
-                    "当前状态[" + currentStatusLabel + "]不支持退回操作，或您无权限执行退回");
-        }
+        WorkflowTransition returnTransition = null;
+        String targetStatus = null;
+        Long targetAssigneeId = null;
 
-        // 若有多个退回路径，使用 input.getTargetStatus 指定；否则取第一个
-        WorkflowTransition returnTransition;
-        if (StringUtils.hasText(input.getTargetStatus())) {
-            String targetStatusLabel = resolveStatusLabel(input.getTargetStatus());
-            returnTransition = returnTransitions.stream()
-                    .filter(t -> t.getTo().equalsIgnoreCase(input.getTargetStatus()))
-                    .findFirst()
-                    .orElseThrow(() -> BusinessException.of(ErrorCode.WORKFLOW_TRANSITION_INVALID,
-                            "指定的退回目标状态[" + targetStatusLabel + "]不合法"));
+        if (!returnTransitions.isEmpty()) {
+            // 若有多个退回路径，使用 input.getTargetStatus 指定；否则取第一个
+            if (StringUtils.hasText(input.getTargetStatus())) {
+                String targetStatusLabel = resolveStatusLabel(input.getTargetStatus());
+                returnTransition = returnTransitions.stream()
+                        .filter(t -> t.getTo().equalsIgnoreCase(input.getTargetStatus()))
+                        .findFirst()
+                        .orElseThrow(() -> BusinessException.of(ErrorCode.WORKFLOW_TRANSITION_INVALID,
+                                "指定的退回目标状态[" + targetStatusLabel + "]不合法"));
+            } else {
+                returnTransition = returnTransitions.get(0);
+            }
+            targetStatus = returnTransition.getTo();
         } else {
-            returnTransition = returnTransitions.get(0);
+            // 2) 终态误操作兜底：已关闭，或已完成且存在未归档简报，允许回退“上一步状态 + 上一步处理人”
+            ensureTerminalRollbackAllowed(ticket);
+            TicketFlowRecordPO latestEntry = flowRecordMapper.selectLatestStatusTransitionToStatus(
+                    ticketId, currentStatus);
+            if (latestEntry == null || !StringUtils.hasText(latestEntry.getFromStatus())) {
+                String currentStatusLabel = resolveStatusLabel(currentStatus);
+                throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
+                        "当前状态[" + currentStatusLabel + "]暂无可回退的上一步记录");
+            }
+            targetStatus = latestEntry.getFromStatus();
+            targetAssigneeId = latestEntry.getFromAssigneeId();
+            returnTransition = createVirtualTransition("fallback_return", "回退上一步", oldStatus, targetStatus);
         }
-
-        String targetStatus = returnTransition.getTo();
-        String oldStatus = ticket.getStatus();
-        Long oldAssigneeId = ticket.getAssigneeId();
 
         ticket.setStatus(targetStatus);
+        if (targetAssigneeId != null) {
+            ticketAssigneeSyncService.syncSingleAssigneeRow(ticket, targetAssigneeId);
+        }
         ticketMapper.updateById(ticket);
 
         saveTicketLog(ticketId, operatorId, "RETURN", oldStatus, targetStatus, input.getReason());
@@ -461,6 +486,54 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
         eventPublisher.publishEvent(
                 new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
+    }
+
+    private void ensureTerminalRollbackAllowed(TicketPO ticket) {
+        TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
+        if (status == TicketStatus.CLOSED) {
+            return;
+        }
+        if (status == TicketStatus.COMPLETED) {
+            if (hasUnarchivedBugReport(ticket.getId())) {
+                return;
+            }
+            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
+                    "已完成工单仅在存在未归档Bug简报时可回退上一步");
+        }
+        String currentStatusLabel = resolveStatusLabel(ticket.getStatus());
+        throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,
+                "当前状态[" + currentStatusLabel + "]不支持回退上一步操作");
+    }
+
+    private boolean hasUnarchivedBugReport(Long ticketId) {
+        if (ticketId == null) {
+            return false;
+        }
+        List<BugReportTicketPO> links = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>().eq(BugReportTicketPO::getTicketId, ticketId));
+        if (links == null || links.isEmpty()) {
+            return false;
+        }
+        Set<Long> reportIds = links.stream()
+                .map(BugReportTicketPO::getReportId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        if (reportIds.isEmpty()) {
+            return false;
+        }
+        List<BugReportPO> reports = bugReportMapper.selectBatchIds(reportIds);
+        if (reports == null || reports.isEmpty()) {
+            return false;
+        }
+        for (BugReportPO report : reports) {
+            if (report == null || !StringUtils.hasText(report.getStatus())) {
+                continue;
+            }
+            if (!"ARCHIVED".equalsIgnoreCase(report.getStatus().trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // =========================================================================
