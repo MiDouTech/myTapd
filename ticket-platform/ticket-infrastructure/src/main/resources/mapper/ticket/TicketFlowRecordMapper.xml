@@ -60,4 +60,35 @@
         LIMIT #{limit}
     </select>
 
+    <select id="selectLatestStatusTransitionToStatus"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFlowRecordPO">
+        SELECT
+            id,
+            ticket_id,
+            ticket_no,
+            flow_type,
+            transition_id,
+            transition_name,
+            from_status,
+            to_status,
+            from_assignee_id,
+            to_assignee_id,
+            operator_id,
+            operator_role,
+            remark,
+            create_time,
+            update_time,
+            create_by,
+            update_by,
+            deleted
+        FROM ticket_flow_record
+        WHERE ticket_id = #{ticketId}
+          AND deleted = 0
+          AND to_status = #{toStatus}
+          AND from_status IS NOT NULL
+          AND from_status <> to_status
+        ORDER BY create_time DESC, id DESC
+        LIMIT 1
+    </select>
+
 </mapper>

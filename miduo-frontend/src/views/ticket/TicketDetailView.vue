@@ -34,6 +34,7 @@ import {
   getAvailableActions,
   transitTicket,
   transferTicket,
+  returnTicket,
   getFlowHistory,
 } from '@/api/workflow'
 import { getUserList } from '@/api/user'
@@ -59,7 +60,7 @@ import type {
   TicketFlowRecordOutput,
 } from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
-import { notifySuccess, notifyError } from '@/utils/feedback'
+import { confirmAction, notifySuccess, notifyError } from '@/utils/feedback'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticket-status'
@@ -539,6 +540,21 @@ const canShowUrgeTicket = computed(() => {
   return urgeDefaultNotifyUserIds.value.length > 0
 })
 
+const canShowRollbackLastStep = computed(() => {
+  if (!detail.value) {
+    return false
+  }
+  if (currentStatus.value === 'closed') {
+    return true
+  }
+  if (currentStatus.value !== 'completed') {
+    return false
+  }
+  // 已完成仅在存在未归档简报时允许回退（与后端兜底校验保持一致）
+  const reports = detail.value.bugReports ?? []
+  return reports.some((report) => (report.status || '').trim().toUpperCase() !== 'ARCHIVED')
+})
+
 function urgeNotifyUserName(userId: number): string {
   return users.value.find((u) => u.id === userId)?.name ?? `用户#${userId}`
 }
@@ -881,6 +897,23 @@ async function handleCloseTicket(): Promise<void> {
     notifySuccess('工单关闭成功')
     closeDialogVisible.value = false
     await loadAll()
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+async function handleRollbackLastStep(): Promise<void> {
+  await confirmAction(
+    '确认回退到上一步吗？系统会同时恢复到上一步状态和上一步处理人。',
+    '回退上一步',
+  )
+  submitLoading.value = true
+  try {
+    await returnTicket(ticketId.value, {
+      reason: '误操作回退上一步',
+    })
+    await loadAll()
+    notifySuccess('已回退到上一步')
   } finally {
     submitLoading.value = false
   }
@@ -1304,6 +1337,16 @@ watch(
               {{ action.actionName }}
             </el-button>
           </template>
+          <el-button
+            v-if="canShowRollbackLastStep"
+            size="small"
+            type="warning"
+            plain
+            :loading="submitLoading"
+            @click="handleRollbackLastStep"
+          >
+            回退上一步
+          </el-button>
           <template v-if="currentStatus === 'pending_assign' || currentStatus === 'alert_triggered'">
             <el-button size="small" type="primary" plain @click="openAssignDialog">
               分派处理人

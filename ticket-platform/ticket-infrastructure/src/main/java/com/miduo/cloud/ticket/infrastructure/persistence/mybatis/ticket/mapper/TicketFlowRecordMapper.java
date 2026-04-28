@@ -23,4 +23,10 @@ public interface TicketFlowRecordMapper extends BaseMapper<TicketFlowRecordPO> {
      */
     List<TicketFlowRecordPO> selectRecentByWorkflowId(@Param("workflowId") Long workflowId,
                                                       @Param("limit") Long limit);
+
+    /**
+     * 查询最近一次“进入指定状态”的状态流转记录（排除 from=to 的纯转派）
+     */
+    TicketFlowRecordPO selectLatestStatusTransitionToStatus(@Param("ticketId") Long ticketId,
+                                                            @Param("toStatus") String toStatus);
 }
