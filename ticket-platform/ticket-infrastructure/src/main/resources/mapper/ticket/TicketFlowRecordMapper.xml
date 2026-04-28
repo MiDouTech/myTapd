@@ -86,7 +86,7 @@
           AND deleted = 0
           AND to_status = #{toStatus}
           AND from_status IS NOT NULL
-          AND from_status <> to_status
+          AND from_status &lt;&gt; to_status
         ORDER BY create_time DESC, id DESC
         LIMIT 1
     </select>
