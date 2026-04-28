@@ -5,6 +5,8 @@ import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiResult } from '@/types/common'
 
+import { tryRefreshAndReplay } from '@/utils/authRefresh'
+
 import { notifyError } from './feedback'
 import { getAccessToken } from './storage'
 
@@ -40,6 +42,33 @@ function redirectToLogin(): void {
     })
 }
 
+const AUTH_RETRY_FLAG = '_ticketAuthRetried' as const
+
+/** Access 过期时先试静默刷新，失败再跳转登录（否则 refresh 设再长也没用） */
+async function handleUnauthorized(
+  originalConfig: AxiosRequestConfig | undefined,
+  replay: (cfg: AxiosRequestConfig) => Promise<unknown>,
+): Promise<unknown> {
+  if (isNoLoginRedirectRoute()) {
+    return Promise.reject(new Error('Unauthorized'))
+  }
+  if (!originalConfig) {
+    redirectToLogin()
+    return Promise.reject(new Error('Unauthorized'))
+  }
+  if ((originalConfig as Record<string, unknown>)[AUTH_RETRY_FLAG]) {
+    redirectToLogin()
+    return Promise.reject(new Error('Unauthorized'))
+  }
+  ;(originalConfig as Record<string, unknown>)[AUTH_RETRY_FLAG] = true
+  try {
+    return await tryRefreshAndReplay(originalConfig, replay)
+  } catch {
+    redirectToLogin()
+    return Promise.reject(new Error('Unauthorized'))
+  }
+}
+
 service.interceptors.request.use((config) => {
   const token = getAccessToken()
   if (token) {
@@ -55,8 +84,11 @@ service.interceptors.response.use(
       if (payload.code === 200) {
         return payload.data
       }
-      if (payload.code === 401 && !isNoLoginRedirectRoute()) {
-        redirectToLogin()
+      if (payload.code === 401) {
+        return handleUnauthorized(response.config, (cfg) => service.request(cfg)).catch(() => {
+          notifyError(payload.message || '请求失败')
+          return Promise.reject(new Error(payload.message || 'Request failed'))
+        })
       }
       notifyError(payload.message || '请求失败')
       return Promise.reject(new Error(payload.message || 'Request failed'))
@@ -64,9 +96,12 @@ service.interceptors.response.use(
     return response.data
   },
   (error) => {
-    if (error.response?.status === 401 && !isNoLoginRedirectRoute()) {
-      redirectToLogin()
-      return Promise.reject(error)
+    if (error.response?.status === 401) {
+      return handleUnauthorized(error.config, (cfg) => service.request(cfg)).catch(() => {
+        const message = error.response?.data?.message || error.message || '网络异常'
+        notifyError(message)
+        return Promise.reject(error)
+      })
     }
     const message = error.response?.data?.message || error.message || '网络异常'
     notifyError(message)
