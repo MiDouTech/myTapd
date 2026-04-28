@@ -146,6 +146,7 @@ function getReviewActionLabel(action?: string): string {
     CREATE: '创建',
     EDIT: '编辑',
     SUBMIT: '提交审核',
+    SUBMIT_ARCHIVED: '提交归档',
     APPROVE: '审核通过',
     REJECT: '审核驳回',
     VOID: '作废',
