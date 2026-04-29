@@ -35,6 +35,7 @@ import {
   persistLayoutTicketSearch,
 } from '@/stores/layoutTicketSearch'
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import { parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 const route = useRoute()
 const router = useRouter()
@@ -351,23 +352,6 @@ function getPreviewAttachmentImageIndex(filePath?: string): number {
   return idx >= 0 ? idx : 0
 }
 
-function uniqStringList(values: string[]): string[] {
-  return Array.from(new Set(values.filter((item) => Boolean(item && item.trim()))))
-}
-
-/** 问题截图字段可能为逗号/分号分隔的 URL 列表 */
-function problemScreenshotUrls(raw?: string): string[] {
-  if (!raw) {
-    return []
-  }
-  return uniqStringList(
-    raw
-      .split(/[,，;\n]/)
-      .map((item) => item.trim())
-      .filter(Boolean),
-  )
-}
-
 async function refreshPreviewDetail(): Promise<void> {
   const id = previewDetail.value?.id
   if (id == null) {
@@ -419,7 +403,7 @@ const previewCustomFieldEntries = computed(() => {
 })
 
 const previewProblemScreenshotUrls = computed(() =>
-  problemScreenshotUrls(previewDetail.value?.bugCustomerInfo?.problemScreenshot),
+  parseProblemScreenshotUrls(previewDetail.value?.bugCustomerInfo?.problemScreenshot),
 )
 
 const previewProblemScreenshotImageUrls = computed(() =>

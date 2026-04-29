@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
 import type { TicketPublicDetailOutput } from '@/types/ticket'
+import { filterHttpImageUrls, parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 
 const route = useRoute()
@@ -23,17 +24,72 @@ const internalTicketHref = computed(() => {
   return `${origin}/ticket/detail/${id}`
 })
 
-const lightboxVisible = ref(false)
-const lightboxSrc = ref('')
+/** 与后台客服区「问题截图」字段同源，仅解析该字段，不包含附件区 */
+const problemScreenshotUrls = computed(() => {
+  const raw = detail.value?.bugCustomerInfo?.problemScreenshot
+  return filterHttpImageUrls(parseProblemScreenshotUrls(raw))
+})
 
-function openLightbox(src: string): void {
-  lightboxSrc.value = src
-  lightboxVisible.value = true
+const lightboxUrls = ref<string[]>([])
+const lightboxIndex = ref(0)
+const lightboxScale = ref(1)
+
+const lightboxVisible = computed(() => lightboxUrls.value.length > 0)
+const lightboxCurrentSrc = computed(() => {
+  const list = lightboxUrls.value
+  const i = lightboxIndex.value
+  if (list.length === 0 || i < 0 || i >= list.length) {
+    return ''
+  }
+  return list[i] ?? ''
+})
+
+const lightboxCanPrev = computed(() => lightboxIndex.value > 0)
+const lightboxCanNext = computed(() => lightboxIndex.value < lightboxUrls.value.length - 1)
+const lightboxShowNav = computed(() => lightboxUrls.value.length > 1)
+
+function openLightboxGallery(urls: string[], startIndex: number): void {
+  if (urls.length === 0) {
+    return
+  }
+  const i = Math.min(Math.max(0, startIndex), urls.length - 1)
+  lightboxUrls.value = urls
+  lightboxIndex.value = i
+  lightboxScale.value = 1
+}
+
+function openLightboxSingle(src: string): void {
+  if (src) {
+    openLightboxGallery([src], 0)
+  }
 }
 
 function closeLightbox(): void {
-  lightboxVisible.value = false
-  lightboxSrc.value = ''
+  lightboxUrls.value = []
+  lightboxIndex.value = 0
+  lightboxScale.value = 1
+}
+
+function lightboxPrev(): void {
+  if (lightboxCanPrev.value) {
+    lightboxIndex.value -= 1
+    lightboxScale.value = 1
+  }
+}
+
+function lightboxNext(): void {
+  if (lightboxCanNext.value) {
+    lightboxIndex.value += 1
+    lightboxScale.value = 1
+  }
+}
+
+function lightboxZoomIn(): void {
+  lightboxScale.value = Math.min(3, Math.round((lightboxScale.value + 0.25) * 100) / 100)
+}
+
+function lightboxZoomOut(): void {
+  lightboxScale.value = Math.max(0.5, Math.round((lightboxScale.value - 0.25) * 100) / 100)
 }
 
 function handleCommentImageClick(event: MouseEvent): void {
@@ -41,14 +97,39 @@ function handleCommentImageClick(event: MouseEvent): void {
   if (target.tagName === 'IMG') {
     const src = (target as HTMLImageElement).src
     if (src) {
-      openLightbox(src)
+      openLightboxSingle(src)
     }
   }
 }
 
 function handleLightboxKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && lightboxVisible.value) {
+  if (!lightboxVisible.value) {
+    return
+  }
+  if (event.key === 'Escape') {
     closeLightbox()
+    return
+  }
+  if (lightboxShowNav.value) {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      lightboxPrev()
+      return
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      lightboxNext()
+      return
+    }
+  }
+  if (event.key === '+' || event.key === '=') {
+    event.preventDefault()
+    lightboxZoomIn()
+    return
+  }
+  if (event.key === '-' || event.key === '_') {
+    event.preventDefault()
+    lightboxZoomOut()
   }
 }
 
@@ -352,17 +433,21 @@ onMounted(() => {
             <span class="info-label">预期结果</span>
             <div class="info-text-block">{{ detail.bugCustomerInfo.expectedResult }}</div>
           </div>
-          <div v-if="detail.bugCustomerInfo.problemScreenshot" class="info-block-full">
+          <div class="info-block-full customer-problem-screenshots">
             <span class="info-label">问题截图</span>
-            <div class="screenshot-wrap">
-              <img
-                v-for="(url, idx) in detail.bugCustomerInfo.problemScreenshot.split(',')"
+            <div v-if="problemScreenshotUrls.length > 0" class="screenshot-thumb-row">
+              <button
+                v-for="(url, idx) in problemScreenshotUrls"
                 :key="idx"
-                :src="url.trim()"
-                class="screenshot-img"
-                alt="问题截图"
-              />
+                type="button"
+                class="screenshot-thumb-btn"
+                :title="'点击查看第 ' + (idx + 1) + ' 张'"
+                @click="openLightboxGallery(problemScreenshotUrls, idx)"
+              >
+                <img :src="url" class="screenshot-thumb" alt="问题截图缩略图" />
+              </button>
             </div>
+            <div v-else class="info-text-block info-text-muted">—</div>
           </div>
         </div>
 
@@ -408,11 +493,52 @@ onMounted(() => {
     </footer>
   </div>
 
-  <!-- 图片预览灯箱 -->
+  <!-- 图片预览灯箱（处理记录单图 / 问题截图多图） -->
   <Teleport to="body">
     <div v-if="lightboxVisible" class="lightbox-overlay" @click.self="closeLightbox">
-      <button class="lightbox-close" @click="closeLightbox">✕</button>
-      <img :src="lightboxSrc" class="lightbox-img" alt="图片预览" />
+      <button type="button" class="lightbox-close" aria-label="关闭" @click="closeLightbox">✕</button>
+      <div v-if="lightboxShowNav" class="lightbox-toolbar">
+        <button type="button" class="lightbox-tool-btn" :disabled="!lightboxCanPrev" @click="lightboxPrev">
+          上一张
+        </button>
+        <span class="lightbox-counter">{{ lightboxIndex + 1 }} / {{ lightboxUrls.length }}</span>
+        <button type="button" class="lightbox-tool-btn" :disabled="!lightboxCanNext" @click="lightboxNext">
+          下一张
+        </button>
+        <span class="lightbox-toolbar-sep" />
+        <button type="button" class="lightbox-tool-btn" @click="lightboxZoomOut">缩小</button>
+        <button type="button" class="lightbox-tool-btn" @click="lightboxZoomIn">放大</button>
+      </div>
+      <div v-else class="lightbox-toolbar lightbox-toolbar-single">
+        <button type="button" class="lightbox-tool-btn" @click="lightboxZoomOut">缩小</button>
+        <button type="button" class="lightbox-tool-btn" @click="lightboxZoomIn">放大</button>
+      </div>
+      <div class="lightbox-stage">
+        <button
+          v-if="lightboxShowNav && lightboxCanPrev"
+          type="button"
+          class="lightbox-side lightbox-side-left"
+          aria-label="上一张"
+          @click.stop="lightboxPrev"
+        >
+          ‹
+        </button>
+        <img
+          :src="lightboxCurrentSrc"
+          class="lightbox-img"
+          alt="图片预览"
+          :style="{ transform: `scale(${lightboxScale})` }"
+        />
+        <button
+          v-if="lightboxShowNav && lightboxCanNext"
+          type="button"
+          class="lightbox-side lightbox-side-right"
+          aria-label="下一张"
+          @click.stop="lightboxNext"
+        >
+          ›
+        </button>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -693,20 +819,44 @@ onMounted(() => {
   word-break: break-word;
 }
 
-/* 问题截图 */
-.screenshot-wrap {
+/* 问题截图（缩略图，与后台同一数据源 problemScreenshot） */
+.customer-problem-screenshots {
+  margin-top: 12px;
+}
+
+.info-text-muted {
+  color: #909399;
+  text-align: center;
+}
+
+.screenshot-thumb-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin-top: 6px;
 }
 
-.screenshot-img {
-  max-width: 100%;
-  max-height: 240px;
-  border-radius: 6px;
+.screenshot-thumb-btn {
+  padding: 0;
   border: 1px solid #e5e6eb;
-  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  cursor: zoom-in;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.screenshot-thumb-btn:hover {
+  border-color: #1675d1;
+  box-shadow: 0 2px 8px rgba(22, 117, 209, 0.2);
+}
+
+.screenshot-thumb {
+  display: block;
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
 }
 
 /* 问题描述 */
@@ -932,6 +1082,14 @@ onMounted(() => {
     padding: 12px;
   }
 
+  .lightbox-side-left {
+    left: 4px;
+  }
+
+  .lightbox-side-right {
+    right: 4px;
+  }
+
   .card {
     border-radius: 8px;
     padding: 14px;
@@ -963,24 +1121,123 @@ onMounted(() => {
   z-index: 9999;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 56px 16px 24px;
+  gap: 12px;
+}
+
+.lightbox-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  z-index: 10001;
+}
+
+.lightbox-toolbar-single {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lightbox-tool-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lightbox-tool-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.lightbox-counter {
+  color: #e5e7eb;
+  font-size: 13px;
+  min-width: 4.5em;
+  text-align: center;
+}
+
+.lightbox-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  max-height: calc(100vh - 120px);
+  min-height: 0;
 }
 
 .lightbox-img {
-  max-width: 100%;
-  max-height: 90vh;
+  max-width: min(100%, 1200px);
+  max-height: calc(100vh - 140px);
+  width: auto;
+  height: auto;
   border-radius: 6px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   object-fit: contain;
   user-select: none;
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
+}
+
+.lightbox-side {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 72px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.lightbox-side:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-side-left {
+  left: 8px;
+}
+
+.lightbox-side-right {
+  right: 8px;
 }
 
 .lightbox-close {
   position: fixed;
   top: 16px;
   right: 20px;
+  z-index: 10002;
   background: rgba(255, 255, 255, 0.15);
   border: none;
   color: #fff;
