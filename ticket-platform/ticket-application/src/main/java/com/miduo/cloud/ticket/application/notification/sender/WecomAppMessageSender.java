@@ -10,6 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 企微应用消息发送器
@@ -97,19 +100,35 @@ public class WecomAppMessageSender implements NotificationSender {
     }
 
     private String buildTextCardDescription(String content) {
+        List<String> lines = parseContentLines(content);
+        return renderDescriptionLines(lines);
+    }
+
+    /**
+     * 将工单卡片正文按行拆分（跳过空行），与参考图一致每行一条「标签：值」。
+     */
+    private List<String> parseContentLines(String content) {
         if (content == null || content.trim().isEmpty()) {
-            return DEFAULT_DESCRIPTION;
+            return Collections.emptyList();
         }
-        String[] lines = content.split("\\r?\\n");
-        StringBuilder builder = new StringBuilder();
-        for (String line : lines) {
+        String[] raw = content.split("\\r?\\n");
+        List<String> lines = new ArrayList<>();
+        for (String line : raw) {
             if (line == null || line.trim().isEmpty()) {
                 continue;
             }
-            builder.append(wrapDescriptionLine(escapeHtml(line.trim())));
+            lines.add(line.trim());
         }
-        if (builder.length() == 0) {
+        return lines;
+    }
+
+    private String renderDescriptionLines(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
             return DEFAULT_DESCRIPTION;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String line : lines) {
+            builder.append(wrapDescriptionLine(escapeHtml(line)));
         }
         return builder.toString();
     }
@@ -155,7 +174,52 @@ public class WecomAppMessageSender implements NotificationSender {
         if (utf8Bytes(fullDescription) <= TEXT_CARD_DESCRIPTION_MAX_BYTES) {
             return fullDescription;
         }
+        String titleTruncated = tryFitDescriptionByTruncatingTitleValueOnly(content);
+        if (titleTruncated != null) {
+            return titleTruncated;
+        }
         return buildTruncatedTextCardDescription(content);
+    }
+
+    /**
+     * 超长时只缩短「标题：」后面的工单标题，其它行（状态、操作人等）保持完整，避免整块末尾截断。
+     */
+    private String tryFitDescriptionByTruncatingTitleValueOnly(String content) {
+        List<String> lines = parseContentLines(content);
+        if (lines.isEmpty()) {
+            return null;
+        }
+        int titleIndex = -1;
+        String titlePrefix = null;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line.startsWith("标题：")) {
+                titleIndex = i;
+                titlePrefix = "标题：";
+                break;
+            }
+            if (line.startsWith("标题:")) {
+                titleIndex = i;
+                titlePrefix = "标题:";
+                break;
+            }
+        }
+        if (titleIndex < 0) {
+            return null;
+        }
+        String titleLine = lines.get(titleIndex);
+        String titleValue = titleLine.substring(titlePrefix.length());
+        List<String> mutable = new ArrayList<>(lines);
+        for (int end = titleValue.length(); end >= 0; end--) {
+            String newTitleLine = titlePrefix + titleValue.substring(0, end)
+                    + (end < titleValue.length() ? DESCRIPTION_TRUNCATE_HINT : "");
+            mutable.set(titleIndex, newTitleLine);
+            String candidate = renderDescriptionLines(mutable);
+            if (utf8Bytes(candidate) <= TEXT_CARD_DESCRIPTION_MAX_BYTES) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private String buildTruncatedTextCardDescription(String content) {
