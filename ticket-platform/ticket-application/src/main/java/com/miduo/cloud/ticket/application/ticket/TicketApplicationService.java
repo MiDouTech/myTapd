@@ -539,7 +539,10 @@ public class TicketApplicationService {
             bugCustomerInfo.setProblemDesc(customerInfoOutput.getProblemDesc());
             bugCustomerInfo.setExpectedResult(customerInfoOutput.getExpectedResult());
             bugCustomerInfo.setSceneCode(customerInfoOutput.getSceneCode());
-            bugCustomerInfo.setProblemScreenshot(customerInfoOutput.getProblemScreenshot());
+            // 与工单详情「已选问题截图」一致：库表 problem_screenshot + 企微机器人关联的图片附件
+            // （企微先文后图时图片可能只写入 ticket_attachment）
+            bugCustomerInfo.setProblemScreenshot(mergePublicProblemScreenshotUrls(
+                    customerInfoOutput.getProblemScreenshot(), ticket.getId()));
             output.setBugCustomerInfo(bugCustomerInfo);
         }
         output.setArchivedBugReport(buildArchivedBugReportSummary(ticket.getId()));
@@ -589,6 +592,52 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    /**
+     * 公开详情「问题截图」与工单详情页「已选问题截图」展示口径一致：
+     * 库表 {@code problem_screenshot} 中的 URL，加上企微机器人写入且未体现在字段里的图片附件。
+     */
+    private String mergePublicProblemScreenshotUrls(String problemScreenshotFromDb, Long ticketId) {
+        LinkedHashSet<String> ordered = new LinkedHashSet<>();
+        if (problemScreenshotFromDb != null && !problemScreenshotFromDb.trim().isEmpty()) {
+            for (String part : problemScreenshotFromDb.split("[,，;\\n]")) {
+                String u = part == null ? "" : part.trim();
+                if (!u.isEmpty()) {
+                    ordered.add(u);
+                }
+            }
+        }
+        if (ticketId != null) {
+            List<TicketAttachmentPO> wecomImages = attachmentMapper.selectList(
+                    new LambdaQueryWrapper<TicketAttachmentPO>()
+                            .eq(TicketAttachmentPO::getTicketId, ticketId)
+                            .eq(TicketAttachmentPO::getSource, AttachmentSource.WECOM_BOT.getCode())
+                            .orderByDesc(TicketAttachmentPO::getCreateTime)
+            );
+            if (wecomImages != null) {
+                for (TicketAttachmentPO a : wecomImages) {
+                    if (a == null || a.getFilePath() == null || a.getFilePath().trim().isEmpty()) {
+                        continue;
+                    }
+                    if (isImageMimeType(a.getFileType())) {
+                        ordered.add(a.getFilePath().trim());
+                    }
+                }
+            }
+        }
+        if (ordered.isEmpty()) {
+            return null;
+        }
+        return String.join(",", ordered);
+    }
+
+    private static boolean isImageMimeType(String fileType) {
+        if (fileType == null || fileType.trim().isEmpty()) {
+            return false;
+        }
+        String t = fileType.trim().toLowerCase(Locale.ROOT);
+        return t.startsWith("image/");
     }
 
     /**
