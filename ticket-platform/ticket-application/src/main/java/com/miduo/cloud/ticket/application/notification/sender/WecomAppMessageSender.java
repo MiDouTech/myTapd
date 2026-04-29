@@ -21,7 +21,11 @@ public class WecomAppMessageSender implements NotificationSender {
     private static final Logger log = LoggerFactory.getLogger(WecomAppMessageSender.class);
     private static final int TEXT_CARD_TITLE_MAX_BYTES = 120;
     private static final int TEXT_CARD_DESCRIPTION_MAX_BYTES = 480;
-    private static final int TEXT_MESSAGE_MAX_BYTES = 1800;
+    private static final String DEFAULT_TITLE = "工单通知";
+    private static final String DEFAULT_DESCRIPTION = "<div class=\"normal\">无详细内容</div>";
+    private static final String TITLE_TRUNCATE_SUFFIX = "...";
+    private static final String DESCRIPTION_TRUNCATE_HINT = " ...(内容过长，已截断)";
+    private static final String DEFAULT_DETAIL_URL = "https://work.weixin.qq.com";
 
     private final SysUserMapper sysUserMapper;
     private final WecomClient wecomClient;
@@ -62,28 +66,28 @@ public class WecomAppMessageSender implements NotificationSender {
             return;
         }
 
-        String detailUrl = (detailLink != null && !detailLink.trim().isEmpty())
-                ? detailLink.trim()
-                : buildDefaultDetailUrl();
-        String textCardDescription = buildTextCardDescription(content);
-        boolean canSendTextCard = isTextCardPayloadSafe(title, textCardDescription)
-                && detailUrl != null && !detailUrl.trim().isEmpty();
-        if (canSendTextCard) {
-            wecomClient.sendTextCardMessage(user.getWecomUserid(), title, textCardDescription, detailUrl, "查看详情");
-            log.info("企微应用消息发送成功: userId={}, title={}", userId, title);
-            return;
-        }
+        String detailUrl = resolveDetailUrl(detailLink);
+        String safeTitle = buildSafeTextCardTitle(title);
+        String safeDescription = buildSafeTextCardDescription(content);
+        wecomClient.sendTextCardMessage(user.getWecomUserid(), safeTitle, safeDescription, detailUrl, "查看详情");
+        log.info("企微应用消息发送成功（textcard）: userId={}, title={}", userId, safeTitle);
+    }
 
-        // 为什么需要 text 兜底：textcard 依赖详情链接且长度限制更严格，简报类通知在未配置详情地址时会被企微拒收。
-        String textMessage = buildTextMessageContent(title, content);
-        wecomClient.sendTextMessage(user.getWecomUserid(), textMessage);
-        log.info("企微应用消息发送成功（text兜底）: userId={}, title={}", userId, title);
+    private String resolveDetailUrl(String detailLink) {
+        if (detailLink != null && !detailLink.trim().isEmpty()) {
+            return detailLink.trim();
+        }
+        String trustedDomain = buildDefaultDetailUrl();
+        if (trustedDomain == null || trustedDomain.trim().isEmpty()) {
+            return DEFAULT_DETAIL_URL;
+        }
+        return trustedDomain;
     }
 
     private String buildDefaultDetailUrl() {
         String trustedDomain = wecomProperties.getTrustedDomain();
         if (trustedDomain == null || trustedDomain.trim().isEmpty()) {
-            return "";
+            return DEFAULT_DETAIL_URL;
         }
         String domain = trustedDomain.trim();
         if (domain.startsWith("http://") || domain.startsWith("https://")) {
@@ -94,7 +98,7 @@ public class WecomAppMessageSender implements NotificationSender {
 
     private String buildTextCardDescription(String content) {
         if (content == null || content.trim().isEmpty()) {
-            return "<div class=\"normal\">无详细内容</div>";
+            return DEFAULT_DESCRIPTION;
         }
         String[] lines = content.split("\\r?\\n");
         StringBuilder builder = new StringBuilder();
@@ -102,43 +106,108 @@ public class WecomAppMessageSender implements NotificationSender {
             if (line == null || line.trim().isEmpty()) {
                 continue;
             }
-            builder.append("<div class=\"normal\">")
-                    .append(escapeHtml(line.trim()))
-                    .append("</div>");
+            builder.append(wrapDescriptionLine(escapeHtml(line.trim())));
         }
         if (builder.length() == 0) {
-            return "<div class=\"normal\">无详细内容</div>";
+            return DEFAULT_DESCRIPTION;
         }
         return builder.toString();
     }
 
-    private boolean isTextCardPayloadSafe(String title, String description) {
-        return utf8Bytes(title) <= TEXT_CARD_TITLE_MAX_BYTES
-                && utf8Bytes(description) <= TEXT_CARD_DESCRIPTION_MAX_BYTES;
+    private String buildSafeTextCardTitle(String title) {
+        String normalizedTitle = sanitizeSingleLine(title);
+        if (normalizedTitle.isEmpty()) {
+            normalizedTitle = DEFAULT_TITLE;
+        }
+        if (utf8Bytes(normalizedTitle) <= TEXT_CARD_TITLE_MAX_BYTES) {
+            return normalizedTitle;
+        }
+        String truncatedByDescription = truncateTitleDescription(normalizedTitle);
+        if (utf8Bytes(truncatedByDescription) <= TEXT_CARD_TITLE_MAX_BYTES) {
+            return truncatedByDescription;
+        }
+        return truncateWithSuffix(normalizedTitle, TEXT_CARD_TITLE_MAX_BYTES, TITLE_TRUNCATE_SUFFIX);
     }
 
-    private String buildTextMessageContent(String title, String content) {
-        String normalizedTitle = sanitizeSingleLine(title);
-        String normalizedContent = sanitizeMultiline(content);
-        StringBuilder builder = new StringBuilder();
-        if (!normalizedTitle.isEmpty()) {
-            builder.append(normalizedTitle);
-        } else {
-            builder.append("工单通知");
+    private String truncateTitleDescription(String title) {
+        String[] separators = {" - ", "：", ":"};
+        for (String separator : separators) {
+            int separatorIndex = title.indexOf(separator);
+            if (separatorIndex <= 0 || separatorIndex >= title.length() - separator.length()) {
+                continue;
+            }
+            String prefix = title.substring(0, separatorIndex + separator.length());
+            String description = title.substring(separatorIndex + separator.length()).trim();
+            int remainBytes = TEXT_CARD_TITLE_MAX_BYTES - utf8Bytes(prefix);
+            if (remainBytes <= 0) {
+                continue;
+            }
+            String truncatedDescription = truncateWithSuffix(description, remainBytes, TITLE_TRUNCATE_SUFFIX);
+            if (!truncatedDescription.isEmpty()) {
+                return prefix + truncatedDescription;
+            }
         }
-        if (!normalizedContent.isEmpty()) {
-            builder.append('\n').append(normalizedContent);
+        return truncateWithSuffix(title, TEXT_CARD_TITLE_MAX_BYTES, TITLE_TRUNCATE_SUFFIX);
+    }
+
+    private String buildSafeTextCardDescription(String content) {
+        String fullDescription = buildTextCardDescription(content);
+        if (utf8Bytes(fullDescription) <= TEXT_CARD_DESCRIPTION_MAX_BYTES) {
+            return fullDescription;
         }
-        String result = builder.toString();
-        if (utf8Bytes(result) <= TEXT_MESSAGE_MAX_BYTES) {
-            return result;
+        return buildTruncatedTextCardDescription(content);
+    }
+
+    private String buildTruncatedTextCardDescription(String content) {
+        String normalized = sanitizeSingleLine(content);
+        if (normalized.isEmpty()) {
+            return wrapDescriptionLine("内容过长，已截断");
         }
-        String suffix = "\n...(内容过长，请到系统查看详情)";
-        int maxContentBytes = TEXT_MESSAGE_MAX_BYTES - utf8Bytes(suffix);
-        if (maxContentBytes <= 0) {
-            return "工单通知";
+        String escaped = escapeHtml(normalized);
+        String wrappedHint = wrapDescriptionLine("内容过长，已截断");
+        String candidate = wrapDescriptionLine(escaped + DESCRIPTION_TRUNCATE_HINT);
+        if (utf8Bytes(candidate) <= TEXT_CARD_DESCRIPTION_MAX_BYTES) {
+            return candidate;
         }
-        return truncateUtf8(result, maxContentBytes) + suffix;
+
+        int shellBytes = utf8Bytes(wrapDescriptionLine(""));
+        int availableBytes = TEXT_CARD_DESCRIPTION_MAX_BYTES - shellBytes - utf8Bytes(DESCRIPTION_TRUNCATE_HINT);
+        if (availableBytes <= 0) {
+            return wrappedHint;
+        }
+        String truncated = truncateUtf8(escaped, availableBytes);
+        if (truncated.isEmpty()) {
+            return wrappedHint;
+        }
+        String truncatedCandidate = wrapDescriptionLine(truncated + DESCRIPTION_TRUNCATE_HINT);
+        if (utf8Bytes(truncatedCandidate) <= TEXT_CARD_DESCRIPTION_MAX_BYTES) {
+            return truncatedCandidate;
+        }
+        return wrappedHint;
+    }
+
+    private String wrapDescriptionLine(String content) {
+        String value = content == null ? "" : content;
+        return "<div class=\"normal\">" + value + "</div>";
+    }
+
+    private String truncateWithSuffix(String value, int maxBytes, String suffix) {
+        if (value == null || value.isEmpty() || maxBytes <= 0) {
+            return "";
+        }
+        if (utf8Bytes(value) <= maxBytes) {
+            return value;
+        }
+        String safeSuffix = suffix == null ? "" : suffix;
+        int suffixBytes = utf8Bytes(safeSuffix);
+        if (suffixBytes >= maxBytes) {
+            return truncateUtf8(value, maxBytes);
+        }
+        String truncated = truncateUtf8(value, maxBytes - suffixBytes);
+        if (truncated.isEmpty()) {
+            return truncateUtf8(value, maxBytes);
+        }
+        return truncated + safeSuffix;
     }
 
     private String sanitizeSingleLine(String value) {
@@ -146,13 +215,6 @@ public class WecomAppMessageSender implements NotificationSender {
             return "";
         }
         return value.trim().replace("\r", " ").replace("\n", " ");
-    }
-
-    private String sanitizeMultiline(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.trim().replace("\r", "");
     }
 
     private String truncateUtf8(String value, int maxBytes) {
