@@ -37,6 +37,7 @@ import {
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
 import { parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
+import { notifyWarning } from '@/utils/feedback'
 const route = useRoute()
 const router = useRouter()
 
@@ -46,6 +47,7 @@ const loading = ref(false)
 const categoryTree = ref<CategoryTreeOutput[]>([])
 const tableData = ref<TicketListOutput[]>([])
 const total = ref(0)
+const selectedRows = ref<TicketListOutput[]>([])
 
 const previewDrawerVisible = ref(false)
 const previewLoading = ref(false)
@@ -130,8 +132,20 @@ const viewTabs: Array<{ label: string; value: TicketView }> = [
   { label: '我创建的', value: 'my_created' },
   { label: '我参与的', value: 'my_participated' },
   { label: '我关注的', value: 'my_followed' },
+  { label: '待出简报工单', value: 'my_brief_todo' },
   { label: '所有工单', value: 'all' },
 ]
+
+const isBriefTodoView = computed(() => query.view === 'my_brief_todo')
+const selectedBriefTicketIds = computed(() =>
+  Array.from(
+    new Set(
+      selectedRows.value
+        .map((item) => item.id)
+        .filter((id): id is number => Number.isFinite(id) && id > 0),
+    ),
+  ),
+)
 
 const categoryOptions = computed(() => {
   const options: Array<{ label: string; value: number }> = []
@@ -196,6 +210,8 @@ async function loadTickets(): Promise<void> {
     const response = await getTicketPage(params)
     tableData.value = response.records
     total.value = response.total
+    // 列表刷新后清空选择，避免跨页/筛选后仍保留旧勾选导致误写简报
+    selectedRows.value = []
   } catch {
     tableData.value = []
     total.value = 0
@@ -283,6 +299,27 @@ function handleSortChange(payload: {
   query.orderBy = payload.order && payload.prop ? sortMap[payload.prop] || payload.prop : undefined
   query.asc = payload.order === 'ascending'
   loadTickets()
+}
+
+function handleSelectionChange(rows: unknown[]): void {
+  selectedRows.value = rows as TicketListOutput[]
+}
+
+function handleCreateBugBrief(): void {
+  if (!isBriefTodoView.value) {
+    return
+  }
+  const ticketIds = selectedBriefTicketIds.value
+  if (ticketIds.length === 0) {
+    notifyWarning('请至少选择一条工单后再去写简报')
+    return
+  }
+  void router.push({
+    path: '/bug-report/edit',
+    query: {
+      ticketIds: ticketIds.join(','),
+    },
+  })
 }
 
 function handlePaginationChange(payload: { pageNum: number; pageSize: number }): void {
@@ -503,6 +540,7 @@ watch(
     const normalized = normalizeViewFromRoute()
     query.view = normalized
     query.pageNum = 1
+    selectedRows.value = []
 
     // 从仪表盘卡片跳转时携带的状态/SLA过滤参数（status 支持单值或多值 query）
     const rawStatusQ = route.query.status
@@ -662,9 +700,29 @@ onUnmounted(() => {
     </el-card>
 
     <el-card shadow="never" class="ticket-list-card">
+      <div v-if="isBriefTodoView" class="brief-toolbar">
+        <div class="brief-toolbar-left">
+          <span class="brief-toolbar-title">个人待出简报工单</span>
+          <span class="brief-toolbar-desc">勾选后可批量带入简报编辑页</span>
+        </div>
+        <el-button
+          type="primary"
+          :disabled="selectedBriefTicketIds.length === 0"
+          @click="handleCreateBugBrief"
+        >
+          去写简报（{{ selectedBriefTicketIds.length }}）
+        </el-button>
+      </div>
       <EmptyState v-if="!loading && tableData.length === 0" description="暂无工单数据" />
       <template v-else>
-        <BaseTable :data="tableData" :loading="loading" class="ticket-table" @sort-change="handleSortChange">
+        <BaseTable
+          :data="tableData"
+          :loading="loading"
+          :show-selection="isBriefTodoView"
+          class="ticket-table"
+          @selection-change="handleSelectionChange"
+          @sort-change="handleSortChange"
+        >
           <el-table-column prop="ticketNo" label="工单编号" width="160" sortable="custom">
             <template #default="{ row }">
               <el-button type="primary" link class="cell-link" @click="openDetail(row)">
@@ -1143,6 +1201,36 @@ onUnmounted(() => {
 
 .ticket-list-card {
   width: 100%;
+}
+
+.brief-toolbar {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e4ecf5;
+  border-radius: 8px;
+  background: #f7fbff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brief-toolbar-left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brief-toolbar-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d2129;
+}
+
+.brief-toolbar-desc {
+  font-size: 12px;
+  color: #606266;
 }
 
 .mobile-view-switch {
@@ -1789,6 +1877,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .brief-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .query-form {
     gap: 0;
   }

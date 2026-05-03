@@ -1,6 +1,12 @@
 import type { PageQuery } from './common'
 
-export type TicketView = 'my_created' | 'my_todo' | 'my_participated' | 'my_followed' | 'all'
+export type TicketView =
+  | 'my_created'
+  | 'my_todo'
+  | 'my_participated'
+  | 'my_followed'
+  | 'my_brief_todo'
+  | 'all'
 
 export interface TicketPageInput extends PageQuery {
   view?: TicketView
