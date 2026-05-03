@@ -11,6 +11,7 @@ public enum TicketView {
     MY_TODO("my_todo", "我待办的"),
     MY_PARTICIPATED("my_participated", "我参与的"),
     MY_FOLLOWED("my_followed", "我关注的"),
+    MY_BRIEF_TODO("my_brief_todo", "待出简报工单"),
     ALL("all", "所有工单");
 
     private final String code;
