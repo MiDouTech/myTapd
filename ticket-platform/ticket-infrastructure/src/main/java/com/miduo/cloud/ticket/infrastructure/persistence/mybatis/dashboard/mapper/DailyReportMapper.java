@@ -64,7 +64,7 @@ public interface DailyReportMapper {
     List<DailyReportTicketRow> selectProcessingTickets();
 
     /**
-     * 查询待简报（pending_cs_confirm/pending_verify）的工单列表
+     * 查询待简报工单：pending_cs_confirm / pending_verify，或已完成但无已归档关联 Bug 简报（与「待出简报」列表口径一致）
      */
     List<DailyReportTicketRow> selectPendingVerifyTickets();
 
