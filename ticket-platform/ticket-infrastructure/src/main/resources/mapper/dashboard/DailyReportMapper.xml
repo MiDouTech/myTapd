@@ -90,7 +90,11 @@
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
-    <!-- 待简报（待验收/待客服确认） -->
+    <!--
+      待简报：与列表「待出简报」(my_brief_todo) 口径一致
+      - 历史：待验收 / 待客服确认
+      - 当前：已完成，且不存在已归档(ARCHIVED)的关联 Bug 简报
+    -->
     <select id="selectPendingVerifyTickets"
             resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyReportTicketRow">
         SELECT t.id, t.ticket_no AS ticketNo, t.title, LOWER(t.status) AS status,
@@ -102,7 +106,19 @@
         LEFT JOIN ticket_category c ON t.category_id = c.id AND c.deleted = 0
         LEFT JOIN ticket_bug_test_info bti ON bti.ticket_id = t.id AND bti.deleted = 0
         WHERE t.deleted = 0
-          AND LOWER(t.status) IN ('pending_verify', 'pending_cs_confirm')
+          AND (
+            LOWER(t.status) IN ('pending_verify', 'pending_cs_confirm')
+            OR (
+              LOWER(t.status) = 'completed'
+              AND NOT EXISTS (
+                SELECT 1 FROM bug_report_ticket brt
+                INNER JOIN bug_report br ON br.id = brt.report_id AND br.deleted = 0
+                WHERE brt.ticket_id = t.id
+                  AND brt.deleted = 0
+                  AND br.status = 'ARCHIVED'
+              )
+            )
+          )
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
