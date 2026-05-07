@@ -129,6 +129,7 @@ public class AlertTicketApplicationService {
 
     private void handleAlertEvent(NightingaleAlertEvent event, String rawPayload) {
         AlertRuleMappingPO mapping = findMapping(event.getRuleName());
+        boolean mappedOnlyCreateEnabled = isMappedOnlyCreateEnabled();
 
         int dedupMinutes = (mapping != null) ? mapping.getDedupWindowMinutes() : 30;
         if (isDuplicate(event.getHash(), dedupMinutes)) {
@@ -141,6 +142,14 @@ public class AlertTicketApplicationService {
 
         Long categoryId;
         String priority;
+
+        if (mapping == null && mappedOnlyCreateEnabled) {
+            AlertEventLogPO logEntry = buildLogEntry(event, rawPayload);
+            logEntry.setProcessResult(AlertProcessResult.UNMAPPED.getCode());
+            alertEventLogMapper.insert(logEntry);
+            log.info("告警事件未命中映射且已开启仅映射建单，跳过创建: ruleName={}", event.getRuleName());
+            return;
+        }
 
         if (mapping != null) {
             categoryId = mapping.getCategoryId();
@@ -507,6 +516,23 @@ public class AlertTicketApplicationService {
     }
 
     /**
+     * 是否启用“仅命中映射规则时创建工单”。
+     * 默认 false，保持历史兼容行为。
+     */
+    private boolean isMappedOnlyCreateEnabled() {
+        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SystemConfigPO::getConfigKey, AlertConstants.CONFIG_KEY_MAPPED_ONLY_CREATE);
+        SystemConfigPO config = systemConfigMapper.selectOne(wrapper);
+        if (config == null || !StringUtils.hasText(config.getConfigValue())) {
+            return false;
+        }
+        String value = config.getConfigValue().trim();
+        return "1".equals(value)
+                || "true".equalsIgnoreCase(value)
+                || "yes".equalsIgnoreCase(value);
+    }
+
+    /**
      * 验证告警接入 Token
      */
     public boolean validateToken(String token) {
@@ -536,6 +562,39 @@ public class AlertTicketApplicationService {
             output.setWebhookUrl("");
         }
         return output;
+    }
+
+    /**
+     * 获取告警建单策略配置
+     */
+    public AlertCreatePolicyOutput getCreatePolicy() {
+        AlertCreatePolicyOutput output = new AlertCreatePolicyOutput();
+        output.setMappedOnlyCreate(isMappedOnlyCreateEnabled());
+        return output;
+    }
+
+    /**
+     * 更新告警建单策略配置
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateCreatePolicy(AlertCreatePolicyUpdateInput input) {
+        boolean mappedOnlyCreate = Boolean.TRUE.equals(input.getMappedOnlyCreate());
+        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SystemConfigPO::getConfigKey, AlertConstants.CONFIG_KEY_MAPPED_ONLY_CREATE);
+        SystemConfigPO config = systemConfigMapper.selectOne(wrapper);
+
+        if (config != null) {
+            config.setConfigValue(Boolean.toString(mappedOnlyCreate));
+            systemConfigMapper.updateById(config);
+            return;
+        }
+
+        config = new SystemConfigPO();
+        config.setConfigKey(AlertConstants.CONFIG_KEY_MAPPED_ONLY_CREATE);
+        config.setConfigValue(Boolean.toString(mappedOnlyCreate));
+        config.setConfigGroup(AlertConstants.CONFIG_GROUP);
+        config.setDescription("告警仅命中映射规则时创建工单");
+        systemConfigMapper.insert(config);
     }
 
     /**
