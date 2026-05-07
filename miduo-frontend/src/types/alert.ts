@@ -75,3 +75,11 @@ export interface AlertTokenOutput {
   token: string
   webhookUrl: string
 }
+
+export interface AlertCreatePolicyOutput {
+  mappedOnlyCreate: boolean
+}
+
+export interface AlertCreatePolicyUpdateInput {
+  mappedOnlyCreate: boolean
+}

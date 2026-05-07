@@ -13,7 +13,7 @@ public enum AlertProcessResult {
     CREATED("CREATED", "已创建工单"),
     DEDUP("DEDUP", "去重跳过"),
     RECOVERED("RECOVERED", "恢复事件"),
-    UNMAPPED("UNMAPPED", "无映射配置-使用默认"),
+    UNMAPPED("UNMAPPED", "无映射配置"),
     ERROR("ERROR", "处理异常");
 
     private final String code;

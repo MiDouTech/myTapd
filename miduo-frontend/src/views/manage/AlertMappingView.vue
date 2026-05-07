@@ -4,12 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
 
 import {
+  getAlertCreatePolicy,
   createAlertMapping,
   deleteAlertMapping,
   getAlertEventLogPage,
   getAlertMappingPage,
   getAlertToken,
   resetAlertToken,
+  updateAlertCreatePolicy,
   updateAlertMapping,
 } from '@/api/alert'
 import { getCategoryTree } from '@/api/category'
@@ -17,6 +19,7 @@ import { getUserList } from '@/api/user'
 import type {
   AlertEventLogOutput,
   AlertEventLogPageInput,
+  AlertCreatePolicyOutput,
   AlertRuleMappingCreateInput,
   AlertRuleMappingOutput,
   AlertRuleMappingPageInput,
@@ -52,6 +55,9 @@ const eventLogQuery = reactive<AlertEventLogPageInput>({
 
 const tokenInfo = ref<AlertTokenOutput>({ token: '', webhookUrl: '' })
 const tokenLoading = ref(false)
+const createPolicyLoading = ref(false)
+const createPolicySaving = ref(false)
+const createPolicy = ref<AlertCreatePolicyOutput>({ mappedOnlyCreate: false })
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增告警规则映射')
@@ -91,7 +97,7 @@ const processResultOptions = [
   { value: 'CREATED', label: '已创建工单' },
   { value: 'DEDUP', label: '去重跳过' },
   { value: 'RECOVERED', label: '恢复事件' },
-  { value: 'UNMAPPED', label: '无映射配置' },
+  { value: 'UNMAPPED', label: '无映射配置(未建单)' },
   { value: 'ERROR', label: '处理异常' },
 ]
 
@@ -105,7 +111,7 @@ const processResultLabelMap: Record<string, string> = {
   CREATED: '已创建工单',
   DEDUP: '去重跳过',
   RECOVERED: '恢复事件',
-  UNMAPPED: '无映射(默认)',
+  UNMAPPED: '无映射配置(未建单)',
   ERROR: '处理异常',
 }
 
@@ -159,6 +165,15 @@ async function loadToken() {
     tokenInfo.value = await getAlertToken()
   } finally {
     tokenLoading.value = false
+  }
+}
+
+async function loadCreatePolicy() {
+  createPolicyLoading.value = true
+  try {
+    createPolicy.value = await getAlertCreatePolicy()
+  } finally {
+    createPolicyLoading.value = false
   }
 }
 
@@ -316,6 +331,19 @@ async function handleResetToken() {
   }
 }
 
+async function handleMappedOnlyCreateChange(nextValue: boolean) {
+  const previousValue = !nextValue
+  createPolicySaving.value = true
+  try {
+    await updateAlertCreatePolicy({ mappedOnlyCreate: nextValue })
+    ElMessage.success(nextValue ? '已开启仅命中映射规则建单' : '已关闭仅命中映射规则建单')
+  } catch {
+    createPolicy.value.mappedOnlyCreate = previousValue
+  } finally {
+    createPolicySaving.value = false
+  }
+}
+
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text).then(() => {
     ElMessage.success('已复制到剪贴板')
@@ -326,8 +354,11 @@ function handleTabChange(tab: string) {
   if (tab === 'eventLog' && eventLogList.value.length === 0) {
     loadEventLogs()
   }
-  if (tab === 'webhook' && !tokenInfo.value.token) {
-    loadToken()
+  if (tab === 'webhook') {
+    if (!tokenInfo.value.token) {
+      loadToken()
+    }
+    loadCreatePolicy()
   }
 }
 
@@ -579,6 +610,22 @@ onMounted(() => {
               </el-descriptions-item>
             </el-descriptions>
 
+            <div class="create-policy-row" v-loading="createPolicyLoading">
+              <div class="create-policy-title">建单策略</div>
+              <div class="create-policy-control">
+                <el-switch
+                  v-model="createPolicy.mappedOnlyCreate"
+                  :loading="createPolicySaving"
+                  active-text="仅命中映射规则才创建工单"
+                  inactive-text="未命中映射时使用默认策略创建工单"
+                  @change="handleMappedOnlyCreateChange"
+                />
+              </div>
+              <div class="form-tip">
+                开启后，未命中映射规则的夜莺告警只记录在事件日志，不会创建工单；适合测试环境降噪。
+              </div>
+            </div>
+
             <el-alert
               type="info"
               :closable="false"
@@ -752,6 +799,24 @@ onMounted(() => {
   .webhook-url {
     word-break: break-all;
     font-size: 13px;
+  }
+
+  .create-policy-row {
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid #ebeef5;
+    border-radius: 4px;
+    background: #fafafa;
+  }
+
+  .create-policy-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .create-policy-control {
+    margin-bottom: 8px;
   }
 
   .setup-steps {

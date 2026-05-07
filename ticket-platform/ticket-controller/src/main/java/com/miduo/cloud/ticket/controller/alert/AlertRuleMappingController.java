@@ -122,6 +122,30 @@ public class AlertRuleMappingController {
         return ApiResult.success(alertTicketService.resetToken(baseUrl));
     }
 
+    /**
+     * 获取告警建单策略配置
+     * 接口编号：API000709
+     * 产品文档功能：告警接入 - 查询建单策略开关
+     */
+    @Operation(summary = "获取告警建单策略配置", description = "接口编号：API000709")
+    @GetMapping("/create-policy")
+    public ApiResult<AlertCreatePolicyOutput> getCreatePolicy() {
+        return ApiResult.success(alertTicketService.getCreatePolicy());
+    }
+
+    /**
+     * 更新告警建单策略配置
+     * 接口编号：API000710
+     * 产品文档功能：告警接入 - 更新建单策略开关
+     */
+    @OperationLog(moduleName = "告警接入", operationItem = "更新告警建单策略配置")
+    @Operation(summary = "更新告警建单策略配置", description = "接口编号：API000710")
+    @PutMapping("/create-policy")
+    public ApiResult<Void> updateCreatePolicy(@Valid @RequestBody AlertCreatePolicyUpdateInput input) {
+        alertTicketService.updateCreatePolicy(input);
+        return ApiResult.success();
+    }
+
     private String getBaseUrl(HttpServletRequest request) {
         String scheme = request.getScheme();
         String serverName = request.getServerName();

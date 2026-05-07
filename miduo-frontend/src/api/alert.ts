@@ -1,5 +1,7 @@
 import type { PageOutput } from '@/types/common'
 import type {
+  AlertCreatePolicyOutput,
+  AlertCreatePolicyUpdateInput,
   AlertEventLogOutput,
   AlertEventLogPageInput,
   AlertRuleMappingCreateInput,
@@ -84,4 +86,22 @@ export function getAlertToken(): Promise<AlertTokenOutput> {
  */
 export function resetAlertToken(): Promise<AlertTokenOutput> {
   return request.post<AlertTokenOutput>('/alert-mapping/token/reset')
+}
+
+/**
+ * 获取告警建单策略配置
+ * 接口编号：API000709
+ * 产品文档功能：告警接入 - 查询建单策略开关
+ */
+export function getAlertCreatePolicy(): Promise<AlertCreatePolicyOutput> {
+  return request.get<AlertCreatePolicyOutput>('/alert-mapping/create-policy')
+}
+
+/**
+ * 更新告警建单策略配置
+ * 接口编号：API000710
+ * 产品文档功能：告警接入 - 更新建单策略开关
+ */
+export function updateAlertCreatePolicy(data: AlertCreatePolicyUpdateInput): Promise<void> {
+  return request.put<void>('/alert-mapping/create-policy', data)
 }

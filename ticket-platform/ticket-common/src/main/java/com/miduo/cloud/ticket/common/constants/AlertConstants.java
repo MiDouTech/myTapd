@@ -14,5 +14,7 @@ public final class AlertConstants {
 
     public static final String CONFIG_KEY_DEFAULT_CATEGORY_ID = "alert_default_category_id";
 
+    public static final String CONFIG_KEY_MAPPED_ONLY_CREATE = "alert_mapped_only_create";
+
     public static final String SYSTEM_USER_NAME = "ALERT_SYSTEM";
 }
