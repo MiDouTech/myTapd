@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.controller.annotation.OperationLog;
 import com.miduo.cloud.ticket.entity.dto.alert.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -147,13 +148,64 @@ public class AlertRuleMappingController {
     }
 
     private String getBaseUrl(HttpServletRequest request) {
-        String scheme = request.getScheme();
-        String serverName = request.getServerName();
+        String scheme = firstHeaderValue(request, "X-Forwarded-Proto");
+        String host = firstHeaderValue(request, "X-Forwarded-Host");
+        String portHeader = firstHeaderValue(request, "X-Forwarded-Port");
+
+        if (!StringUtils.hasText(scheme)) {
+            scheme = request.getScheme();
+        }
+        if (!StringUtils.hasText(host)) {
+            host = request.getServerName();
+        }
+
         int serverPort = request.getServerPort();
+        if (StringUtils.hasText(portHeader)) {
+            try {
+                serverPort = Integer.parseInt(portHeader);
+            } catch (NumberFormatException ignored) {
+                // ignore invalid forwarded port and keep request port
+            }
+        }
+
+        // 对公网域名做 HTTPS 兜底，避免在反向代理遗漏转发头时仍生成 http 地址。
+        if (!"https".equalsIgnoreCase(scheme) && !isLocalHost(host)) {
+            scheme = "https";
+            if (serverPort == 80) {
+                serverPort = 443;
+            }
+        }
+
+        if (host.contains(":")) {
+            return scheme + "://" + host;
+        }
         if (("http".equals(scheme) && serverPort == 80) ||
                 ("https".equals(scheme) && serverPort == 443)) {
-            return scheme + "://" + serverName;
+            return scheme + "://" + host;
         }
-        return scheme + "://" + serverName + ":" + serverPort;
+        return scheme + "://" + host + ":" + serverPort;
+    }
+
+    private String firstHeaderValue(HttpServletRequest request, String headerName) {
+        String raw = request.getHeader(headerName);
+        if (!StringUtils.hasText(raw)) {
+            return "";
+        }
+        int commaIndex = raw.indexOf(',');
+        return (commaIndex >= 0 ? raw.substring(0, commaIndex) : raw).trim();
+    }
+
+    private boolean isLocalHost(String host) {
+        if (!StringUtils.hasText(host)) {
+            return false;
+        }
+        String normalized = host.trim();
+        int colonIndex = normalized.indexOf(':');
+        if (colonIndex > 0) {
+            normalized = normalized.substring(0, colonIndex);
+        }
+        return "localhost".equalsIgnoreCase(normalized)
+                || "127.0.0.1".equals(normalized)
+                || "::1".equals(normalized);
     }
 }

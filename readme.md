@@ -2131,3 +2131,43 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.5-alert-mapped-only-create-switch` | 告警接入新增“仅命中映射规则才创建工单”开关；未命中映射时仅记录事件日志不建单；新增 API000709/API000710 |
+
+---
+
+## 47. 告警Webhook地址默认生成HTTPS（后端）
+
+### 47.1 功能用途
+- **用途**：修复告警接入页面里 Webhook URL 显示成 `http://` 的问题，改为优先生成 `https://`。  
+- **类比理解**：像导航地址优先给你“高速公路入口（https）”，而不是老路（http）。
+
+### 47.2 使用方法（验收步骤）
+1. 进入「系统设置 → 告警接入 → Webhook配置」。
+2. 点击「重新生成」。
+3. 预期：`Webhook URL` 以 `https://` 开头（如 `https://ticket.t.miduonet.com/...`）。
+
+### 47.3 参数说明（本次改动相关）
+| 参数/头 | 类型 | 说明 |
+|---|---|---|
+| `X-Forwarded-Proto` | `header` | 若网关传递该头，后端优先使用其协议 |
+| `X-Forwarded-Host` | `header` | 若网关传递该头，后端优先使用其主机 |
+| `X-Forwarded-Port` | `header` | 若网关传递该头，后端优先使用其端口 |
+
+### 47.4 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/alert-mapping/token` | `ApiResult<AlertTokenOutput>` | `webhookUrl` 现在优先输出 HTTPS 地址 |
+| `POST /api/alert-mapping/token/reset` | `ApiResult<AlertTokenOutput>` | 重置后返回的 `webhookUrl` 同样优先 HTTPS |
+
+### 47.5 常见问题（新增）
+#### Q51：为什么偶尔还是看到 `http://`？
+- **检测**：检查网关是否传递 `X-Forwarded-Proto/Host/Port`。  
+- **记录（错误类型）**：反向代理转发头缺失。  
+- **恢复建议**：
+  1. 在网关补齐 `X-Forwarded-Proto` 等转发头；
+  2. 确认访问域名不是本地开发地址（`localhost/127.0.0.1`）；
+  3. 重新点击「重新生成」并刷新页面。
+
+### 47.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.6-alert-webhook-url-https-default` | 修复告警Webhook地址生成协议，优先读取转发头并对公网域名兜底输出 HTTPS |
