@@ -192,12 +192,14 @@ async function loadTickets(): Promise<void> {
       if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
       if (query.title?.trim()) params.title = query.title.trim()
     }
-    if (query.categoryId) params.categoryId = query.categoryId
-    if (query.statuses?.length) {
-      params.statuses = query.statuses
+    if (!isBriefTodoView.value) {
+      if (query.categoryId) params.categoryId = query.categoryId
+      if (query.statuses?.length) {
+        params.statuses = query.statuses
+      }
+      if (query.priority) params.priority = query.priority
     }
     if (query.slaStatus) params.slaStatus = query.slaStatus
-    if (query.priority) params.priority = query.priority
     if (query.creatorId) params.creatorId = query.creatorId
     if (query.assigneeId) params.assigneeId = query.assigneeId
     if (query.orderBy) {
@@ -550,8 +552,16 @@ watch(
         ? [rawStatusQ.trim()]
         : []
     const routeSlaStatus = typeof route.query.slaStatus === 'string' ? route.query.slaStatus : ''
-    query.statuses = routeStatuses
-    query.slaStatus = routeSlaStatus
+    if (normalized === 'my_brief_todo') {
+      // 待出简报页签固定后端口径，忽略分类/状态/优先级（含 URL 带入），避免误筛或误传参
+      query.statuses = []
+      query.categoryId = undefined
+      query.priority = ''
+      query.slaStatus = routeSlaStatus
+    } else {
+      query.statuses = routeStatuses
+      query.slaStatus = routeSlaStatus
+    }
 
     // 进入「我的工单」时补齐默认 view，避免仅路径 /ticket/mine、无 query 时刷新/分享链接与当前 Tab 不一致
     if (route.path === '/ticket/mine') {
@@ -625,7 +635,7 @@ onUnmounted(() => {
         <el-form-item label="标题" class="query-form-item">
           <el-input v-model="query.title" class="query-input" placeholder="支持模糊匹配" clearable />
         </el-form-item>
-        <el-form-item label="分类" class="query-form-item">
+        <el-form-item v-if="!isBriefTodoView" label="分类" class="query-form-item">
           <el-select
             v-model="query.categoryId"
             class="query-input"
@@ -641,7 +651,7 @@ onUnmounted(() => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" class="query-form-item">
+        <el-form-item v-if="!isBriefTodoView" label="状态" class="query-form-item">
           <el-select
             v-model="query.statuses"
             class="query-input"
@@ -672,7 +682,7 @@ onUnmounted(() => {
             <el-option label="待客服确认" value="pending_cs_confirm" />
           </el-select>
         </el-form-item>
-        <el-form-item label="优先级" class="query-form-item">
+        <el-form-item v-if="!isBriefTodoView" label="优先级" class="query-form-item">
           <el-select v-model="query.priority" class="query-input" placeholder="请选择内容" clearable>
             <el-option label="紧急" value="urgent" />
             <el-option label="高" value="high" />

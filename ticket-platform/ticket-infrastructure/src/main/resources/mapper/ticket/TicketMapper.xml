@@ -51,7 +51,7 @@
                 </if>
             </otherwise>
         </choose>
-        <!-- 待出简报：仅主处理人为当前用户且状态为已完成（不出现在「我创建的但处理人是别人」或仅协同身份的单） -->
+        <!-- 待出简报：仅主处理人为当前用户且状态为已完成；排除已归档简报；排除存在「待审核」简报（仅保留待填写/已退回等需本人继续完善的单） -->
         <if test="view == 'my_brief_todo'">
             AND t.assignee_id = #{currentUserId}
             AND LOWER(t.status) = 'completed'
@@ -61,6 +61,13 @@
                 WHERE brt.ticket_id = t.id
                   AND brt.deleted = 0
                   AND br.status = 'ARCHIVED'
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM bug_report_ticket brt
+                INNER JOIN bug_report br ON br.id = brt.report_id AND br.deleted = 0
+                WHERE brt.ticket_id = t.id
+                  AND brt.deleted = 0
+                  AND br.status = 'PENDING_REVIEW'
             )
         </if>
         <if test="categoryId != null">
