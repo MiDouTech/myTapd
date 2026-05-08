@@ -176,6 +176,14 @@ public class AlertRuleMappingController {
             }
         }
 
+        // 反向代理常见误配：X-Forwarded-Proto=https 但 X-Forwarded-Port=80（或上游仍为 80）。
+        // HTTPS 与显式 80 端口组合无效，这里按默认 443 处理以便省略端口展示。
+        if ("https".equalsIgnoreCase(scheme) && serverPort == 80) {
+            serverPort = 443;
+        }
+
+        host = stripExplicitPort80FromForwardedHost(host);
+
         if (host.contains(":")) {
             return scheme + "://" + host;
         }
@@ -207,5 +215,32 @@ public class AlertRuleMappingController {
         return "localhost".equalsIgnoreCase(normalized)
                 || "127.0.0.1".equals(normalized)
                 || "::1".equals(normalized);
+    }
+
+    /**
+     * X-Forwarded-Host 可能带显式 :80（与浏览器侧 HTTPS 不一致），去掉后缀以免生成 https://域名:80。
+     * IPv6 字面量（方括号形式）不在此拆分，避免误伤。
+     */
+    private String stripExplicitPort80FromForwardedHost(String host) {
+        if (!StringUtils.hasText(host) || !host.contains(":")) {
+            return host;
+        }
+        String trimmed = host.trim();
+        if (trimmed.startsWith("[")) {
+            return host;
+        }
+        int colon = trimmed.lastIndexOf(':');
+        if (colon <= 0 || colon >= trimmed.length() - 1) {
+            return host;
+        }
+        try {
+            int portInHost = Integer.parseInt(trimmed.substring(colon + 1));
+            if (portInHost == 80) {
+                return trimmed.substring(0, colon);
+            }
+        } catch (NumberFormatException ignored) {
+            // 后缀不是端口数字则保留原 host
+        }
+        return host;
     }
 }
