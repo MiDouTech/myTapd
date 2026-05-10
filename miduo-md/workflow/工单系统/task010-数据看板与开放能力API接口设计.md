@@ -30,6 +30,7 @@
 | API000421 | 删除Webhook配置 | DELETE | /api/webhook/config/delete/{id} | 删除Webhook配置（逻辑删除） |
 | API000431 | 分页查询Webhook推送日志 | GET | /api/webhook/config/dispatch-log/page | Webhook推送日志排障查询 |
 | API000513 | 外部系统分页拉取工单全量数据 | GET | /api/open/v1/ticket-export/page | 按创建/完成时间范围拉取工单核心字段与流程节点耗时 |
+| API000514 | 按工单编号查询Bug简报 | GET | /api/open/v1/bug-report/detail/{ticketNo} | 外部系统按工单编号查询最新归档Bug简报摘要 |
 
 ---
 
@@ -116,6 +117,36 @@ GET /api/webhook/config/dispatch-log/page?pageNum=1&pageSize=20&ticketId=1001&st
   "pageNum": 1,
   "pageSize": 20,
   "totalPages": 1
+}
+```
+
+### 2.5 按工单编号查询Bug简报（API000514）
+
+请求示例：
+
+```http
+GET /api/open/v1/bug-report/detail/WO-20260507-004-7459
+```
+
+响应示例：
+
+```json
+{
+  "ticketNo": "WO-20260507-004-7459",
+  "bugReport": {
+    "id": 301,
+    "reportNo": "BR-20260508-001",
+    "status": "archived",
+    "statusLabel": "已归档",
+    "defectCategory": "错误逻辑",
+    "severityLevel": "P1",
+    "problemDesc": "支付回调重复执行导致金额翻倍",
+    "impactScope": "部分商户订单结算异常",
+    "solution": "增加幂等校验并补偿修复脚本",
+    "responsibleUserNames": "张三、李四",
+    "reporterName": "王五",
+    "reviewedAt": "2026-05-08 18:30:00"
+  }
 }
 ```
 
