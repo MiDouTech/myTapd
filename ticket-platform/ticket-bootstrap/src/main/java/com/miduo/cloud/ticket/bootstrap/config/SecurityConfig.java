@@ -66,9 +66,9 @@ public class SecurityConfig {
                 ).permitAll()
                 .anyRequest().authenticated()
                 .and()
-                // JWT → API Key：先尝试 JWT，未认证再尝试 X-Api-Key
-                .addFilterBefore(openApiAppAuthFilter, JwtAuthenticationFilter.class)
+                // OpenAPI App 鉴权 → JWT → API Key：未认证时依次尝试
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(openApiAppAuthFilter, JwtAuthenticationFilter.class)
                 .addFilterAfter(agentApiKeyAuthenticationFilter, JwtAuthenticationFilter.class);
 
         return http.build();
