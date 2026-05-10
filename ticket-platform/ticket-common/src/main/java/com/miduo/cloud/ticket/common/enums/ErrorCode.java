@@ -58,6 +58,12 @@ public enum ErrorCode {
     UPLOAD_FAILED(7001, "文件上传失败"),
     PARAM_INVALID(7002, "参数不合法"),
 
+    OPEN_API_APP_NOT_FOUND(8001, "开放接口应用不存在或已禁用"),
+    OPEN_API_SIGNATURE_INVALID(8002, "开放接口签名校验失败"),
+    OPEN_API_TIMESTAMP_EXPIRED(8003, "开放接口时间戳已过期"),
+    OPEN_API_REPLAY_REQUEST(8004, "开放接口请求已重复"),
+    OPEN_API_RATE_LIMITED(8005, "开放接口调用过于频繁"),
+
     INTERNAL_ERROR(9999, "系统内部错误");
 
     private final int code;

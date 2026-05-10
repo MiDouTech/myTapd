@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.bootstrap.config;
 import com.miduo.cloud.ticket.bootstrap.config.agent.AgentApiKeyAuthenticationFilter;
 import com.miduo.cloud.ticket.bootstrap.config.jwt.JwtAuthenticationFilter;
 import com.miduo.cloud.ticket.bootstrap.config.jwt.JwtAuthenticationEntryPoint;
+import com.miduo.cloud.ticket.bootstrap.config.openapi.OpenApiAppAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -24,13 +25,16 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final AgentApiKeyAuthenticationFilter agentApiKeyAuthenticationFilter;
+    private final OpenApiAppAuthFilter openApiAppAuthFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
-                          AgentApiKeyAuthenticationFilter agentApiKeyAuthenticationFilter) {
+                          AgentApiKeyAuthenticationFilter agentApiKeyAuthenticationFilter,
+                          OpenApiAppAuthFilter openApiAppAuthFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.agentApiKeyAuthenticationFilter = agentApiKeyAuthenticationFilter;
+        this.openApiAppAuthFilter = openApiAppAuthFilter;
     }
 
     @Bean
@@ -53,6 +57,7 @@ public class SecurityConfig {
                         "/wecom/callback/**",
                         "/api/wecom/callback/**",
                         "/api/open/ticket/**",
+                        "/api/open/v1/**",
                         "/api/open/alert/**",
                         "/ws/**",
                         "/api/auth/sso/status",
@@ -62,6 +67,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
                 .and()
                 // JWT → API Key：先尝试 JWT，未认证再尝试 X-Api-Key
+                .addFilterBefore(openApiAppAuthFilter, JwtAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(agentApiKeyAuthenticationFilter, JwtAuthenticationFilter.class);
 

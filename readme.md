@@ -2173,3 +2173,69 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.6-alert-webhook-url-https-default` | 修复告警Webhook地址生成协议，优先读取转发头并对公网域名兜底输出 HTTPS |
+
+---
+
+## 48. 外部系统工单开放拉取接口（后端）
+
+### 48.1 功能用途
+- **用途**：给外部合作系统开放“按时间范围拉取工单全量数据”的标准接口，支持做流程耗时统计、状态同步和业务分析。  
+- **类比理解**：像给合作方开了一个“带门禁的取件窗口”——能稳定拿数据，但要先刷门禁卡（AppKey + 签名）。
+
+### 48.2 使用方法（联调步骤）
+1. 在网关/配置中心为合作方分配 `AppKey`、`AppSecret`。  
+2. 按签名规则生成请求头：`X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`。  
+3. 调用：
+   - `GET /api/open/v1/ticket-export/page`
+4. 传入时间范围（创建时间或完成时间至少一组）和分页参数。  
+5. 预期返回 `ApiResult<PageOutput<...>>`，包含工单核心信息 + 流程节点耗时信息。
+
+### 48.3 参数说明（核心）
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `createTimeStart` | `String` | 条件必填 | 创建时间开始，格式 `yyyy-MM-dd HH:mm:ss` |
+| `createTimeEnd` | `String` | 条件必填 | 创建时间结束，格式 `yyyy-MM-dd HH:mm:ss` |
+| `completeTimeStart` | `String` | 条件必填 | 完成时间开始，格式 `yyyy-MM-dd HH:mm:ss` |
+| `completeTimeEnd` | `String` | 条件必填 | 完成时间结束，格式 `yyyy-MM-dd HH:mm:ss` |
+| `statuses` | `List<String>` | 否 | 状态筛选 |
+| `businessTypeId` | `Long` | 否 | 业务类型ID（映射工单分类ID） |
+| `businessTypeName` | `String` | 否 | 业务类型名（映射工单分类名，模糊匹配） |
+| `pageNum` | `int` | 否 | 页码，默认1 |
+| `pageSize` | `int` | 否 | 每页条数，默认20，最大100 |
+
+### 48.4 返回值说明
+- 外层：`ApiResult`
+  - `code`：200 为成功；非200为业务错误码
+  - `message`：提示信息
+  - `data`：分页对象
+- 分页对象：`PageOutput`
+  - `records`：工单列表
+  - `total`：总条数
+  - `totalPages`：总页数
+  - `pageNum`：当前页码
+  - `pageSize`：每页条数
+- 每条工单记录包含：
+  - 工单核心：编号、标题、状态、创建时间、完结时间、简报描述
+  - 流程节点：节点名称、进入/离开时间、处理耗时、处理人、流转备注
+
+### 48.5 常见问题（新增）
+#### Q52：为什么返回“签名校验失败”？
+- **检测**：检查签名串拼接顺序是否与文档一致（方法、路径、排序后的 query、时间戳、nonce、appKey）。  
+- **记录（错误类型）**：签名算法或拼接规则不一致。  
+- **恢复建议**：
+  1. 统一使用 `HmacSHA256`；
+  2. 参数按 key 升序、value 升序参与签名；
+  3. 核对 `X-App-Secret` 是否使用了当前有效密钥。
+
+#### Q53：为什么返回“请求已重复”或“调用过于频繁”？
+- **检测**：查看请求是否重复使用了同一个 `nonce`，或一分钟内调用次数过高。  
+- **记录（错误类型）**：防重放/限流命中。  
+- **恢复建议**：
+  1. 每次请求使用新的 `nonce`；
+  2. 将批量拉取改为分页轮询，降低每分钟请求数；
+  3. 必要时由管理员调整 `open-api.rate-limit-per-minute`。
+
+### 48.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.7-open-ticket-export-api` | 新增外部系统工单开放拉取接口（API000513）：支持按创建/完成时间范围分页拉取工单核心信息与节点耗时；新增 AppKey+签名鉴权、防重放、限流、调用审计 |
