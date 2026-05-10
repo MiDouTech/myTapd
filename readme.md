@@ -2239,3 +2239,55 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.7-open-ticket-export-api` | 新增外部系统工单开放拉取接口（API000513）：支持按创建/完成时间范围分页拉取工单核心信息与节点耗时；新增 AppKey+签名鉴权、防重放、限流、调用审计 |
+
+---
+
+## 49. 后端启动报错修复：JwtAuthenticationFilter 未注册顺序（后端）
+
+### 49.1 功能用途
+- **用途**：修复后端启动时报错 `The Filter class ... JwtAuthenticationFilter does not have a registered order`，让 Spring Security 过滤器链可以正常构建。  
+- **类比理解**：以前像“先让保安B站到保安A前面，但A还没排进队伍”；现在改成“先把A排进队，再把B插到A前面”。
+
+### 49.2 根因说明（对应本次日志）
+- `SecurityConfig` 里原顺序是：
+  1. `openApiAppAuthFilter` 插到 `JwtAuthenticationFilter` 前面  
+  2. 再注册 `JwtAuthenticationFilter`
+- 在 Spring Security 6 中，`addFilterBefore(..., JwtAuthenticationFilter.class)` 这一步要求 `JwtAuthenticationFilter` 已经有已知顺序；否则会直接抛 `IllegalArgumentException`。
+
+### 49.3 本次修复内容
+1. 先注册 `jwtAuthenticationFilter` 到 `UsernamePasswordAuthenticationFilter` 前。  
+2. 再把 `openApiAppAuthFilter` 插到 `JwtAuthenticationFilter` 前。  
+3. `agentApiKeyAuthenticationFilter` 继续保持在 `JwtAuthenticationFilter` 后。  
+
+> 修复文件：`ticket-platform/ticket-bootstrap/src/main/java/com/miduo/cloud/ticket/bootstrap/config/SecurityConfig.java`
+
+### 49.4 使用方法（验收步骤）
+1. 重新构建并启动后端容器。  
+2. 查看启动日志，确认不再出现：
+   - `JwtAuthenticationFilter does not have a registered order`
+3. 观察服务是否正常完成启动并监听端口。
+
+### 49.5 参数说明（本次改动相关）
+| 参数/对象 | 类型 | 说明 |
+|---|---|---|
+| `jwtAuthenticationFilter` | `Filter` | JWT 认证过滤器，作为中间锚点先注册 |
+| `openApiAppAuthFilter` | `Filter` | OpenAPI 应用鉴权过滤器，放在 JWT 之前 |
+| `agentApiKeyAuthenticationFilter` | `Filter` | Agent API Key 鉴权过滤器，放在 JWT 之后 |
+
+### 49.6 返回值说明（接口行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| Spring Security 构建过滤器链 | `SecurityFilterChain` | 现在可正常创建，不再因过滤器顺序异常中断启动 |
+
+### 49.7 常见问题（新增）
+#### Q54：为什么我改完还报同样错误？
+- **检测**：确认运行镜像是否已经包含本次代码（避免旧镜像未更新）。  
+- **记录（错误类型）**：部署镜像版本未刷新，仍在运行旧 `SecurityConfig`。  
+- **恢复建议**：
+  1. 重新构建镜像并替换运行容器；
+  2. 再看启动日志中的 `SecurityConfig` 行为是否更新。
+
+### 49.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.8-security-filter-order-fix` | 修复 Spring Security 启动失败：调整 `openApiAppAuthFilter` 与 `jwtAuthenticationFilter` 的注册顺序，避免 `JwtAuthenticationFilter` 未注册顺序异常 |
