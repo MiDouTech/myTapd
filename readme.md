@@ -2291,3 +2291,55 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.8-security-filter-order-fix` | 修复 Spring Security 启动失败：调整 `openApiAppAuthFilter` 与 `jwtAuthenticationFilter` 的注册顺序，避免 `JwtAuthenticationFilter` 未注册顺序异常 |
+
+---
+
+## 50. 开放接口：按工单编号获取 Bug 简报（后端）
+
+### 50.1 功能用途
+- **用途**：给外部系统新增一个“拿着工单号就能查 Bug 简报”的接口。  
+- **类比理解**：像快递柜取件码查询，输入唯一编号（`ticketNo`）就能拿到对应的“问题处理小结”。
+
+### 50.2 使用方法（联调步骤）
+1. 准备开放接口鉴权头（`X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`）。  
+2. 调用接口：
+   - `GET /api/open/v1/bug-report/detail/{ticketNo}`
+3. 示例：
+   - `GET /api/open/v1/bug-report/detail/WO-20260507-004-7459`
+4. 预期：返回该工单最新一条**已归档** Bug 简报摘要；若没有归档简报，返回 `bugReport = null`。
+
+### 50.3 参数说明
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `ticketNo` | `String` | 是 | 工单编号（路径参数） |
+
+### 50.4 返回值说明
+外层：`ApiResult<OpenTicketBugReportOutput>`
+
+- `ticketNo`：工单编号
+- `bugReport`：最新归档简报（无归档时为 `null`）
+
+`bugReport` 主要字段：
+- `reportNo`：简报编号
+- `status/statusLabel`：简报状态（及中文）
+- `defectCategory`：缺陷分类
+- `severityLevel`：严重级别
+- `problemDesc`：问题描述
+- `impactScope`：影响范围
+- `solution/tempSolution`：彻底方案/临时方案
+- `responsibleUserNames`：责任人（多个用“、”）
+- `reporterName`：反馈人
+- `reviewedAt/updateTime`：归档时间/更新时间
+
+### 50.5 常见问题（新增）
+#### Q55：为什么返回成功但 `bugReport` 是 `null`？
+- **检测**：确认该工单是否已经有关联且状态为“已归档”的简报。  
+- **记录（错误类型）**：工单存在，但当前没有归档简报（业务数据状态）。  
+- **恢复建议**：
+  1. 先在系统内完成简报归档；
+  2. 再用同一 `ticketNo` 调该接口复测。
+
+### 50.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.9-openapi-bugreport-by-ticketno` | 新增开放接口 API000514：支持按 `ticketNo` 查询最新归档 Bug 简报摘要（`/api/open/v1/bug-report/detail/{ticketNo}`） |
