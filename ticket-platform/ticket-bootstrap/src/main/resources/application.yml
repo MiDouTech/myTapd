@@ -61,3 +61,14 @@ logging:
     org.springframework.security: warn
     org.flywaydb: debug
     org.springframework.boot.autoconfigure.flyway: debug
+
+open-api:
+  enabled: true
+  timestamp-skew-seconds: 300
+  nonce-expire-seconds: 300
+  rate-limit-per-minute: 120
+  clients:
+    - app-key: ${OPEN_API_APP_KEY:}
+      app-secret: ${OPEN_API_APP_SECRET:}
+      app-name: ${OPEN_API_APP_NAME:external-partner}
+      enabled: ${OPEN_API_APP_ENABLED:false}

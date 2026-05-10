@@ -186,4 +186,36 @@
           AND deleted = 0
     </update>
 
+    <select id="selectOpenTicketExportPage" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO">
+        SELECT t.*
+        FROM ticket t
+                 LEFT JOIN ticket_category tc ON tc.id = t.category_id AND tc.deleted = 0
+        WHERE t.deleted = 0
+        <if test="createTimeStart != null and createTimeStart != ''">
+            AND t.create_time &gt;= #{createTimeStart}
+        </if>
+        <if test="createTimeEnd != null and createTimeEnd != ''">
+            AND t.create_time &lt;= #{createTimeEnd}
+        </if>
+        <if test="completeTimeStart != null and completeTimeStart != ''">
+            AND COALESCE(t.closed_at, t.resolved_at) &gt;= #{completeTimeStart}
+        </if>
+        <if test="completeTimeEnd != null and completeTimeEnd != ''">
+            AND COALESCE(t.closed_at, t.resolved_at) &lt;= #{completeTimeEnd}
+        </if>
+        <if test="statusList != null and statusList.size() &gt; 0">
+            AND t.status IN
+            <foreach collection="statusList" item="st" open="(" separator="," close=")">
+                #{st}
+            </foreach>
+        </if>
+        <if test="businessTypeId != null">
+            AND t.category_id = #{businessTypeId}
+        </if>
+        <if test="businessTypeName != null and businessTypeName != ''">
+            AND tc.name LIKE CONCAT('%', #{businessTypeName}, '%')
+        </if>
+        ORDER BY t.create_time DESC, t.id DESC
+    </select>
+
 </mapper>

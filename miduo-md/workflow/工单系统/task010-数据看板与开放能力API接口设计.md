@@ -29,6 +29,7 @@
 | API000420 | 更新Webhook配置 | PUT | /api/webhook/config/update/{id} | 更新Webhook配置 |
 | API000421 | 删除Webhook配置 | DELETE | /api/webhook/config/delete/{id} | 删除Webhook配置（逻辑删除） |
 | API000431 | 分页查询Webhook推送日志 | GET | /api/webhook/config/dispatch-log/page | Webhook推送日志排障查询 |
+| API000513 | 外部系统分页拉取工单全量数据 | GET | /api/open/v1/ticket-export/page | 按创建/完成时间范围拉取工单核心字段与流程节点耗时 |
 
 ---
 
@@ -123,9 +124,11 @@ GET /api/webhook/config/dispatch-log/page?pageNum=1&pageSize=20&ticketId=1001&st
 ## 3. 安全与鉴权
 
 1. `/api/v1/**` 开放接口仍受 JWT 鉴权控制；调用方需携带 `Authorization: Bearer <token>`。
-2. Webhook 推送支持在 Header 中透传 `X-Webhook-Secret`（当配置了 secret）。
-3. 当Webhook地址为企微群机器人地址（`qyapi.weixin.qq.com/cgi-bin/webhook/send`）时，系统会自动按官方规范转为 `msgtype=text` 的消息体，避免 `40008 invalid message type`。
-4. 接口统一返回 `ApiResult<T>` 结构，code=200 表示成功。
+2. `/api/open/v1/**` 走 AppKey + 签名鉴权，请求头包含 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`。
+3. `/api/open/v1/**` 默认启用时间戳校验、防重放（nonce）和分钟级限流。
+4. Webhook 推送支持在 Header 中透传 `X-Webhook-Secret`（当配置了 secret）。
+5. 当Webhook地址为企微群机器人地址（`qyapi.weixin.qq.com/cgi-bin/webhook/send`）时，系统会自动按官方规范转为 `msgtype=text` 的消息体，避免 `40008 invalid message type`。
+6. 接口统一返回 `ApiResult<T>` 结构，code=200 表示成功。
 
 ---
 

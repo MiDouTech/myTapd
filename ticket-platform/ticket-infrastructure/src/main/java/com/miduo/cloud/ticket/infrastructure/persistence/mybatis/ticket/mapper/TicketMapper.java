@@ -52,4 +52,16 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
      * @return 影响行数，期望为 1
      */
     int incrementUrgeCount(@Param("id") Long id);
+
+    /**
+     * 开放接口：分页拉取工单全量数据
+     */
+    IPage<TicketPO> selectOpenTicketExportPage(Page<TicketPO> page,
+                                               @Param("createTimeStart") String createTimeStart,
+                                               @Param("createTimeEnd") String createTimeEnd,
+                                               @Param("completeTimeStart") String completeTimeStart,
+                                               @Param("completeTimeEnd") String completeTimeEnd,
+                                               @Param("statusList") List<String> statusList,
+                                               @Param("businessTypeId") Long businessTypeId,
+                                               @Param("businessTypeName") String businessTypeName);
 }
