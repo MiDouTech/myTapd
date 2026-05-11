@@ -2399,3 +2399,57 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.10-node-duration-start-process-close-fix` | 修复 START_PROCESS 跨节点未关前节点问题：补齐中间节点离开时间，并保证已关闭节点具备开始处理时间与耗时闭环 |
+
+---
+
+## 52. 历史节点耗时一次性回填脚本（后端/数据库）
+
+### 52.1 功能用途
+- **用途**：给已存在工单补历史数据，把遗留的 `leave_at` 空值批量回填，并同步补齐 `start_process_at` 与耗时字段。  
+- **类比理解**：像给旧考勤记录补“下班打卡”，顺便把“工时统计”一并修正。
+
+### 52.2 脚本位置
+- `miduo-md/database/20260511_1_backfill_ticket_node_duration_leave_at.sql`
+
+### 52.3 使用方法（执行步骤）
+1. 先在测试环境执行脚本，看预览结果（`will_backfill_rows`）是否符合预期。  
+2. 生产低峰执行同一脚本。  
+3. 执行后关注脚本内校验项：
+   - `remain_open_with_next_node`
+   - `closed_node_without_start_process`
+
+示例命令：
+
+```bash
+mysql -h <host> -P <port> -u <user> -p<password> <database> \
+  < /path/to/miduo-md/database/20260511_1_backfill_ticket_node_duration_leave_at.sql
+```
+
+### 52.4 参数说明（本次脚本相关）
+| 参数/表 | 类型 | 说明 |
+|---|---|---|
+| `ticket_node_duration.leave_at` | `datetime` | 节点离开时间，脚本按“下一节点到达/流转时间”回填 |
+| `ticket_node_duration.start_process_at` | `datetime` | 开始处理时间，缺失时按 `first_read_at` 或 `leave_at` 补齐 |
+| `ticket_node_duration.wait_duration_sec` | `bigint` | 等待耗时，脚本回算 |
+| `ticket_node_duration.process_duration_sec` | `bigint` | 处理耗时，脚本回算 |
+| `ticket_node_duration.total_duration_sec` | `bigint` | 总耗时，脚本回算 |
+
+### 52.5 返回值说明（执行结果）
+| 输出 | 说明 |
+|---|---|
+| `will_backfill_rows` | 本次预计回填的行数（更新前预览） |
+| `affected_rows` | 实际更新行数 |
+| `remain_open_with_next_node` | 回填后仍异常的“有下一节点但未关闭”记录数 |
+
+### 52.6 常见问题（新增）
+#### Q57：为什么脚本跑完后还有少量 `leave_at` 为空？
+- **检测**：确认该节点是否为当前最后一个进行中节点，或历史数据缺少下一节点与流转时间。  
+- **记录（错误类型）**：历史链路信息不足（无法安全推断离开时间）。  
+- **恢复建议**：
+  1. 先保留为空，避免误填造成时序污染；
+  2. 对个别工单结合 `ticket_flow_record/ticket_time_track` 做人工核对补录。
+
+### 52.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.11-node-duration-historical-backfill-script` | 新增历史节点耗时一次性回填脚本：批量补齐 `leave_at`，并同步修正 `start_process_at` 与耗时字段 |
