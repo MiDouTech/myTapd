@@ -2410,19 +2410,28 @@ vite v7.3.1 building client environment for production...
 
 ### 52.2 脚本位置
 - `miduo-md/database/20260511_1_backfill_ticket_node_duration_leave_at.sql`
+- `miduo-md/database/20260511_2_backfill_missing_start_process_nodes.sql`
 
 ### 52.3 使用方法（执行步骤）
-1. 先在测试环境执行脚本，看预览结果（`will_backfill_rows`）是否符合预期。  
-2. 生产低峰执行同一脚本。  
+1. 先在测试环境按顺序执行两段脚本：  
+   - 第1段：`20260511_1_backfill_ticket_node_duration_leave_at.sql`（补离开时间和耗时）
+   - 第2段：`20260511_2_backfill_missing_start_process_nodes.sql`（补缺失节点行，如 testing/developing）
+2. 生产低峰按相同顺序执行。  
 3. 执行后关注脚本内校验项：
    - `remain_open_with_next_node`
    - `closed_node_without_start_process`
+   - `remain_missing_start_process_target_node`
 
 示例命令：
 
 ```bash
+# 第1段：补 leave_at / start_process_at / duration
 mysql -h <host> -P <port> -u <user> -p<password> <database> \
   < /path/to/miduo-md/database/20260511_1_backfill_ticket_node_duration_leave_at.sql
+
+# 第2段：补缺失节点（例如 TESTING / DEVELOPING）
+mysql -h <host> -P <port> -u <user> -p<password> <database> \
+  < /path/to/miduo-md/database/20260511_2_backfill_missing_start_process_nodes.sql
 ```
 
 ### 52.4 参数说明（本次脚本相关）
@@ -2449,7 +2458,16 @@ mysql -h <host> -P <port> -u <user> -p<password> <database> \
   1. 先保留为空，避免误填造成时序污染；
   2. 对个别工单结合 `ticket_flow_record/ticket_time_track` 做人工核对补录。
 
+#### Q58：为什么只补出了“离开时间”，但没看到“测试复现中/开发解决中”节点？
+- **检测**：确认是否只执行了第1段脚本（`20260511_1`）而未执行第2段（`20260511_2`）。  
+- **记录（错误类型）**：第1段只补字段，不会新增缺失节点行。  
+- **恢复建议**：
+  1. 再执行第2段脚本 `20260511_2_backfill_missing_start_process_nodes.sql`；
+  2. 执行后检查 `remain_missing_start_process_target_node` 是否下降；
+  3. 抽样核对工单详情“节点耗时统计”里是否出现 `测试复现中/开发解决中`。
+
 ### 52.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.11-node-duration-historical-backfill-script` | 新增历史节点耗时一次性回填脚本：批量补齐 `leave_at`，并同步修正 `start_process_at` 与耗时字段 |
+| `v1.4.12-start-process-missing-node-backfill-script` | 新增第二段回填脚本：按 START_PROCESS 跨状态事件补齐缺失的目标节点行（如 TESTING/DEVELOPING），并同步补齐离开时间与耗时 |
