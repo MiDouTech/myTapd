@@ -53,12 +53,29 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
             return;
         }
         if ("START_PROCESS".equals(action)) {
-            markStartProcess(event.getTicketId(), event.getToStatus(), eventTime, event.getToUserId());
+            handleStartProcess(event.getTicketId(), event.getFromStatus(), event.getToStatus(),
+                    event.getToUserId(), eventTime);
             return;
         }
         if ("ASSIGN".equals(action) || "TRANSFER".equals(action)) {
             updateCurrentNodeAssignee(event.getTicketId(), event.getToUserId());
         }
+    }
+
+    private void handleStartProcess(Long ticketId, String fromStatus, String toStatus,
+                                    Long toUserId, Date eventTime) {
+        String normalizedFrom = normalize(fromStatus);
+        String normalizedTo = normalize(toStatus);
+        boolean statusChanged = normalizedFrom != null && normalizedTo != null && !normalizedFrom.equals(normalizedTo);
+        if (statusChanged) {
+            // 受理动作既代表“前一节点开始处理”，也代表“切换到下一节点”
+            markExistingNodeStartProcess(ticketId, normalizedFrom, eventTime);
+            handleStatusTransition(ticketId, normalizedFrom, normalizedTo, toUserId, eventTime);
+            markStartProcess(ticketId, normalizedTo, eventTime, toUserId);
+            return;
+        }
+        String currentStatus = normalizedTo != null ? normalizedTo : normalizedFrom;
+        markStartProcess(ticketId, currentStatus, eventTime, toUserId);
     }
 
     private void handleStatusTransition(Long ticketId, String fromStatus, String toStatus,
@@ -67,7 +84,7 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
         String normalizedTo = normalize(toStatus);
 
         if (normalizedFrom != null && !normalizedFrom.isEmpty()) {
-            closeNode(ticketId, normalizedFrom, eventTime);
+            closeNode(ticketId, normalizedFrom, normalizedTo, eventTime);
         }
         if (normalizedTo != null && !normalizedTo.isEmpty()) {
             openNode(ticketId, normalizedTo, toUserId, eventTime);
@@ -91,6 +108,23 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
     private void markStartProcess(Long ticketId, String status, Date eventTime, Long toUserId) {
         TicketNodeDurationPO node = ensureOpenNode(ticketId, normalize(status), eventTime, toUserId);
         if (node == null) {
+            return;
+        }
+        if (node.getStartProcessAt() == null) {
+            node.setStartProcessAt(eventTime);
+            nodeDurationMapper.updateById(node);
+        }
+    }
+
+    private void markExistingNodeStartProcess(Long ticketId, String status, Date eventTime) {
+        TicketNodeDurationPO node = null;
+        if (status != null && !status.isEmpty()) {
+            node = getOpenNodeByStatus(ticketId, status);
+        }
+        if (node == null) {
+            node = getOpenNode(ticketId);
+        }
+        if (node == null || node.getLeaveAt() != null) {
             return;
         }
         if (node.getStartProcessAt() == null) {
@@ -139,10 +173,20 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
         return node;
     }
 
-    private void closeNode(Long ticketId, String status, Date leaveAt) {
+    private void closeNode(Long ticketId, String status, String nextStatus, Date leaveAt) {
         TicketNodeDurationPO node = getOpenNodeByStatus(ticketId, status);
         if (node == null) {
-            return;
+            TicketNodeDurationPO openNode = getOpenNode(ticketId);
+            if (openNode == null) {
+                return;
+            }
+            String openNodeStatus = normalize(openNode.getNodeName());
+            if (nextStatus != null && nextStatus.equals(openNodeStatus)) {
+                return;
+            }
+            log.warn("按状态关闭节点未命中，降级关闭当前开启节点: ticketId={}, expectStatus={}, actualStatus={}",
+                    ticketId, status, openNodeStatus);
+            node = openNode;
         }
         if (node.getLeaveAt() != null) {
             return;
@@ -155,7 +199,17 @@ public class TicketNodeDurationApplicationService extends BaseApplicationService
         if (node.getFirstReadAt() != null && node.getArriveAt() != null) {
             node.setWaitDurationSec(durationSeconds(node.getFirstReadAt(), node.getArriveAt()));
         }
-        Date processStart = node.getStartProcessAt() != null ? node.getStartProcessAt() : node.getFirstReadAt();
+        Date processStart = node.getStartProcessAt();
+        if (processStart == null) {
+            processStart = node.getFirstReadAt();
+            if (processStart != null) {
+                node.setStartProcessAt(processStart);
+            } else {
+                // 没有显式“开始处理”动作时，补齐为离开时刻，保证闭环统计完整
+                processStart = leaveAt;
+                node.setStartProcessAt(processStart);
+            }
+        }
         if (processStart != null) {
             node.setProcessDurationSec(durationSeconds(leaveAt, processStart));
         }

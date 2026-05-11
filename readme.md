@@ -2343,3 +2343,59 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.9-openapi-bugreport-by-ticketno` | 新增开放接口 API000514：支持按 `ticketNo` 查询最新归档 Bug 简报摘要（`/api/open/v1/bug-report/detail/{ticketNo}`） |
+
+---
+
+## 51. 节点耗时统计修复：START_PROCESS 正确关前节点并补齐开始/离开时间（后端）
+
+### 51.1 功能用途
+- **用途**：修复“待测试受理、待开发受理等节点离开时间一直为空”的问题，保证节点耗时链完整。  
+- **类比理解**：以前像“只打了上车时间，没打下车时间”；现在每一站都能打上“开始处理 + 离开时间”，路线就完整了。
+
+### 51.2 根因说明（对应你反馈）
+- `START_PROCESS` 在旧逻辑里只做了“开始处理打点”，没有执行“关闭前节点 + 打开下一节点”。  
+- 所以像 `pending_test_accept -> testing`、`pending_dev_accept -> developing` 这种流转，会导致前一个节点 `leave_at` 长期为空。
+
+### 51.3 本次修复内容
+1. `TicketNodeDurationApplicationService` 新增 `handleStartProcess(...)`：  
+   - 当 `fromStatus != toStatus` 时，按“开始前节点 -> 关闭前节点 -> 打开并开始新节点”执行。  
+2. 关闭节点时增加兜底：  
+   - 如果按 `fromStatus` 找不到开启节点，会降级关闭当前开启节点（避免旧链路遗留的开口节点继续漂移）。  
+3. 节点闭环补齐：  
+   - 关闭节点时若缺少 `start_process_at`，会按 `first_read_at` 或离开时刻补齐，确保已关闭节点都有开始处理时间和离开时间。
+
+### 51.4 使用方法（验收步骤）
+1. 选择一条缺陷工单，执行以下流转：
+   - `待测试受理 -> 测试复现中`
+   - `待开发受理 -> 开发解决中`
+2. 打开工单详情的“节点耗时统计”。
+3. 预期结果：
+   - `待测试受理`、`待开发受理` 节点的“离开时间”不再为空；
+   - 对应节点有“开始处理时间”；
+   - 新进入节点也会被正确打开并参与后续耗时统计。
+
+### 51.5 参数说明（本次改动相关）
+| 参数/方法 | 类型 | 说明 |
+|---|---|---|
+| `handleStartProcess(ticketId, fromStatus, toStatus, toUserId, eventTime)` | `method` | 统一处理 START_PROCESS 的跨节点流转 |
+| `closeNode(ticketId, status, nextStatus, leaveAt)` | `method` | 关闭节点并计算总耗时/处理耗时，含未命中兜底关闭 |
+| `start_process_at` | `datetime` | 节点开始处理时间（本次确保闭环补齐） |
+| `leave_at` | `datetime` | 节点离开时间（本次修复中间节点遗漏） |
+
+### 51.6 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/ticket/node-duration/{id}` | `ApiResult<TicketNodeDurationOutput>` | 修复后中间节点 `leaveAt` 可正确返回，不再长期为 `null` |
+
+### 51.7 常见问题（新增）
+#### Q56：历史老工单里为什么偶尔还有节点时间不完整？
+- **检测**：确认该工单是否在本次修复上线前已走完大部分流程。  
+- **记录（错误类型）**：历史链路遗留数据（旧逻辑写入时已缺失）。  
+- **恢复建议**：
+  1. 新流转会按修复逻辑继续闭环；
+  2. 对需要追溯的历史工单，可按时间链和流转记录做一次数据核对补录。
+
+### 51.8 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.10-node-duration-start-process-close-fix` | 修复 START_PROCESS 跨节点未关前节点问题：补齐中间节点离开时间，并保证已关闭节点具备开始处理时间与耗时闭环 |
