@@ -133,6 +133,9 @@ public class TicketApplicationService {
     private TicketAssigneeMapper ticketAssigneeMapper;
 
     @Resource
+    private TicketFlowRecordMapper flowRecordMapper;
+
+    @Resource
     private com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaTimerMapper slaTimerMapper;
 
     @Transactional(rollbackFor = Exception.class)
@@ -541,9 +544,9 @@ public class TicketApplicationService {
                 userIds.add(aid);
             }
         }
-        Long publicTestAcceptAssigneeId = findLatestTestAcceptAssigneeId(ticket.getId());
-        if (publicTestAcceptAssigneeId != null) {
-            userIds.add(publicTestAcceptAssigneeId);
+        Long publicTestAcceptUserId = findLatestTestAcceptUserId(ticket.getId());
+        if (publicTestAcceptUserId != null) {
+            userIds.add(publicTestAcceptUserId);
         }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
@@ -590,7 +593,7 @@ public class TicketApplicationService {
         if (assignee != null) {
             output.setAssigneeName(assignee.getName());
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicTestAcceptAssigneeId, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicTestAcceptUserId, userMap));
 
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
@@ -612,13 +615,13 @@ public class TicketApplicationService {
     }
 
     /**
-     * 测试受理人展示名：仅展示最近一次「待测试受理」节点对应的处理人。
+     * 测试受理人展示名：优先展示最近一次「待测试受理 -> 测试复现中」流转的操作人。
      */
-    private String buildTestFollowAssigneeNames(Long testAcceptAssigneeId, Map<Long, SysUserPO> userMap) {
-        if (testAcceptAssigneeId == null || userMap == null || userMap.isEmpty()) {
+    private String buildTestFollowAssigneeNames(Long testAcceptUserId, Map<Long, SysUserPO> userMap) {
+        if (testAcceptUserId == null || userMap == null || userMap.isEmpty()) {
             return null;
         }
-        SysUserPO user = userMap.get(testAcceptAssigneeId);
+        SysUserPO user = userMap.get(testAcceptUserId);
         if (user == null || user.getName() == null) {
             return null;
         }
@@ -627,7 +630,42 @@ public class TicketApplicationService {
     }
 
     /**
-     * 从节点耗时表定位最近一次「待测试受理」的处理人。
+     * 测试受理人：优先取「待测试受理 -> 测试复现中」流转操作人，取不到再回退到节点处理人。
+     */
+    private Long findLatestTestAcceptUserId(Long ticketId) {
+        Long operatorId = findLatestTestAcceptOperatorId(ticketId);
+        if (operatorId != null) {
+            return operatorId;
+        }
+        return findLatestTestAcceptAssigneeId(ticketId);
+    }
+
+    /**
+     * 从流转流水中定位最近一次「待测试受理 -> 测试复现中」的操作人。
+     */
+    private Long findLatestTestAcceptOperatorId(Long ticketId) {
+        if (ticketId == null) {
+            return null;
+        }
+        List<TicketFlowRecordPO> rows = flowRecordMapper.selectList(
+                new LambdaQueryWrapper<TicketFlowRecordPO>()
+                        .eq(TicketFlowRecordPO::getTicketId, ticketId)
+                        .eq(TicketFlowRecordPO::getFlowType, "TRANSIT")
+                        .eq(TicketFlowRecordPO::getFromStatus, TicketStatus.PENDING_TEST_ACCEPT.getCode())
+                        .eq(TicketFlowRecordPO::getToStatus, TicketStatus.TESTING.getCode())
+                        .isNotNull(TicketFlowRecordPO::getOperatorId)
+                        .orderByDesc(TicketFlowRecordPO::getCreateTime)
+                        .orderByDesc(TicketFlowRecordPO::getId)
+                        .last("LIMIT 1"));
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+        TicketFlowRecordPO row = rows.get(0);
+        return row == null ? null : row.getOperatorId();
+    }
+
+    /**
+     * 从节点耗时表定位最近一次「待测试受理」的处理人（历史数据回退兜底）。
      */
     private Long findLatestTestAcceptAssigneeId(Long ticketId) {
         if (ticketId == null) {
@@ -972,9 +1010,9 @@ public class TicketApplicationService {
         for (Long aid : assigneeIdList) {
             userIds.add(aid);
         }
-        Long detailTestAcceptAssigneeId = findLatestTestAcceptAssigneeId(ticket.getId());
-        if (detailTestAcceptAssigneeId != null) {
-            userIds.add(detailTestAcceptAssigneeId);
+        Long detailTestAcceptUserId = findLatestTestAcceptUserId(ticket.getId());
+        if (detailTestAcceptUserId != null) {
+            userIds.add(detailTestAcceptUserId);
         }
 
         if (ticket.getCategoryId() != null) {
@@ -1059,7 +1097,7 @@ public class TicketApplicationService {
         if (!assigneeNames.isEmpty()) {
             output.setAssigneeName(String.join("、", assigneeNames));
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(detailTestAcceptAssigneeId, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(detailTestAcceptUserId, userMap));
 
         if (attachments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;

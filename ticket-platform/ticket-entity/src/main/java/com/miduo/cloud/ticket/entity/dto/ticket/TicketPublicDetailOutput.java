@@ -37,7 +37,7 @@ public class TicketPublicDetailOutput implements Serializable {
     private String assigneeName;
 
     /**
-     * 测试受理人：最近一次「待测试受理」节点的处理人姓名，无则 null
+     * 测试受理人：最近一次「待测试受理 -> 测试复现中」流转操作人姓名（历史数据回退到测试节点处理人），无则 null
      */
     private String testFollowAssigneeNames;
 
