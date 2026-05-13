@@ -9,6 +9,7 @@ import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.util.DateTimeRangeQueryUtil;
 import com.miduo.cloud.ticket.common.util.TicketNoGenerator;
 import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
@@ -233,6 +234,9 @@ public class TicketApplicationService {
 
         List<String> statusFilterList = mergeStatusFilter(input.getStatus(), input.getStatuses());
 
+        String createTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCreateTimeStart());
+        String createTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCreateTimeEnd());
+
         IPage<TicketPO> result = ticketMapper.selectTicketPage(
                 page,
                 viewCode,
@@ -245,8 +249,8 @@ public class TicketApplicationService {
                 input.getPriority(),
                 input.getCreatorId(),
                 input.getAssigneeId(),
-                input.getCreateTimeStart(),
-                input.getCreateTimeEnd(),
+                createTimeStart,
+                createTimeEnd,
                 input.getOrderBy(),
                 input.isAsc(),
                 input.getSlaStatus(),

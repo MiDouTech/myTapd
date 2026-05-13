@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.common.util.DateTimeRangeQueryUtil;
 import com.miduo.cloud.ticket.entity.dto.openapi.OpenTicketExportOutput;
 import com.miduo.cloud.ticket.entity.dto.openapi.OpenTicketExportPageInput;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
@@ -58,12 +59,16 @@ public class OpenTicketExportApplicationService {
         validateTimeRange(input);
 
         List<String> statusList = normalizeStatuses(input.getStatuses());
+        String createTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCreateTimeStart());
+        String createTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCreateTimeEnd());
+        String completeTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCompleteTimeStart());
+        String completeTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCompleteTimeEnd());
         IPage<TicketPO> pageResult = ticketMapper.selectOpenTicketExportPage(
                 new Page<>(input.getPageNum(), input.getPageSize()),
-                input.getCreateTimeStart(),
-                input.getCreateTimeEnd(),
-                input.getCompleteTimeStart(),
-                input.getCompleteTimeEnd(),
+                createTimeStart,
+                createTimeEnd,
+                completeTimeStart,
+                completeTimeEnd,
                 statusList,
                 input.getBusinessTypeId(),
                 input.getBusinessTypeName()
