@@ -733,11 +733,13 @@ onUnmounted(() => {
           @selection-change="handleSelectionChange"
           @sort-change="handleSortChange"
         >
-          <el-table-column prop="ticketNo" label="工单编号" width="160" sortable="custom">
+          <el-table-column prop="ticketNo" label="工单编号" min-width="220" sortable="custom">
             <template #default="{ row }">
-              <el-button type="primary" link class="cell-link" @click="openDetail(row)">
-                {{ row.ticketNo }}
-              </el-button>
+              <el-tooltip :content="row.ticketNo" placement="top" :disabled="!row.ticketNo">
+                <el-button type="primary" link class="cell-link ticket-no-cell-btn" @click="openDetail(row)">
+                  <span class="ticket-no-cell-text">{{ row.ticketNo }}</span>
+                </el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column
@@ -1330,6 +1332,23 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.ticket-no-cell-btn {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.ticket-no-cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sla-normal {
   color: #67c23a;
   font-size: 13px;
@@ -1342,7 +1361,7 @@ onUnmounted(() => {
 
 .ticket-table {
   :deep(.el-table) {
-    min-width: 1460px;
+    min-width: 1520px;
   }
 }
 
