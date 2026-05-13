@@ -21,6 +21,12 @@
           <span class="info-value">{{ detail.assigneeName || '-' }}</span>
         </div>
 
+        <!-- 跟进的测试人员（多人处理人中具备测试角色的成员） -->
+        <div class="info-row">
+          <span class="info-label"><el-icon><UserFilled /></el-icon> 跟进测试人员</span>
+          <span class="info-value">{{ detail.testFollowAssigneeNames || '-' }}</span>
+        </div>
+
         <!-- 催办次数 -->
         <div class="info-row">
           <span class="info-label"><el-icon><Bell /></el-icon> 催办次数</span>

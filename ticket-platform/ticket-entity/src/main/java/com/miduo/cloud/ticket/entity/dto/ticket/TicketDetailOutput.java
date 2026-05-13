@@ -47,6 +47,11 @@ public class TicketDetailOutput implements Serializable {
     private String assigneeName;
 
     /**
+     * 跟进的测试人员：当前工单关联处理人中具备「测试」系统角色的成员姓名，顿号拼接；无则 null
+     */
+    private String testFollowAssigneeNames;
+
+    /**
      * 多人处理时全部处理人 ID（含主处理人，顺序与分工一致）
      */
     private List<Long> assigneeIds;
