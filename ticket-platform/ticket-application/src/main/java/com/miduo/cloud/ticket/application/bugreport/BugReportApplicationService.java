@@ -721,7 +721,6 @@ public class BugReportApplicationService extends BaseApplicationService {
                 joiner.add("关联工单：" + String.join("；", lines));
             }
         }
-        appendPlainLine(joiner, "问题描述", report.getProblemDesc());
         appendPlainLine(joiner, "逻辑归因", buildLogicCauseText(report));
         appendPlainLine(joiner, "缺陷分类", report.getDefectCategory());
         appendPlainLine(joiner, "引入项目", report.getIntroducedProject());
@@ -750,6 +749,8 @@ public class BugReportApplicationService extends BaseApplicationService {
                     .collect(Collectors.joining("、"));
             appendPlainLine(joiner, "责任人", responsibleNames);
         }
+        // 问题描述放到摘要末尾，避免超长时挤掉后续关键字段。
+        appendPlainLine(joiner, "问题描述", normalizeSingleLineForWebhook(report.getProblemDesc()));
         return joiner.toString();
     }
 
@@ -758,6 +759,20 @@ public class BugReportApplicationService extends BaseApplicationService {
             return;
         }
         joiner.add(label + "：" + value.trim());
+    }
+
+    /**
+     * 企微 text 摘要字段统一单行化，避免多行问题描述吞掉后续字段展示空间。
+     */
+    private String normalizeSingleLineForWebhook(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String normalized = value.replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replace('\n', ' ');
+        normalized = normalized.replaceAll("\\s{2,}", " ");
+        return normalized.trim();
     }
 
     /**
