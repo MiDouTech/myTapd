@@ -48,6 +48,11 @@ public class WebhookDispatchService extends BaseApplicationService {
     private static final int WECOM_TEXT_MAX_BYTES = 1900;
     /** 企微群机器人 text 工单通知正文列表符号（与产品模板一致） */
     private static final String WECOM_LIST_BULLET = "• ";
+    private static final String BUG_REPORT_RELATED_TICKETS_LABEL = "关联工单：";
+    private static final String BUG_REPORT_PROBLEM_DESC_LABEL = "问题描述：";
+    private static final int BUG_REPORT_RELATED_TICKETS_MAX_ITEMS = 3;
+    private static final int BUG_REPORT_RELATED_TICKETS_MAX_BYTES = 360;
+    private static final int BUG_REPORT_PROBLEM_DESC_MAX_BYTES = 240;
     private static final int MAX_REQUEST_BODY_LENGTH = 8000;
     private static final int MAX_RESPONSE_BODY_LENGTH = 4000;
     private static final int MAX_FAIL_REASON_LENGTH = 900;
@@ -479,7 +484,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (d != null) {
             String dt = d.getString("detailText");
             if (dt != null) {
-                detail = dt;
+                detail = sanitizeBugReportDetailForWecom(dt);
             }
         }
 
@@ -532,6 +537,79 @@ public class WebhookDispatchService extends BaseApplicationService {
         payload.put("msgtype", "text");
         payload.put("text", text);
         return JSON.toJSONString(payload);
+    }
+
+    /**
+     * Bug简报归档消息仅对高风险超长字段做定向截断，尽量保留其它摘要字段完整展示。
+     */
+    private String sanitizeBugReportDetailForWecom(String detail) {
+        if (detail == null || detail.trim().isEmpty()) {
+            return "";
+        }
+        String[] lines = detail.split("\\r?\\n");
+        List<String> normalizedLines = new ArrayList<>();
+        for (String rawLine : lines) {
+            if (rawLine == null) {
+                continue;
+            }
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith(BUG_REPORT_RELATED_TICKETS_LABEL)) {
+                normalizedLines.add(truncateRelatedTicketsLine(line));
+                continue;
+            }
+            if (line.startsWith(BUG_REPORT_PROBLEM_DESC_LABEL)) {
+                normalizedLines.add(truncateLabeledLineValue(line, BUG_REPORT_PROBLEM_DESC_LABEL,
+                        BUG_REPORT_PROBLEM_DESC_MAX_BYTES));
+                continue;
+            }
+            normalizedLines.add(line);
+        }
+        return String.join("\n", normalizedLines);
+    }
+
+    private String truncateRelatedTicketsLine(String line) {
+        String rawValue = line.substring(BUG_REPORT_RELATED_TICKETS_LABEL.length()).trim();
+        if (rawValue.isEmpty()) {
+            return line;
+        }
+        String[] segments = rawValue.split("；");
+        List<String> cleanedSegments = new ArrayList<>();
+        for (String segment : segments) {
+            if (segment == null) {
+                continue;
+            }
+            String trimmed = segment.trim();
+            if (!trimmed.isEmpty()) {
+                cleanedSegments.add(trimmed);
+            }
+        }
+        if (cleanedSegments.isEmpty()) {
+            return BUG_REPORT_RELATED_TICKETS_LABEL;
+        }
+
+        int keepCount = Math.min(cleanedSegments.size(), BUG_REPORT_RELATED_TICKETS_MAX_ITEMS);
+        String mergedValue = String.join("；", cleanedSegments.subList(0, keepCount));
+        String truncatedValue = truncateByUtf8Bytes(mergedValue, BUG_REPORT_RELATED_TICKETS_MAX_BYTES);
+        boolean truncatedByCount = cleanedSegments.size() > keepCount;
+        boolean truncatedByBytes = !mergedValue.equals(truncatedValue);
+        if (truncatedByCount && !truncatedByBytes) {
+            truncatedValue = truncatedValue + "...(内容已截断)";
+        }
+        return BUG_REPORT_RELATED_TICKETS_LABEL + truncatedValue;
+    }
+
+    private String truncateLabeledLineValue(String line, String label, int maxValueBytes) {
+        if (!line.startsWith(label)) {
+            return line;
+        }
+        String rawValue = line.substring(label.length()).trim();
+        if (rawValue.isEmpty()) {
+            return line;
+        }
+        return label + truncateByUtf8Bytes(rawValue, maxValueBytes);
     }
 
     private MentionTargets collectBugReportArchivedMentionTargets(JSONObject ticket, JSONObject data) {
