@@ -37,7 +37,7 @@ public class TicketPublicDetailOutput implements Serializable {
     private String assigneeName;
 
     /**
-     * 跟进的测试人员：关联处理人中具备「测试」系统角色的成员姓名，顿号拼接；无则 null
+     * 跟进的测试人员：曾在测试相关节点作为处理人，或当前处理人中账号含 TESTER 角色；顿号拼接，无则 null
      */
     private String testFollowAssigneeNames;
 

@@ -249,7 +249,7 @@ export interface TicketDetailOutput {
   creatorName?: string
   assigneeId?: number
   assigneeName?: string
-  /** 跟进的测试人员（关联处理人中具备测试角色的姓名，顿号拼接） */
+  /** 跟进的测试人员（测试阶段节点处理人 + 当前账号含 TESTER 的处理人，顿号拼接） */
   testFollowAssigneeNames?: string | null
   assigneeIds?: number[]
   /** 催办时默认通知的关联处理人（与 assigneeIds 一致） */
@@ -399,7 +399,7 @@ export interface TicketPublicDetailOutput {
   statusLabel?: string
   creatorName?: string
   assigneeName?: string
-  /** 跟进的测试人员（关联处理人中具备测试角色的姓名，顿号拼接） */
+  /** 跟进的测试人员（测试阶段节点处理人 + 当前账号含 TESTER 的处理人，顿号拼接） */
   testFollowAssigneeNames?: string | null
   source?: string
   sourceLabel?: string
