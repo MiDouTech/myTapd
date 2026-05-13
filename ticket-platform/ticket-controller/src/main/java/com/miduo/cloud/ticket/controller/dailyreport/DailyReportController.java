@@ -44,7 +44,7 @@ public class DailyReportController {
     @Operation(summary = "手动推送日报", description = "接口编号：API000502")
     @PostMapping("/push")
     public ApiResult<Void> push() {
-        dailyReportService.pushDailyReport();
+        dailyReportService.pushDailyReportManually();
         return ApiResult.success();
     }
 

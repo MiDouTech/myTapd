@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigUpdateInput;
@@ -121,15 +123,34 @@ public class DailyReportApplicationService extends BaseApplicationService {
      * 推送日报到企微群
      */
     public void pushDailyReport() {
+        pushDailyReportInternal(false);
+    }
+
+    /**
+     * 手动推送日报到企微群（忽略自动推送开关）
+     */
+    public void pushDailyReportManually() {
+        pushDailyReportInternal(true);
+    }
+
+    private void pushDailyReportInternal(boolean manualTrigger) {
         Map<String, String> configMap = loadDailyReportConfigMap();
         boolean enabled = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
         if (!enabled) {
-            log.info("日报自动推送已关闭，跳过推送");
-            return;
+            if (manualTrigger) {
+                // 手动推送属于运营兜底动作，避免因自动开关关闭导致“点了却不发”。
+                log.info("日报自动推送开关关闭，但本次为手动推送，继续执行");
+            } else {
+                log.info("日报自动推送已关闭，跳过推送");
+                return;
+            }
         }
 
         String webhookUrlsStr = configMap.getOrDefault(CONFIG_KEY_WEBHOOK_URLS, "");
         if (webhookUrlsStr.trim().isEmpty()) {
+            if (manualTrigger) {
+                throw BusinessException.of(ErrorCode.PARAM_INVALID, "请先在日报配置中填写企微群Webhook地址");
+            }
             log.warn("日报推送Webhook地址未配置，跳过推送");
             return;
         }
@@ -137,22 +158,56 @@ public class DailyReportApplicationService extends BaseApplicationService {
         DailyReportOutput report = generateDailyReport();
         String markdown = report.getMarkdownContent();
         if (markdown == null || markdown.trim().isEmpty()) {
+            if (manualTrigger) {
+                throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "日报内容为空，无法推送");
+            }
             log.warn("日报内容为空，跳过推送");
             return;
         }
 
+        int validWebhookCount = 0;
+        int successCount = 0;
+        List<String> failedWebhookWithReason = new ArrayList<>();
         String[] urls = webhookUrlsStr.split(",");
         for (String url : urls) {
             String trimmedUrl = url.trim();
             if (trimmedUrl.isEmpty()) {
                 continue;
             }
+            validWebhookCount++;
             try {
                 groupWebhookSender.sendReportNoticeToWebhook(trimmedUrl, markdown, null);
                 log.info("日报推送成功: webhook={}", sanitizeWebhookUrl(trimmedUrl));
+                successCount++;
             } catch (Exception ex) {
-                log.error("日报推送失败: webhook={}, reason={}", sanitizeWebhookUrl(trimmedUrl), ex.getMessage(), ex);
+                String webhook = sanitizeWebhookUrl(trimmedUrl);
+                String reason = sanitizePushErrorReason(ex.getMessage());
+                failedWebhookWithReason.add(webhook + " -> " + reason);
+                log.error("日报推送失败: webhook={}, reason={}", webhook, ex.getMessage(), ex);
             }
+        }
+
+        if (validWebhookCount == 0) {
+            if (manualTrigger) {
+                throw BusinessException.of(ErrorCode.PARAM_INVALID, "日报配置中的Webhook地址无效，请检查后重试");
+            }
+            log.warn("日报推送Webhook地址全为空，跳过推送");
+            return;
+        }
+
+        if (successCount == 0) {
+            String reason = failedWebhookWithReason.isEmpty()
+                    ? "未获取到可用Webhook地址"
+                    : String.join("；", failedWebhookWithReason);
+            if (manualTrigger) {
+                throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "日报推送失败，请检查Webhook或企微机器人状态。失败详情：" + reason);
+            }
+            log.error("日报自动推送失败：全部Webhook发送失败，details={}", reason);
+            return;
+        }
+
+        if (!failedWebhookWithReason.isEmpty()) {
+            log.warn("日报推送部分失败：successCount={}, failedDetails={}", successCount, failedWebhookWithReason);
         }
     }
 
@@ -644,5 +699,13 @@ public class DailyReportApplicationService extends BaseApplicationService {
             return normalized.substring(0, queryIndex) + "?***";
         }
         return normalized;
+    }
+
+    private String sanitizePushErrorReason(String reason) {
+        if (reason == null || reason.trim().isEmpty()) {
+            return "未知错误";
+        }
+        String trimmed = reason.trim();
+        return trimmed.length() > 120 ? trimmed.substring(0, 120) + "..." : trimmed;
     }
 }
