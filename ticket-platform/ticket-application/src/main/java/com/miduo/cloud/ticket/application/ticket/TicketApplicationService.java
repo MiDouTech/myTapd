@@ -29,6 +29,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.Bu
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.model.UserRoleCodePair;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -529,6 +530,15 @@ public class TicketApplicationService {
         if (ticket.getAssigneeId() != null) {
             userIds.add(ticket.getAssigneeId());
         }
+        List<Long> publicAssigneeIdList = ticketAssigneeSyncService.listActiveUserIds(ticket.getId());
+        if (publicAssigneeIdList.isEmpty() && ticket.getAssigneeId() != null) {
+            publicAssigneeIdList = new ArrayList<>(Collections.singletonList(ticket.getAssigneeId()));
+        }
+        for (Long aid : publicAssigneeIdList) {
+            if (aid != null) {
+                userIds.add(aid);
+            }
+        }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
         if (customerInfoOutput != null) {
@@ -574,6 +584,7 @@ public class TicketApplicationService {
         if (assignee != null) {
             output.setAssigneeName(assignee.getName());
         }
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicAssigneeIdList, userMap));
 
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
@@ -592,6 +603,55 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    /**
+     * 从工单关联处理人中筛出具备「测试」系统角色的用户姓名，顺序与 assigneeIdList 一致、同一人只出现一次。
+     */
+    private String buildTestFollowAssigneeNames(List<Long> assigneeIdList, Map<Long, SysUserPO> userMap) {
+        if (assigneeIdList == null || assigneeIdList.isEmpty() || userMap == null || userMap.isEmpty()) {
+            return null;
+        }
+        List<Long> distinctNonNull = assigneeIdList.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (distinctNonNull.isEmpty()) {
+            return null;
+        }
+        List<UserRoleCodePair> pairs = userMapper.selectRoleCodesByUserIds(distinctNonNull);
+        if (pairs == null || pairs.isEmpty()) {
+            return null;
+        }
+        Map<Long, Set<String>> rolesByUser = new HashMap<>();
+        for (UserRoleCodePair p : pairs) {
+            if (p == null || p.getUserId() == null || p.getRoleCode() == null) {
+                continue;
+            }
+            rolesByUser.computeIfAbsent(p.getUserId(), k -> new HashSet<>())
+                    .add(p.getRoleCode().trim().toUpperCase(Locale.ROOT));
+        }
+        LinkedHashSet<String> testerNames = new LinkedHashSet<>();
+        for (Long aid : assigneeIdList) {
+            if (aid == null) {
+                continue;
+            }
+            Set<String> roles = rolesByUser.getOrDefault(aid, Collections.emptySet());
+            if (!roles.contains("TESTER")) {
+                continue;
+            }
+            SysUserPO u = userMap.get(aid);
+            if (u != null && u.getName() != null) {
+                String name = u.getName().trim();
+                if (!name.isEmpty()) {
+                    testerNames.add(name);
+                }
+            }
+        }
+        if (testerNames.isEmpty()) {
+            return null;
+        }
+        return String.join("、", testerNames);
     }
 
     /**
@@ -997,6 +1057,7 @@ public class TicketApplicationService {
         if (!assigneeNames.isEmpty()) {
             output.setAssigneeName(String.join("、", assigneeNames));
         }
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(assigneeIdList, userMap));
 
         if (attachments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;

@@ -386,6 +386,10 @@ onMounted(() => {
               <span class="info-value">{{ detail.assigneeName || '待分配' }}</span>
             </div>
             <div class="info-item">
+              <span class="info-label">跟进测试人员</span>
+              <span class="info-value">{{ detail.testFollowAssigneeNames || '-' }}</span>
+            </div>
+            <div class="info-item">
               <span class="info-label">期望完成</span>
               <span class="info-value">{{ formatDate(detail.expectedTime) }}</span>
             </div>
