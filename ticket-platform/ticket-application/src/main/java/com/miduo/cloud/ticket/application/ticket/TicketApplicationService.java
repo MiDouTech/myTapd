@@ -125,6 +125,9 @@ public class TicketApplicationService {
     private TicketAssigneeSyncService ticketAssigneeSyncService;
 
     @Resource
+    private TicketNodeDurationMapper nodeDurationMapper;
+
+    @Resource
     private TicketBugInfoMapper ticketBugInfoMapper;
 
     @Resource
@@ -539,6 +542,11 @@ public class TicketApplicationService {
                 userIds.add(aid);
             }
         }
+        for (Long tid : listOrderedTestFollowUserIdsFromNodes(ticket.getId())) {
+            if (tid != null) {
+                userIds.add(tid);
+            }
+        }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
         if (customerInfoOutput != null) {
@@ -584,7 +592,7 @@ public class TicketApplicationService {
         if (assignee != null) {
             output.setAssigneeName(assignee.getName());
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicAssigneeIdList, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(ticket.getId(), publicAssigneeIdList, userMap));
 
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
@@ -606,52 +614,103 @@ public class TicketApplicationService {
     }
 
     /**
-     * 从工单关联处理人中筛出具备「测试」系统角色的用户姓名，顺序与 assigneeIdList 一致、同一人只出现一次。
+     * 跟进测试人员展示名：优先来自节点耗时（曾在待测试受理/测试复现中等节点作为处理人），
+     * 再补充当前处理人中账号角色含 TESTER 的成员；顺序为节点时间先后，同一人只出现一次。
      */
-    private String buildTestFollowAssigneeNames(List<Long> assigneeIdList, Map<Long, SysUserPO> userMap) {
-        if (assigneeIdList == null || assigneeIdList.isEmpty() || userMap == null || userMap.isEmpty()) {
+    private String buildTestFollowAssigneeNames(Long ticketId, List<Long> assigneeIdList, Map<Long, SysUserPO> userMap) {
+        if (userMap == null) {
             return null;
         }
-        List<Long> distinctNonNull = assigneeIdList.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        if (distinctNonNull.isEmpty()) {
-            return null;
-        }
-        List<UserRoleCodePair> pairs = userMapper.selectRoleCodesByUserIds(distinctNonNull);
-        if (pairs == null || pairs.isEmpty()) {
-            return null;
-        }
-        Map<Long, Set<String>> rolesByUser = new HashMap<>();
-        for (UserRoleCodePair p : pairs) {
-            if (p == null || p.getUserId() == null || p.getRoleCode() == null) {
-                continue;
+        LinkedHashSet<Long> orderedUserIds = new LinkedHashSet<>();
+        for (Long uid : listOrderedTestFollowUserIdsFromNodes(ticketId)) {
+            if (uid != null) {
+                orderedUserIds.add(uid);
             }
-            rolesByUser.computeIfAbsent(p.getUserId(), k -> new HashSet<>())
-                    .add(p.getRoleCode().trim().toUpperCase(Locale.ROOT));
         }
-        LinkedHashSet<String> testerNames = new LinkedHashSet<>();
-        for (Long aid : assigneeIdList) {
-            if (aid == null) {
-                continue;
-            }
-            Set<String> roles = rolesByUser.getOrDefault(aid, Collections.emptySet());
-            if (!roles.contains("TESTER")) {
-                continue;
-            }
-            SysUserPO u = userMap.get(aid);
-            if (u != null && u.getName() != null) {
-                String name = u.getName().trim();
-                if (!name.isEmpty()) {
-                    testerNames.add(name);
+        if (assigneeIdList != null && !assigneeIdList.isEmpty()) {
+            List<Long> distinctNonNull = assigneeIdList.stream()
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (!distinctNonNull.isEmpty()) {
+                List<UserRoleCodePair> pairs = userMapper.selectRoleCodesByUserIds(distinctNonNull);
+                Map<Long, Set<String>> rolesByUser = new HashMap<>();
+                if (pairs != null) {
+                    for (UserRoleCodePair p : pairs) {
+                        if (p == null || p.getUserId() == null || p.getRoleCode() == null) {
+                            continue;
+                        }
+                        rolesByUser.computeIfAbsent(p.getUserId(), k -> new HashSet<>())
+                                .add(p.getRoleCode().trim().toUpperCase(Locale.ROOT));
+                    }
+                }
+                for (Long aid : assigneeIdList) {
+                    if (aid == null) {
+                        continue;
+                    }
+                    if (rolesByUser.getOrDefault(aid, Collections.emptySet()).contains("TESTER")) {
+                        orderedUserIds.add(aid);
+                    }
                 }
             }
         }
-        if (testerNames.isEmpty()) {
+        List<String> names = new ArrayList<>();
+        for (Long uid : orderedUserIds) {
+            SysUserPO u = userMap.get(uid);
+            if (u != null && u.getName() != null) {
+                String name = u.getName().trim();
+                if (!name.isEmpty()) {
+                    names.add(name);
+                }
+            }
+        }
+        if (names.isEmpty()) {
             return null;
         }
-        return String.join("、", testerNames);
+        return String.join("、", names);
+    }
+
+    /**
+     * 从节点耗时表按时间顺序收集「测试阶段处理人」用户 ID（去重保持首次出现顺序）。
+     */
+    private List<Long> listOrderedTestFollowUserIdsFromNodes(Long ticketId) {
+        if (ticketId == null) {
+            return Collections.emptyList();
+        }
+        List<TicketNodeDurationPO> rows = nodeDurationMapper.selectList(
+                new LambdaQueryWrapper<TicketNodeDurationPO>()
+                        .eq(TicketNodeDurationPO::getTicketId, ticketId)
+                        .isNotNull(TicketNodeDurationPO::getAssigneeId)
+                        .orderByAsc(TicketNodeDurationPO::getArriveAt)
+                        .orderByAsc(TicketNodeDurationPO::getId));
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<Long> out = new LinkedHashSet<>();
+        for (TicketNodeDurationPO row : rows) {
+            if (row == null || row.getAssigneeId() == null) {
+                continue;
+            }
+            if (isTesterAssigneeRoleOnNode(row) || isDefectTestPhaseNodeName(row.getNodeName())) {
+                out.add(row.getAssigneeId());
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    private static boolean isTesterAssigneeRoleOnNode(TicketNodeDurationPO row) {
+        String role = row.getAssigneeRole();
+        return role != null && "TESTER".equalsIgnoreCase(role.trim());
+    }
+
+    private static boolean isDefectTestPhaseNodeName(String nodeName) {
+        TicketStatus s = TicketStatus.fromCode(nodeName);
+        if (s == null) {
+            return false;
+        }
+        return s == TicketStatus.PENDING_TEST_ACCEPT
+                || s == TicketStatus.TESTING
+                || s == TicketStatus.INVESTIGATING;
     }
 
     /**
@@ -974,6 +1033,11 @@ public class TicketApplicationService {
         for (Long aid : assigneeIdList) {
             userIds.add(aid);
         }
+        for (Long tid : listOrderedTestFollowUserIdsFromNodes(ticket.getId())) {
+            if (tid != null) {
+                userIds.add(tid);
+            }
+        }
 
         if (ticket.getCategoryId() != null) {
             TicketCategoryPO category = categoryMapper.selectById(ticket.getCategoryId());
@@ -1057,7 +1121,7 @@ public class TicketApplicationService {
         if (!assigneeNames.isEmpty()) {
             output.setAssigneeName(String.join("、", assigneeNames));
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(assigneeIdList, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(ticket.getId(), assigneeIdList, userMap));
 
         if (attachments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
