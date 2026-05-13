@@ -386,7 +386,7 @@ onMounted(() => {
               <span class="info-value">{{ detail.assigneeName || '待分配' }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">跟进测试人员</span>
+              <span class="info-label">测试受理人</span>
               <span class="info-value">{{ detail.testFollowAssigneeNames || '-' }}</span>
             </div>
             <div class="info-item">
