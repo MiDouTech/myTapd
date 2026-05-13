@@ -896,10 +896,6 @@ public class TicketApplicationService {
 
         ticketWorkflowAppService.transit(ticketId, transitInput, currentUserId);
 
-        if (input.getRemark() != null && !input.getRemark().isEmpty()) {
-            recordOperationComment(ticketId, currentUserId, input.getRemark());
-        }
-
         log.info("工单处理（委托工作流）: ticketId={}, targetStatus={}", ticketId, input.getTargetStatus());
     }
 
@@ -1405,15 +1401,6 @@ public class TicketApplicationService {
         logPO.setNewValue(newValue);
         logPO.setRemark(remark);
         logMapper.insert(logPO);
-    }
-
-    private void recordOperationComment(Long ticketId, Long userId, String content) {
-        TicketCommentPO comment = new TicketCommentPO();
-        comment.setTicketId(ticketId);
-        comment.setUserId(userId);
-        comment.setContent(content);
-        comment.setType(CommentType.OPERATION.getCode());
-        commentMapper.insert(comment);
     }
 
     private void safePublishEvent(Object event) {
