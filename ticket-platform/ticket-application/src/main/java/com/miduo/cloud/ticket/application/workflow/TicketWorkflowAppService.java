@@ -5,6 +5,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
+import com.miduo.cloud.ticket.common.enums.CommentType;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
@@ -25,8 +26,10 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mappe
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFlowRecordMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCommentMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCommentPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFlowRecordPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
@@ -71,6 +74,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
     private final TicketMapper ticketMapper;
     private final TicketLogMapper ticketLogMapper;
+    private final TicketCommentMapper ticketCommentMapper;
     private final TicketFlowRecordMapper flowRecordMapper;
     private final SysUserMapper sysUserMapper;
     private final WorkflowEngine workflowEngine;
@@ -91,6 +95,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
 
     public TicketWorkflowAppService(TicketMapper ticketMapper,
                                      TicketLogMapper ticketLogMapper,
+                                     TicketCommentMapper ticketCommentMapper,
                                      TicketFlowRecordMapper flowRecordMapper,
                                      SysUserMapper sysUserMapper,
                                      WorkflowEngine workflowEngine,
@@ -104,6 +109,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                                      BugReportMapper bugReportMapper) {
         this.ticketMapper = ticketMapper;
         this.ticketLogMapper = ticketLogMapper;
+        this.ticketCommentMapper = ticketCommentMapper;
         this.flowRecordMapper = flowRecordMapper;
         this.sysUserMapper = sysUserMapper;
         this.workflowEngine = workflowEngine;
@@ -266,6 +272,11 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         String transitionAction = ticketTimeTrackService.resolveTransitionAction(oldStatus, targetStatus);
         ticketTimeTrackService.recordStatusTrack(ticketId, safeOperatorId, transitionAction,
                 oldStatus, targetStatus, oldAssigneeId, ticket.getAssigneeId(), input.getRemark());
+
+        // 与工单详情评论区同步：手动流转填写的备注写入操作评论（系统自动流转不写）
+        if (operatorId != null && StringUtils.hasText(input.getRemark())) {
+            saveOperationComment(ticketId, operatorId, input.getRemark().trim());
+        }
 
         // SLA计时器联动：根据目标状态的slaAction驱动计时器生命周期
         if (targetState != null) {
@@ -785,6 +796,15 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         record.setOperatorRole(operatorRole);
         record.setRemark(remark);
         flowRecordMapper.insert(record);
+    }
+
+    private void saveOperationComment(Long ticketId, Long operatorId, String content) {
+        TicketCommentPO comment = new TicketCommentPO();
+        comment.setTicketId(ticketId);
+        comment.setUserId(operatorId);
+        comment.setContent(content);
+        comment.setType(CommentType.OPERATION.getCode());
+        ticketCommentMapper.insert(comment);
     }
 
     /**
