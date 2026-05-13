@@ -21,9 +21,9 @@
           <span class="info-value">{{ detail.assigneeName || '-' }}</span>
         </div>
 
-        <!-- 跟进的测试人员（多人处理人中具备测试角色的成员） -->
+        <!-- 测试受理人 -->
         <div class="info-row">
-          <span class="info-label"><el-icon><UserFilled /></el-icon> 跟进测试人员</span>
+          <span class="info-label"><el-icon><UserFilled /></el-icon> 测试受理人</span>
           <span class="info-value">{{ detail.testFollowAssigneeNames || '-' }}</span>
         </div>
 

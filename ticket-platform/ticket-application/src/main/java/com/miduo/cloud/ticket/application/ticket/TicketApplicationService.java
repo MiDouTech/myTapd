@@ -29,7 +29,6 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.Bu
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.model.UserRoleCodePair;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -542,10 +541,9 @@ public class TicketApplicationService {
                 userIds.add(aid);
             }
         }
-        for (Long tid : listOrderedTestFollowUserIdsFromNodes(ticket.getId())) {
-            if (tid != null) {
-                userIds.add(tid);
-            }
+        Long publicTestAcceptAssigneeId = findLatestTestAcceptAssigneeId(ticket.getId());
+        if (publicTestAcceptAssigneeId != null) {
+            userIds.add(publicTestAcceptAssigneeId);
         }
 
         TicketBugCustomerInfoOutput customerInfoOutput = ticketBugApplicationService.getCustomerInfo(ticket.getId());
@@ -592,7 +590,7 @@ public class TicketApplicationService {
         if (assignee != null) {
             output.setAssigneeName(assignee.getName());
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(ticket.getId(), publicAssigneeIdList, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicTestAcceptAssigneeId, userMap));
 
         if (comments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
@@ -614,103 +612,44 @@ public class TicketApplicationService {
     }
 
     /**
-     * 跟进测试人员展示名：优先来自节点耗时（曾在待测试受理/测试复现中等节点作为处理人），
-     * 再补充当前处理人中账号角色含 TESTER 的成员；顺序为节点时间先后，同一人只出现一次。
+     * 测试受理人展示名：仅展示最近一次「待测试受理」节点对应的处理人。
      */
-    private String buildTestFollowAssigneeNames(Long ticketId, List<Long> assigneeIdList, Map<Long, SysUserPO> userMap) {
-        if (userMap == null) {
+    private String buildTestFollowAssigneeNames(Long testAcceptAssigneeId, Map<Long, SysUserPO> userMap) {
+        if (testAcceptAssigneeId == null || userMap == null || userMap.isEmpty()) {
             return null;
         }
-        LinkedHashSet<Long> orderedUserIds = new LinkedHashSet<>();
-        for (Long uid : listOrderedTestFollowUserIdsFromNodes(ticketId)) {
-            if (uid != null) {
-                orderedUserIds.add(uid);
-            }
-        }
-        if (assigneeIdList != null && !assigneeIdList.isEmpty()) {
-            List<Long> distinctNonNull = assigneeIdList.stream()
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .collect(Collectors.toList());
-            if (!distinctNonNull.isEmpty()) {
-                List<UserRoleCodePair> pairs = userMapper.selectRoleCodesByUserIds(distinctNonNull);
-                Map<Long, Set<String>> rolesByUser = new HashMap<>();
-                if (pairs != null) {
-                    for (UserRoleCodePair p : pairs) {
-                        if (p == null || p.getUserId() == null || p.getRoleCode() == null) {
-                            continue;
-                        }
-                        rolesByUser.computeIfAbsent(p.getUserId(), k -> new HashSet<>())
-                                .add(p.getRoleCode().trim().toUpperCase(Locale.ROOT));
-                    }
-                }
-                for (Long aid : assigneeIdList) {
-                    if (aid == null) {
-                        continue;
-                    }
-                    if (rolesByUser.getOrDefault(aid, Collections.emptySet()).contains("TESTER")) {
-                        orderedUserIds.add(aid);
-                    }
-                }
-            }
-        }
-        List<String> names = new ArrayList<>();
-        for (Long uid : orderedUserIds) {
-            SysUserPO u = userMap.get(uid);
-            if (u != null && u.getName() != null) {
-                String name = u.getName().trim();
-                if (!name.isEmpty()) {
-                    names.add(name);
-                }
-            }
-        }
-        if (names.isEmpty()) {
+        SysUserPO user = userMap.get(testAcceptAssigneeId);
+        if (user == null || user.getName() == null) {
             return null;
         }
-        return String.join("、", names);
+        String name = user.getName().trim();
+        return name.isEmpty() ? null : name;
     }
 
     /**
-     * 从节点耗时表按时间顺序收集「测试阶段处理人」用户 ID（去重保持首次出现顺序）。
+     * 从节点耗时表定位最近一次「待测试受理」的处理人。
      */
-    private List<Long> listOrderedTestFollowUserIdsFromNodes(Long ticketId) {
+    private Long findLatestTestAcceptAssigneeId(Long ticketId) {
         if (ticketId == null) {
-            return Collections.emptyList();
+            return null;
         }
         List<TicketNodeDurationPO> rows = nodeDurationMapper.selectList(
                 new LambdaQueryWrapper<TicketNodeDurationPO>()
                         .eq(TicketNodeDurationPO::getTicketId, ticketId)
+                        .eq(TicketNodeDurationPO::getNodeName, TicketStatus.PENDING_TEST_ACCEPT.getCode())
                         .isNotNull(TicketNodeDurationPO::getAssigneeId)
-                        .orderByAsc(TicketNodeDurationPO::getArriveAt)
-                        .orderByAsc(TicketNodeDurationPO::getId));
+                        .orderByDesc(TicketNodeDurationPO::getArriveAt)
+                        .orderByDesc(TicketNodeDurationPO::getId));
         if (rows == null || rows.isEmpty()) {
-            return Collections.emptyList();
+            return null;
         }
-        LinkedHashSet<Long> out = new LinkedHashSet<>();
         for (TicketNodeDurationPO row : rows) {
             if (row == null || row.getAssigneeId() == null) {
                 continue;
             }
-            if (isTesterAssigneeRoleOnNode(row) || isDefectTestPhaseNodeName(row.getNodeName())) {
-                out.add(row.getAssigneeId());
-            }
+            return row.getAssigneeId();
         }
-        return new ArrayList<>(out);
-    }
-
-    private static boolean isTesterAssigneeRoleOnNode(TicketNodeDurationPO row) {
-        String role = row.getAssigneeRole();
-        return role != null && "TESTER".equalsIgnoreCase(role.trim());
-    }
-
-    private static boolean isDefectTestPhaseNodeName(String nodeName) {
-        TicketStatus s = TicketStatus.fromCode(nodeName);
-        if (s == null) {
-            return false;
-        }
-        return s == TicketStatus.PENDING_TEST_ACCEPT
-                || s == TicketStatus.TESTING
-                || s == TicketStatus.INVESTIGATING;
+        return null;
     }
 
     /**
@@ -1033,10 +972,9 @@ public class TicketApplicationService {
         for (Long aid : assigneeIdList) {
             userIds.add(aid);
         }
-        for (Long tid : listOrderedTestFollowUserIdsFromNodes(ticket.getId())) {
-            if (tid != null) {
-                userIds.add(tid);
-            }
+        Long detailTestAcceptAssigneeId = findLatestTestAcceptAssigneeId(ticket.getId());
+        if (detailTestAcceptAssigneeId != null) {
+            userIds.add(detailTestAcceptAssigneeId);
         }
 
         if (ticket.getCategoryId() != null) {
@@ -1121,7 +1059,7 @@ public class TicketApplicationService {
         if (!assigneeNames.isEmpty()) {
             output.setAssigneeName(String.join("、", assigneeNames));
         }
-        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(ticket.getId(), assigneeIdList, userMap));
+        output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(detailTestAcceptAssigneeId, userMap));
 
         if (attachments != null) {
             Map<Long, SysUserPO> finalUserMap = userMap;
