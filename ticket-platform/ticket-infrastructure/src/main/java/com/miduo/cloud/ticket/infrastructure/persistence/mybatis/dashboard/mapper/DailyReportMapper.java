@@ -18,7 +18,8 @@ public interface DailyReportMapper {
      * 统计指定日期范围内各状态的工单数
      */
     List<DailyReportStatusRow> selectStatusCountsByDateRange(@Param("startTime") Date startTime,
-                                                             @Param("endTime") Date endTime);
+                                                             @Param("endTime") Date endTime,
+                                                             @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 统计全量未关闭工单各状态数（不限日期范围，用于汇总全局待处理数据）
@@ -29,32 +30,37 @@ public interface DailyReportMapper {
      * 统计指定日期范围内已解决的工单数
      */
     Long selectResolvedCountByDateRange(@Param("startTime") Date startTime,
-                                        @Param("endTime") Date endTime);
+                                        @Param("endTime") Date endTime,
+                                        @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 统计指定日期范围内新建工单数
      */
     Long selectCreatedCountByDateRange(@Param("startTime") Date startTime,
-                                       @Param("endTime") Date endTime);
+                                       @Param("endTime") Date endTime,
+                                       @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 查询待解决工单列表（排查中状态）
      */
     List<DailyReportTicketRow> selectTicketsByStatus(@Param("status") String status,
                                                      @Param("startTime") Date startTime,
-                                                     @Param("endTime") Date endTime);
+                                                     @Param("endTime") Date endTime,
+                                                     @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 查询挂起工单列表
      */
     List<DailyReportTicketRow> selectSuspendedTickets(@Param("startTime") Date startTime,
-                                                      @Param("endTime") Date endTime);
+                                                      @Param("endTime") Date endTime,
+                                                      @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 统计指定日期范围内按缺陷等级分组的已解决工单数
      */
     List<DailyReportStatusRow> selectResolvedBySeverity(@Param("startTime") Date startTime,
-                                                        @Param("endTime") Date endTime);
+                                                        @Param("endTime") Date endTime,
+                                                        @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 统计指定日期范围内按缺陷等级分组的未解决工单数（非终态）
@@ -65,29 +71,34 @@ public interface DailyReportMapper {
      * 查询处理中（processing）的工单列表
      */
     List<DailyReportTicketRow> selectProcessingTickets(@Param("startTime") Date startTime,
-                                                       @Param("endTime") Date endTime);
+                                                       @Param("endTime") Date endTime,
+                                                       @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 查询待简报工单：pending_cs_confirm / pending_verify，或已完成但无已归档关联 Bug 简报且无待审核(PENDING_REVIEW)关联简报（与「待出简报」my_brief_todo 已完成分支口径一致）
      */
     List<DailyReportTicketRow> selectPendingVerifyTickets(@Param("startTime") Date startTime,
-                                                          @Param("endTime") Date endTime);
+                                                          @Param("endTime") Date endTime,
+                                                          @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 查询临时解决的工单列表
      */
     List<DailyReportTicketRow> selectTempResolvedTickets(@Param("startTime") Date startTime,
-                                                         @Param("endTime") Date endTime);
+                                                         @Param("endTime") Date endTime,
+                                                         @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 统计指定日期范围内已关闭的工单数（按是否缺陷分组）
      */
     List<DailyReportStatusRow> selectClosedByDefectType(@Param("startTime") Date startTime,
-                                                        @Param("endTime") Date endTime);
+                                                        @Param("endTime") Date endTime,
+                                                        @Param("categoryIds") List<Long> categoryIds);
 
     /**
      * 指定日期范围内反馈总数
      */
     Long selectTotalFeedbackCount(@Param("startTime") Date startTime,
-                                  @Param("endTime") Date endTime);
+                                  @Param("endTime") Date endTime,
+                                  @Param("categoryIds") List<Long> categoryIds);
 }

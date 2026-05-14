@@ -2711,3 +2711,60 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.16-daily-report-monthly-scope-readable-push-error` | 日报统计改为当月口径（明细+汇总），并将手动推送失败原因改为可读提示（重点覆盖企微4096长度超限） |
+
+---
+
+## 58. 日报统计按分类ID过滤（前后端）
+
+### 58.1 功能用途
+- **用途**：让日报统计只计算指定分类ID范围内的工单，避免把监控告警等非目标分类混入“问题总数”。  
+- **类比理解**：像给统计加了“筛网”，只有你勾选的分类ID会通过，其他类型自动过滤掉。
+
+### 58.2 本次改动了什么
+1. 日报配置新增字段 `statCategoryIds`（统计分类ID列表）。  
+2. 后端新增配置键 `daily_report_stat_category_ids`（`DAILY_REPORT` 分组）。  
+3. 日报相关统计查询统一增加 `category_id IN (...)` 过滤（总数、今日新增、待解决、临时解决、已解决、挂起）。  
+4. 管理端「日报管理 -> 推送配置」新增“统计范围分类（多选）”，保存后直接影响日报预览和推送口径。  
+5. 配置为空时保持全量统计，保障发布兼容性。
+
+### 58.3 使用方法（验收步骤）
+1. 进入「管理 -> 日报管理 -> 推送配置」。  
+2. 在“统计范围分类”里选择要纳入日报的分类（按分类ID保存）。  
+3. 点击“保存配置”。  
+4. 切到“日报预览”，核对“问题反馈总数”与各分区统计是否按所选分类变化。  
+5. 手动推送到企微群，确认推送内容与预览一致。
+
+### 58.4 参数说明（本次改动相关）
+| 参数/字段 | 类型 | 说明 |
+|---|---|---|
+| `daily_report_stat_category_ids` | `String` | 后端配置键，逗号分隔分类ID列表（如 `23,41`） |
+| `DailyReportConfigOutput.statCategoryIds` | `List<Long>` | 查询日报配置时返回的统计分类ID列表 |
+| `DailyReportConfigUpdateInput.statCategoryIds` | `List<Long>` | 更新日报配置时提交的统计分类ID列表 |
+| `categoryIds`（Mapper参数） | `List<Long>` | 日报各统计SQL统一过滤参数 |
+
+### 58.5 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/daily-report/config` | `ApiResult<DailyReportConfigOutput>` | 新增返回 `statCategoryIds` |
+| `PUT /api/daily-report/config` | `ApiResult<Void>` | 支持保存 `statCategoryIds` |
+| `GET /api/daily-report/preview` | `ApiResult<DailyReportOutput>` | 汇总与分区统计按 `statCategoryIds` 过滤 |
+
+### 58.6 常见问题（新增）
+#### Q65：测试环境叫“功能缺陷”，线上叫“技术缺陷”，会影响统计吗？
+- **检测**：确认两个环境的 `daily_report_stat_category_ids` 是否分别配置为对应环境的真实分类ID。  
+- **记录（错误类型）**：按名称理解而未按ID配置，导致跨环境统计错位。  
+- **恢复建议**：
+  1. 不按名称匹配，统一按分类ID配置；
+  2. 通过分类树接口先核对真实ID，再保存日报配置。
+
+#### Q66：为什么配置后日报总数变成0？
+- **检测**：检查 `statCategoryIds` 是否为空、是否配置了不存在或禁用的分类ID。  
+- **记录（错误类型）**：分类ID配置错误或环境配错。  
+- **恢复建议**：
+  1. 重新核对分类ID并保存；
+  2. 紧急情况下可先清空配置，回退到全量统计口径。
+
+### 58.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.17-daily-report-stat-category-id-filter` | 日报统计支持按分类ID过滤：新增 `statCategoryIds` 配置、日报SQL统一按分类过滤、管理端支持分类多选配置，解决跨环境分类名称不一致导致的统计偏差 |

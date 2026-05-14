@@ -37,4 +37,9 @@ public class DailyReportConfigUpdateInput implements Serializable {
      * 是否包含挂起工单列表
      */
     private Boolean includeSuspended;
+
+    /**
+     * 日报统计分类ID列表（为空时表示全量统计）
+     */
+    private List<Long> statCategoryIds;
 }

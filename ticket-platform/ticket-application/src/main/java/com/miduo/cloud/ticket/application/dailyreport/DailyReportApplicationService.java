@@ -38,6 +38,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
     private static final String CONFIG_KEY_WEBHOOK_URLS = "daily_report_webhook_urls";
     private static final String CONFIG_KEY_INCLUDE_DEFECT_DETAIL = "daily_report_include_defect_detail";
     private static final String CONFIG_KEY_INCLUDE_SUSPENDED = "daily_report_include_suspended";
+    private static final String CONFIG_KEY_STAT_CATEGORY_IDS = "daily_report_stat_category_ids";
     private static final String CONFIG_GROUP = "DAILY_REPORT";
     private static final String BASIC_CONFIG_GROUP = "BASIC";
     private static final String BASIC_CONFIG_KEY_TIMEZONE = "timezone";
@@ -81,18 +82,19 @@ public class DailyReportApplicationService extends BaseApplicationService {
         Map<String, String> configMap = loadDailyReportConfigMap();
         boolean includeDefectDetail = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_DEFECT_DETAIL, "true"));
         boolean includeSuspended = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true"));
+        List<Long> statCategoryIds = parseStatCategoryIds(configMap.get(CONFIG_KEY_STAT_CATEGORY_IDS));
 
-        Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount(startOfMonth, endOfMonth));
-        Long newIssueCountToday = safeLong(dailyReportMapper.selectCreatedCountByDateRange(startOfDay, endOfDay));
+        Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount(startOfMonth, endOfMonth, statCategoryIds));
+        Long newIssueCountToday = safeLong(dailyReportMapper.selectCreatedCountByDateRange(startOfDay, endOfDay, statCategoryIds));
 
-        List<DailyReportTicketRow> testingReproduceTickets = dailyReportMapper.selectTicketsByStatus("testing", startOfMonth, endOfMonth);
-        List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets(startOfMonth, endOfMonth);
-        List<DailyReportTicketRow> pendingVerifyTickets = dailyReportMapper.selectPendingVerifyTickets(startOfMonth, endOfMonth);
-        List<DailyReportTicketRow> tempResolvedTickets = dailyReportMapper.selectTempResolvedTickets(startOfMonth, endOfMonth);
-        List<DailyReportTicketRow> suspendedTickets = dailyReportMapper.selectSuspendedTickets(startOfMonth, endOfMonth);
+        List<DailyReportTicketRow> testingReproduceTickets = dailyReportMapper.selectTicketsByStatus("testing", startOfMonth, endOfMonth, statCategoryIds);
+        List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets(startOfMonth, endOfMonth, statCategoryIds);
+        List<DailyReportTicketRow> pendingVerifyTickets = dailyReportMapper.selectPendingVerifyTickets(startOfMonth, endOfMonth, statCategoryIds);
+        List<DailyReportTicketRow> tempResolvedTickets = dailyReportMapper.selectTempResolvedTickets(startOfMonth, endOfMonth, statCategoryIds);
+        List<DailyReportTicketRow> suspendedTickets = dailyReportMapper.selectSuspendedTickets(startOfMonth, endOfMonth, statCategoryIds);
 
-        Long resolvedCountInMonth = safeLong(dailyReportMapper.selectResolvedCountByDateRange(startOfMonth, endOfMonth));
-        List<DailyReportStatusRow> closedByDefectType = dailyReportMapper.selectClosedByDefectType(startOfMonth, endOfMonth);
+        Long resolvedCountInMonth = safeLong(dailyReportMapper.selectResolvedCountByDateRange(startOfMonth, endOfMonth, statCategoryIds));
+        List<DailyReportStatusRow> closedByDefectType = dailyReportMapper.selectClosedByDefectType(startOfMonth, endOfMonth, statCategoryIds);
         DailyReportSection pendingSection = buildPendingSection(testingReproduceTickets, processingTickets, pendingVerifyTickets);
         long pendingResolveCount = pendingSection.getCount();
 
@@ -224,6 +226,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         output.setCronList(parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, "0 0 18 * * ?")));
         output.setIncludeDefectDetail("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_DEFECT_DETAIL, "true")));
         output.setIncludeSuspended("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true")));
+        output.setStatCategoryIds(parseStatCategoryIds(configMap.get(CONFIG_KEY_STAT_CATEGORY_IDS)));
 
         String webhookUrlsStr = configMap.getOrDefault(CONFIG_KEY_WEBHOOK_URLS, "");
         if (webhookUrlsStr.trim().isEmpty()) {
@@ -268,6 +271,9 @@ public class DailyReportApplicationService extends BaseApplicationService {
         }
         if (input.getIncludeSuspended() != null) {
             upsertConfig(CONFIG_KEY_INCLUDE_SUSPENDED, String.valueOf(input.getIncludeSuspended()));
+        }
+        if (input.getStatCategoryIds() != null) {
+            upsertConfig(CONFIG_KEY_STAT_CATEGORY_IDS, joinStatCategoryIds(input.getStatCategoryIds()));
         }
         invalidateDailyReportRelatedCaches();
     }
@@ -744,5 +750,33 @@ public class DailyReportApplicationService extends BaseApplicationService {
             normalized = normalized.substring("发送企微群Webhook失败:".length()).trim();
         }
         return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
+    }
+
+    private List<Long> parseStatCategoryIds(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<Long> categoryIdSet = new LinkedHashSet<>();
+        for (String item : value.split(",")) {
+            if (item == null || item.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                categoryIdSet.add(Long.parseLong(item.trim()));
+            } catch (NumberFormatException ex) {
+                log.warn("日报统计分类ID配置包含非法值，value={}", item);
+            }
+        }
+        return new ArrayList<>(categoryIdSet);
+    }
+
+    private String joinStatCategoryIds(List<Long> statCategoryIds) {
+        if (statCategoryIds == null || statCategoryIds.isEmpty()) {
+            return "";
+        }
+        return statCategoryIds.stream()
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
     }
 }
