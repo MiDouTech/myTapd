@@ -40,12 +40,15 @@ public interface DailyReportMapper {
     /**
      * 查询待解决工单列表（排查中状态）
      */
-    List<DailyReportTicketRow> selectTicketsByStatus(@Param("status") String status);
+    List<DailyReportTicketRow> selectTicketsByStatus(@Param("status") String status,
+                                                     @Param("startTime") Date startTime,
+                                                     @Param("endTime") Date endTime);
 
     /**
      * 查询挂起工单列表
      */
-    List<DailyReportTicketRow> selectSuspendedTickets();
+    List<DailyReportTicketRow> selectSuspendedTickets(@Param("startTime") Date startTime,
+                                                      @Param("endTime") Date endTime);
 
     /**
      * 统计指定日期范围内按缺陷等级分组的已解决工单数
@@ -61,17 +64,20 @@ public interface DailyReportMapper {
     /**
      * 查询处理中（processing）的工单列表
      */
-    List<DailyReportTicketRow> selectProcessingTickets();
+    List<DailyReportTicketRow> selectProcessingTickets(@Param("startTime") Date startTime,
+                                                       @Param("endTime") Date endTime);
 
     /**
      * 查询待简报工单：pending_cs_confirm / pending_verify，或已完成但无已归档关联 Bug 简报且无待审核(PENDING_REVIEW)关联简报（与「待出简报」my_brief_todo 已完成分支口径一致）
      */
-    List<DailyReportTicketRow> selectPendingVerifyTickets();
+    List<DailyReportTicketRow> selectPendingVerifyTickets(@Param("startTime") Date startTime,
+                                                          @Param("endTime") Date endTime);
 
     /**
      * 查询临时解决的工单列表
      */
-    List<DailyReportTicketRow> selectTempResolvedTickets();
+    List<DailyReportTicketRow> selectTempResolvedTickets(@Param("startTime") Date startTime,
+                                                         @Param("endTime") Date endTime);
 
     /**
      * 统计指定日期范围内已关闭的工单数（按是否缺陷分组）
@@ -80,7 +86,8 @@ public interface DailyReportMapper {
                                                         @Param("endTime") Date endTime);
 
     /**
-     * 全量反馈总数（指定日期范围内新建 + 截至当天未关闭的存量）
+     * 指定日期范围内反馈总数
      */
-    Long selectTotalFeedbackCount();
+    Long selectTotalFeedbackCount(@Param("startTime") Date startTime,
+                                  @Param("endTime") Date endTime);
 }
