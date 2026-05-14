@@ -106,7 +106,7 @@ async function handlePush() {
     await pushDailyReport()
     notifySuccess('日报已推送到企微群')
   } catch {
-    notifyError('推送日报失败')
+    // 请求拦截器会直接弹出后端返回的可读错误原因，这里不重复用通用文案覆盖。
   } finally {
     pushLoading.value = false
   }

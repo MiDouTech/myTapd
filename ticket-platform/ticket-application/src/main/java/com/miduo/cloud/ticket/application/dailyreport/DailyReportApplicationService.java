@@ -73,6 +73,8 @@ public class DailyReportApplicationService extends BaseApplicationService {
         Date now = new Date();
         Date startOfDay = startOfDay(now);
         Date endOfDay = addDays(startOfDay, 1);
+        Date startOfMonth = startOfMonth(now);
+        Date endOfMonth = addMonths(startOfMonth, 1);
         SimpleDateFormat sdf = DisplayTimeFormat.newFormatter("yyyy-MM-dd");
         String reportDate = sdf.format(now);
 
@@ -80,17 +82,17 @@ public class DailyReportApplicationService extends BaseApplicationService {
         boolean includeDefectDetail = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_DEFECT_DETAIL, "true"));
         boolean includeSuspended = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_INCLUDE_SUSPENDED, "true"));
 
-        Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount());
+        Long totalFeedbackCount = safeLong(dailyReportMapper.selectTotalFeedbackCount(startOfMonth, endOfMonth));
         Long newIssueCountToday = safeLong(dailyReportMapper.selectCreatedCountByDateRange(startOfDay, endOfDay));
 
-        List<DailyReportTicketRow> testingReproduceTickets = dailyReportMapper.selectTicketsByStatus("testing");
-        List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets();
-        List<DailyReportTicketRow> pendingVerifyTickets = dailyReportMapper.selectPendingVerifyTickets();
-        List<DailyReportTicketRow> tempResolvedTickets = dailyReportMapper.selectTempResolvedTickets();
-        List<DailyReportTicketRow> suspendedTickets = dailyReportMapper.selectSuspendedTickets();
+        List<DailyReportTicketRow> testingReproduceTickets = dailyReportMapper.selectTicketsByStatus("testing", startOfMonth, endOfMonth);
+        List<DailyReportTicketRow> processingTickets = dailyReportMapper.selectProcessingTickets(startOfMonth, endOfMonth);
+        List<DailyReportTicketRow> pendingVerifyTickets = dailyReportMapper.selectPendingVerifyTickets(startOfMonth, endOfMonth);
+        List<DailyReportTicketRow> tempResolvedTickets = dailyReportMapper.selectTempResolvedTickets(startOfMonth, endOfMonth);
+        List<DailyReportTicketRow> suspendedTickets = dailyReportMapper.selectSuspendedTickets(startOfMonth, endOfMonth);
 
-        Long resolvedTodayCount = safeLong(dailyReportMapper.selectResolvedCountByDateRange(startOfDay, endOfDay));
-        List<DailyReportStatusRow> closedByDefectType = dailyReportMapper.selectClosedByDefectType(startOfDay, endOfDay);
+        Long resolvedCountInMonth = safeLong(dailyReportMapper.selectResolvedCountByDateRange(startOfMonth, endOfMonth));
+        List<DailyReportStatusRow> closedByDefectType = dailyReportMapper.selectClosedByDefectType(startOfMonth, endOfMonth);
         DailyReportSection pendingSection = buildPendingSection(testingReproduceTickets, processingTickets, pendingVerifyTickets);
         long pendingResolveCount = pendingSection.getCount();
 
@@ -102,7 +104,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
         summary.setNewIssueCountToday(newIssueCountToday);
         summary.setPendingResolveCount(pendingResolveCount);
         summary.setTempResolvedCount(tempResolvedTickets.size());
-        summary.setResolvedCount(resolvedTodayCount);
+        summary.setResolvedCount(resolvedCountInMonth);
         summary.setSuspendedCount(suspendedTickets.size());
         output.setSummary(summary);
 
@@ -167,7 +169,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
 
         int validWebhookCount = 0;
         int successCount = 0;
-        List<String> failedWebhookWithReason = new ArrayList<>();
+        List<String> failedReasons = new ArrayList<>();
         String[] urls = webhookUrlsStr.split(",");
         for (String url : urls) {
             String trimmedUrl = url.trim();
@@ -182,7 +184,7 @@ public class DailyReportApplicationService extends BaseApplicationService {
             } catch (Exception ex) {
                 String webhook = sanitizeWebhookUrl(trimmedUrl);
                 String reason = sanitizePushErrorReason(ex.getMessage());
-                failedWebhookWithReason.add(webhook + " -> " + reason);
+                failedReasons.add(reason);
                 log.error("日报推送失败: webhook={}, reason={}", webhook, ex.getMessage(), ex);
             }
         }
@@ -196,18 +198,18 @@ public class DailyReportApplicationService extends BaseApplicationService {
         }
 
         if (successCount == 0) {
-            String reason = failedWebhookWithReason.isEmpty()
+            String reason = failedReasons.isEmpty()
                     ? "未获取到可用Webhook地址"
-                    : String.join("；", failedWebhookWithReason);
+                    : String.join("；", new LinkedHashSet<>(failedReasons));
             if (manualTrigger) {
-                throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "日报推送失败，请检查Webhook或企微机器人状态。失败详情：" + reason);
+                throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "日报推送失败：" + reason);
             }
             log.error("日报自动推送失败：全部Webhook发送失败，details={}", reason);
             return;
         }
 
-        if (!failedWebhookWithReason.isEmpty()) {
-            log.warn("日报推送部分失败：successCount={}, failedDetails={}", successCount, failedWebhookWithReason);
+        if (!failedReasons.isEmpty()) {
+            log.warn("日报推送部分失败：successCount={}, failedReasons={}", successCount, new LinkedHashSet<>(failedReasons));
         }
     }
 
@@ -685,6 +687,24 @@ public class DailyReportApplicationService extends BaseApplicationService {
         return calendar.getTime();
     }
 
+    private Date startOfMonth(Date date) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
+        calendar.setTime(date);
+        calendar.set(Calendar.DAY_OF_MONTH, 1);
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        return calendar.getTime();
+    }
+
+    private Date addMonths(Date date, int months) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(DisplayTimeFormat.TIMEZONE_ID));
+        calendar.setTime(date);
+        calendar.add(Calendar.MONTH, months);
+        return calendar.getTime();
+    }
+
     private long safeLong(Long value) {
         return value == null ? 0L : value;
     }
@@ -705,7 +725,24 @@ public class DailyReportApplicationService extends BaseApplicationService {
         if (reason == null || reason.trim().isEmpty()) {
             return "未知错误";
         }
-        String trimmed = reason.trim();
-        return trimmed.length() > 120 ? trimmed.substring(0, 120) + "..." : trimmed;
+        String normalized = reason.trim().replaceAll("\\s+", " ");
+        String lowerCase = normalized.toLowerCase(Locale.ROOT);
+        if ((lowerCase.contains("exceed max length") && lowerCase.contains("4096"))
+                || lowerCase.contains("markdown.content exceed max length 4096")) {
+            return "日报内容超过企微单条消息上限（4096字符），请减少当月明细后重试";
+        }
+        if (lowerCase.contains("timed out") || lowerCase.contains("timeout")) {
+            return "连接企微超时，请稍后重试";
+        }
+        if (lowerCase.contains("connection refused") || lowerCase.contains("connectexception")) {
+            return "无法连接企微服务，请检查网络或Webhook可用性";
+        }
+        if (lowerCase.contains("invalid webhook") || lowerCase.contains("webhook key")) {
+            return "Webhook地址无效或已失效，请在日报配置中更新后重试";
+        }
+        if (normalized.startsWith("发送企微群Webhook失败:")) {
+            normalized = normalized.substring("发送企微群Webhook失败:".length()).trim();
+        }
+        return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
     }
 }
