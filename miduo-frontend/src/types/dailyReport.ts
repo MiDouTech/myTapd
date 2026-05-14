@@ -48,6 +48,7 @@ export interface DailyReportConfigOutput {
   webhookUrls: string[]
   includeDefectDetail: boolean
   includeSuspended: boolean
+  statCategoryIds: number[]
 }
 
 export interface DailyReportConfigUpdateInput {
@@ -56,4 +57,5 @@ export interface DailyReportConfigUpdateInput {
   webhookUrls?: string[]
   includeDefectDetail?: boolean
   includeSuspended?: boolean
+  statCategoryIds?: number[]
 }

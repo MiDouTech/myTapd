@@ -6,13 +6,16 @@ MAVEN_VERSION="${MAVEN_VERSION:-3.9.11}"
 MAVEN_ARCHIVE="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
 MAVEN_URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/${MAVEN_ARCHIVE}"
 MAVEN_HOME="/opt/apache-maven-${MAVEN_VERSION}"
+MAVEN_PROFILE_PATH="/etc/profile.d/maven.sh"
 
 JDK8_RELEASE_TAG="${JDK8_RELEASE_TAG:-jdk8u442-b06}"
 JDK8_ARCHIVE="${JDK8_ARCHIVE:-OpenJDK8U-jdk_x64_linux_hotspot_8u442b06.tar.gz}"
 JDK8_URL="https://github.com/adoptium/temurin8-binaries/releases/download/${JDK8_RELEASE_TAG}/${JDK8_ARCHIVE}"
 JDK8_HOME="/opt/jdk8"
+JDK8_PROFILE_PATH="/etc/profile.d/jdk8.sh"
 
 FRONTEND_DIR="${FRONTEND_DIR:-/workspace/miduo-frontend}"
+NPM_INSTALL_ARGS="${NPM_INSTALL_ARGS:---no-audit --no-fund}"
 
 log() {
   echo "[cloud-agent-startup] $*"
@@ -41,6 +44,34 @@ get_java_version() {
   java -version 2>&1 | awk 'NR==1 { gsub(/"/, "", $3); print $3; exit }'
 }
 
+checksum_file() {
+  local target="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${target}" | awk '{ print $1; exit }'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${target}" | awk '{ print $1; exit }'
+    return
+  fi
+  log "当前环境缺少 sha256sum/shasum，无法计算校验值"
+  exit 1
+}
+
+configure_maven_profile() {
+  run_as_root tee "${MAVEN_PROFILE_PATH}" >/dev/null <<EOF
+export MAVEN_HOME=${MAVEN_HOME}
+export PATH=\$MAVEN_HOME/bin:\$PATH
+EOF
+}
+
+configure_jdk8_profile() {
+  run_as_root tee "${JDK8_PROFILE_PATH}" >/dev/null <<EOF
+export JAVA_HOME=${JDK8_HOME}
+export PATH=\$JAVA_HOME/bin:\$PATH
+EOF
+}
+
 install_maven() {
   local current_version=""
   if command -v mvn >/dev/null 2>&1; then
@@ -49,6 +80,7 @@ install_maven() {
 
   if [ -n "${current_version}" ] && version_ge "${current_version}" "3.8.0"; then
     log "Maven 已满足要求：${current_version}"
+    configure_maven_profile
     return
   fi
 
@@ -62,17 +94,16 @@ install_maven() {
   run_as_root ln -sf "${MAVEN_HOME}/bin/mvn" /usr/local/bin/mvn
 
   rm -rf "${tmp_dir}"
+  configure_maven_profile
   log "Maven 安装完成：$(mvn -v 2>/dev/null | awk 'NR==1 { print; exit }')"
 }
 
 install_jdk8() {
-  local java_version=""
-  if command -v java >/dev/null 2>&1; then
-    java_version="$(get_java_version || true)"
-  fi
-
-  if [[ "${java_version}" == 1.8.* || "${java_version}" == 8* ]]; then
-    log "JDK8 已满足要求：${java_version}"
+  if [ -x "${JDK8_HOME}/bin/java" ]; then
+    run_as_root ln -sf "${JDK8_HOME}/bin/java" /usr/local/bin/java
+    run_as_root ln -sf "${JDK8_HOME}/bin/javac" /usr/local/bin/javac
+    configure_jdk8_profile
+    log "JDK8 已满足要求：$("${JDK8_HOME}/bin/java" -version 2>&1 | awk 'NR==1 { print; exit }')"
     return
   fi
 
@@ -89,10 +120,7 @@ install_jdk8() {
   run_as_root mv "/opt/${extracted_dir}" "${JDK8_HOME}"
   run_as_root ln -sf "${JDK8_HOME}/bin/java" /usr/local/bin/java
   run_as_root ln -sf "${JDK8_HOME}/bin/javac" /usr/local/bin/javac
-  run_as_root tee /etc/profile.d/jdk8.sh >/dev/null <<EOF
-export JAVA_HOME=${JDK8_HOME}
-export PATH=\$JAVA_HOME/bin:\$PATH
-EOF
+  configure_jdk8_profile
 
   rm -rf "${tmp_dir}"
   log "JDK8 安装完成：$(java -version 2>&1 | awk 'NR==1 { print; exit }')"
@@ -104,10 +132,27 @@ install_frontend_dependencies() {
     return
   fi
 
-  log "执行前端依赖安装：${FRONTEND_DIR} -> npm install"
+  local lock_file="${FRONTEND_DIR}/package-lock.json"
+  local state_file="${FRONTEND_DIR}/node_modules/.cloud-agent-lock.sha256"
+  local lock_hash=""
+  local installed_hash=""
+
+  if [ -d "${FRONTEND_DIR}/node_modules" ] && [ -f "${lock_file}" ] && [ -f "${state_file}" ]; then
+    lock_hash="$(checksum_file "${lock_file}")"
+    installed_hash="$(tr -d '[:space:]' < "${state_file}")"
+    if [ -n "${installed_hash}" ] && [ "${installed_hash}" = "${lock_hash}" ]; then
+      log "前端依赖已与 package-lock.json 对齐，跳过 npm install"
+      return
+    fi
+  fi
+
+  log "执行前端依赖安装：${FRONTEND_DIR} -> npm install ${NPM_INSTALL_ARGS}"
   (
     cd "${FRONTEND_DIR}"
-    npm install
+    npm install ${NPM_INSTALL_ARGS}
+    if [ -f "${lock_file}" ]; then
+      checksum_file "${lock_file}" > "${state_file}"
+    fi
   )
 }
 

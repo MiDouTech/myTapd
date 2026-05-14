@@ -2,11 +2,15 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 
 import {
+  getCategoryTree,
+} from '@/api/category'
+import {
   getDailyReportConfig,
   previewDailyReport,
   pushDailyReport,
   updateDailyReportConfig,
 } from '@/api/dailyReport'
+import type { CategoryTreeOutput } from '@/types/category'
 import type {
   DailyReportConfigOutput,
   DailyReportConfigUpdateInput,
@@ -18,6 +22,14 @@ const configLoading = ref(false)
 const previewLoading = ref(false)
 const pushLoading = ref(false)
 const saveLoading = ref(false)
+const categoryLoading = ref(false)
+
+interface CategoryOption {
+  id: number
+  label: string
+}
+
+const categoryOptions = ref<CategoryOption[]>([])
 
 const configForm = reactive<DailyReportConfigUpdateInput>({
   enabled: false,
@@ -25,6 +37,7 @@ const configForm = reactive<DailyReportConfigUpdateInput>({
   webhookUrls: [],
   includeDefectDetail: true,
   includeSuspended: true,
+  statCategoryIds: [],
 })
 
 const cronInput = ref('')
@@ -41,11 +54,39 @@ async function loadConfig() {
     configForm.webhookUrls = data.webhookUrls || []
     configForm.includeDefectDetail = data.includeDefectDetail
     configForm.includeSuspended = data.includeSuspended
+    configForm.statCategoryIds = data.statCategoryIds || []
   } catch {
     notifyError('加载日报配置失败')
   } finally {
     configLoading.value = false
   }
+}
+
+async function loadCategoryOptions() {
+  categoryLoading.value = true
+  try {
+    const tree = await getCategoryTree()
+    categoryOptions.value = flattenCategoryTree(tree)
+  } catch {
+    notifyError('加载分类列表失败')
+  } finally {
+    categoryLoading.value = false
+  }
+}
+
+function flattenCategoryTree(tree: CategoryTreeOutput[], prefix = ''): CategoryOption[] {
+  const options: CategoryOption[] = []
+  for (const node of tree) {
+    const label = prefix ? `${prefix} / ${node.name}` : node.name
+    options.push({
+      id: node.id,
+      label,
+    })
+    if (node.children && node.children.length > 0) {
+      options.push(...flattenCategoryTree(node.children, label))
+    }
+  }
+  return options
 }
 
 async function saveConfig() {
@@ -171,6 +212,7 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   loadConfig()
+  loadCategoryOptions()
 })
 </script>
 
@@ -256,6 +298,30 @@ onMounted(() => {
                   <el-text type="info" size="small">暂未配置 Webhook 地址</el-text>
                 </div>
               </div>
+            </el-form-item>
+
+            <el-form-item label="统计范围分类">
+              <el-select
+                v-model="configForm.statCategoryIds"
+                class="category-select"
+                multiple
+                filterable
+                clearable
+                collapse-tags
+                collapse-tags-tooltip
+                :loading="categoryLoading"
+                placeholder="请选择纳入日报统计的分类（按分类ID）"
+              >
+                <el-option
+                  v-for="option in categoryOptions"
+                  :key="option.id"
+                  :label="option.label"
+                  :value="option.id"
+                />
+              </el-select>
+              <el-text type="info" size="small" style="margin-left: 12px">
+                仅统计所选分类ID；测试和生产可配置不同分类名称对应的ID
+              </el-text>
             </el-form-item>
 
             <el-form-item label="缺陷明细分类">
@@ -563,6 +629,10 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
 
 .webhook-empty {
   padding: 4px 0;
+}
+
+.category-select {
+  width: 100%;
 }
 
 .preview-actions {

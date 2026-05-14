@@ -2711,3 +2711,122 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.16-daily-report-monthly-scope-readable-push-error` | 日报统计改为当月口径（明细+汇总），并将手动推送失败原因改为可读提示（重点覆盖企微4096长度超限） |
+
+---
+
+## 58. 日报统计按分类ID过滤（前后端）
+
+### 58.1 功能用途
+- **用途**：让日报统计只计算指定分类ID范围内的工单，避免把监控告警等非目标分类混入“问题总数”。  
+- **类比理解**：像给统计加了“筛网”，只有你勾选的分类ID会通过，其他类型自动过滤掉。
+
+### 58.2 本次改动了什么
+1. 日报配置新增字段 `statCategoryIds`（统计分类ID列表）。  
+2. 后端新增配置键 `daily_report_stat_category_ids`（`DAILY_REPORT` 分组）。  
+3. 日报相关统计查询统一增加 `category_id IN (...)` 过滤（总数、今日新增、待解决、临时解决、已解决、挂起）。  
+4. 管理端「日报管理 -> 推送配置」新增“统计范围分类（多选）”，保存后直接影响日报预览和推送口径。  
+5. 配置为空时保持全量统计，保障发布兼容性。
+
+### 58.3 使用方法（验收步骤）
+1. 进入「管理 -> 日报管理 -> 推送配置」。  
+2. 在“统计范围分类”里选择要纳入日报的分类（按分类ID保存）。  
+3. 点击“保存配置”。  
+4. 切到“日报预览”，核对“问题反馈总数”与各分区统计是否按所选分类变化。  
+5. 手动推送到企微群，确认推送内容与预览一致。
+
+### 58.4 参数说明（本次改动相关）
+| 参数/字段 | 类型 | 说明 |
+|---|---|---|
+| `daily_report_stat_category_ids` | `String` | 后端配置键，逗号分隔分类ID列表（如 `23,41`） |
+| `DailyReportConfigOutput.statCategoryIds` | `List<Long>` | 查询日报配置时返回的统计分类ID列表 |
+| `DailyReportConfigUpdateInput.statCategoryIds` | `List<Long>` | 更新日报配置时提交的统计分类ID列表 |
+| `categoryIds`（Mapper参数） | `List<Long>` | 日报各统计SQL统一过滤参数 |
+
+### 58.5 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `GET /api/daily-report/config` | `ApiResult<DailyReportConfigOutput>` | 新增返回 `statCategoryIds` |
+| `PUT /api/daily-report/config` | `ApiResult<Void>` | 支持保存 `statCategoryIds` |
+| `GET /api/daily-report/preview` | `ApiResult<DailyReportOutput>` | 汇总与分区统计按 `statCategoryIds` 过滤 |
+
+### 58.6 常见问题（新增）
+#### Q65：测试环境叫“功能缺陷”，线上叫“技术缺陷”，会影响统计吗？
+- **检测**：确认两个环境的 `daily_report_stat_category_ids` 是否分别配置为对应环境的真实分类ID。  
+- **记录（错误类型）**：按名称理解而未按ID配置，导致跨环境统计错位。  
+- **恢复建议**：
+  1. 不按名称匹配，统一按分类ID配置；
+  2. 通过分类树接口先核对真实ID，再保存日报配置。
+
+#### Q66：为什么配置后日报总数变成0？
+- **检测**：检查 `statCategoryIds` 是否为空、是否配置了不存在或禁用的分类ID。  
+- **记录（错误类型）**：分类ID配置错误或环境配错。  
+- **恢复建议**：
+  1. 重新核对分类ID并保存；
+  2. 紧急情况下可先清空配置，回退到全量统计口径。
+
+### 58.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.17-daily-report-stat-category-id-filter` | 日报统计支持按分类ID过滤：新增 `statCategoryIds` 配置、日报SQL统一按分类过滤、管理端支持分类多选配置，解决跨环境分类名称不一致导致的统计偏差 |
+
+---
+
+## 59. Cloud Agent 启动环境补全（Maven + JDK8 + 前端依赖免重复安装）
+
+### 59.1 功能用途
+- **用途**：让 Cloud Agent 新会话启动后可直接执行后端 `mvn` 编译和前端 `npm run build`，不再手工补环境。  
+- **类比理解**：像把“上班前要自己开灯、开空调、连网线”的步骤做成“一键开工”场景，坐下就能干活。
+
+### 59.2 本次改动了什么
+1. 增强 `scripts/cloud-agent-startup.sh`：
+   - 自动安装并校验 Maven（默认 3.9.11）；
+   - 自动安装并校验 JDK8 到 `/opt/jdk8`；
+   - 写入 `/etc/profile.d/jdk8.sh` 与 `/etc/profile.d/maven.sh`；
+   - 前端依赖安装增加 lock 校验缓存，`package-lock.json` 未变化时跳过重复 `npm install`。
+2. 更新 `scripts/README-cloud-agent.md`，补充启动脚本能力、参数和验证方式。
+3. 更新 `.claude/hooks/session-start.sh`，在 Cloud Agent 远程会话启动时自动调用 `/workspace/scripts/cloud-agent-startup.sh`。
+
+### 59.3 使用方法（验收步骤）
+1. 执行启动脚本：
+   - `bash /workspace/scripts/cloud-agent-startup.sh`
+2. 验证后端：
+   - `cd /workspace/ticket-platform && mvn -pl ticket-bootstrap -am -DskipTests compile`
+3. 验证前端：
+   - `cd /workspace/miduo-frontend && npm run build`
+4. 再次执行启动脚本，预期出现“前端依赖已与 package-lock.json 对齐，跳过 npm install”。
+
+### 59.4 参数说明（本次改动相关）
+| 参数/变量 | 类型 | 说明 |
+|---|---|---|
+| `MAVEN_VERSION` | `String` | Maven 版本，默认 `3.9.11` |
+| `JDK8_RELEASE_TAG` | `String` | Temurin JDK8 发布标签，默认 `jdk8u442-b06` |
+| `NPM_INSTALL_ARGS` | `String` | npm install 附加参数，默认 `--no-audit --no-fund` |
+| `node_modules/.cloud-agent-lock.sha256` | `file` | 依赖锁文件校验缓存，命中时跳过重复安装 |
+
+### 59.5 返回值说明（脚本行为）
+| 场景 | 返回值 | 说明 |
+|---|---|---|
+| 首次初始化 | 安装日志 + 版本摘要 | 完成 Maven/JDK8 安装与前端依赖安装 |
+| 重复执行且 lock 未变化 | 跳过 npm install | 直接输出环境摘要，缩短启动时间 |
+| 版本不满足 | 自动修复 | 重新安装目标版本并更新系统链接 |
+
+### 59.6 常见问题（新增）
+#### Q67：为什么执行脚本后还是找不到 `mvn`？
+- **检测**：执行 `which mvn` 与 `mvn -v`。  
+- **记录（错误类型）**：PATH 未刷新或安装未完成。  
+- **恢复建议**：
+  1. 重新执行启动脚本；
+  2. 新开一个 shell 再执行 `mvn -v`；
+  3. 确认 `/usr/local/bin/mvn` 已存在。
+
+#### Q68：为什么脚本每次都在装前端依赖？
+- **检测**：确认 `miduo-frontend/package-lock.json` 是否有变化。  
+- **记录（错误类型）**：lock 变化或 `node_modules` 被清理导致缓存失效。  
+- **恢复建议**：
+  1. 属于预期行为（依赖变化后需重新安装）；
+  2. lock 不变时会自动跳过安装。
+
+### 59.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.18-cloud-agent-startup-env-bootstrap` | 增强 Cloud Agent 启动环境脚本：补齐 Maven/JDK8 安装与 profile 固化，前端依赖基于 lock 缓存避免重复 npm install，支持会话启动后直接执行 `mvn` 与 `npm run build` |

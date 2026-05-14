@@ -10,6 +10,12 @@
         WHERE t.deleted = 0
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         GROUP BY LOWER(t.status)
     </select>
 
@@ -31,6 +37,12 @@
           AND LOWER(t.status) IN ('completed', 'closed')
           AND (t.closed_at &gt;= #{startTime} AND t.closed_at &lt; #{endTime}
                OR t.resolved_at &gt;= #{startTime} AND t.resolved_at &lt; #{endTime})
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
     </select>
 
     <!-- 指定日期范围内新建工单数 -->
@@ -40,6 +52,12 @@
         WHERE t.deleted = 0
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
     </select>
 
     <!-- 按状态查询工单列表 -->
@@ -57,6 +75,12 @@
           AND LOWER(t.status) = #{status}
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
@@ -75,6 +99,12 @@
           AND LOWER(t.status) = 'suspended'
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
@@ -93,6 +123,12 @@
           AND LOWER(t.status) IN ('processing', 'developing')
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
@@ -114,6 +150,12 @@
         WHERE t.deleted = 0
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+          <if test="categoryIds != null and categoryIds.size() &gt; 0">
+            AND t.category_id IN
+            <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+              #{cid}
+            </foreach>
+          </if>
           AND (
             LOWER(t.status) IN ('pending_verify', 'pending_cs_confirm')
             OR (
@@ -152,6 +194,12 @@
           AND LOWER(t.status) = 'temp_resolved'
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         ORDER BY t.priority DESC, t.create_time ASC
     </select>
 
@@ -165,6 +213,12 @@
           AND LOWER(t.status) IN ('completed', 'closed')
           AND (t.closed_at &gt;= #{startTime} AND t.closed_at &lt; #{endTime}
                OR t.resolved_at &gt;= #{startTime} AND t.resolved_at &lt; #{endTime})
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         GROUP BY bti.severity_level
     </select>
 
@@ -191,6 +245,12 @@
           AND LOWER(t.status) IN ('completed', 'closed')
           AND (t.closed_at &gt;= #{startTime} AND t.closed_at &lt; #{endTime}
                OR t.resolved_at &gt;= #{startTime} AND t.resolved_at &lt; #{endTime})
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
         GROUP BY CASE WHEN bti.id IS NOT NULL THEN '缺陷' ELSE '非缺陷' END
     </select>
 
@@ -201,6 +261,12 @@
         WHERE t.deleted = 0
           AND t.create_time &gt;= #{startTime}
           AND t.create_time &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
     </select>
 
 </mapper>
