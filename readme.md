@@ -2784,6 +2784,7 @@ vite v7.3.1 building client environment for production...
    - 写入 `/etc/profile.d/jdk8.sh` 与 `/etc/profile.d/maven.sh`；
    - 前端依赖安装增加 lock 校验缓存，`package-lock.json` 未变化时跳过重复 `npm install`。
 2. 更新 `scripts/README-cloud-agent.md`，补充启动脚本能力、参数和验证方式。
+3. 更新 `.claude/hooks/session-start.sh`，在 Cloud Agent 远程会话启动时自动调用 `/workspace/scripts/cloud-agent-startup.sh`。
 
 ### 59.3 使用方法（验收步骤）
 1. 执行启动脚本：

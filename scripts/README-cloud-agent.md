@@ -29,6 +29,16 @@
 bash /workspace/scripts/cloud-agent-startup.sh
 ```
 
+## 仓库内默认会话钩子（已接入）
+
+仓库中的 `.claude/hooks/session-start.sh` 在远程会话启动时会自动执行：
+
+```bash
+bash /workspace/scripts/cloud-agent-startup.sh
+```
+
+因此在 Claude Code Remote / Cloud Agent 场景下，默认会做一次幂等环境补全。
+
 ## 可选参数
 
 ```bash
