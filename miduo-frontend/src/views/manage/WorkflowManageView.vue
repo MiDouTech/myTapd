@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getUserList } from '@/api/user'
 import {
+  createWorkflow,
+  deleteWorkflow,
   createHandlerGroup,
   getHandlerGroupList,
   getWorkflowDetail,
@@ -26,7 +28,7 @@ import type {
   WorkflowObservationOutput,
   WorkflowUpdateInput,
 } from '@/types/workflow'
-import { notifySuccess, notifyWarning } from '@/utils/feedback'
+import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
 
 interface ListQuery {
@@ -45,6 +47,7 @@ const workflowDetailVisible = ref(false)
 const workflowEditVisible = ref(false)
 const workflowEditLoading = ref(false)
 const workflowEditSubmitLoading = ref(false)
+const workflowEditMode = ref<'create' | 'edit'>('create')
 const workflowObservationLoading = ref(false)
 const workflowEditingId = ref<number | null>(null)
 const createHandlerGroupVisible = ref(false)
@@ -280,6 +283,10 @@ const handlerGroupDialogTitle = computed(() =>
   editingHandlerGroupId.value === null ? '新建处理组' : '编辑处理组',
 )
 
+const workflowEditDrawerTitle = computed(() =>
+  workflowEditMode.value === 'create' ? '新建工作流' : '编辑工作流',
+)
+
 function resetCreateHandlerGroupForm(): void {
   createHandlerGroupForm.name = ''
   createHandlerGroupForm.description = ''
@@ -443,6 +450,7 @@ async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
 
 function resetWorkflowEditForm(): void {
   workflowEditingId.value = null
+  workflowEditMode.value = 'create'
   workflowEditForm.name = ''
   workflowEditForm.mode = 'SIMPLE'
   workflowEditForm.description = ''
@@ -451,11 +459,19 @@ function resetWorkflowEditForm(): void {
   workflowEditForm.transitions = []
 }
 
+function openWorkflowCreate(): void {
+  resetWorkflowEditForm()
+  workflowEditMode.value = 'create'
+  addWorkflowStateRow()
+  workflowEditVisible.value = true
+}
+
 async function openWorkflowEdit(row: WorkflowListOutput): Promise<void> {
   if (row.isBuiltin === 1) {
     notifyWarning('内置工作流不可编辑')
     return
   }
+  workflowEditMode.value = 'edit'
   workflowEditVisible.value = true
   workflowEditLoading.value = true
   workflowEditingId.value = row.id
@@ -538,11 +554,6 @@ async function handleWorkflowEditSubmit(): Promise<void> {
     notifyWarning('请至少配置一条流转规则')
     return
   }
-  const wid = workflowEditingId.value
-  if (wid === null) {
-    return
-  }
-
   const payload: WorkflowUpdateInput = {
     name,
     mode: workflowEditForm.mode,
@@ -569,8 +580,18 @@ async function handleWorkflowEditSubmit(): Promise<void> {
 
   workflowEditSubmitLoading.value = true
   try {
-    await updateWorkflow(wid, payload)
-    notifySuccess('工作流已保存')
+    if (workflowEditMode.value === 'create') {
+      await createWorkflow(payload)
+      notifySuccess('工作流创建成功')
+    } else {
+      const wid = workflowEditingId.value
+      if (wid === null) {
+        notifyWarning('未识别到待编辑的工作流')
+        return
+      }
+      await updateWorkflow(wid, payload)
+      notifySuccess('工作流已保存')
+    }
     workflowEditVisible.value = false
     resetWorkflowEditForm()
     await loadWorkflows()
@@ -578,6 +599,31 @@ async function handleWorkflowEditSubmit(): Promise<void> {
     // 保留表单
   } finally {
     workflowEditSubmitLoading.value = false
+  }
+}
+
+async function handleDeleteWorkflow(row: WorkflowListOutput): Promise<void> {
+  if (row.isBuiltin === 1) {
+    notifyWarning('内置工作流不可删除')
+    return
+  }
+  if ((row.invocationCount || 0) > 0) {
+    notifyWarning(row.deleteBlockedReason || '工作流已被调用，不允许删除')
+    return
+  }
+  try {
+    await confirmAction(`确认删除工作流「${row.name}」吗？删除后不可恢复。`)
+  } catch {
+    return
+  }
+
+  workflowLoading.value = true
+  try {
+    await deleteWorkflow(row.id)
+    notifySuccess('工作流删除成功')
+    await loadWorkflows()
+  } finally {
+    workflowLoading.value = false
   }
 }
 
@@ -694,7 +740,10 @@ onMounted(async () => {
     <el-card shadow="never" class="page-card">
       <div class="toolbar">
         <div class="title">工作流管理</div>
-        <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
+        <el-space>
+          <el-button type="primary" @click="openWorkflowCreate">新建工作流</el-button>
+          <el-button type="primary" link @click="loadWorkflows">刷新列表</el-button>
+        </el-space>
       </div>
 
       <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleWorkflowSearch">
@@ -741,6 +790,7 @@ onMounted(async () => {
           </el-table-column>
           <el-table-column prop="stateCount" label="状态数" width="100" sortable="custom" />
           <el-table-column prop="transitionCount" label="流转数" width="100" sortable="custom" />
+          <el-table-column prop="invocationCount" label="调用次数" width="100" sortable="custom" />
           <el-table-column label="启用状态" width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.isActive)">{{ row.isActive === 1 ? '启用' : '停用' }}</el-tag>
@@ -751,7 +801,7 @@ onMounted(async () => {
               {{ formatDateTime(row.updateTime || row.createTime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="180" align="center" fixed="right">
+          <el-table-column label="操作" width="240" align="center" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link @click="openWorkflowDetail(row)">详情</el-button>
               <el-button
@@ -762,6 +812,20 @@ onMounted(async () => {
               >
                 编辑
               </el-button>
+              <el-tooltip
+                v-if="row.isBuiltin !== 1"
+                :content="row.deleteBlockedReason || '删除未被调用的工作流'"
+                placement="top"
+              >
+                <el-button
+                  type="danger"
+                  link
+                  :disabled="row.canDelete === false"
+                  @click="handleDeleteWorkflow(row)"
+                >
+                  删除
+                </el-button>
+              </el-tooltip>
             </template>
           </el-table-column>
         </BaseTable>
@@ -899,6 +963,10 @@ onMounted(async () => {
               <div class="overview-card__label">使用工单数</div>
               <div class="overview-card__value">{{ workflowObservation?.ticketCount ?? 0 }}</div>
             </div>
+            <div class="overview-card">
+              <div class="overview-card__label">累计调用次数</div>
+              <div class="overview-card__value">{{ workflowDetail.invocationCount ?? 0 }}</div>
+            </div>
           </div>
           <div class="workflow-overview-description">
             {{ workflowDetail.description || '暂无工作流描述' }}
@@ -988,7 +1056,7 @@ onMounted(async () => {
 
   <el-drawer
     v-model="workflowEditVisible"
-    title="编辑工作流"
+    :title="workflowEditDrawerTitle"
     size="90%"
     destroy-on-close
     @closed="resetWorkflowEditForm"
@@ -999,7 +1067,7 @@ onMounted(async () => {
         :closable="false"
         show-icon
         class="workflow-edit-tip"
-        title="修改状态与流转将影响后续工单操作，请谨慎保存。流转中的角色须使用大写枚举：SUBMITTER、HANDLER、ADMIN、TICKET_ADMIN 等。"
+        title="请按业务流程配置状态与流转，保存后将用于后续工单。流转中的角色须使用大写枚举：SUBMITTER、HANDLER、ADMIN、TICKET_ADMIN 等。"
       />
       <el-form label-width="100px" class="workflow-edit-form">
         <el-form-item label="名称" required>
@@ -1166,7 +1234,7 @@ onMounted(async () => {
     <template #footer>
       <el-button @click="workflowEditVisible = false">取消</el-button>
       <el-button type="primary" :loading="workflowEditSubmitLoading" @click="handleWorkflowEditSubmit">
-        保存
+        {{ workflowEditMode === 'create' ? '创建工作流' : '保存修改' }}
       </el-button>
     </template>
   </el-drawer>

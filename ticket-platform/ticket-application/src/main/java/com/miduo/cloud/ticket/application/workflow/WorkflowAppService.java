@@ -14,6 +14,7 @@ import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowListOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowObservationOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowUpdateInput;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFlowRecordMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketNodeDurationMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
@@ -45,6 +46,7 @@ public class WorkflowAppService extends BaseApplicationService {
 
     private final WorkflowMapper workflowMapper;
     private final WorkflowEngine workflowEngine;
+    private final TicketCategoryMapper ticketCategoryMapper;
     private final TicketMapper ticketMapper;
     private final TicketFlowRecordMapper ticketFlowRecordMapper;
     private final TicketNodeDurationMapper ticketNodeDurationMapper;
@@ -52,12 +54,14 @@ public class WorkflowAppService extends BaseApplicationService {
 
     public WorkflowAppService(WorkflowMapper workflowMapper,
                               WorkflowEngine workflowEngine,
+                              TicketCategoryMapper ticketCategoryMapper,
                               TicketMapper ticketMapper,
                               TicketFlowRecordMapper ticketFlowRecordMapper,
                               TicketNodeDurationMapper ticketNodeDurationMapper,
                               SysUserMapper sysUserMapper) {
         this.workflowMapper = workflowMapper;
         this.workflowEngine = workflowEngine;
+        this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketMapper = ticketMapper;
         this.ticketFlowRecordMapper = ticketFlowRecordMapper;
         this.ticketNodeDurationMapper = ticketNodeDurationMapper;
@@ -83,6 +87,9 @@ public class WorkflowAppService extends BaseApplicationService {
             output.setDescription(po.getDescription());
             output.setIsBuiltin(po.getIsBuiltin());
             output.setIsActive(po.getIsActive());
+            output.setInvocationCount(po.getInvocationCount() != null ? po.getInvocationCount() : 0L);
+            output.setCanDelete(isWorkflowDeletable(po));
+            output.setDeleteBlockedReason(resolveDeleteBlockedReason(po));
             output.setCreateTime(po.getCreateTime());
             output.setUpdateTime(po.getUpdateTime());
 
@@ -111,6 +118,9 @@ public class WorkflowAppService extends BaseApplicationService {
         output.setDescription(po.getDescription());
         output.setIsBuiltin(po.getIsBuiltin());
         output.setIsActive(po.getIsActive());
+        output.setInvocationCount(po.getInvocationCount() != null ? po.getInvocationCount() : 0L);
+        output.setCanDelete(isWorkflowDeletable(po));
+        output.setDeleteBlockedReason(resolveDeleteBlockedReason(po));
         output.setCreateTime(po.getCreateTime());
         output.setUpdateTime(po.getUpdateTime());
 
@@ -170,6 +180,71 @@ public class WorkflowAppService extends BaseApplicationService {
         List<WorkflowNodeObservationStat> nodeStats = ticketNodeDurationMapper.selectWorkflowNodeStats(id);
         output.setNodeStats(convertNodeStats(workflow, nodeStats));
         return output;
+    }
+
+    /**
+     * 创建工作流定义（仅自定义工作流）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long createWorkflow(WorkflowUpdateInput input) {
+        if (WorkflowMode.fromCode(input.getMode()) == null) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_VALIDATION_FAILED, "工作流模式不合法");
+        }
+        if (input.getIsActive() != 0 && input.getIsActive() != 1) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_VALIDATION_FAILED, "启用状态只能为0或1");
+        }
+
+        List<WorkflowState> states = buildStatesForUpdate(input.getStates());
+        List<WorkflowTransition> transitions = buildTransitionsForUpdate(input.getTransitions(), states);
+        validateWorkflowGraph(states, transitions);
+
+        LambdaQueryWrapper<WorkflowPO> nameCheck = new LambdaQueryWrapper<>();
+        nameCheck.eq(WorkflowPO::getName, input.getName().trim());
+        if (workflowMapper.selectCount(nameCheck) > 0) {
+            throw BusinessException.of(ErrorCode.DATA_ALREADY_EXISTS, "工作流名称已存在");
+        }
+
+        WorkflowPO po = new WorkflowPO();
+        po.setName(input.getName().trim());
+        po.setMode(input.getMode().trim());
+        po.setDescription(input.getDescription() != null ? input.getDescription().trim() : null);
+        po.setIsBuiltin(0);
+        po.setIsActive(input.getIsActive());
+        po.setInvocationCount(0L);
+        po.setStates(JSON.toJSONString(states));
+        po.setTransitions(JSON.toJSONString(transitions));
+        workflowMapper.insert(po);
+        return po.getId();
+    }
+
+    /**
+     * 删除工作流定义（仅未被调用且未关联分类/工单的自定义工作流）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteWorkflow(Long id) {
+        WorkflowPO existing = requireWorkflow(id);
+        if (existing.getIsBuiltin() != null && existing.getIsBuiltin() == 1) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "内置工作流不允许删除");
+        }
+        Long invocationCount = existing.getInvocationCount() != null ? existing.getInvocationCount() : 0L;
+        if (invocationCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "工作流已被调用，不允许删除");
+        }
+
+        Long categoryRefCount = ticketCategoryMapper.selectCount(
+                new LambdaQueryWrapper<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO>()
+                        .eq(com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO::getWorkflowId, id));
+        if (categoryRefCount != null && categoryRefCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "工作流已关联分类，请先解除关联后再删除");
+        }
+
+        Long ticketRefCount = ticketMapper.selectCount(
+                new LambdaQueryWrapper<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO>()
+                        .eq(com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO::getWorkflowId, id));
+        if (ticketRefCount != null && ticketRefCount > 0) {
+            throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "工作流已关联工单，不允许删除");
+        }
+        workflowMapper.deleteById(id);
     }
 
     /**
@@ -347,6 +422,31 @@ public class WorkflowAppService extends BaseApplicationService {
             return "";
         }
         return code.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isWorkflowDeletable(WorkflowPO workflow) {
+        if (workflow == null) {
+            return false;
+        }
+        if (workflow.getIsBuiltin() != null && workflow.getIsBuiltin() == 1) {
+            return false;
+        }
+        Long invocationCount = workflow.getInvocationCount() != null ? workflow.getInvocationCount() : 0L;
+        return invocationCount == 0L;
+    }
+
+    private String resolveDeleteBlockedReason(WorkflowPO workflow) {
+        if (workflow == null) {
+            return "工作流不存在";
+        }
+        if (workflow.getIsBuiltin() != null && workflow.getIsBuiltin() == 1) {
+            return "内置工作流不可删除";
+        }
+        Long invocationCount = workflow.getInvocationCount() != null ? workflow.getInvocationCount() : 0L;
+        if (invocationCount > 0) {
+            return "工作流已被调用，不可删除";
+        }
+        return null;
     }
 
     /**

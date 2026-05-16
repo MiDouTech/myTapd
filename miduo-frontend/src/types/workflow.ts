@@ -6,6 +6,9 @@ export interface WorkflowListOutput {
   description?: string
   isBuiltin?: number
   isActive: number
+  invocationCount?: number
+  canDelete?: boolean
+  deleteBlockedReason?: string
   stateCount: number
   transitionCount: number
   createTime?: string
@@ -41,6 +44,9 @@ export interface WorkflowDetailOutput {
   description?: string
   isBuiltin?: number
   isActive: number
+  invocationCount?: number
+  canDelete?: boolean
+  deleteBlockedReason?: string
   states: WorkflowDetailStateItem[]
   transitions: WorkflowDetailTransitionItem[]
   createTime?: string

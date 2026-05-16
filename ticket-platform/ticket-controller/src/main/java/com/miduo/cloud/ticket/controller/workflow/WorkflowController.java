@@ -9,8 +9,10 @@ import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowObservationOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowUpdateInput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -70,6 +72,19 @@ public class WorkflowController {
     }
 
     /**
+     * 创建工作流
+     * 接口编号：API000515
+     * 产品文档功能：工作流管理 - 创建自定义工作流
+     */
+    @OperationLog(moduleName = "工作流管理", operationItem = "创建工作流")
+    @Operation(summary = "创建工作流", description = "接口编号：API000515")
+    @PostMapping("/create")
+    public ApiResult<Long> createWorkflow(@Valid @RequestBody WorkflowUpdateInput input) {
+        Long workflowId = workflowAppService.createWorkflow(input);
+        return ApiResult.success(workflowId);
+    }
+
+    /**
      * 更新工作流
      * 接口编号：API000202
      * 产品文档功能：4.4 工作流引擎 - 工作流编辑（非内置）
@@ -80,6 +95,19 @@ public class WorkflowController {
     public ApiResult<Void> updateWorkflow(@PathVariable Long id,
                                           @Valid @RequestBody WorkflowUpdateInput input) {
         workflowAppService.updateWorkflow(id, input);
+        return ApiResult.success();
+    }
+
+    /**
+     * 删除工作流
+     * 接口编号：API000516
+     * 产品文档功能：工作流管理 - 删除未调用的自定义工作流
+     */
+    @OperationLog(moduleName = "工作流管理", operationItem = "删除工作流")
+    @Operation(summary = "删除工作流", description = "接口编号：API000516")
+    @DeleteMapping("/delete/{id}")
+    public ApiResult<Void> deleteWorkflow(@PathVariable Long id) {
+        workflowAppService.deleteWorkflow(id);
         return ApiResult.success();
     }
 }
