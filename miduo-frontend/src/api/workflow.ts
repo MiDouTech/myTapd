@@ -193,7 +193,7 @@ export function createWorkflow(data: WorkflowUpdateInput): Promise<number> {
  * 产品文档功能：工作流管理 - 删除未调用的自定义工作流
  */
 export function deleteWorkflow(id: number): Promise<void> {
-  return request.delete<void>(`/workflow/delete/${id}`)
+  return request.del<void>(`/workflow/delete/${id}`)
 }
 
 /**
