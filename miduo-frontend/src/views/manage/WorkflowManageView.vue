@@ -1166,7 +1166,7 @@ onMounted(async () => {
     <template #footer>
       <el-button @click="workflowEditVisible = false">取消</el-button>
       <el-button type="primary" :loading="workflowEditSubmitLoading" @click="handleWorkflowEditSubmit">
-        保存
+        {{ workflowEditMode === 'create' ? '创建工作流' : '保存修改' }}
       </el-button>
     </template>
   </el-drawer>

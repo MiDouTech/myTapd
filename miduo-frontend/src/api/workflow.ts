@@ -22,6 +22,9 @@ interface WorkflowListRawOutput {
   description?: string
   isBuiltin?: number
   isActive: number
+  invocationCount?: number
+  canDelete?: boolean
+  deleteBlockedReason?: string
   stateCount?: number
   transitionCount?: number
   createTime?: string
@@ -36,6 +39,9 @@ interface WorkflowDetailRawOutput {
   description?: string
   isBuiltin?: number
   isActive: number
+  invocationCount?: number
+  canDelete?: boolean
+  deleteBlockedReason?: string
   states?: WorkflowDetailOutput['states']
   transitions?: WorkflowDetailOutput['transitions']
   createTime?: string
@@ -73,6 +79,9 @@ function normalizeWorkflowListItem(item: WorkflowListRawOutput): WorkflowListOut
     description: item.description,
     isBuiltin: item.isBuiltin,
     isActive: item.isActive,
+    invocationCount: item.invocationCount ?? 0,
+    canDelete: item.canDelete,
+    deleteBlockedReason: item.deleteBlockedReason,
     stateCount: item.stateCount ?? 0,
     transitionCount: item.transitionCount ?? 0,
     createTime: item.createTime,
@@ -92,6 +101,9 @@ function normalizeWorkflowDetail(item: WorkflowDetailRawOutput | null | undefine
     description: item.description,
     isBuiltin: item.isBuiltin,
     isActive: item.isActive,
+    invocationCount: item.invocationCount ?? 0,
+    canDelete: item.canDelete,
+    deleteBlockedReason: item.deleteBlockedReason,
     states: item.states || [],
     transitions: item.transitions || [],
     createTime: item.createTime,
@@ -164,6 +176,24 @@ export async function getWorkflowObservation(id: number): Promise<WorkflowObserv
  */
 export function updateWorkflow(id: number, data: WorkflowUpdateInput): Promise<void> {
   return request.put<void>(`/workflow/update/${id}`, data)
+}
+
+/**
+ * 创建工作流（自定义）
+ * 接口编号：API000515
+ * 产品文档功能：工作流管理 - 创建自定义工作流
+ */
+export function createWorkflow(data: WorkflowUpdateInput): Promise<number> {
+  return request.post<number>('/workflow/create', data)
+}
+
+/**
+ * 删除工作流（仅未被调用）
+ * 接口编号：API000516
+ * 产品文档功能：工作流管理 - 删除未调用的自定义工作流
+ */
+export function deleteWorkflow(id: number): Promise<void> {
+  return request.delete<void>(`/workflow/delete/${id}`)
 }
 
 /**

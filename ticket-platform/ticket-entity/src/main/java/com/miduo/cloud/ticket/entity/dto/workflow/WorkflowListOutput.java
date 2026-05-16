@@ -18,6 +18,9 @@ public class WorkflowListOutput implements Serializable {
     private String description;
     private Integer isBuiltin;
     private Integer isActive;
+    private Long invocationCount;
+    private Boolean canDelete;
+    private String deleteBlockedReason;
     private Integer stateCount;
     private Integer transitionCount;
     private Date createTime;

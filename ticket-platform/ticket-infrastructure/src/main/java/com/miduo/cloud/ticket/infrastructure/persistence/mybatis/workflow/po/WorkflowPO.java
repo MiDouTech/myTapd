@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.common.BaseEnti
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.Date;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("workflow")
@@ -31,4 +33,13 @@ public class WorkflowPO extends BaseEntity {
 
     @TableField("is_active")
     private Integer isActive;
+
+    @TableField("invocation_count")
+    private Long invocationCount;
+
+    @TableField("first_invoked_time")
+    private Date firstInvokedTime;
+
+    @TableField("last_invoked_time")
+    private Date lastInvokedTime;
 }

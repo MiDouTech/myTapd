@@ -58,6 +58,16 @@ public class WorkflowApplicationService {
     }
 
     /**
+     * 记录工作流调用次数（工单创建成功即视为一次调用）
+     */
+    public void recordInvocation(Long workflowId) {
+        if (workflowId == null) {
+            return;
+        }
+        workflowMapper.incrementInvocation(workflowId);
+    }
+
+    /**
      * 判断指定状态是否为终态
      */
     public boolean isTerminalStatus(Long workflowId, String status) {

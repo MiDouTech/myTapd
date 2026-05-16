@@ -170,6 +170,8 @@ public class TicketApplicationService {
         }
 
         ticketMapper.insert(ticket);
+        // 工单创建成功即视为调用了对应工作流，便于后续安全删除判定。
+        workflowService.recordInvocation(workflowId);
 
         if (ticket.getAssigneeId() != null) {
             ticketAssigneeSyncService.applyAssigneesToTicket(

@@ -349,6 +349,57 @@ public class WorkflowAppService extends BaseApplicationService {
         return code.trim().toLowerCase(Locale.ROOT);
     }
 
+    private void validateWorkflowBaseInput(WorkflowUpdateInput input) {
+        if (input == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "工作流请求不能为空");
+        }
+        if (input.getName() == null || input.getName().trim().isEmpty()) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_VALIDATION_FAILED, "工作流名称不能为空");
+        }
+        if (WorkflowMode.fromCode(input.getMode()) == null) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_VALIDATION_FAILED, "工作流模式不合法");
+        }
+        if (input.getIsActive() == null || (input.getIsActive() != 0 && input.getIsActive() != 1)) {
+            throw BusinessException.of(ErrorCode.WORKFLOW_VALIDATION_FAILED, "启用状态只能为0或1");
+        }
+    }
+
+    private void ensureWorkflowNameUnique(String name, Long excludeId) {
+        LambdaQueryWrapper<WorkflowPO> nameCheck = new LambdaQueryWrapper<>();
+        nameCheck.eq(WorkflowPO::getName, name);
+        if (excludeId != null) {
+            nameCheck.ne(WorkflowPO::getId, excludeId);
+        }
+        if (workflowMapper.selectCount(nameCheck) > 0) {
+            throw BusinessException.of(ErrorCode.DATA_ALREADY_EXISTS, "工作流名称已存在");
+        }
+    }
+
+    private boolean isWorkflowDeletable(WorkflowPO workflow) {
+        if (workflow == null) {
+            return false;
+        }
+        if (workflow.getIsBuiltin() != null && workflow.getIsBuiltin() == 1) {
+            return false;
+        }
+        Long invocationCount = workflow.getInvocationCount() != null ? workflow.getInvocationCount() : 0L;
+        return invocationCount == 0L;
+    }
+
+    private String resolveDeleteBlockedReason(WorkflowPO workflow) {
+        if (workflow == null) {
+            return "工作流不存在";
+        }
+        if (workflow.getIsBuiltin() != null && workflow.getIsBuiltin() == 1) {
+            return "内置工作流不可删除";
+        }
+        Long invocationCount = workflow.getInvocationCount() != null ? workflow.getInvocationCount() : 0L;
+        if (invocationCount > 0) {
+            return "工作流已被调用，不可删除";
+        }
+        return null;
+    }
+
     /**
      * 根据ID获取工作流PO
      */
