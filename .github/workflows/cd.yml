@@ -22,13 +22,19 @@ on:
     inputs:
       service_names:
         description: "ticket-platform-backend"
-        type: string
-        default:
+        type: choice
+        default: ''
+        options:
+          - ''
+          - ticket-platform-backend
       
       frontend_names:
         description: "ticket-platform"
-        type: string
-        default:
+        type: choice
+        default: ''
+        options:
+          - ''
+          - ticket-platform
 
 env:
   GHCR_REGISTRY: ghcr.io
