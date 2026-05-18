@@ -510,7 +510,7 @@ jobs:
             echo "服务提交信息：${{ github.event.head_commit.message }}" >> ${FRONTEND_VERSION_FILE} 
             echo "服务提交SHA：${{ github.sha }}" >> ${FRONTEND_VERSION_FILE}
             echo "FrontendURL：${{ needs.build-frontend.outputs.download_url }}" >> ${FRONTEND_VERSION_FILE} 
-            echo "提交时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${BACKEND_VERSION_FILE}
+            echo "提交时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${FRONTEND_VERSION_FILE}
 
 
              if [[ "${is_prod_branch}" == "true" ]]; then
@@ -522,7 +522,13 @@ jobs:
             fi
           fi
 
-          git add -f ${BACKEND_VERSION_FILE} ${FRONTEND_VERSION_FILE} ${DEPOLY_FILE}
+          git add -f ${DEPOLY_FILE}
+          if [[ -f "${BACKEND_VERSION_FILE}" ]]; then
+            git add -f "${BACKEND_VERSION_FILE}"
+          fi
+          if [[ -f "${FRONTEND_VERSION_FILE}" ]]; then
+            git add -f "${FRONTEND_VERSION_FILE}"
+          fi
           git commit -m "提交人: ${AUTHOR} 提交信息: ${MSG_CLEAN}"
           git push
 
