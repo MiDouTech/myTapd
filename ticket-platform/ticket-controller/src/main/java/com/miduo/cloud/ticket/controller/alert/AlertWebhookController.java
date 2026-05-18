@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.controller.alert;
 
 import com.miduo.cloud.ticket.application.alert.AlertTicketApplicationService;
+import com.miduo.cloud.ticket.application.alert.AlertWebhookPayloadAdapter;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.entity.dto.alert.NightingaleAlertEvent;
@@ -21,9 +22,12 @@ public class AlertWebhookController {
     private static final Logger log = LoggerFactory.getLogger(AlertWebhookController.class);
 
     private final AlertTicketApplicationService alertTicketService;
+    private final AlertWebhookPayloadAdapter alertWebhookPayloadAdapter;
 
-    public AlertWebhookController(AlertTicketApplicationService alertTicketService) {
+    public AlertWebhookController(AlertTicketApplicationService alertTicketService,
+                                  AlertWebhookPayloadAdapter alertWebhookPayloadAdapter) {
         this.alertTicketService = alertTicketService;
+        this.alertWebhookPayloadAdapter = alertWebhookPayloadAdapter;
     }
 
     /**
@@ -31,20 +35,23 @@ public class AlertWebhookController {
      * 接口编号：API000700
      * 产品文档功能：告警监控接入工单系统 - Webhook接收端点
      *
-     * 夜莺通过 HTTP POST 将 AlertCurEvent JSON 推送至此端点，
-     * 系统解析后根据映射规则自动创建工单。
+     * 支持两类请求体：（1）夜莺原生 AlertCurEvent JSON；（2）HTTP 通知媒介自定义包装：
+     * 根级 {@code notify_users}、{@code rule_name}、{@code severity}、{@code status}、{@code trigger_time}
+     * 与内嵌 {@code event}（完整 AlertCurEvent），见 {@link AlertWebhookPayloadAdapter}。
      */
     @Operation(summary = "夜莺告警Webhook回调", description = "接口编号：API000700")
     @PostMapping("/nightingale/webhook")
     public ApiResult<String> receiveAlert(@RequestParam("token") String token,
-                                          @RequestBody NightingaleAlertEvent event) {
+                                          @RequestBody String rawBody) {
         if (!alertTicketService.validateToken(token)) {
             log.warn("告警Webhook Token验证失败");
             return ApiResult.fail(ErrorCode.UNAUTHORIZED.getCode(), "Token无效");
         }
 
+        NightingaleAlertEvent event = null;
         try {
-            alertTicketService.processAlertEvent(event);
+            event = alertWebhookPayloadAdapter.parse(rawBody);
+            alertTicketService.processAlertEvent(event, rawBody);
             return ApiResult.success("OK");
         } catch (Exception e) {
             log.error("处理告警事件异常: ruleName={}, error={}",

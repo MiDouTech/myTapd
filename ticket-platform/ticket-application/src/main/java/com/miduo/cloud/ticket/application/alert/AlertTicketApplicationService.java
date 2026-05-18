@@ -80,15 +80,17 @@ public class AlertTicketApplicationService {
 
     /**
      * 处理夜莺告警事件
+     *
+     * @param rawHttpJson 原始 HTTP 请求体（可选）；若提供则写入告警事件日志，便于保留 HTTP 媒介包装字段
      */
     @Transactional(rollbackFor = Exception.class)
-    public void processAlertEvent(NightingaleAlertEvent event) {
+    public void processAlertEvent(NightingaleAlertEvent event, String rawHttpJson) {
         if (event == null) {
             log.warn("收到空告警事件，跳过");
             return;
         }
 
-        String rawPayload = JSON.toJSONString(event);
+        String rawPayload = StringUtils.hasText(rawHttpJson) ? rawHttpJson : JSON.toJSONString(event);
         log.info("收到夜莺告警事件: ruleId={}, ruleName={}, severity={}, target={}, recovered={}",
                 event.getRuleId(), event.getRuleName(), event.getSeverity(),
                 event.getTargetIdent(), event.getIsRecovered());
