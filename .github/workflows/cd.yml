@@ -215,7 +215,7 @@ jobs:
     name: Build Frontend – ZIP
     runs-on: ubuntu-latest
     needs: prepare
-    if: needs.prepare.outputs.has_frontend == 'true'
+    if: needs.prepare.outputs.has_frontend == 'true' && needs.prepare.outputs.frontends != '[]'
     strategy:
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.frontends) }}
@@ -484,13 +484,13 @@ jobs:
           ##四、如果后端构建成功，则写入后端版本信息
           if [[ ${{needs.build-and-push.result }} == 'success' ]]; then    
             
-            echo "##当前测试环境后端版本信息：" > ${BACKEND_VERSION_FILE}
-            echo "version=${VERSION}" >> ${BACKEND_VERSION_FILE}
-            echo "branch_name=${BRANCH_NAME}" >> ${BACKEND_VERSION_FILE} 
-            echo "提交人：${AUTHOR}" >> ${BACKEND_VERSION_FILE} 
-            echo "服务提交信息：${{ github.event.head_commit.message }}" >> ${BACKEND_VERSION_FILE} 
-            echo "容器版本信息：$DOCKER_VERSION_INFO" >> ${BACKEND_VERSION_FILE}
-            echo "提交时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${BACKEND_VERSION_FILE}
+            echo "##当前测试环境后端版本信息: " > ${BACKEND_VERSION_FILE}
+            echo "version: ${VERSION}" >> ${BACKEND_VERSION_FILE}
+            echo "branch_name: ${BRANCH_NAME}" >> ${BACKEND_VERSION_FILE} 
+            echo "提交人: ${AUTHOR}" >> ${BACKEND_VERSION_FILE} 
+            echo "服务提交信息: ${{ github.event.head_commit.message }}" >> ${BACKEND_VERSION_FILE} 
+            echo "容器版本信息: $DOCKER_VERSION_INFO" >> ${BACKEND_VERSION_FILE}
+            echo "提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${BACKEND_VERSION_FILE}
 
             if [[ "${is_prod_branch}" == "true" ]]; then
               sed -i "/- name: 生产发布-后端/,/提交时间: / {
@@ -503,14 +503,14 @@ jobs:
 
           ##五、如果前端构建成功，则写入前端版本信息
           if [[ ${{needs.build-frontend.result }} == 'success' ]]; then       
-            echo "##当前测试环境前端版本信息：" > ${FRONTEND_VERSION_FILE}
-            echo "version=${VERSION}" >> ${FRONTEND_VERSION_FILE}
-            echo "branch_name=${BRANCH_NAME}" >> ${FRONTEND_VERSION_FILE} 
-            echo "提交人：${AUTHOR}" >> ${FRONTEND_VERSION_FILE} 
-            echo "服务提交信息：${{ github.event.head_commit.message }}" >> ${FRONTEND_VERSION_FILE} 
-            echo "服务提交SHA：${{ github.sha }}" >> ${FRONTEND_VERSION_FILE}
-            echo "FrontendURL：${{ needs.build-frontend.outputs.download_url }}" >> ${FRONTEND_VERSION_FILE} 
-            echo "提交时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${FRONTEND_VERSION_FILE}
+            echo "##当前测试环境前端版本信息:" > ${FRONTEND_VERSION_FILE}
+            echo "version: ${VERSION}" >> ${FRONTEND_VERSION_FILE}
+            echo "branch_name: ${BRANCH_NAME}" >> ${FRONTEND_VERSION_FILE} 
+            echo "提交人: ${AUTHOR}" >> ${FRONTEND_VERSION_FILE} 
+            echo "服务提交信息: ${{ github.event.head_commit.message }}" >> ${FRONTEND_VERSION_FILE} 
+            echo "服务提交SHA: ${{ github.sha }}" >> ${FRONTEND_VERSION_FILE}
+            echo "FrontendURL: ${{ needs.build-frontend.outputs.download_url }}" >> ${FRONTEND_VERSION_FILE} 
+            echo "提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${FRONTEND_VERSION_FILE}
 
 
              if [[ "${is_prod_branch}" == "true" ]]; then
