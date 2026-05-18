@@ -3,6 +3,13 @@
     "name": "ticket-platform-backend",
     "dockerfile": "ticket-platform/deployment/docker/Dockerfile",
     "context": "ticket-platform",
-    "build_output": "ticket-platform/ticket-bootstrap/target"
+    "manual_only": false,
+    "build_on_any_path": true,
+    "build_output": "ticket-platform/ticket-bootstrap/target",
+    "watch_paths": [
+      "miduo-bootstrap",
+      ".github",
+      ".deploy"
+    ]
   }
 ]

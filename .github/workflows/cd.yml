@@ -11,6 +11,13 @@ on:
     tags:
       - 'v*.*.*'
 
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+      - 'release/**'
+
 env:
   GHCR_REGISTRY: ghcr.io
   CNB_REGISTRY: docker.cnb.cool
@@ -23,20 +30,18 @@ jobs:
     name: Prepare – Load Config & Build Matrix
     runs-on: ubuntu-latest
     outputs:
-      matrix:            ${{ steps.services.outputs.matrix }}
       has_prebuilt:      ${{ steps.services.outputs.has_prebuilt }}
       build_type:        ${{ steps.config.outputs.build_type }}
       java_version:      ${{ steps.config.outputs.java_version }}
       dotnet_version:    ${{ steps.config.outputs.dotnet_version }}
       build_subproject:  ${{ steps.config.outputs.build_subproject }}
-      compile_dir:       ${{ steps.config.outputs.compile_dir }}
       cnb_namespace:          ${{ steps.config.outputs.cnb_namespace }}
       cnb_version_repo:       ${{ steps.config.outputs.cnb_version_repo }}
-      frontend_dir:           ${{ steps.config.outputs.frontend_dir }}
-      node_version:           ${{ steps.config.outputs.node_version }}
-      frontend_artifact_name: ${{ steps.config.outputs.frontend_artifact_name }}
       static_repo_url:        ${{ steps.config.outputs.static_repo_url }}
       static_repo_path:       ${{ steps.config.outputs.static_repo_path }}
+      services:               ${{ steps.config.outputs.services }}
+      frontends:              ${{ steps.config.outputs.frontends }}
+      prod_branches:           ${{ steps.config.outputs.prod_branches }}
 
     steps:
       - name: Checkout
@@ -45,6 +50,7 @@ jobs:
       - name: Load deploy config
         id: config
         run: |
+
           set -a
           source .deploy/config.env
           set +a
@@ -54,34 +60,164 @@ jobs:
           echo "build_subproject=${BUILD_SUBPROJECT:-}" >> "$GITHUB_OUTPUT"
           echo "cnb_namespace=${CNB_NAMESPACE}"                     >> "$GITHUB_OUTPUT"
           echo "cnb_version_repo=${CNB_VERSION_REPO}"               >> "$GITHUB_OUTPUT"
-          echo "frontend_dir=${FRONTEND_DIR:-}"                     >> "$GITHUB_OUTPUT"
-          echo "node_version=${NODE_VERSION:-20}"                   >> "$GITHUB_OUTPUT"
-          echo "frontend_artifact_name=${FRONTEND_ARTIFACT_NAME:-}" >> "$GITHUB_OUTPUT"
           echo "static_repo_url=${STATIC_REPO_URL:-}"               >> "$GITHUB_OUTPUT"
           echo "static_repo_path=${STATIC_REPO_PATH:-}"             >> "$GITHUB_OUTPUT"
-          # 从 services.json 取第一个有 build_output 服务的 context 作为编译工作目录
-          COMPILE_DIR=$(jq -r \
-            '[.[] | select(.build_output != null and .build_output != "")] | first | .context // "."' \
-            .deploy/services.json)
-          echo "compile_dir=${COMPILE_DIR}" >> "$GITHUB_OUTPUT"
+          echo "prod_branches=${PROD_BRANCHES:-}"                   >> "$GITHUB_OUTPUT"
 
-      - name: Build services matrix
-        id: services
-        run: |
-          echo "matrix=$(jq -c '{include: .}' .deploy/services.json)" >> "$GITHUB_OUTPUT"
-          # 是否有需要预编译的服务（build_output 非空）
-          HAS=$(jq '[.[] | select(.build_output != null and .build_output != "")] | length > 0' \
-            .deploy/services.json)
-          echo "has_prebuilt=${HAS}" >> "$GITHUB_OUTPUT"
+          # ────────────────────────────────────────────────────────────────────────────
+          # 后端构建判断逻辑
+          # ────────────────────────────────────────────────────────────────────────────
+          ALL_SERVICES=$(cat .deploy/services.json | jq -c .)
+
+          ##判断是否手动触发任务
+          if [[ ${{ github.event_name }} == "workflow_dispatch" ]] && \
+            [[ -n "${{ inputs.service_names }}" ]]; then
+            echo "手动触发任务：${{ inputs.service_names }}"
+            IFS=',' read -ra NAMES <<< "${{ inputs.service_names }}"
+            FILTERED="[]"
+            for name in "${NAMES[@]}"; do
+              echo "当前服务：${name}"
+              name=$(echo "${name}" | xargs )
+              svc=$(echo $ALL_SERVICES | jq -c --arg n "$name" '.[] | select(.name == $n)')
+              if [[ -n "$svc" ]]; then
+                FILTERED=$(echo $FILTERED | jq -c --argjson s "$svc" '. + [$s]')
+              else
+                echo "服务 ${name} 不存在"
+                exit 1
+              fi
+            done
+            SERVICES=$FILTERED
+
+          elif [[ "${{ github.ref }}" == refs/tags/* ]] || \
+            [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+            [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]] || \
+            [[ ${{ github.event_name }} == "pull_request" ]]; then
+
+            echo "全量构建所有服务"
+            SERVICES=$ALL_SERVICES
+
+          else
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "")
+            echo "本次变动文件："; echo "$CHANGED"
+            FILTERED="[]"
+            while IFS= read -r svc; do
+              name=$(echo "$svc" | jq -r '.name')
+              IF_MANUAL=$(echo $svc | jq -c '.manual_only')
+              if [[ "$IF_MANUAL" == "true" ]]; then
+                echo "服务 ${name} 不是自动构建，跳过"
+                continue
+              fi
+
+              matched=false
+              BUILD_ON_ANY_PATH=$(echo $svc | jq -c '.build_on_any_path')
+              if [[ "$BUILD_ON_ANY_PATH" == "true" ]]; then
+                matched=true
+                echo "别管，改动就加入构建"
+              else
+                while IFS= read -r watch_path; do
+                  if echo "$CHANGED" | grep -qE "^${watch_path}(/|$)" && echo $svc ; then
+                    matched=true
+                    break
+                  fi
+                done < <(echo "$svc" | jq -r '.watch_paths[]')
+              fi
+
+              if [[ "$matched" == "true" ]]; then
+                echo "服务 ${name} 有文件变动，加入构建队列"
+                FILTERED=$(echo $FILTERED | jq -c --argjson s "$svc" '. + [$s]')
+              fi
+            done < <(echo $ALL_SERVICES | jq -c '.[]')
+            SERVICES=$FILTERED
+          fi
+
+          echo "参与构建的后端服务列表：${SERVICES}"
+          echo "services=${SERVICES}" >> "$GITHUB_OUTPUT"
+
+          ## ────────────────────────────────────────────────────────────────────────────
+          ##前端构建判断逻辑
+          ## ────────────────────────────────────────────────────────────────────────────
+          if [ -f ".deploy/frontend.json" ]; then
+            echo "has_frontend=true" >> "$GITHUB_OUTPUT"
+            ALL_Frontends=$(cat .deploy/frontend.json | jq -c .)
+
+            if [[ ${{ github.event_name }} == "workflow_dispatch" ]] && \
+              [[ -n "${{ inputs.frontend_names }}" ]]; then
+              echo "手动触发任务：${{ inputs.frontend_names }}"
+              IFS=',' read -ra NAMES <<< "${{ inputs.frontend_names }}"
+              FILTERED="[]"
+              for name in "${NAMES[@]}"; do
+                echo "当前服务：${name}"
+                name=$(echo "${name}" | xargs )
+                svc=$(echo $ALL_Frontends | jq -c --arg n "$name" '.[] | select(.name == $n)')
+                if [[ -n "$svc" ]]; then
+                  FILTERED=$(echo $FILTERED | jq -c --argjson s "$svc" '. + [$s]')
+                else
+                  echo "服务 ${name} 不存在"
+                  exit 1
+                fi
+              done
+              Frontends=$FILTERED
+            
+          elif [[ "${{ github.ref }}" == refs/tags/* ]] || \
+            [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+            [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]] || \
+            [[ ${{ github.event_name }} == "pull_request" ]]; then
+
+            echo "全量构建所有服务"
+            Frontends=$ALL_Frontends
+          
+          else
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "")
+            echo "本次变动文件："; echo "$CHANGED"
+            FILTERED="[]"
+            while IFS= read -r svc; do
+              name=$(echo "$svc" | jq -r '.name')
+              IF_MANUAL=$(echo $svc | jq -c '.manual_only')
+              if [[ "$IF_MANUAL" == "true" ]]; then
+                echo "服务 ${name} 不是自动构建，跳过"
+                continue
+              fi
+
+              matched=false
+              BUILD_ON_ANY_PATH=$(echo $svc | jq -c '.build_on_any_path')
+              if [[ "$BUILD_ON_ANY_PATH" == "true" ]]; then
+                matched=true
+                echo "别管，改动就加入构建"
+              else
+                while IFS= read -r watch_path; do
+                  if echo "$CHANGED" | grep -qE "^${watch_path}(/|$)" && echo $svc ; then
+                    matched=true
+                    break
+                  fi
+                done < <(echo "$svc" | jq -r '.watch_paths[]')
+              fi
+
+              if [[ "$matched" == "true" ]]; then
+                echo "服务 ${name} 有文件变动，加入构建队列"
+                FILTERED=$(echo $FILTERED | jq -c --argjson s "$svc" '. + [$s]')
+              fi
+
+            done < <(echo $ALL_Frontends | jq -c '.[]')
+            Frontends=$FILTERED
+          fi
+          else
+            echo "has_frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "参与构建的前端服务列表：$Frontends"
+          echo "frontends=${Frontends}" >> "$GITHUB_OUTPUT"
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 3 – 前端编译并打包为 ZIP（与后端镜像构建并行，FRONTEND_DIR 为空则跳过）
+  # Job 2 – 前端编译并打包为 ZIP（与后端镜像构建并行，FRONTEND_DIR 为空则跳过）
   # ────────────────────────────────────────────────────────────────────────────
   build-frontend:
     name: Build Frontend – ZIP
     runs-on: ubuntu-latest
     needs: prepare
-    if: needs.prepare.outputs.frontend_dir != ''
+    if: needs.prepare.outputs.has_frontend == 'true'
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.frontends) }}
+      fail-fast: false
     permissions:
       contents: write
     outputs:
@@ -91,39 +227,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ needs.prepare.outputs.node_version }}
+      - name: Set up Node.js ${{ matrix.node_version }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ needs.prepare.outputs.node_version }}
+          node-version: ${{ matrix.node_version }}
           cache: npm
-          cache-dependency-path: ${{ needs.prepare.outputs.frontend_dir }}/package-lock.json
+          cache-dependency-path: ${{ matrix.context }}/package-lock.json
 
       - name: Install dependencies
-        working-directory: ${{ needs.prepare.outputs.frontend_dir }}
-        run: npm ci
+        working-directory: ${{ matrix.context }}
+        run: ${{ matrix.npm_install_command }}
 
       - name: Build frontend
-        working-directory: ${{ needs.prepare.outputs.frontend_dir }}
+        working-directory: ${{ matrix.context }}
         env:
           VITE_WECOM_OAUTH_URL: ${{ secrets.VITE_WECOM_OAUTH_URL }}
-        run: npm run build
+        run: ${{ matrix.npm_build_command }}
 
       - name: Package dist as ZIP
         run: |
-          ARTIFACT="${{ needs.prepare.outputs.frontend_artifact_name }}"
-          cd "${{ needs.prepare.outputs.frontend_dir }}/dist"
+          ARTIFACT="${{ matrix.artifact }}"
+          cd "${{ matrix.context }}/dist"
           zip -r "$GITHUB_WORKSPACE/${ARTIFACT}.zip" .
           echo "ZIP size: $(du -sh "$GITHUB_WORKSPACE/${ARTIFACT}.zip" | cut -f1)"
 
       # ── 推送 ZIP 到 CNB 静态仓库，输出下载链接 ───────────────────────────────
       - name: Push ZIP to CNB static repo
         id: push_static
-        if: needs.prepare.outputs.static_repo_url != ''
+        if: needs.prepare.outputs.static_repo_url != '' &&  github.event_name != 'pull_request'
         env:
           CNB_TOKEN:        ${{ secrets.CNB_TOKEN }}
           STATIC_REPO_URL:  ${{ needs.prepare.outputs.static_repo_url }}
           STATIC_REPO_PATH: ${{ needs.prepare.outputs.static_repo_path }}
-          ARTIFACT:         ${{ needs.prepare.outputs.frontend_artifact_name }}
+          ARTIFACT:         ${{ matrix.artifact }}
         run: |
           # 计算版本号（与 update-version 保持一致）
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
@@ -163,7 +299,7 @@ jobs:
 
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 4 – 并行构建所有镜像并同时推送到 GHCR 和 CNB
+  # Job 4 – 并行构建所有镜像并同时推送到 CNB
   # ────────────────────────────────────────────────────────────────────────────
   build-and-push:
     name: Build & Push – ${{ matrix.name }}
@@ -174,7 +310,8 @@ jobs:
       contents: read
       packages: write
     strategy:
-      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.services) }}
       fail-fast: false
 
     steps:
@@ -192,7 +329,7 @@ jobs:
 
       - name: Build JAR (Maven, skip tests)
         if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'java'
-        working-directory: ${{ needs.prepare.outputs.compile_dir }}
+        working-directory: ${{ matrix.context }}
         env:
           BUILD_SUBPROJECT: ${{ needs.prepare.outputs.build_subproject }}
         run: |
@@ -202,22 +339,13 @@ jobs:
             mvn clean package -DskipTests -B
           fi
 
-      - name: Set up .NET ${{ needs.prepare.outputs.dotnet_version }}
-        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'dotnet'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ needs.prepare.outputs.dotnet_version }}
-
-      - name: Publish (.NET, skip tests)
-        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'dotnet'
-        working-directory: ${{ needs.prepare.outputs.compile_dir }}
-        run: dotnet publish --configuration Release --no-restore
-
       # ── Docker 准备 ────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to CNB
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.CNB_REGISTRY }}
@@ -226,6 +354,7 @@ jobs:
 
       # ── 计算 release/* 分支的 rc-* Tag（去掉 release/ 前缀）───────────────
       - name: Compute release branch tag
+        if: github.event_name != 'pull_request'
         id: branch_tag
         run: |
           if [[ "$GITHUB_REF" == refs/heads/release/* ]]; then
@@ -237,8 +366,9 @@ jobs:
             echo "is_release=false"    >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 同时为 GHCR 和 CNB 生成镜像 Tag ───────────────────────────────────
+      # ── 同时为 CNB 生成镜像 Tag ───────────────────────────────────
       - name: Extract Docker metadata
+        if: github.event_name != 'pull_request'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -257,8 +387,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # ── 一次构建，同时推送到 GHCR 和 CNB ──────────────────────────────────
+      # ── 一次构建，同时推送到CNB ──────────────────────────────────
       - name: Build and push image
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context:    ${{ matrix.context }}
@@ -276,10 +407,18 @@ jobs:
     name: Update CNB Version File
     runs-on: ubuntu-latest
     needs: [prepare, build-and-push, build-frontend]
+    #Job 的运行策略配置块，控制这个 Job 怎么跑多个实例
+    strategy:
+      # false 表示其他实例失败继续跑，true 表示矩阵中任何一个实例失败，立刻取消其他所有正在运行的实例
+      fail-fast: false
+      #matrix 矩阵，表示这个 Job 要跑多个实例，每个实例对应一个服务
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.services) }}  
+
     # build-frontend 可能被跳过（FRONTEND_DIR 为空），用 always() 兼容
     if: |
-      always() &&
-      needs.build-and-push.result == 'success' &&
+      always() && github.event_name != 'pull_request' &&
+      needs.build-and-push.result == 'success' && 
       (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
 
     steps:
@@ -302,55 +441,82 @@ jobs:
           CNB_VERSION_REPO:     ${{ needs.prepare.outputs.cnb_version_repo }}
           VERSION:              ${{ steps.version.outputs.value }}
           FRONTEND_DOWNLOAD_URL: ${{ needs.build-frontend.outputs.download_url }}
+          MSG:                  ${{ github.event.head_commit.message }}
+          REPO_URL:  ${{ needs.prepare.outputs.cnb_version_repo }}
+          AUTHOR:     ${{ github.actor }}
         run: |
-          # 配置 git 凭证（避免 token 出现在 URL 明文中）
-          CNB_HOST="${CNB_VERSION_REPO#https://}"
-          CNB_HOST="${CNB_HOST%%/*}"
-          git config --global credential.helper store
-          printf 'https://cnb:%s@%s\n' "${CNB_TOKEN}" "${CNB_HOST}" \
-            >> ~/.git-credentials
-          chmod 600 ~/.git-credentials
+          #一、变量初始化
+          is_prod_branch=false 
+          BACKEND_VERSION_FILE=".testTicketBackendVersion.yml"
+          FRONTEND_VERSION_FILE=".testFrontendVersion.yml"
 
-          git clone "${CNB_VERSION_REPO}" _version_repo
+          DEPOLY_FILE=".cnb/web_trigger.yml"
+
+          BRANCH_NAME=${GITHUB_REF_NAME}
+          MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
+          #容器版本信息:
+          
+          DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}/${VERSION}"
+
+          #二、配置 git 凭证（避免 token 出现在 URL 明文中）
+          AUTH_URL="${CNB_VERSION_REPO/https:\/\//https:\/\/cnb:${CNB_TOKEN}@}"
+          rm -rf _version_repo
+          git clone --depth=1 "${AUTH_URL}" _version_repo
           cd _version_repo
 
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
-
-          # 生成 .cnb_version.yml（使用 printf 避免 heredoc 缩进问题）
-          {
-            printf 'version: "%s"\n'    "${VERSION}"
-            printf 'commit: "%s"\n'     "${GITHUB_SHA:0:7}"
-            printf 'repository: "%s"\n' "${GITHUB_REPOSITORY}"
-            printf 'ref: "%s"\n'        "${GITHUB_REF_NAME}"
-            printf 'updatedAt: "%s"\n'  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            printf 'services:\n'
-            jq -r '.[].name' "$GITHUB_WORKSPACE/.deploy/services.json" | \
-              while IFS= read -r svc; do
-                printf '  %s: "%s"\n' "${svc}" "${VERSION}"
-              done
-            # 仅当前端 ZIP 推送成功时写入下载链接
-            if [ -n "${FRONTEND_DOWNLOAD_URL}" ]; then
-              printf 'frontendDownloadUrl: "%s"\n' "${FRONTEND_DOWNLOAD_URL}"
+  
+          ##三、判断当前分支是否能发布生产
+          for branch in ${{ needs.prepare.outputs.prod_branches }}; do
+            if [[ "${BRANCH_NAME}" == "${branch}" ]]; then
+              is_prod_branch=true
+              break
             fi
-          } > .cnb_version.yml
+          done
 
-          # 同步部署触发版本：优先更新 .cnb/web_trigger.yml 中的 testVersion
-          if [ -f .cnb/web_trigger.yml ]; then
-            if sed -n '/^[[:space:]]*testVersion[[:space:]]*:/p' .cnb/web_trigger.yml | sed -n '1p' >/dev/null; then
-              sed -i -E "s|^([[:space:]]*testVersion:[[:space:]]*).*$|\\1${VERSION}|" .cnb/web_trigger.yml
-            else
-              printf '\ntestVersion: %s\n' "${VERSION}" >> .cnb/web_trigger.yml
+          ##四、如果后端构建成功，则写入后端版本信息
+          if [[ ${{needs.build-and-push.result }} == 'success' ]]; then    
+            
+            echo "##当前测试环境后端版本信息：" > ${BACKEND_VERSION_FILE}
+            echo "version=${VERSION}" >> ${BACKEND_VERSION_FILE}
+            echo "branch_name=${BRANCH_NAME}" >> ${BACKEND_VERSION_FILE} 
+            echo "提交人：${AUTHOR}" >> ${BACKEND_VERSION_FILE} 
+            echo "服务提交信息：${{ github.event.head_commit.message }}" >> ${BACKEND_VERSION_FILE} 
+            echo "容器版本信息：$DOCKER_VERSION_INFO" >> ${BACKEND_VERSION_FILE}
+
+            if [[ "${is_prod_branch}" == "true" ]]; then
+              sed -i "/- name: 生产发布-后端/,/提交时间: / {
+                s|提交人.*|提交人: ${AUTHOR}|
+                s|提交信息.*|提交信息: ${{ github.event.head_commit.message }}|
+                s|deploy_version.*|deploy_version: $DOCKER_VERSION_INFO|
+                s|提交时间.*|提交时间: $(date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
             fi
-            git add .cnb/web_trigger.yml
-          else
-            echo "WARN: .cnb/web_trigger.yml not found, skip testVersion update."
           fi
 
-          git add .cnb_version.yml
-          if git diff --staged --quiet; then
-            echo ".cnb_version.yml 无变化，跳过提交。"
-          else
-            git commit -m "chore: update version to ${VERSION}"
-            git push
+          ##五、如果前端构建成功，则写入前端版本信息
+          if [[ ${{needs.build-frontend.result }} == 'success' ]]; then       
+            echo "##当前测试环境前端版本信息：" > ${FRONTEND_VERSION_FILE}
+            echo "version=${VERSION}" >> ${FRONTEND_VERSION_FILE}
+            echo "branch_name=${BRANCH_NAME}" >> ${FRONTEND_VERSION_FILE} 
+            echo "提交人：${AUTHOR}" >> ${FRONTEND_VERSION_FILE} 
+            echo "服务提交信息：${{ github.event.head_commit.message }}" >> ${FRONTEND_VERSION_FILE} 
+            echo "服务提交SHA：${{ github.sha }}" >> ${FRONTEND_VERSION_FILE}
+            echo "FrontendURL：${{ needs.build-frontend.outputs.download_url }}" >> ${FRONTEND_VERSION_FILE} 
+
+
+             if [[ "${is_prod_branch}" == "true" ]]; then
+              sed -i "/- name: 生产发布-前端/,/提交时间: / {
+                s|提交人.*|提交人: ${AUTHOR}|
+                s|提交信息.*|提交信息: ${{ github.event.head_commit.message }}|
+                s|deploy_version.*|deploy_version: ${{ needs.build-frontend.outputs.download_url }}|
+                s|提交时间.*|提交时间: $(date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
+            fi
           fi
+
+          git add -A ${BACKEND_VERSION_FILE} ${FRONTEND_VERSION_FILE} ${DEPOLY_FILE}
+          git commit -m "提交人: ${AUTHOR} 提交信息: ${MSG_CLEAN}"
+          git push
+
+
+
