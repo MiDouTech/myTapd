@@ -109,7 +109,6 @@ jobs:
             SERVICES=$FILTERED
 
           elif [[ "${{ github.ref }}" == refs/tags/* ]] || \
-            [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
             [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]] || \
             [[ ${{ github.event_name }} == "pull_request" ]]; then
 
@@ -179,7 +178,6 @@ jobs:
               Frontends=$FILTERED
             
           elif [[ "${{ github.ref }}" == refs/tags/* ]] || \
-            [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
             [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]] || \
             [[ ${{ github.event_name }} == "pull_request" ]]; then
 
