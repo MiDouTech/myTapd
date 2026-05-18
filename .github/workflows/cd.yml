@@ -453,8 +453,8 @@ jobs:
         run: |
           #一、变量初始化
           is_prod_branch=false 
-          BACKEND_VERSION_FILE=".testTicketBackendVersion.yml"
-          FRONTEND_VERSION_FILE=".testFrontendVersion.yml"
+          BACKEND_VERSION_FILE="testTicketBackendVersion.yml"
+          FRONTEND_VERSION_FILE="testFrontendVersion.yml"
 
           DEPOLY_FILE=".cnb/web_trigger.yml"
 
@@ -497,7 +497,7 @@ jobs:
                 s|提交人.*|提交人: ${AUTHOR}|
                 s|提交信息.*|提交信息: ${{ github.event.head_commit.message }}|
                 s|deploy_version.*|deploy_version: $DOCKER_VERSION_INFO|
-                s|提交时间.*|提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"|}" ${DEPOLY_FILE}
+                s|提交时间.*|提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
             fi
           fi
 
@@ -518,7 +518,7 @@ jobs:
                 s|提交人.*|提交人: ${AUTHOR}|
                 s|提交信息.*|提交信息: ${{ github.event.head_commit.message }}|
                 s|deploy_version.*|deploy_version: ${{ needs.build-frontend.outputs.download_url }}|
-                s|提交时间.*|提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"|}" ${DEPOLY_FILE}
+                s|提交时间.*|提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
             fi
           fi
 
