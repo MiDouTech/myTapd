@@ -323,7 +323,8 @@ jobs:
     name: Build & Push – ${{ matrix.name }}
     runs-on: ubuntu-latest
     needs: prepare
-    if: needs.prepare.result == 'success'
+    if: needs.prepare.result == 'success' && needs.prepare.outputs.services != '[]'
+
     permissions:
       contents: read
       packages: write
@@ -431,7 +432,7 @@ jobs:
       fail-fast: false
       #matrix 矩阵，表示这个 Job 要跑多个实例，每个实例对应一个服务
       matrix:
-        include: ${{ fromJson(needs.prepare.outputs.services) }}  
+        include: ${{ fromJson(needs.prepare.outputs.services != '[]' && needs.prepare.outputs.services || '[{"name":"__frontend_only__"}]') }}
 
     # 任一构建成功就更新版本；always() 允许读取已跳过/失败的依赖结果
     if: |
@@ -478,8 +479,10 @@ jobs:
           MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
           #容器版本信息:
           
-          DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}/${VERSION}"
-
+          if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
+            DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}/${VERSION}"
+          fi
+          
           #二、配置 git 凭证（避免 token 出现在 URL 明文中）
           AUTH_URL="${CNB_VERSION_REPO/https:\/\//https:\/\/cnb:${CNB_TOKEN}@}"
           rm -rf _version_repo
