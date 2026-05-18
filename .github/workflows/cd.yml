@@ -417,11 +417,15 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.services) }}  
 
-    # build-frontend 可能被跳过（FRONTEND_DIR 为空），用 always() 兼容
+    # 任一构建成功就更新版本；always() 允许读取已跳过/失败的依赖结果
     if: |
-      always() && github.event_name != 'pull_request' &&
-      needs.build-and-push.result == 'success' && 
-      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
+      always() &&
+      !cancelled() &&
+      github.event_name != 'pull_request' &&
+      (
+        needs.build-and-push.result == 'success' ||
+        needs.build-frontend.result == 'success'
+      )
 
     steps:
       - name: Checkout（读取 services.json）
