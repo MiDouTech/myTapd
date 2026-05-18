@@ -18,6 +18,18 @@ on:
       - develop
       - 'release/**'
 
+  workflow_dispatch:
+    inputs:
+      service_names:
+        description: "ticket-platform-backend"
+        type: string
+        default:
+      
+      frontend_names:
+        description: "ticket-platform"
+        type: string
+        default:
+
 env:
   GHCR_REGISTRY: ghcr.io
   CNB_REGISTRY: docker.cnb.cool
@@ -112,7 +124,7 @@ jobs:
 
               matched=false
               BUILD_ON_ANY_PATH=$(echo $svc | jq -c '.build_on_any_path')
-              if [[ "$BUILD_ON_ANY_PATH" == "true" ]]; then
+              if [[ "$BUILD_ON_ANY_PATH" == "true" ]] && [[ -n "$CHANGED" ]]; then
                 matched=true
                 echo "别管，改动就加入构建"
               else
@@ -182,7 +194,7 @@ jobs:
 
               matched=false
               BUILD_ON_ANY_PATH=$(echo $svc | jq -c '.build_on_any_path')
-              if [[ "$BUILD_ON_ANY_PATH" == "true" ]]; then
+              if [[ "$BUILD_ON_ANY_PATH" == "true" ]] && [[ -n "$CHANGED" ]]; then
                 matched=true
                 echo "别管，改动就加入构建"
               else
