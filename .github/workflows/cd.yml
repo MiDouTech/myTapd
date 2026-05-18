@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       service_names:
-        description: "ticket-platform-backend"
+        description: "后端构建服务：ticket-platform-backend"
         type: choice
         default: ''
         options:
@@ -29,7 +29,7 @@ on:
           - ticket-platform-backend
       
       frontend_names:
-        description: "ticket-platform"
+        description: "前端构建服务: ticket-platform"
         type: choice
         default: ''
         options:
@@ -482,7 +482,7 @@ jobs:
           if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
             DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}/${VERSION}"
           fi
-          
+
           #二、配置 git 凭证（避免 token 出现在 URL 明文中）
           AUTH_URL="${CNB_VERSION_REPO/https:\/\//https:\/\/cnb:${CNB_TOKEN}@}"
           rm -rf _version_repo
