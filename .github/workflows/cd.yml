@@ -482,7 +482,7 @@ jobs:
           #容器版本信息:
           
           if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
-            DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}/${VERSION}"
+            DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}:${VERSION}"
           fi
 
           #二、配置 git 凭证（避免 token 出现在 URL 明文中）
