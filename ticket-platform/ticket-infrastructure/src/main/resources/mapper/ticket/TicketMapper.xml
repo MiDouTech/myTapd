@@ -51,10 +51,19 @@
                 </if>
             </otherwise>
         </choose>
-        <!-- 待出简报：仅主处理人为当前用户且状态为已完成；排除已归档简报；排除存在「待审核」简报（仅保留待填写/已退回等需本人继续完善的单） -->
+        <!-- 待出简报：主处理人为当前用户；工单已完成，或存在关联简报为已退回(REJECTED)（工单未结单也需继续改简报）；排除已归档简报；排除存在「待审核」简报 -->
         <if test="view == 'my_brief_todo'">
             AND t.assignee_id = #{currentUserId}
-            AND LOWER(t.status) = 'completed'
+            AND (
+                LOWER(t.status) = 'completed'
+                OR EXISTS (
+                    SELECT 1 FROM bug_report_ticket brt
+                    INNER JOIN bug_report br ON br.id = brt.report_id AND br.deleted = 0
+                    WHERE brt.ticket_id = t.id
+                      AND brt.deleted = 0
+                      AND br.status = 'REJECTED'
+                )
+            )
             AND NOT EXISTS (
                 SELECT 1 FROM bug_report_ticket brt
                 INNER JOIN bug_report br ON br.id = brt.report_id AND br.deleted = 0

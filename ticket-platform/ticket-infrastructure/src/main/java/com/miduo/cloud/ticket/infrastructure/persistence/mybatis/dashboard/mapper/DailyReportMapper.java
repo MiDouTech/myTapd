@@ -75,7 +75,7 @@ public interface DailyReportMapper {
                                                        @Param("categoryIds") List<Long> categoryIds);
 
     /**
-     * 查询待简报工单：pending_cs_confirm / pending_verify，或已完成但无已归档关联 Bug 简报且无待审核(PENDING_REVIEW)关联简报（与「待出简报」my_brief_todo 已完成分支口径一致）
+     * 查询待简报工单：pending_cs_confirm / pending_verify，或（已完成或存在已退回(REJECTED)关联简报）且无已归档关联简报且无待审核(PENDING_REVIEW)关联简报（与「待出简报」my_brief_todo 口径一致）
      */
     List<DailyReportTicketRow> selectPendingVerifyTickets(@Param("startTime") Date startTime,
                                                           @Param("endTime") Date endTime,
