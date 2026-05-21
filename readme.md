@@ -2080,6 +2080,7 @@ vite v7.3.1 building client environment for production...
 | `v1.4.3-my-ticket-brief-todo-multi-select` | 我的工单新增“待出简报工单”页签，支持多选工单后一键跳转 Bug 简报编辑并自动预关联 |
 | `v1.4.4-my-brief-todo-assignee-only-completed` | 「待出简报工单」列表改为仅主处理人为本人且状态为已完成（修复创建人/协同身份误展示他人处理单） |
 | `v1.4.5-my-brief-todo-draft-only-filters` | 「待出简报工单」排除关联简报为待审核的单；该页签隐藏分类/状态/优先级筛选 |
+| `v1.4.6-my-brief-todo-include-rejected-brief` | 「待出简报工单」在工单未完成时，若已有关联 Bug 简报为**已退回**，也列入列表（与日报「待简报」统计口径一致） |
 
 ---
 
