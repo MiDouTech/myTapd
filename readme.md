@@ -2897,7 +2897,8 @@ vite v7.3.1 building client environment for production...
 在后端启动链路增加兜底：
 1. `TicketApplication` 启动前把 `DATASOURCE_URL/MYSQL_*、REDIS_*、JWT_SECRET` 注入为系统属性（仅在原属性为空时注入）；
 2. 即使 Nacos 配置临时为空，也能优先读取部署环境已经下发的变量；
-3. `application-dev.yml` 新增 `jwt.secret` 默认值兜底，避免 secret 为空触发启动期空指针。
+3. `application-dev.yml` 新增 `jwt.secret` 默认值兜底，避免 secret 为空触发启动期空指针；
+4. 预览兜底模式下自动关闭 Flyway 并放宽数据库初始化失败策略，保证服务先拉起。
 
 ### 61.3 参数说明（新增兜底链路）
 | 参数 | 类型 | 说明 |
@@ -2916,7 +2917,7 @@ vite v7.3.1 building client environment for production...
 |---|---|---|
 | Nacos secrets 正常 | 使用 Nacos 配置 | 与原流程一致 |
 | Nacos 缺失但环境变量齐全 | 自动走环境变量兜底 | 服务可继续启动 |
-| Nacos 缺失且环境变量也缺失 | 启动阶段明确报错 | 日志会指出缺少数据库连接参数 |
+| Nacos 缺失且环境变量也缺失（dev 预览） | 自动启用预览兜底启动 | 服务可拉起，数据库相关能力受限 |
 
 ### 61.5 常见问题（新增）
 #### Q70：为什么 PR 显示 “Checks still running”，但很久不结束？
@@ -2924,10 +2925,11 @@ vite v7.3.1 building client environment for production...
 - **记录（错误类型）**：配置注入失败（Nacos secrets 缺失或延迟）。
 - **恢复建议**：
   1. 先确认是否已有 `DATASOURCE_URL` / `MYSQL_HOST` 等环境变量；
-  2. 若 Nacos 偶发不稳定，走环境变量兜底可快速恢复部署；
-  3. 重新触发一次检查，确认状态从 `failure/pending` 变为 `success`。
+  2. 若 Nacos 偶发不稳定，优先补齐 `DATASOURCE_URL` 或 `MYSQL_*` 环境变量；
+  3. dev 预览场景可依赖自动兜底先启动服务，再补数据库配置；
+  4. 重新触发一次检查，确认状态从 `failure/pending` 变为 `success`。
 
 ### 61.6 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
-| `v1.4.20-cds-deploy-config-fallback` | 新增启动前系统属性兜底注入（datasource/redis/jwt），并补充 dev 配置的 JWT secret 兜底，降低 `CDS Deploy` 因配置缺失导致的阻塞 |
+| `v1.4.20-cds-deploy-config-fallback` | 新增启动前系统属性兜底注入（datasource/redis/jwt），并在 dev 预览模式下增加 Flyway/数据库初始化降级策略，降低 `CDS Deploy` 因配置缺失导致的阻塞 |

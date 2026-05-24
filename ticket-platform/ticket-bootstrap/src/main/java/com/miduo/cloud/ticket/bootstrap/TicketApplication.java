@@ -43,17 +43,25 @@ public class TicketApplication {
                         + "?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true";
             }
         }
-        setSystemPropertyIfAbsent("spring.datasource.url", datasourceUrl);
+        if (isBlank(datasourceUrl) && shouldEnableDevPreviewFallback()) {
+            // Why: 预览环境只要能拉起服务即可，不强依赖数据库连通性
+            datasourceUrl = "jdbc:mysql://127.0.0.1:3306/ticket_platform"
+                    + "?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true";
+        }
+
+        boolean datasourceFallbackApplied = setSystemPropertyIfAbsent("spring.datasource.url", datasourceUrl);
         setSystemPropertyIfAbsent("spring.datasource.username", firstNonBlank(
                 System.getenv("DATASOURCE_USERNAME"),
                 System.getenv("SPRING_DATASOURCE_USERNAME"),
-                System.getenv("MYSQL_USER")
+                System.getenv("MYSQL_USER"),
+                shouldEnableDevPreviewFallback() ? "root" : null
         ));
         setSystemPropertyIfAbsent("spring.datasource.password", firstNonBlank(
                 System.getenv("DATASOURCE_PASSWORD"),
                 System.getenv("SPRING_DATASOURCE_PASSWORD"),
                 System.getenv("MYSQL_PASSWORD"),
-                System.getenv("MYSQL_ROOT_PASSWORD")
+                System.getenv("MYSQL_ROOT_PASSWORD"),
+                shouldEnableDevPreviewFallback() ? "" : null
         ));
 
         setSystemPropertyIfAbsent("spring.redis.host", firstNonBlank(
@@ -70,13 +78,25 @@ public class TicketApplication {
         ));
 
         setSystemPropertyIfAbsent("jwt.secret", firstNonBlank(System.getenv("JWT_SECRET")));
+
+        if (datasourceFallbackApplied && shouldEnableDevPreviewFallback()) {
+            // Why: 数据库不可达时，允许预览环境先把应用拉起，避免 CDS 直接判定启动失败
+            setSystemPropertyIfAbsent("spring.datasource.hikari.initialization-fail-timeout", "0");
+            setSystemPropertyIfAbsent("spring.flyway.enabled", firstNonBlank(
+                    System.getenv("SPRING_FLYWAY_ENABLED"),
+                    System.getenv("FLYWAY_ENABLED"),
+                    "false"
+            ));
+            setSystemPropertyIfAbsent("management.health.db.enabled", "false");
+        }
     }
 
-    private static void setSystemPropertyIfAbsent(String key, String candidate) {
+    private static boolean setSystemPropertyIfAbsent(String key, String candidate) {
         if (!isBlank(System.getProperty(key)) || isBlank(candidate)) {
-            return;
+            return false;
         }
         System.setProperty(key, candidate);
+        return true;
     }
 
     private static String firstNonBlank(String... values) {
@@ -102,5 +122,20 @@ public class TicketApplication {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean shouldEnableDevPreviewFallback() {
+        String activeProfiles = firstNonBlank(
+                System.getProperty("spring.profiles.active"),
+                System.getenv("SPRING_PROFILES_ACTIVE")
+        );
+        if (isBlank(activeProfiles)) {
+            return true;
+        }
+        String normalized = activeProfiles.toLowerCase();
+        if (normalized.contains("prod")) {
+            return false;
+        }
+        return normalized.contains("dev");
     }
 }
