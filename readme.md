@@ -3079,3 +3079,38 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.26-ticket-list-manual-valid-report-column-compat` | 修复工单列表查询 SQL 报错：列表改为最小字段查询，并新增 V57 迁移脚本兜底补齐 `manual_valid_report` 字段 |
+
+---
+
+## 64. PR 状态检查 `CDS Deploy` 失败修复（前端依赖安装）
+
+### 64.1 功能用途
+- **用途**：修复 PR 预览部署里 `miduo-frontend` 启动失败导致的状态检查失败。
+- **类比理解**：像做饭前只买了主菜没买调料，锅一开就报错；这次是把“做菜必须的调料包”强制一起买齐。
+
+### 64.2 根因说明
+- CDS 启动前端时执行命令：`npm ci --no-audit --no-fund && npx --yes vite ...`
+- 在 `NODE_ENV=production` 场景下，`npm ci` 默认会跳过 dev 依赖，导致 `vite`、`@vitejs/plugin-vue` 缺失，前端容器启动失败。
+
+### 64.3 本次改动
+1. 新增 `miduo-frontend/.npmrc`
+2. 配置 `include=dev`，确保 `npm ci` 在该项目中安装 dev 依赖，避免预览环境缺包。
+
+### 64.4 使用方法（验收步骤）
+1. 在前端目录执行：`NODE_ENV=production npm ci --no-audit --no-fund`
+2. 执行：`node -e "require.resolve('vite');require.resolve('@vitejs/plugin-vue')"`
+3. 预期结果：命令不报错，说明关键依赖已可解析。
+
+### 64.5 常见问题（新增）
+#### Q78：为什么 CDS 里前端还是起不来？
+- **检测**：查看状态检查日志是否仍出现 `Cannot find package 'vite'` 或 `Cannot find module '@vitejs/plugin-vue'`。
+- **记录（错误类型）**：依赖安装策略导致的缺包启动失败。
+- **恢复建议**：
+  1. 确认分支包含 `miduo-frontend/.npmrc` 且内容为 `include=dev`；
+  2. 推送新提交触发一次新的 CDS 部署；
+  3. 若仍失败，再看是否为网络拉包失败（可重试一次部署）。
+
+### 64.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.27-cds-frontend-npm-ci-include-dev` | 修复 CDS 预览部署失败：新增 `.npmrc` 强制 `npm ci` 安装 dev 依赖，避免 `vite`/`@vitejs/plugin-vue` 缺失导致前端启动失败 |
