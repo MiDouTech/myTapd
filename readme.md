@@ -2998,7 +2998,15 @@ vite v7.3.1 building client environment for production...
 - **记录（错误类型）**：数据未设置（非报错）。
 - **恢复建议**：点击字段后选择“是”或“否”并保存。
 
+#### Q73：为什么状态看起来是“已关闭”，刷新后还是不显示“有效反馈”？
+- **检测**：打开浏览器开发者工具，查看详情接口里的 `status` 与 `statusLabel` 是否存在历史值或空格。
+- **记录（错误类型）**：关闭态识别条件过窄（仅按状态码精确匹配）。
+- **恢复建议**：
+  1. 升级到版本 `v1.4.22-ticket-closed-feedback-status-fallback` 及以上；
+  2. 强制刷新页面（`Ctrl+F5`）清理旧静态资源缓存；
+  3. 若仍异常，反馈该工单详情接口原始响应中的 `status/statusLabel` 以继续排查。
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.21-ticket-closed-valid-feedback-visible` | 优化工单详情：已关闭状态固定显示“有效反馈”，支持是/否下拉选择并持久化显示 |
+| `v1.4.22-ticket-closed-feedback-status-fallback` | 修复刷新后不显示问题：关闭态判定增加状态码标准化与 `statusLabel=已关闭` 兜底，避免历史状态值导致漏显示 |
