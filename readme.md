@@ -3037,3 +3037,123 @@ vite v7.3.1 building client environment for production...
 | `v1.4.23-ticket-closed-feedback-triple-fallback` | 再次增强关闭态识别：增加 `status` 中文判定与 `closedAt` 兜底，解决历史脏值场景下“已关闭却不显示有效反馈”问题 |
 | `v1.4.24-ticket-closed-summary-backend-fallback` | 后端兼容兜底：已关闭且未关联简报时也返回非空 `bugSummaryInfo`，保证新旧前端都能显示“有效反馈”入口 |
 | `v1.4.25-ticket-closed-summary-closedat-fallback` | 后端再增强：状态码异常但 `closedAt` 不为空时，仍按关闭场景透出非空 `bugSummaryInfo`，避免接口漏字段 |
+
+---
+
+## 63. 工单列表查询报错 `Unknown column 'manual_valid_report'` 修复（后端）
+
+### 63.1 功能用途
+- **用途**：修复“所有工单 → 点击查询”时偶发的数据库字段不存在报错（9999）。
+- **类比理解**：原来像“查订单时硬读了新加的备注栏”，老仓库还没这栏就会卡住；现在先按“最小必需字段”查，系统能先稳定跑起来。
+
+### 63.2 本次改动了什么
+1. 工单列表查询中，`ticket_bug_info` 由“全字段查询”改为“只查询 `ticket_id` + `company_name`”。
+2. 新增数据库迁移脚本 `V57__ensure_ticket_bug_info_manual_valid_report.sql`，启动时自动补齐 `manual_valid_report` 字段（若缺失）。
+
+### 63.3 使用方法（联调/验收）
+1. 进入“所有工单”页面。
+2. 随便设置或不设置筛选条件，点击“查询”。
+3. 预期结果：列表正常返回，不再出现 `BadSqlGrammarException` + `Unknown column 'manual_valid_report'`。
+
+### 63.4 参数说明（本次修复相关）
+| 位置 | 参数/字段 | 类型 | 说明 |
+|---|---|---|---|
+| `TicketApplicationService` | `select(ticket_id, company_name)` | 查询字段集合 | 列表页仅使用企业名展示，避免不必要字段触发老库兼容问题 |
+| Flyway `V57` | `manual_valid_report` | `varchar(8)` | 字段缺失时自动补齐，保障后续详情/编辑链路可用 |
+
+### 63.5 返回值说明（接口行为）
+| 接口 | 返回值 | 说明 |
+|---|---|---|
+| `POST /api/ticket/page` | `ApiResult<PageOutput<TicketListOutput>>` | 成功返回分页列表；本次修复后不再因缺失 `manual_valid_report` 报 SQL 语法错误 |
+
+### 63.6 常见问题（新增）
+#### Q77：为什么代码修了，页面还提示同样错误？
+- **检测**：查看后端启动日志，确认是否执行到 `V57` 迁移。
+- **记录（错误类型）**：数据库结构未同步 / 服务未重启到新版本。
+- **恢复建议**：
+  1. 部署本次版本后重启后端；
+  2. 确认 Flyway 迁移执行成功；
+  3. 再次点击“所有工单 -> 查询”验证。
+
+### 63.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.26-ticket-list-manual-valid-report-column-compat` | 修复工单列表查询 SQL 报错：列表改为最小字段查询，并新增 V57 迁移脚本兜底补齐 `manual_valid_report` 字段 |
+
+---
+
+## 64. PR 状态检查 `CDS Deploy` 失败修复（前端依赖安装）
+
+### 64.1 功能用途
+- **用途**：修复 PR 预览部署里 `miduo-frontend` 启动失败导致的状态检查失败。
+- **类比理解**：像做饭前只买了主菜没买调料，锅一开就报错；这次是把“做菜必须的调料包”强制一起买齐。
+
+### 64.2 根因说明
+- CDS 启动前端时执行命令：`npm ci --no-audit --no-fund && npx --yes vite ...`
+- 在 `NODE_ENV=production` 场景下，`npm ci` 默认会跳过 dev 依赖，导致 `vite`、`@vitejs/plugin-vue` 缺失，前端容器启动失败。
+
+### 64.3 本次改动
+1. 新增 `miduo-frontend/.npmrc`
+2. 配置 `include=dev`，确保 `npm ci` 在该项目中安装 dev 依赖，避免预览环境缺包。
+
+### 64.4 使用方法（验收步骤）
+1. 在前端目录执行：`NODE_ENV=production npm ci --no-audit --no-fund`
+2. 执行：`node -e "require.resolve('vite');require.resolve('@vitejs/plugin-vue')"`
+3. 预期结果：命令不报错，说明关键依赖已可解析。
+
+### 64.5 常见问题（新增）
+#### Q78：为什么 CDS 里前端还是起不来？
+- **检测**：查看状态检查日志是否仍出现 `Cannot find package 'vite'` 或 `Cannot find module '@vitejs/plugin-vue'`。
+- **记录（错误类型）**：依赖安装策略导致的缺包启动失败。
+- **恢复建议**：
+  1. 确认分支包含 `miduo-frontend/.npmrc` 且内容为 `include=dev`；
+  2. 推送新提交触发一次新的 CDS 部署；
+  3. 若仍失败，再看是否为网络拉包失败（可重试一次部署）。
+
+### 64.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.27-cds-frontend-npm-ci-include-dev` | 修复 CDS 预览部署失败：新增 `.npmrc` 强制 `npm ci` 安装 dev 依赖，避免 `vite`/`@vitejs/plugin-vue` 缺失导致前端启动失败 |
+
+---
+
+## 65. CDS 前端启动兼容性补充修复（Vite Node 版本）
+
+### 65.1 功能用途
+- **用途**：解决 CDS 预览环境中 `miduo-frontend` 仍可能启动失败的问题。
+- **类比理解**：不是“调料缺了”，而是“锅具型号不兼容”；要把工具换成低一档但稳定兼容的版本。
+
+### 65.2 根因说明（补充）
+- `vite@7` 与 `@vitejs/plugin-vue@6` 要求 Node `^20.19 || >=22.12`。
+- 在 CDS 预览环境存在较低 Node 版本场景时，`npx vite` 启动会直接失败。
+
+### 65.3 本次改动
+1. 将 `vite` 从 `^7.3.1` 调整为 `^4.5.14`（Node 16+ 兼容）。
+2. 将 `@vitejs/plugin-vue` 从 `^6.0.2` 调整为 `^4.6.2`（与 Vite 4 兼容）。
+3. 更新 `package-lock.json`，锁定新的依赖树。
+
+### 65.4 使用方法（验收步骤）
+1. `cd /workspace/miduo-frontend`
+2. `NODE_ENV=production npm ci --no-audit --no-fund`
+3. `timeout 8s bash -lc 'NODE_ENV=production npx --yes vite --host 0.0.0.0 --port 5173'`
+4. 预期结果：输出 `VITE v4.x ready`，说明 CDS 同路径命令可启动。
+
+### 65.5 返回值说明（命令行为）
+| 命令 | 返回值 | 说明 |
+|---|---|---|
+| `npm run build` | `0` | 前端生产构建通过 |
+| `NODE_ENV=production npm ci ... && npx vite ...` | 启动成功日志 | 与 CDS 预览命令保持一致，验证可运行 |
+
+### 65.6 常见问题（新增）
+#### Q79：为什么已经加了 `.npmrc`，CDS 还是红？
+- **检测**：查看是否使用了 `vite@7` / `@vitejs/plugin-vue@6`（Node 20+ 才兼容）。
+- **记录（错误类型）**：运行时版本兼容冲突（Node 与 Vite 主版本不匹配）。
+- **恢复建议**：
+  1. 使用本次提交中的 `vite@^4` + `@vitejs/plugin-vue@^4`；
+  2. 重新执行 `npm ci` 并触发 CDS 重新部署；
+  3. 若团队后续统一升级 CDS Node 到 20+，再评估回升 Vite 主版本。
+
+### 65.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.4.28-cds-frontend-vite-node16-compat` | 兼容更低版本 Node 运行时：Vite 栈降级到 Node 16+ 兼容组合（vite4 + plugin-vue4），解决预览部署前端启动失败 |
