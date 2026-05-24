@@ -3005,7 +3005,6 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.4.22-ticket-closed-feedback-status-fallback` 及以上；
   2. 强制刷新页面（`Ctrl+F5`）清理旧静态资源缓存；
   3. 若仍异常，反馈该工单详情接口原始响应中的 `status/statusLabel` 以继续排查。
-
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
