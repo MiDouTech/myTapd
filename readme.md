@@ -3013,9 +3013,18 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.4.23-ticket-closed-feedback-triple-fallback` 及以上；
   2. 新版本会按“状态码标准化 + 中文状态 + closedAt”三路识别关闭态；
   3. 仍异常时反馈接口原始 JSON（status/statusLabel/closedAt）用于继续排查。
+
+#### Q75：接口里没有 `bugSummaryInfo`，会不会导致“有效反馈”不显示？
+- **检测**：查看工单详情返回体是否缺失 `bugSummaryInfo` 字段，且工单状态已经是 `closed`。
+- **记录（错误类型）**：前后端版本错位/前端缓存导致旧渲染条件生效。
+- **恢复建议**：
+  1. 升级到版本 `v1.4.24-ticket-closed-summary-backend-fallback` 及以上；
+  2. 新版本后端会在“已关闭且无简报”场景下返回非空 `bugSummaryInfo`；
+  3. 强制刷新前端后再次验证字段是否显示。
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.21-ticket-closed-valid-feedback-visible` | 优化工单详情：已关闭状态固定显示“有效反馈”，支持是/否下拉选择并持久化显示 |
 | `v1.4.22-ticket-closed-feedback-status-fallback` | 修复刷新后不显示问题：关闭态判定增加状态码标准化与 `statusLabel=已关闭` 兜底，避免历史状态值导致漏显示 |
 | `v1.4.23-ticket-closed-feedback-triple-fallback` | 再次增强关闭态识别：增加 `status` 中文判定与 `closedAt` 兜底，解决历史脏值场景下“已关闭却不显示有效反馈”问题 |
+| `v1.4.24-ticket-closed-summary-backend-fallback` | 后端兼容兜底：已关闭且未关联简报时也返回非空 `bugSummaryInfo`，保证新旧前端都能显示“有效反馈”入口 |
