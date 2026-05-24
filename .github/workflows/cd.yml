@@ -479,11 +479,21 @@ jobs:
 
           BRANCH_NAME=${GITHUB_REF_NAME}
           MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
+          escape_sed_replacement() {
+            printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+          }
+          AUTHOR_ESC=$(escape_sed_replacement "${AUTHOR}")
+          MSG_ESC=$(escape_sed_replacement "${MSG_CLEAN}")
+          BACKEND_DESC_ESC=$(escape_sed_replacement "生产后端发布-${AUTHOR}：${MSG_CLEAN}")
+          FRONTEND_DESC_ESC=$(escape_sed_replacement "生产前端发布-${AUTHOR}：${MSG_CLEAN}")
+          FRONTEND_URL_ESC=$(escape_sed_replacement "${FRONTEND_DOWNLOAD_URL}")
           #容器版本信息:
           
           if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
             DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}:${VERSION}"
           fi
+          DOCKER_VERSION_ESC=$(escape_sed_replacement "${DOCKER_VERSION_INFO}")
+          PUBLISH_TIME_ESC=$(escape_sed_replacement "$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')")
 
           #二、配置 git 凭证（避免 token 出现在 URL 明文中）
           AUTH_URL="${CNB_VERSION_REPO/https:\/\//https:\/\/cnb:${CNB_TOKEN}@}"
@@ -515,11 +525,11 @@ jobs:
 
             if [[ "${is_prod_branch}" == "true" ]]; then
               sed -i "/- name: 生产发布-后端/,/提交时间: / {
-                s|author.*|author: ${AUTHOR}|
-                s|description: 生产后端发布.*|description: 生产后端发布-${AUTHOR}：${{ github.event.head_commit.message }}|
-                s|message.*|message: ${{ github.event.head_commit.message }}|
-                s|deploy_version.*|deploy_version: $DOCKER_VERSION_INFO|
-                s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
+                s|author.*|author: ${AUTHOR_ESC}|
+                s|description: 生产后端发布.*|description: ${BACKEND_DESC_ESC}|
+                s|message.*|message: ${MSG_ESC}|
+                s|deploy_version.*|deploy_version: ${DOCKER_VERSION_ESC}|
+                s|publish_time.*|publish_time: ${PUBLISH_TIME_ESC}|}" ${DEPOLY_FILE}
             fi
           fi
 
@@ -537,11 +547,11 @@ jobs:
 
              if [[ "${is_prod_branch}" == "true" ]]; then
               sed -i "/- name: 生产发布-前端/,/提交时间: / {
-                s|author.*|author: ${AUTHOR}|
-                s|description: 生产前端发布.*|description: 生产前端发布-${AUTHOR}：${{ github.event.head_commit.message }}|
-                s|message.*|message: ${MSG_CLEAN}|
-                s|deploy_version.*|deploy_version: ${{ needs.build-frontend.outputs.download_url }}|
-                s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
+                s|author.*|author: ${AUTHOR_ESC}|
+                s|description: 生产前端发布.*|description: ${FRONTEND_DESC_ESC}|
+                s|message.*|message: ${MSG_ESC}|
+                s|deploy_version.*|deploy_version: ${FRONTEND_URL_ESC}|
+                s|publish_time.*|publish_time: ${PUBLISH_TIME_ESC}|}" ${DEPOLY_FILE}
             fi
           fi
 
