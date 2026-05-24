@@ -180,24 +180,24 @@
           <span class="info-value">{{ detail.bugSummaryInfo?.defectCategoryLabel || detail.bugSummaryInfo?.defectCategory || '-' }}</span>
         </div>
 
-        <!-- 有效反馈（关闭状态可手工选择） -->
+        <!-- 有效反馈（关闭状态直接下拉选择） -->
         <div class="info-row editable-row" v-if="canEditValidFeedback">
           <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效反馈</span>
           <div class="info-value editable-value">
-            <template v-if="editingField !== 'isValidReport'">
-              <span class="value-text" :class="validFeedbackClass" @click="startEdit('isValidReport')">
-                {{ validFeedbackLabel }}
-              </span>
-              <el-icon class="edit-icon" @click="startEdit('isValidReport')"><Edit /></el-icon>
-            </template>
-            <template v-else>
-              <el-select v-model="editValues.isValidReport" size="small" style="width: 120px">
-                <el-option label="是" value="YES" />
-                <el-option label="否" value="NO" />
-              </el-select>
-              <el-button type="primary" link size="small" @click="saveField('isValidReport')"><el-icon><Check /></el-icon></el-button>
-              <el-button link size="small" @click="cancelEdit"><el-icon><Close /></el-icon></el-button>
-            </template>
+            <el-select
+              v-model="validFeedbackSelection"
+              size="small"
+              placeholder="请选择"
+              style="width: 120px"
+              :disabled="validFeedbackSaving"
+              @change="handleValidFeedbackChange"
+            >
+              <el-option label="是" value="YES" />
+              <el-option label="否" value="NO" />
+            </el-select>
+            <span class="valid-feedback-tip" :class="validFeedbackClass">
+              当前：{{ validFeedbackLabel }}
+            </span>
           </div>
         </div>
         <div class="info-row" v-else-if="detail.bugSummaryInfo">
@@ -233,7 +233,7 @@ import {
   UserFilled,
   Warning,
 } from '@element-plus/icons-vue'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import { updateBugCustomerInfo } from '@/api/ticket'
 import type { TicketDetailOutput } from '@/types/ticket'
@@ -268,6 +268,8 @@ const emit = defineEmits<{
 
 const editingField = ref<string | null>(null)
 const editValues = reactive<Record<string, string>>({})
+const validFeedbackSelection = ref('')
+const validFeedbackSaving = ref(false)
 
 const canEditCustomerInfo = computed(() => true)
 const isClosedTicket = computed(() => {
@@ -326,6 +328,17 @@ const validFeedbackClass = computed(() => {
   return ''
 })
 
+watch(
+  validFeedbackValue,
+  (value) => {
+    // 这里在详情刷新后同步最新值，避免下拉框停留在旧状态
+    if (!validFeedbackSaving.value) {
+      validFeedbackSelection.value = value
+    }
+  },
+  { immediate: true },
+)
+
 function normalizeSeverity(source?: string): string {
   if (!source) {
     return ''
@@ -346,8 +359,6 @@ function startEdit(field: string): void {
     editValues.merchantNo = props.detail.bugCustomerInfo?.merchantNo ?? ''
   } else if (field === 'expectedTime') {
     editValues.expectedTime = props.detail.expectedTime ?? ''
-  } else if (field === 'isValidReport') {
-    editValues.isValidReport = validFeedbackValue.value
   }
 }
 
@@ -367,19 +378,32 @@ async function saveField(field: string): Promise<void> {
       })
       notifySuccess('保存成功')
       emit('refresh')
-    } else if (field === 'isValidReport') {
-      const existing = props.detail.bugCustomerInfo ?? {}
-      await updateBugCustomerInfo(props.ticketId, {
-        ...existing,
-        manualValidReport: editValues.isValidReport || null,
-      })
-      notifySuccess('保存成功')
-      emit('refresh')
     }
   } catch {
     notifyError('保存失败，请重试')
   } finally {
     editingField.value = null
+  }
+}
+
+async function handleValidFeedbackChange(value: string): Promise<void> {
+  if (value !== 'YES' && value !== 'NO') {
+    return
+  }
+  const existing = props.detail.bugCustomerInfo ?? {}
+  validFeedbackSaving.value = true
+  try {
+    await updateBugCustomerInfo(props.ticketId, {
+      ...existing,
+      manualValidReport: value,
+    })
+    notifySuccess('保存成功')
+    emit('refresh')
+  } catch {
+    validFeedbackSelection.value = validFeedbackValue.value
+    notifyError('保存失败，请重试')
+  } finally {
+    validFeedbackSaving.value = false
   }
 }
 </script>
@@ -538,5 +562,10 @@ async function saveField(field: string): Promise<void> {
 .valid-no {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.valid-feedback-tip {
+  font-size: 12px;
+  color: #909399;
 }
 </style>
