@@ -180,13 +180,13 @@
           <span class="info-value">{{ detail.bugSummaryInfo?.defectCategoryLabel || detail.bugSummaryInfo?.defectCategory || '-' }}</span>
         </div>
 
-        <!-- 有效报告（关闭状态可手工选择） -->
-        <div class="info-row editable-row" v-if="detail.bugSummaryInfo && canEditValidReport">
-          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效报告</span>
+        <!-- 有效反馈（关闭状态可手工选择） -->
+        <div class="info-row editable-row" v-if="canEditValidFeedback">
+          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效反馈</span>
           <div class="info-value editable-value">
             <template v-if="editingField !== 'isValidReport'">
-              <span class="value-text" :class="validReportClass" @click="startEdit('isValidReport')">
-                {{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}
+              <span class="value-text" :class="validFeedbackClass" @click="startEdit('isValidReport')">
+                {{ validFeedbackLabel }}
               </span>
               <el-icon class="edit-icon" @click="startEdit('isValidReport')"><Edit /></el-icon>
             </template>
@@ -201,8 +201,8 @@
           </div>
         </div>
         <div class="info-row" v-else-if="detail.bugSummaryInfo">
-          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效报告</span>
-          <span class="info-value" :class="validReportClass">{{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}</span>
+          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效反馈</span>
+          <span class="info-value" :class="validFeedbackClass">{{ validFeedbackLabel }}</span>
         </div>
 
         <!-- 责任人 -->
@@ -269,10 +269,37 @@ const editingField = ref<string | null>(null)
 const editValues = reactive<Record<string, string>>({})
 
 const canEditCustomerInfo = computed(() => true)
-const canEditValidReport = computed(() => (props.detail.status || '').toLowerCase() === 'closed')
+const isClosedTicket = computed(() => (props.detail.status || '').toLowerCase() === 'closed')
+const canEditValidFeedback = computed(() => isClosedTicket.value)
 
-const validReportClass = computed(() => {
-  const v = props.detail.bugSummaryInfo?.isValidReport
+const validFeedbackValue = computed(() => {
+  const summaryValue = props.detail.bugSummaryInfo?.isValidReport
+  if (summaryValue === 'YES' || summaryValue === 'NO') {
+    return summaryValue
+  }
+  const manualValue = props.detail.bugCustomerInfo?.manualValidReport
+  if (manualValue === 'YES' || manualValue === 'NO') {
+    return manualValue
+  }
+  return ''
+})
+
+const validFeedbackLabel = computed(() => {
+  const summaryValue = props.detail.bugSummaryInfo?.isValidReport
+  if (summaryValue === 'YES' || summaryValue === 'NO') {
+    return props.detail.bugSummaryInfo?.isValidReportLabel || '-'
+  }
+  if (validFeedbackValue.value === 'YES') {
+    return '是'
+  }
+  if (validFeedbackValue.value === 'NO') {
+    return '否'
+  }
+  return '-'
+})
+
+const validFeedbackClass = computed(() => {
+  const v = validFeedbackValue.value
   if (v === 'YES') return 'valid-yes'
   if (v === 'NO') return 'valid-no'
   return ''
@@ -299,7 +326,7 @@ function startEdit(field: string): void {
   } else if (field === 'expectedTime') {
     editValues.expectedTime = props.detail.expectedTime ?? ''
   } else if (field === 'isValidReport') {
-    editValues.isValidReport = props.detail.bugSummaryInfo?.isValidReport ?? 'NO'
+    editValues.isValidReport = validFeedbackValue.value
   }
 }
 
@@ -323,7 +350,7 @@ async function saveField(field: string): Promise<void> {
       const existing = props.detail.bugCustomerInfo ?? {}
       await updateBugCustomerInfo(props.ticketId, {
         ...existing,
-        manualValidReport: editValues.isValidReport ?? null,
+        manualValidReport: editValues.isValidReport || null,
       })
       notifySuccess('保存成功')
       emit('refresh')
