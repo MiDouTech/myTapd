@@ -180,18 +180,18 @@
           <span class="info-value">{{ detail.bugSummaryInfo?.defectCategoryLabel || detail.bugSummaryInfo?.defectCategory || '-' }}</span>
         </div>
 
-        <!-- 有效报告（关闭状态可手工选择） -->
-        <div class="info-row editable-row" v-if="detail.bugSummaryInfo && canEditValidReport">
+        <!-- 有效报告（关闭状态可手工编辑；非关闭状态沿用摘要只读） -->
+        <div class="info-row editable-row" v-if="canEditValidReport || detail.bugSummaryInfo">
           <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效报告</span>
-          <div class="info-value editable-value">
+          <div v-if="canEditValidReport" class="info-value editable-value">
             <template v-if="editingField !== 'isValidReport'">
               <span class="value-text" :class="validReportClass" @click="startEdit('isValidReport')">
-                {{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}
+                {{ currentValidReportLabel }}
               </span>
               <el-icon class="edit-icon" @click="startEdit('isValidReport')"><Edit /></el-icon>
             </template>
             <template v-else>
-              <el-select v-model="editValues.isValidReport" size="small" style="width: 120px">
+              <el-select v-model="editValues.isValidReport" size="small" placeholder="请选择" style="width: 120px">
                 <el-option label="是" value="YES" />
                 <el-option label="否" value="NO" />
               </el-select>
@@ -199,10 +199,9 @@
               <el-button link size="small" @click="cancelEdit"><el-icon><Close /></el-icon></el-button>
             </template>
           </div>
-        </div>
-        <div class="info-row" v-else-if="detail.bugSummaryInfo">
-          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效报告</span>
-          <span class="info-value" :class="validReportClass">{{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}</span>
+          <span v-else class="info-value" :class="validReportClass">
+            {{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}
+          </span>
         </div>
 
         <!-- 责任人 -->
@@ -256,6 +255,11 @@ const IMPACT_SCOPE_LABEL_MAP: Record<string, string> = {
   ALL: '全部商户',
 }
 
+const VALID_REPORT_LABEL_MAP: Record<string, string> = {
+  YES: '是',
+  NO: '否',
+}
+
 const props = defineProps<{
   detail: TicketDetailOutput
   ticketId: number
@@ -271,8 +275,28 @@ const editValues = reactive<Record<string, string>>({})
 const canEditCustomerInfo = computed(() => true)
 const canEditValidReport = computed(() => (props.detail.status || '').toLowerCase() === 'closed')
 
+const currentValidReportCode = computed(() => {
+  const summary = props.detail.bugSummaryInfo?.isValidReport?.toUpperCase?.()
+  if (summary === 'YES' || summary === 'NO') {
+    return summary
+  }
+  const manual = props.detail.bugCustomerInfo?.manualValidReport?.toUpperCase?.()
+  if (manual === 'YES' || manual === 'NO') {
+    return manual
+  }
+  return ''
+})
+
+const currentValidReportLabel = computed(() => {
+  if (props.detail.bugSummaryInfo?.isValidReportLabel) {
+    return props.detail.bugSummaryInfo.isValidReportLabel
+  }
+  const code = currentValidReportCode.value
+  return code ? (VALID_REPORT_LABEL_MAP[code] || code) : '-'
+})
+
 const validReportClass = computed(() => {
-  const v = props.detail.bugSummaryInfo?.isValidReport
+  const v = currentValidReportCode.value
   if (v === 'YES') return 'valid-yes'
   if (v === 'NO') return 'valid-no'
   return ''
@@ -299,7 +323,7 @@ function startEdit(field: string): void {
   } else if (field === 'expectedTime') {
     editValues.expectedTime = props.detail.expectedTime ?? ''
   } else if (field === 'isValidReport') {
-    editValues.isValidReport = props.detail.bugSummaryInfo?.isValidReport ?? 'NO'
+    editValues.isValidReport = currentValidReportCode.value
   }
 }
 
@@ -320,10 +344,14 @@ async function saveField(field: string): Promise<void> {
       notifySuccess('保存成功')
       emit('refresh')
     } else if (field === 'isValidReport') {
+      if (editValues.isValidReport !== 'YES' && editValues.isValidReport !== 'NO') {
+        notifyError('请选择有效报告是或否')
+        return
+      }
       const existing = props.detail.bugCustomerInfo ?? {}
       await updateBugCustomerInfo(props.ticketId, {
         ...existing,
-        manualValidReport: editValues.isValidReport ?? null,
+        manualValidReport: editValues.isValidReport,
       })
       notifySuccess('保存成功')
       emit('refresh')

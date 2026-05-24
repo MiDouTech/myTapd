@@ -2887,74 +2887,49 @@ vite v7.3.1 building client environment for production...
 
 ---
 
-## 61. 工单缺陷信息：关闭状态可手工设置“有效报告”（前后端）
+## 61. CDS 部署卡在“Checks still running / Deploy failed”兜底修复
 
 ### 61.1 功能用途
-- **用途**：在工单已经关闭（`closed`）后，允许人工把“有效报告”改成“是/否”，用于最终复盘口径确认。  
-- **类比理解**：系统自动判断像“机器初审”，关闭后的手工选择像“老师终审签字”，最终以终审为准。
+- **用途**：当 Nacos 里的敏感配置（尤其是数据库 URL）暂时没注入时，后端也能通过环境变量正常启动，避免 PR 被 `CDS Deploy` 卡死。  
+- **类比理解**：像导航有“主路线（Nacos）”和“备用路线（环境变量）”，主路堵了还能绕行，不会原地趴窝。
 
 ### 61.2 本次改动了什么
-1. 数据库新增字段：`ticket_bug_info.manual_valid_report`（YES/NO）。  
-2. 复用 `API000021`（更新客服信息）扩展入参 `manualValidReport`。  
-3. 后端增加状态保护：**仅 closed 状态允许修改手工有效报告**。  
-4. 工单详情 `API000008` 展示逻辑升级：
-   - 默认仍按“简报是否归档”自动计算；
-   - 若工单已关闭且已设置手工值，则优先显示手工值。  
-5. 前端详情页右侧“有效报告”在关闭状态下变为可编辑下拉（是/否）。  
-6. 变更历史新增“有效报告（is_valid_report）”字段记录。
+在后端启动链路增加兜底：
+1. `TicketApplication` 启动前把 `DATASOURCE_URL/MYSQL_*、REDIS_*、JWT_SECRET` 注入为系统属性（仅在原属性为空时注入）；
+2. 即使 Nacos 配置临时为空，也能优先读取部署环境已经下发的变量；
+3. `application-dev.yml` 新增 `jwt.secret` 默认值兜底，避免 secret 为空触发启动期空指针；
+4. 预览兜底模式下自动关闭 Flyway 并放宽数据库初始化失败策略，保证服务先拉起。
 
-### 61.3 使用方法（验收步骤）
-1. 打开一条缺陷工单详情，确保工单状态为 `已关闭`。  
-2. 在右侧“缺陷信息”中点击“有效报告”。  
-3. 从下拉中选择“是”或“否”，点击保存。  
-4. 刷新页面，预期：
-   - 字段显示为刚才选择的结果；
-   - 变更历史可看到“有效报告”字段变更记录。  
-5. 反向验证：非关闭状态提交该字段时，后端应拒绝并提示仅关闭状态可修改。
-
-### 61.4 参数说明（本次改动相关）
-| 参数/字段 | 类型 | 说明 |
+### 61.3 参数说明（新增兜底链路）
+| 参数 | 类型 | 说明 |
 |---|---|---|
-| `manual_valid_report` | `varchar(8)` | 数据库字段，手工有效报告（`YES`/`NO`） |
-| `manualValidReport` | `String` | `API000021` 扩展入参，取值 `YES` 或 `NO` |
-| `isValidReport` | `String` | 工单详情摘要中的有效报告代码 |
-| `isValidReportLabel` | `String` | 工单详情摘要中的有效报告中文（是/否） |
+| `DATASOURCE_URL` / `SPRING_DATASOURCE_URL` | `String` | 直接指定 JDBC URL |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DB` | `String/Number` | 未提供 URL 时，自动拼 JDBC URL |
+| `DATASOURCE_USERNAME` / `SPRING_DATASOURCE_USERNAME` / `MYSQL_USER` | `String` | 数据库用户名 |
+| `DATASOURCE_PASSWORD` / `SPRING_DATASOURCE_PASSWORD` / `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` | `String` | 数据库密码 |
+| `REDIS_HOST` / `SPRING_REDIS_HOST` | `String` | Redis 地址 |
+| `REDIS_PORT` / `SPRING_REDIS_PORT` | `Number` | Redis 端口 |
+| `REDIS_PASSWORD` / `SPRING_REDIS_PASSWORD` | `String` | Redis 密码 |
+| `JWT_SECRET` | `String` | JWT 签名密钥（用于启动前兜底注入） |
 
-### 61.5 返回值说明（接口行为）
-| 接口 | 返回值 | 说明 |
+### 61.4 返回值说明（启动行为）
+| 场景 | 行为 | 结果 |
 |---|---|---|
-| `PUT /api/ticket/bug/customer-info/{id}`（API000021） | `ApiResult<Void>` | 关闭状态下可保存 `manualValidReport`；非关闭状态修改会返回参数错误 |
-| `GET /api/ticket/detail/{id}`（API000008） | `ApiResult<TicketDetailOutput>` | `bugSummaryInfo` 中有效报告字段支持“关闭后手工值优先” |
+| Nacos secrets 正常 | 使用 Nacos 配置 | 与原流程一致 |
+| Nacos 缺失但环境变量齐全 | 自动走环境变量兜底 | 服务可继续启动 |
+| Nacos 缺失且环境变量也缺失（dev 预览） | 自动启用预览兜底启动 | 服务可拉起，数据库相关能力受限 |
 
-### 61.6 常见问题（新增）
-#### Q70：为什么我在“处理中”工单上改不了有效报告？
-- **检测**：确认工单状态是否为 `closed`。  
-- **记录（错误类型）**：命中业务保护规则（非关闭状态禁止手工修改）。  
+### 61.5 常见问题（新增）
+#### Q70：为什么 PR 显示 “Checks still running”，但很久不结束？
+- **检测**：打开 `CDS Deploy` 检查项，看是否出现 `Failed to determine suitable jdbc url` 或服务启动失败。
+- **记录（错误类型）**：配置注入失败（Nacos secrets 缺失或延迟）。
 - **恢复建议**：
-  1. 先按流程关闭工单；
-  2. 关闭后再设置“有效报告”。
+  1. 先确认是否已有 `DATASOURCE_URL` / `MYSQL_HOST` 等环境变量；
+  2. 若 Nacos 偶发不稳定，优先补齐 `DATASOURCE_URL` 或 `MYSQL_*` 环境变量；
+  3. dev 预览场景可依赖自动兜底先启动服务，再补数据库配置；
+  4. 重新触发一次检查，确认状态从 `failure/pending` 变为 `success`。
 
-#### Q71：为什么我改了有效报告，刷新后又变回去了？
-- **检测**：查看保存请求是否成功返回；再看是否有并发操作覆盖。  
-- **记录（错误类型）**：保存失败或页面未刷新到最新数据。  
-- **恢复建议**：
-  1. 重新保存一次并确认接口成功；
-  2. 强制刷新页面（`Ctrl+F5`）；
-  3. 到变更历史确认是否已记录“有效报告”变更。
-
-### 61.7 示例截图（终端运行效果）
-```text
-[cloud-agent-startup] Maven 安装完成：Apache Maven 3.9.11
-[cloud-agent-startup] JDK8 安装完成：openjdk version "1.8.0_442"
-
-> miduo-frontend@0.0.0 build
-> vue-tsc -b && vite build
-✓ built in 9.26s
-
-[INFO] BUILD SUCCESS
-```
-
-### 61.8 版本历史（新增）
+### 61.6 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
-| `v1.4.20-ticket-closed-manual-valid-report` | 支持工单关闭后手工设置“有效报告（是/否）”：新增 `manual_valid_report` 字段、扩展 API000021、详情展示改为关闭状态手工值优先并记录变更历史 |
+| `v1.4.20-cds-deploy-config-fallback` | 新增启动前系统属性兜底注入（datasource/redis/jwt），并在 dev 预览模式下增加 Flyway/数据库初始化降级策略，降低 `CDS Deploy` 因配置缺失导致的阻塞 |

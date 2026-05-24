@@ -62,6 +62,10 @@ dev-login:
   password: ${DEV_LOGIN_PASSWORD:}
   phone-password: ${DEV_LOGIN_PHONE_PASSWORD:}
 
+jwt:
+  # Why: Nacos secrets 未就绪时，避免 jwt.secret 为空导致启动失败
+  secret: ${JWT_SECRET:dev-default-jwt-secret-change-me-32bytes}
+
 logging:
   level:
     com.miduo.cloud.ticket: debug
