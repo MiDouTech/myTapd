@@ -1459,7 +1459,8 @@ public class TicketApplicationService {
                         .last("LIMIT 1")
         );
         if (latestReportTicket == null) {
-            if (isClosedStatus(ticket.getStatus())) {
+            // 兼容历史数据：个别工单状态码异常但已写入 closedAt，仍应透出摘要壳对象供前端渲染“有效反馈”。
+            if (isClosedStatus(ticket.getStatus()) || ticket.getClosedAt() != null) {
                 BugSummaryInfoOutput output = new BugSummaryInfoOutput();
                 if (manualOption != null) {
                     applyValidReportOption(output, manualOption);
