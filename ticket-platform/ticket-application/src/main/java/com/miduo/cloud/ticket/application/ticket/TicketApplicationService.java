@@ -312,7 +312,10 @@ public class TicketApplicationService {
         Map<Long, String> companyNameByTicketId = Collections.emptyMap();
         if (!ticketIds.isEmpty()) {
             List<TicketBugInfoPO> bugInfos = ticketBugInfoMapper.selectList(
-                    new LambdaQueryWrapper<TicketBugInfoPO>().in(TicketBugInfoPO::getTicketId, ticketIds));
+                    new LambdaQueryWrapper<TicketBugInfoPO>()
+                            // 这里限制查询字段，因为列表只需要企业名称，避免历史库缺少新增列导致整表查询失败。
+                            .select(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName)
+                            .in(TicketBugInfoPO::getTicketId, ticketIds));
             companyNameByTicketId = bugInfos.stream()
                     .filter(b -> b.getTicketId() != null && b.getCompanyName() != null
                             && !b.getCompanyName().trim().isEmpty())
