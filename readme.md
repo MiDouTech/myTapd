@@ -3021,6 +3021,14 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.4.24-ticket-closed-summary-backend-fallback` 及以上；
   2. 新版本后端会在“已关闭且无简报”场景下返回非空 `bugSummaryInfo`；
   3. 强制刷新前端后再次验证字段是否显示。
+
+#### Q76：接口状态码异常，但 `closedAt` 已有值时还会丢 `bugSummaryInfo` 吗？
+- **检测**：查看接口中 `status` 不是 `closed`，但 `closedAt` 不为空。
+- **记录（错误类型）**：历史脏数据导致关闭态识别仅靠状态码失效。
+- **恢复建议**：
+  1. 升级到版本 `v1.4.25-ticket-closed-summary-closedat-fallback` 及以上；
+  2. 新版本后端会在“状态码命中关闭或 `closedAt` 有值”任一条件下返回非空 `bugSummaryInfo`；
+  3. 重新请求详情接口确认字段已透出。
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
@@ -3028,3 +3036,4 @@ vite v7.3.1 building client environment for production...
 | `v1.4.22-ticket-closed-feedback-status-fallback` | 修复刷新后不显示问题：关闭态判定增加状态码标准化与 `statusLabel=已关闭` 兜底，避免历史状态值导致漏显示 |
 | `v1.4.23-ticket-closed-feedback-triple-fallback` | 再次增强关闭态识别：增加 `status` 中文判定与 `closedAt` 兜底，解决历史脏值场景下“已关闭却不显示有效反馈”问题 |
 | `v1.4.24-ticket-closed-summary-backend-fallback` | 后端兼容兜底：已关闭且未关联简报时也返回非空 `bugSummaryInfo`，保证新旧前端都能显示“有效反馈”入口 |
+| `v1.4.25-ticket-closed-summary-closedat-fallback` | 后端再增强：状态码异常但 `closedAt` 不为空时，仍按关闭场景透出非空 `bugSummaryInfo`，避免接口漏字段 |
