@@ -3125,18 +3125,18 @@ vite v7.3.1 building client environment for production...
 
 ### 65.2 根因说明（补充）
 - `vite@7` 与 `@vitejs/plugin-vue@6` 要求 Node `^20.19 || >=22.12`。
-- CDS 预览环境存在 Node 18 兼容场景时，`npx vite` 启动会直接失败。
+- 在 CDS 预览环境存在较低 Node 版本场景时，`npx vite` 启动会直接失败。
 
 ### 65.3 本次改动
-1. 将 `vite` 从 `^7.3.1` 调整为 `^6.4.2`（Node 18 兼容）。
-2. 将 `@vitejs/plugin-vue` 从 `^6.0.2` 调整为 `^5.2.4`（与 Vite 6 兼容）。
+1. 将 `vite` 从 `^7.3.1` 调整为 `^4.5.14`（Node 16+ 兼容）。
+2. 将 `@vitejs/plugin-vue` 从 `^6.0.2` 调整为 `^4.6.2`（与 Vite 4 兼容）。
 3. 更新 `package-lock.json`，锁定新的依赖树。
 
 ### 65.4 使用方法（验收步骤）
 1. `cd /workspace/miduo-frontend`
 2. `NODE_ENV=production npm ci --no-audit --no-fund`
 3. `timeout 8s bash -lc 'NODE_ENV=production npx --yes vite --host 0.0.0.0 --port 5173'`
-4. 预期结果：输出 `VITE v6.x ready`，说明 CDS 同路径命令可启动。
+4. 预期结果：输出 `VITE v4.x ready`，说明 CDS 同路径命令可启动。
 
 ### 65.5 返回值说明（命令行为）
 | 命令 | 返回值 | 说明 |
@@ -3149,11 +3149,11 @@ vite v7.3.1 building client environment for production...
 - **检测**：查看是否使用了 `vite@7` / `@vitejs/plugin-vue@6`（Node 20+ 才兼容）。
 - **记录（错误类型）**：运行时版本兼容冲突（Node 与 Vite 主版本不匹配）。
 - **恢复建议**：
-  1. 使用本次提交中的 `vite@^6` + `@vitejs/plugin-vue@^5`；
+  1. 使用本次提交中的 `vite@^4` + `@vitejs/plugin-vue@^4`；
   2. 重新执行 `npm ci` 并触发 CDS 重新部署；
   3. 若团队后续统一升级 CDS Node 到 20+，再评估回升 Vite 主版本。
 
 ### 65.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
-| `v1.4.28-cds-frontend-vite-node18-compat` | 兼容 CDS Node 18 场景：Vite 栈降级到 Node 18 兼容组合（vite6 + plugin-vue5），解决预览部署前端启动失败 |
+| `v1.4.28-cds-frontend-vite-node16-compat` | 兼容更低版本 Node 运行时：Vite 栈降级到 Node 16+ 兼容组合（vite4 + plugin-vue4），解决预览部署前端启动失败 |
