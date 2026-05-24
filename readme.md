@@ -3013,7 +3013,6 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.4.23-ticket-closed-feedback-triple-fallback` 及以上；
   2. 新版本会按“状态码标准化 + 中文状态 + closedAt”三路识别关闭态；
   3. 仍异常时反馈接口原始 JSON（status/statusLabel/closedAt）用于继续排查。
-
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
