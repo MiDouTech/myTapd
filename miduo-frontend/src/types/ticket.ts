@@ -100,6 +100,8 @@ export interface TicketBugCustomerInfoInput {
   expectedResult?: string
   sceneCode?: string
   problemScreenshot?: string
+  /** 手工有效报告（YES/NO），仅关闭状态允许修改 */
+  manualValidReport?: string | null
 }
 
 export interface TicketBugTestInfoInput {

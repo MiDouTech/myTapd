@@ -33,6 +33,7 @@ public class BugSummaryInfoOutput implements Serializable {
 
     /**
      * 是否有效报告原始值：YES / NO
+     * 默认来自简报归档状态；工单关闭且设置了手工值时优先返回手工值
      */
     private String isValidReport;
 
