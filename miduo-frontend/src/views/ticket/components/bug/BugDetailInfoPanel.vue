@@ -239,7 +239,7 @@ import { updateBugCustomerInfo } from '@/api/ticket'
 import type { TicketDetailOutput } from '@/types/ticket'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
-import { normalizeTicketStatusCode } from '@/utils/ticket-status'
+import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticket-status'
 
 import BugStatusBadge from './BugStatusBadge.vue'
 
@@ -271,11 +271,25 @@ const editValues = reactive<Record<string, string>>({})
 
 const canEditCustomerInfo = computed(() => true)
 const isClosedTicket = computed(() => {
-  const normalizedStatus = normalizeTicketStatusCode(props.detail.status)
+  const rawStatus = (props.detail.status || '').trim()
+  const rawStatusLabel = (props.detail.statusLabel || '').trim()
+  const normalizedStatus = normalizeTicketStatusCode(rawStatus)
   if (normalizedStatus === 'closed') {
     return true
   }
-  return (props.detail.statusLabel || '').trim() === '已关闭'
+  if (rawStatus.toLowerCase() === 'closed') {
+    return true
+  }
+  if (rawStatus.includes('关闭')) {
+    return true
+  }
+  if (rawStatusLabel.includes('关闭')) {
+    return true
+  }
+  if (getTicketStatusLabel(rawStatus).trim() === '已关闭') {
+    return true
+  }
+  return Boolean(props.detail.closedAt)
 })
 const canEditValidFeedback = computed(() => isClosedTicket.value)
 
