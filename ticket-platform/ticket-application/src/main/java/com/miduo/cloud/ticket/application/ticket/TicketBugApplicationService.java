@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.BugReproduceEnv;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.SeverityLevel;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
+import com.miduo.cloud.ticket.common.enums.ValidReportOption;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.ticket.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
@@ -22,6 +24,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * 缺陷工单扩展信息应用服务
@@ -72,12 +75,14 @@ public class TicketBugApplicationService extends BaseApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateCustomerInfo(Long ticketId, TicketBugCustomerInfoInput input, Long currentUserId) {
-        requireTicket(ticketId);
+        TicketPO ticket = requireTicket(ticketId);
 
         TicketBugInfoPO infoPO = getOrCreateBugInfo(ticketId);
-        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, input);
+        TicketBugCustomerInfoInput normalizedInput = normalizeCustomerInfoInput(input);
+        validateManualValidReportUpdate(ticket, infoPO, normalizedInput);
+        List<BugFieldChangeItem> changes = changeHistoryRecorder.detectCustomerInfoChanges(infoPO, normalizedInput);
 
-        applyCustomerInfoChanges(infoPO, input);
+        applyCustomerInfoChanges(infoPO, normalizedInput);
         saveBugInfo(infoPO);
 
         changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
@@ -138,6 +143,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
         output.setExpectedResult(po.getExpectedResult());
         output.setSceneCode(po.getSceneCode());
         output.setProblemScreenshot(po.getProblemScreenshot());
+        output.setManualValidReport(po.getManualValidReport());
         return output;
     }
 
@@ -252,6 +258,51 @@ public class TicketBugApplicationService extends BaseApplicationService {
         infoPO.setExpectedResult(input.getExpectedResult());
         infoPO.setSceneCode(input.getSceneCode());
         infoPO.setProblemScreenshot(input.getProblemScreenshot());
+        infoPO.setManualValidReport(input.getManualValidReport());
+    }
+
+    private TicketBugCustomerInfoInput normalizeCustomerInfoInput(TicketBugCustomerInfoInput input) {
+        TicketBugCustomerInfoInput normalized = new TicketBugCustomerInfoInput();
+        normalized.setMerchantNo(input.getMerchantNo());
+        normalized.setCompanyName(input.getCompanyName());
+        normalized.setMerchantAccount(input.getMerchantAccount());
+        normalized.setProblemDesc(input.getProblemDesc());
+        normalized.setExpectedResult(input.getExpectedResult());
+        normalized.setSceneCode(input.getSceneCode());
+        normalized.setProblemScreenshot(input.getProblemScreenshot());
+        normalized.setManualValidReport(normalizeManualValidReport(input.getManualValidReport()));
+        return normalized;
+    }
+
+    private void validateManualValidReportUpdate(TicketPO ticket, TicketBugInfoPO existing, TicketBugCustomerInfoInput input) {
+        String oldVal = existing == null ? null : existing.getManualValidReport();
+        String newVal = input == null ? null : input.getManualValidReport();
+        if (Objects.equals(trimToNull(oldVal), trimToNull(newVal))) {
+            return;
+        }
+        TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
+        if (status != TicketStatus.CLOSED) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "仅已关闭工单可手工设置有效报告");
+        }
+    }
+
+    private String normalizeManualValidReport(String source) {
+        if (!StringUtils.hasText(source)) {
+            return null;
+        }
+        ValidReportOption option = ValidReportOption.fromCode(source);
+        if (option == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "有效报告仅支持 YES 或 NO");
+        }
+        return option.getCode();
+    }
+
+    private String trimToNull(String source) {
+        if (source == null) {
+            return null;
+        }
+        String v = source.trim();
+        return v.isEmpty() ? null : v;
     }
 
     private void applyTestInfoChanges(TicketBugTestInfoPO testInfoPO, TicketBugTestInfoInput input) {

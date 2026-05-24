@@ -133,7 +133,7 @@
 | 影响范围 | impactScope | ticket_bug_test_info.impact_scope | 测试/管理员 | 枚举：单一/部分/全部商户 |
 | 缺陷等级 | severityLevel | ticket_bug_test_info.severity_level | 测试/管理员 | P0/P1/P2/P3/P4 |
 | 缺陷划分 | defectCategory | bug_report.defect_category | 管理员 | 关联字典 |
-| 有效报告 | isValidReport | bug_report（从简报关联取） | 管理员 | 是/否 |
+| 有效报告 | isValidReport | 默认：bug_report（从简报关联取）；关闭状态可人工修正（ticket_bug_info.manual_valid_report） | 管理员 | 是/否（仅关闭状态可手工选择） |
 | 处理人 | assigneeName | ticket.assignee_id → sys_user | 管理员/分派 | 可通过分派操作修改 |
 | 责任人 | responsibleName | bug_report_responsible | 管理员 | 从简报获取 |
 | 预计结束 | expectedTime | ticket.expected_time | 客服/管理员 | 可编辑 |
@@ -141,7 +141,8 @@
 | 是否逾期 | isOverdue | 计算字段 | 只读 | expected_time < now() AND status != closed |
 
 **数据来源说明**：
-- 「缺陷划分」「有效报告」「责任人」来自 Bug简报关联数据，若工单未关联简报则显示「-」
+- 「缺陷划分」「责任人」来自 Bug简报关联数据，若工单未关联简报则显示「-」
+- 「有效报告」默认来自 Bug简报关联；当工单状态为 `closed` 且已设置人工值时，优先展示人工值
 - 「是否逾期」为前端/后端计算字段，无需存储
 
 #### 3.3.2 字段展示交互规则

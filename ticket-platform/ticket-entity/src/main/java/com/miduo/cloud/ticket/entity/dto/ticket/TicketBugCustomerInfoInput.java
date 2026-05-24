@@ -23,4 +23,9 @@ public class TicketBugCustomerInfoInput implements Serializable {
     private String sceneCode;
 
     private String problemScreenshot;
+
+    /**
+     * 手工有效报告（YES/NO），仅允许在工单已关闭时修改
+     */
+    private String manualValidReport;
 }

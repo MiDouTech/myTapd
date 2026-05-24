@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.SeverityLevel;
 import com.miduo.cloud.ticket.common.enums.TicketAction;
+import com.miduo.cloud.ticket.common.enums.ValidReportOption;
 import com.miduo.cloud.ticket.entity.dto.ticket.BugFieldChangeItem;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketBugDevInfoPO;
@@ -123,6 +124,8 @@ public class TicketChangeHistoryRecorder {
         detectChange(changes, "scene_code", "场景码", old.getSceneCode(), input.getSceneCode());
         detectChange(changes, "problem_screenshot", "问题截图",
                 old.getProblemScreenshot(), input.getProblemScreenshot());
+        detectEnumChange(changes, "is_valid_report", "有效报告",
+                old.getManualValidReport(), input.getManualValidReport(), this::getValidReportLabel);
         return changes;
     }
 
@@ -229,6 +232,11 @@ public class TicketChangeHistoryRecorder {
     private String getSeverityLevelLabel(String code) {
         SeverityLevel level = SeverityLevel.fromCode(normalizeSeverityCode(code));
         return level != null ? level.getLabel() : code;
+    }
+
+    private String getValidReportLabel(String code) {
+        ValidReportOption option = ValidReportOption.fromCode(code);
+        return option != null ? option.getLabel() : code;
     }
 
     private String normalizeSeverityCode(String source) {
