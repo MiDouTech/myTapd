@@ -3005,8 +3005,18 @@ vite v7.3.1 building client environment for production...
   1. 升级到版本 `v1.4.22-ticket-closed-feedback-status-fallback` 及以上；
   2. 强制刷新页面（`Ctrl+F5`）清理旧静态资源缓存；
   3. 若仍异常，反馈该工单详情接口原始响应中的 `status/statusLabel` 以继续排查。
+
+#### Q74：状态字段有历史脏值（比如中文/混合值）时还能显示“有效反馈”吗？
+- **检测**：查看接口返回是否存在 `status=已关闭`、`statusLabel` 含“关闭”或 `closedAt` 有值等情况。
+- **记录（错误类型）**：状态字段历史兼容场景。
+- **恢复建议**：
+  1. 升级到版本 `v1.4.23-ticket-closed-feedback-triple-fallback` 及以上；
+  2. 新版本会按“状态码标准化 + 中文状态 + closedAt”三路识别关闭态；
+  3. 仍异常时反馈接口原始 JSON（status/statusLabel/closedAt）用于继续排查。
+
 ### 62.7 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.21-ticket-closed-valid-feedback-visible` | 优化工单详情：已关闭状态固定显示“有效反馈”，支持是/否下拉选择并持久化显示 |
 | `v1.4.22-ticket-closed-feedback-status-fallback` | 修复刷新后不显示问题：关闭态判定增加状态码标准化与 `statusLabel=已关闭` 兜底，避免历史状态值导致漏显示 |
+| `v1.4.23-ticket-closed-feedback-triple-fallback` | 再次增强关闭态识别：增加 `status` 中文判定与 `closedAt` 兜底，解决历史脏值场景下“已关闭却不显示有效反馈”问题 |
