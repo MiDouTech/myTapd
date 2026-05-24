@@ -23,6 +23,84 @@ public class TicketApplication {
         if (System.getProperty("jdk.tls.client.protocols") == null) {
             System.setProperty("jdk.tls.client.protocols", "TLSv1.2");
         }
+        // Why: 预览/CDS 环境里 Nacos secrets 可能短时不可用，这里把已有环境变量提升为系统属性兜底，
+        // 避免出现“datasource url 缺失 / jwt secret 为空”导致应用无法启动。
+        applyRuntimeConfigFallback();
         SpringApplication.run(TicketApplication.class, args);
+    }
+
+    private static void applyRuntimeConfigFallback() {
+        String datasourceUrl = firstNonBlank(
+                System.getenv("DATASOURCE_URL"),
+                System.getenv("SPRING_DATASOURCE_URL")
+        );
+        if (isBlank(datasourceUrl)) {
+            String mysqlHost = trimToNull(System.getenv("MYSQL_HOST"));
+            if (mysqlHost != null) {
+                String mysqlPort = firstNonBlank(System.getenv("MYSQL_PORT"), "3306");
+                String mysqlDb = firstNonBlank(System.getenv("MYSQL_DB"), "ticket_platform");
+                datasourceUrl = "jdbc:mysql://" + mysqlHost + ":" + mysqlPort + "/" + mysqlDb
+                        + "?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true";
+            }
+        }
+        setSystemPropertyIfAbsent("spring.datasource.url", datasourceUrl);
+        setSystemPropertyIfAbsent("spring.datasource.username", firstNonBlank(
+                System.getenv("DATASOURCE_USERNAME"),
+                System.getenv("SPRING_DATASOURCE_USERNAME"),
+                System.getenv("MYSQL_USER")
+        ));
+        setSystemPropertyIfAbsent("spring.datasource.password", firstNonBlank(
+                System.getenv("DATASOURCE_PASSWORD"),
+                System.getenv("SPRING_DATASOURCE_PASSWORD"),
+                System.getenv("MYSQL_PASSWORD"),
+                System.getenv("MYSQL_ROOT_PASSWORD")
+        ));
+
+        setSystemPropertyIfAbsent("spring.redis.host", firstNonBlank(
+                System.getenv("REDIS_HOST"),
+                System.getenv("SPRING_REDIS_HOST")
+        ));
+        setSystemPropertyIfAbsent("spring.redis.port", firstNonBlank(
+                System.getenv("REDIS_PORT"),
+                System.getenv("SPRING_REDIS_PORT")
+        ));
+        setSystemPropertyIfAbsent("spring.redis.password", firstNonBlank(
+                System.getenv("REDIS_PASSWORD"),
+                System.getenv("SPRING_REDIS_PASSWORD")
+        ));
+
+        setSystemPropertyIfAbsent("jwt.secret", firstNonBlank(System.getenv("JWT_SECRET")));
+    }
+
+    private static void setSystemPropertyIfAbsent(String key, String candidate) {
+        if (!isBlank(System.getProperty(key)) || isBlank(candidate)) {
+            return;
+        }
+        System.setProperty(key, candidate);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String trimmed = trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
