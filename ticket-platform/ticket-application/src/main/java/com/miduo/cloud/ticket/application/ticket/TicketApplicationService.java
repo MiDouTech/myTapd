@@ -1459,9 +1459,11 @@ public class TicketApplicationService {
                         .last("LIMIT 1")
         );
         if (latestReportTicket == null) {
-            if (isClosedStatus(ticket.getStatus()) && manualOption != null) {
+            if (isClosedStatus(ticket.getStatus())) {
                 BugSummaryInfoOutput output = new BugSummaryInfoOutput();
-                applyValidReportOption(output, manualOption);
+                if (manualOption != null) {
+                    applyValidReportOption(output, manualOption);
+                }
                 output.setIsOverdue(false);
                 return output;
             }
