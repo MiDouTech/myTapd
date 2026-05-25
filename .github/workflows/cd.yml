@@ -466,7 +466,6 @@ jobs:
           CNB_VERSION_REPO:     ${{ needs.prepare.outputs.cnb_version_repo }}
           VERSION:              ${{ steps.version.outputs.value }}
           FRONTEND_DOWNLOAD_URL: ${{ needs.build-frontend.outputs.download_url }}
-          MSG:                  ${{ github.event.head_commit.message }}
           REPO_URL:  ${{ needs.prepare.outputs.cnb_version_repo }}
           AUTHOR:     ${{ github.actor }}
         run: |
@@ -478,6 +477,7 @@ jobs:
           DEPOLY_FILE=".cnb/web_trigger.yml"
 
           BRANCH_NAME=${GITHUB_REF_NAME}
+          MSG=$(git log -1 --pretty=format:'%s%n%b')
           MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
           #容器版本信息:
           
@@ -509,7 +509,7 @@ jobs:
             echo "version: ${VERSION}" >> ${BACKEND_VERSION_FILE}
             echo "branch_name: ${BRANCH_NAME}" >> ${BACKEND_VERSION_FILE} 
             echo "提交人: ${AUTHOR}" >> ${BACKEND_VERSION_FILE} 
-            echo "服务提交信息: ${{ github.event.head_commit.message }}" >> ${BACKEND_VERSION_FILE} 
+            echo "服务提交信息: \"${MSG_CLEAN}\"" >> ${BACKEND_VERSION_FILE} 
             echo "容器版本信息: $DOCKER_VERSION_INFO" >> ${BACKEND_VERSION_FILE}
             echo "提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${BACKEND_VERSION_FILE}
 
@@ -517,7 +517,7 @@ jobs:
               sed -i "/- name: 生产发布-后端/,/提交时间: / {
                 s|author.*|author: ${AUTHOR}|
                 s|description: 生产后端发布.*|description: 生产后端发布-${AUTHOR}：${{ github.event.head_commit.message }}|
-                s|message.*|message: ${{ github.event.head_commit.message }}|
+                s|message.*|message: \"${MSG_CLEAN}\"|
                 s|deploy_version.*|deploy_version: $DOCKER_VERSION_INFO|
                 s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
             fi
@@ -529,7 +529,7 @@ jobs:
             echo "version: ${VERSION}" >> ${FRONTEND_VERSION_FILE}
             echo "branch_name: ${BRANCH_NAME}" >> ${FRONTEND_VERSION_FILE} 
             echo "提交人: ${AUTHOR}" >> ${FRONTEND_VERSION_FILE} 
-            echo "服务提交信息: ${MSG_CLEAN}" >> ${FRONTEND_VERSION_FILE} 
+            echo "服务提交信息: \"${MSG_CLEAN}\"" >> ${FRONTEND_VERSION_FILE} 
             echo "服务提交SHA: ${{ github.sha }}" >> ${FRONTEND_VERSION_FILE}
             echo "FrontendURL: ${{ needs.build-frontend.outputs.download_url }}" >> ${FRONTEND_VERSION_FILE} 
             echo "提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${FRONTEND_VERSION_FILE}
@@ -539,7 +539,7 @@ jobs:
               sed -i "/- name: 生产发布-前端/,/提交时间: / {
                 s|author.*|author: ${AUTHOR}|
                 s|description: 生产前端发布.*|description: 生产前端发布-${AUTHOR}：${{ github.event.head_commit.message }}|
-                s|message.*|message: ${MSG_CLEAN}|
+                s|message.*|message: \"${MSG_CLEAN}\"|
                 s|deploy_version.*|deploy_version: ${{ needs.build-frontend.outputs.download_url }}|
                 s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
             fi
