@@ -480,12 +480,9 @@ jobs:
           MSG=$(git log -1 --pretty=format:'%s%n%b')
           MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
           #容器版本信息:
-          
           if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
             DOCKER_VERSION_INFO="${{ env.CNB_REGISTRY }}/${{ needs.prepare.outputs.cnb_namespace }}/${{ matrix.name }}:${VERSION}"
           fi
-          DOCKER_VERSION_ESC=$(escape_sed_replacement "${DOCKER_VERSION_INFO}")
-          PUBLISH_TIME_ESC=$(escape_sed_replacement "$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')")
 
           #二、配置 git 凭证（避免 token 出现在 URL 明文中）
           AUTH_URL="${CNB_VERSION_REPO/https:\/\//https:\/\/cnb:${CNB_TOKEN}@}"
