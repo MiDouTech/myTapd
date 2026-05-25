@@ -312,7 +312,10 @@ public class TicketApplicationService {
         Map<Long, String> companyNameByTicketId = Collections.emptyMap();
         if (!ticketIds.isEmpty()) {
             List<TicketBugInfoPO> bugInfos = ticketBugInfoMapper.selectList(
-                    new LambdaQueryWrapper<TicketBugInfoPO>().in(TicketBugInfoPO::getTicketId, ticketIds));
+                    new LambdaQueryWrapper<TicketBugInfoPO>()
+                            // 这里限制查询字段，因为列表只需要企业名称，避免历史库缺少新增列导致整表查询失败。
+                            .select(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName)
+                            .in(TicketBugInfoPO::getTicketId, ticketIds));
             companyNameByTicketId = bugInfos.stream()
                     .filter(b -> b.getTicketId() != null && b.getCompanyName() != null
                             && !b.getCompanyName().trim().isEmpty())
@@ -1451,6 +1454,7 @@ public class TicketApplicationService {
      * 若工单未关联简报则返回 null
      */
     private BugSummaryInfoOutput buildBugSummaryInfo(TicketPO ticket) {
+        ValidReportOption manualOption = queryManualValidReportOption(ticket.getId());
         BugReportTicketPO latestReportTicket = bugReportTicketMapper.selectOne(
                 new LambdaQueryWrapper<BugReportTicketPO>()
                         .eq(BugReportTicketPO::getTicketId, ticket.getId())
@@ -1458,6 +1462,15 @@ public class TicketApplicationService {
                         .last("LIMIT 1")
         );
         if (latestReportTicket == null) {
+            // 兼容历史数据：个别工单状态码异常但已写入 closedAt，仍应透出摘要壳对象供前端渲染“有效反馈”。
+            if (isClosedStatus(ticket.getStatus()) || ticket.getClosedAt() != null) {
+                BugSummaryInfoOutput output = new BugSummaryInfoOutput();
+                if (manualOption != null) {
+                    applyValidReportOption(output, manualOption);
+                }
+                output.setIsOverdue(false);
+                return output;
+            }
             return null;
         }
 
@@ -1493,8 +1506,11 @@ public class TicketApplicationService {
         }
 
         boolean isValid = BugReportStatus.ARCHIVED.getCode().equals(report.getStatus());
-        output.setIsValidReport(isValid ? "YES" : "NO");
-        output.setIsValidReportLabel(isValid ? "是" : "否");
+        applyValidReportOption(output, isValid ? ValidReportOption.YES : ValidReportOption.NO);
+        if (isClosedStatus(ticket.getStatus()) && manualOption != null) {
+            // 已关闭工单支持人工复盘口径覆盖自动计算值
+            applyValidReportOption(output, manualOption);
+        }
 
         if (ticket.getExpectedTime() != null && !isTerminalStatus(ticket.getStatus())) {
             output.setIsOverdue(new Date().after(ticket.getExpectedTime()));
@@ -1503,6 +1519,26 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    private ValidReportOption queryManualValidReportOption(Long ticketId) {
+        TicketBugInfoPO bugInfo = ticketBugInfoMapper.selectOne(
+                new LambdaQueryWrapper<TicketBugInfoPO>()
+                        .eq(TicketBugInfoPO::getTicketId, ticketId)
+                        .last("LIMIT 1")
+        );
+        if (bugInfo == null) {
+            return null;
+        }
+        return ValidReportOption.fromCode(bugInfo.getManualValidReport());
+    }
+
+    private void applyValidReportOption(BugSummaryInfoOutput output, ValidReportOption option) {
+        if (output == null || option == null) {
+            return;
+        }
+        output.setIsValidReport(option.getCode());
+        output.setIsValidReportLabel(option.getLabel());
     }
 
     /**
@@ -1531,6 +1567,10 @@ public class TicketApplicationService {
                 || "CLOSED".equalsIgnoreCase(status)
                 || "completed".equals(status)
                 || "closed".equals(status);
+    }
+
+    private boolean isClosedStatus(String status) {
+        return TicketStatus.CLOSED == TicketStatus.fromCode(status);
     }
 
     /**

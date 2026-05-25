@@ -180,12 +180,29 @@
           <span class="info-value">{{ detail.bugSummaryInfo?.defectCategoryLabel || detail.bugSummaryInfo?.defectCategory || '-' }}</span>
         </div>
 
-        <!-- 有效报告 -->
-        <div class="info-row" v-if="detail.bugSummaryInfo">
-          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效报告</span>
-          <span class="info-value" :class="validReportClass">
-            {{ detail.bugSummaryInfo?.isValidReportLabel || '-' }}
-          </span>
+        <!-- 有效反馈（关闭状态直接下拉选择） -->
+        <div class="info-row editable-row" v-if="canEditValidFeedback">
+          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效反馈</span>
+          <div class="info-value editable-value">
+            <el-select
+              v-model="validFeedbackSelection"
+              size="small"
+              placeholder="请选择"
+              style="width: 120px"
+              :disabled="validFeedbackSaving"
+              @change="handleValidFeedbackChange"
+            >
+              <el-option label="是" value="YES" />
+              <el-option label="否" value="NO" />
+            </el-select>
+            <span class="valid-feedback-tip" :class="validFeedbackClass">
+              当前：{{ validFeedbackLabel }}
+            </span>
+          </div>
+        </div>
+        <div class="info-row" v-else-if="detail.bugSummaryInfo">
+          <span class="info-label"><el-icon><CircleCheck /></el-icon> 有效反馈</span>
+          <span class="info-value" :class="validFeedbackClass">{{ validFeedbackLabel }}</span>
         </div>
 
         <!-- 责任人 -->
@@ -216,12 +233,13 @@ import {
   UserFilled,
   Warning,
 } from '@element-plus/icons-vue'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import { updateBugCustomerInfo } from '@/api/ticket'
 import type { TicketDetailOutput } from '@/types/ticket'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
+import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticket-status'
 
 import BugStatusBadge from './BugStatusBadge.vue'
 
@@ -250,15 +268,76 @@ const emit = defineEmits<{
 
 const editingField = ref<string | null>(null)
 const editValues = reactive<Record<string, string>>({})
+const validFeedbackSelection = ref('')
+const validFeedbackSaving = ref(false)
 
 const canEditCustomerInfo = computed(() => true)
+const isClosedTicket = computed(() => {
+  const rawStatus = (props.detail.status || '').trim()
+  const rawStatusLabel = (props.detail.statusLabel || '').trim()
+  const normalizedStatus = normalizeTicketStatusCode(rawStatus)
+  if (normalizedStatus === 'closed') {
+    return true
+  }
+  if (rawStatus.toLowerCase() === 'closed') {
+    return true
+  }
+  if (rawStatus.includes('关闭')) {
+    return true
+  }
+  if (rawStatusLabel.includes('关闭')) {
+    return true
+  }
+  if (getTicketStatusLabel(rawStatus).trim() === '已关闭') {
+    return true
+  }
+  return Boolean(props.detail.closedAt)
+})
+const canEditValidFeedback = computed(() => isClosedTicket.value)
 
-const validReportClass = computed(() => {
-  const v = props.detail.bugSummaryInfo?.isValidReport
+const validFeedbackValue = computed(() => {
+  const summaryValue = props.detail.bugSummaryInfo?.isValidReport
+  if (summaryValue === 'YES' || summaryValue === 'NO') {
+    return summaryValue
+  }
+  const manualValue = props.detail.bugCustomerInfo?.manualValidReport
+  if (manualValue === 'YES' || manualValue === 'NO') {
+    return manualValue
+  }
+  return ''
+})
+
+const validFeedbackLabel = computed(() => {
+  const summaryValue = props.detail.bugSummaryInfo?.isValidReport
+  if (summaryValue === 'YES' || summaryValue === 'NO') {
+    return props.detail.bugSummaryInfo?.isValidReportLabel || '-'
+  }
+  if (validFeedbackValue.value === 'YES') {
+    return '是'
+  }
+  if (validFeedbackValue.value === 'NO') {
+    return '否'
+  }
+  return '-'
+})
+
+const validFeedbackClass = computed(() => {
+  const v = validFeedbackValue.value
   if (v === 'YES') return 'valid-yes'
   if (v === 'NO') return 'valid-no'
   return ''
 })
+
+watch(
+  validFeedbackValue,
+  (value) => {
+    // 这里在详情刷新后同步最新值，避免下拉框停留在旧状态
+    if (!validFeedbackSaving.value) {
+      validFeedbackSelection.value = value
+    }
+  },
+  { immediate: true },
+)
 
 function normalizeSeverity(source?: string): string {
   if (!source) {
@@ -304,6 +383,27 @@ async function saveField(field: string): Promise<void> {
     notifyError('保存失败，请重试')
   } finally {
     editingField.value = null
+  }
+}
+
+async function handleValidFeedbackChange(value: string): Promise<void> {
+  if (value !== 'YES' && value !== 'NO') {
+    return
+  }
+  const existing = props.detail.bugCustomerInfo ?? {}
+  validFeedbackSaving.value = true
+  try {
+    await updateBugCustomerInfo(props.ticketId, {
+      ...existing,
+      manualValidReport: value,
+    })
+    notifySuccess('保存成功')
+    emit('refresh')
+  } catch {
+    validFeedbackSelection.value = validFeedbackValue.value
+    notifyError('保存失败，请重试')
+  } finally {
+    validFeedbackSaving.value = false
   }
 }
 </script>
@@ -462,5 +562,10 @@ async function saveField(field: string): Promise<void> {
 .valid-no {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.valid-feedback-tip {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

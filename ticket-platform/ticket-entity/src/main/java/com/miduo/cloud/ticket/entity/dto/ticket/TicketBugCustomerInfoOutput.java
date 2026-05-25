@@ -25,4 +25,9 @@ public class TicketBugCustomerInfoOutput implements Serializable {
     private String sceneCode;
 
     private String problemScreenshot;
+
+    /**
+     * 手工有效报告（YES/NO）
+     */
+    private String manualValidReport;
 }

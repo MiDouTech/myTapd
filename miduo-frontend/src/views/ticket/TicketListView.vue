@@ -752,7 +752,7 @@ onUnmounted(() => {
               {{ row.companyName || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="title" label="标题" min-width="220" :show-overflow-tooltip="true">
+          <el-table-column prop="title" label="标题" min-width="320" :show-overflow-tooltip="true">
             <template #default="{ row }">
               <el-tooltip :content="row.title" placement="top" :disabled="!row.title">
                 <el-button type="primary" link class="cell-link title-cell-btn" @click="openTitlePreview(row)">

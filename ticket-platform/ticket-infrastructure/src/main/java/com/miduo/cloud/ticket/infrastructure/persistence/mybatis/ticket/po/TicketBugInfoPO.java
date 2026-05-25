@@ -38,4 +38,7 @@ public class TicketBugInfoPO extends BaseEntity {
 
     @TableField("problem_screenshot")
     private String problemScreenshot;
+
+    @TableField("manual_valid_report")
+    private String manualValidReport;
 }
