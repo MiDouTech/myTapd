@@ -51,6 +51,14 @@
                 </if>
             </otherwise>
         </choose>
+        <if test="companyName != null and companyName != ''">
+            AND EXISTS (
+                SELECT 1 FROM ticket_bug_info bi
+                WHERE bi.ticket_id = t.id
+                  AND bi.deleted = 0
+                  AND bi.company_name LIKE CONCAT('%', #{companyName}, '%')
+            )
+        </if>
         <!-- 待出简报：主处理人为当前用户；工单已完成，或存在关联简报为已退回(REJECTED)（工单未结单也需继续改简报）；排除已归档简报；排除存在「待审核」简报 -->
         <if test="view == 'my_brief_todo'">
             AND t.assignee_id = #{currentUserId}

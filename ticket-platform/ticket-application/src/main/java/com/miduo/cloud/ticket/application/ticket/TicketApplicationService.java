@@ -239,6 +239,11 @@ public class TicketApplicationService {
         String createTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCreateTimeStart());
         String createTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCreateTimeEnd());
 
+        String companyName = input.getCompanyName() == null ? null : input.getCompanyName().trim();
+        if (companyName != null && companyName.isEmpty()) {
+            companyName = null;
+        }
+
         IPage<TicketPO> result = ticketMapper.selectTicketPage(
                 page,
                 viewCode,
@@ -246,6 +251,7 @@ public class TicketApplicationService {
                 keyword,
                 keyword != null ? null : input.getTicketNo(),
                 keyword != null ? null : input.getTitle(),
+                companyName,
                 input.getCategoryId(),
                 statusFilterList,
                 input.getPriority(),
