@@ -477,7 +477,7 @@ jobs:
           DEPOLY_FILE=".cnb/web_trigger.yml"
 
           BRANCH_NAME=${GITHUB_REF_NAME}
-          MSG=$(git log -1 --pretty=format:'%s%n%b')
+          MSG=$(git log -1 --pretty=format:'%s')
           MSG_CLEAN=$(echo "${MSG}" | tr '\n' '  ')
           #容器版本信息:
           if [[ "${{ matrix.name }}" != "__frontend_only__" ]]; then
