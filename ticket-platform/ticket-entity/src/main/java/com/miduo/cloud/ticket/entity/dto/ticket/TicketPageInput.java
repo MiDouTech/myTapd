@@ -16,6 +16,11 @@ public class TicketPageInput extends PageInput {
 
     private String title;
 
+    /**
+     * 缺陷客服信息中的公司名称，模糊匹配（对应 ticket_bug_info.company_name）
+     */
+    private String companyName;
+
     /** 统一关键词：同时模糊匹配工单编号与标题（与列表路由 q 对应） */
     private String keyword;
 

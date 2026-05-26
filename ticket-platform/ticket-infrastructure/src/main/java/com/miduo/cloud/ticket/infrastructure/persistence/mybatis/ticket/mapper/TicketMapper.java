@@ -19,6 +19,7 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("keyword") String keyword,
                                      @Param("ticketNo") String ticketNo,
                                      @Param("title") String title,
+                                     @Param("companyName") String companyName,
                                      @Param("categoryId") Long categoryId,
                                      @Param("statusList") List<String> statusList,
                                      @Param("priority") String priority,
