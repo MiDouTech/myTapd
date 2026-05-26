@@ -32,6 +32,7 @@ public class SlaEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(SlaEventListener.class);
 
+    private final SlaNotificationDispatchService slaNotificationDispatchService;
     private final NotificationOrchestrator orchestrator;
     private final WecomGroupPushService wecomGroupPushService;
     private final TicketMapper ticketMapper;
@@ -39,12 +40,14 @@ public class SlaEventListener {
     private final HandlerGroupMapper handlerGroupMapper;
     private final TicketLinkProperties ticketLinkProperties;
 
-    public SlaEventListener(NotificationOrchestrator orchestrator,
+    public SlaEventListener(SlaNotificationDispatchService slaNotificationDispatchService,
+                            NotificationOrchestrator orchestrator,
                             WecomGroupPushService wecomGroupPushService,
                             TicketMapper ticketMapper,
                             TicketCategoryMapper ticketCategoryMapper,
                             HandlerGroupMapper handlerGroupMapper,
                             TicketLinkProperties ticketLinkProperties) {
+        this.slaNotificationDispatchService = slaNotificationDispatchService;
         this.orchestrator = orchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.ticketMapper = ticketMapper;
@@ -75,10 +78,12 @@ public class SlaEventListener {
                 event.getSlaLevel());
 
         String detailLink = ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
+
+        List<Long> receivers = new ArrayList<>();
         if (ticket.getAssigneeId() != null) {
-            orchestrator.dispatch(ticket.getAssigneeId(), ticket.getId(), null,
-                    NotificationType.SLA_WARNING, title, content, detailLink);
+            receivers.add(ticket.getAssigneeId());
         }
+
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
         if (ticket.getCreatorId() != null) {
             mentionUserIds.add(ticket.getCreatorId());
@@ -86,7 +91,10 @@ public class SlaEventListener {
         if (ticket.getAssigneeId() != null) {
             mentionUserIds.add(ticket.getAssigneeId());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
+
+        slaNotificationDispatchService.dispatch(
+                ticket.getId(), NotificationType.SLA_WARNING, title, content, detailLink,
+                receivers, mentionUserIds);
     }
 
     @Async
@@ -117,11 +125,9 @@ public class SlaEventListener {
         if (groupLeaderId != null) {
             receivers.add(groupLeaderId);
         }
-        if (!receivers.isEmpty()) {
-            String detailLink = ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
-            orchestrator.dispatchToUsers(new ArrayList<>(receivers), ticket.getId(), null,
-                    NotificationType.SLA_BREACHED, title, content, detailLink);
-        }
+
+        String detailLink = ticketLinkProperties.buildDetailLink(ticket.getId(), ticket.getTicketNo());
+
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>();
         if (ticket.getCreatorId() != null) {
             mentionUserIds.add(ticket.getCreatorId());
@@ -132,7 +138,10 @@ public class SlaEventListener {
         if (groupLeaderId != null) {
             mentionUserIds.add(groupLeaderId);
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
+
+        slaNotificationDispatchService.dispatch(
+                ticket.getId(), NotificationType.SLA_BREACHED, title, content, detailLink,
+                receivers, mentionUserIds);
     }
 
     @Async
