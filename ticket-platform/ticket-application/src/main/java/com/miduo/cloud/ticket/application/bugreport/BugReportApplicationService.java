@@ -1276,6 +1276,18 @@ public class BugReportApplicationService extends BaseApplicationService {
     }
 
     /**
+     * 工单进入「已关闭」时清理系统自动创建的草稿简报。
+     * 只删除自动草稿（DRAFT + 系统自动创建 + is_auto_created=1），避免误删人工简报。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void removeAutoDraftByTicketId(Long ticketId) {
+        if (ticketId == null) {
+            return;
+        }
+        removeAutoDraftReportsOnManualLink(Collections.singletonList(ticketId), null);
+    }
+
+    /**
      * 手动关联工单保存后：清理同一工单上关单自动生成的「待填写」草稿简报，避免工单详情同时出现手动简报与自动草稿两行。
      * 仅删除 DRAFT 且备注为「系统自动创建」的简报，避免误删用户自建草稿。
      */

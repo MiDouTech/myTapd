@@ -24,9 +24,10 @@ public class BugReportEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCompleted(TicketCompletedEvent event) {
-        // 「已关闭」通常为无效/非缺陷收尾，不强制生成简报草稿与关联；「已完成」等终态仍走原闭环
+        // 「已关闭」统一不出简报；若此前因「已完成」自动生成过草稿，这里一并清理，避免简报列表残留。
         if (StringUtils.hasText(event.getFinalStatus())
                 && TicketStatus.CLOSED.getCode().equalsIgnoreCase(event.getFinalStatus().trim())) {
+            bugReportApplicationService.removeAutoDraftByTicketId(event.getTicketId());
             return;
         }
         bugReportApplicationService.createDraftFromClosedTicket(event.getTicketId(), event.getOperatorId());
