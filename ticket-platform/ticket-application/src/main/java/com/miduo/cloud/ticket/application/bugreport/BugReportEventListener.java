@@ -1,13 +1,8 @@
 package com.miduo.cloud.ticket.application.bugreport;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.domain.common.event.TicketCompletedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketStatusChangedEvent;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketFlowRecordMapper;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketFlowRecordPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import org.springframework.util.StringUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -21,25 +16,18 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class BugReportEventListener {
 
     private final BugReportApplicationService bugReportApplicationService;
-    private final TicketMapper ticketMapper;
-    private final TicketFlowRecordMapper ticketFlowRecordMapper;
 
-    public BugReportEventListener(BugReportApplicationService bugReportApplicationService,
-                                  TicketMapper ticketMapper,
-                                  TicketFlowRecordMapper ticketFlowRecordMapper) {
+    public BugReportEventListener(BugReportApplicationService bugReportApplicationService) {
         this.bugReportApplicationService = bugReportApplicationService;
-        this.ticketMapper = ticketMapper;
-        this.ticketFlowRecordMapper = ticketFlowRecordMapper;
     }
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketCompleted(TicketCompletedEvent event) {
-        // 「已关闭」通常为无效/非缺陷收尾，不强制生成简报草稿与关联。
-        // 但若工单曾进入「已完成」后又回退再关闭，仍需补齐简报闭环。
+        // 「已关闭」统一不出简报；若此前因「已完成」自动生成过草稿，这里一并清理，避免简报列表残留。
         if (StringUtils.hasText(event.getFinalStatus())
-                && TicketStatus.CLOSED.getCode().equalsIgnoreCase(event.getFinalStatus().trim())
-                && !hasReachedCompleted(event.getTicketId())) {
+                && TicketStatus.CLOSED.getCode().equalsIgnoreCase(event.getFinalStatus().trim())) {
+            bugReportApplicationService.removeAutoDraftByTicketId(event.getTicketId());
             return;
         }
         bugReportApplicationService.createDraftFromClosedTicket(event.getTicketId(), event.getOperatorId());
@@ -59,20 +47,5 @@ public class BugReportEventListener {
             return;
         }
         bugReportApplicationService.createDraftFromClosedTicket(event.getTicketId(), event.getOperatorId());
-    }
-
-    private boolean hasReachedCompleted(Long ticketId) {
-        if (ticketId == null) {
-            return false;
-        }
-        TicketPO ticket = ticketMapper.selectById(ticketId);
-        if (ticket != null && ticket.getResolvedAt() != null) {
-            return true;
-        }
-        Long completedCount = ticketFlowRecordMapper.selectCount(
-                new LambdaQueryWrapper<TicketFlowRecordPO>()
-                        .eq(TicketFlowRecordPO::getTicketId, ticketId)
-                        .eq(TicketFlowRecordPO::getToStatus, TicketStatus.COMPLETED.getCode()));
-        return completedCount != null && completedCount > 0;
     }
 }
