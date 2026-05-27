@@ -4,11 +4,13 @@
 
 缺陷类工单进入任意终态时，系统会发布 `TicketCompletedEvent`，由 `BugReportEventListener` 调用 `createDraftFromClosedTicket`：若工单尚未关联简报，则**自动创建简报草稿并写入关联**。
 
-用户选择**「已关闭」**（`closed`，如非缺陷关闭等路径）时，往往表示无需再走简报闭环，自动关联会产生多余草稿与通知。
+用户选择**「已关闭」**（`closed`，如非缺陷关闭等路径）时，通常表示无需再走简报闭环，自动关联会产生多余草稿与通知。  
+但线上出现了一个例外链路：工单先流转到**已完成**，随后因误操作回退上一步，再次点击**已关闭**。该场景虽然当前状态是 `closed`，但业务上仍属于“处理完成后收尾”，需要继续产出 Bug 简报。
 
 ## 目标
 
-- 工单终态为 **`closed`** 时，**不再**自动创建 Bug 简报草稿、不自动写入工单-简报关联。
+- 工单终态为 **`closed`** 时，默认**不再**自动创建 Bug 简报草稿、不自动写入工单-简报关联。
+- 若工单历史上**曾到过 `completed`**（包括“已完成 -> 回退 -> 已关闭”），则关闭时仍需自动创建/复用 Bug 简报草稿，保证闭环。
 - 终态为 **`completed`** 等其他终态时，保持原有「无关联则自动建草稿」行为（不改变验收完成后的简报闭环）。
 
 ## 非目标
@@ -18,9 +20,12 @@
 
 ## 实现要点
 
-- 在 `BugReportEventListener.onTicketCompleted` 中判断 `finalStatus`：若为 `closed`（忽略大小写），直接返回，不调用 `createDraftFromClosedTicket`。
+- 在 `BugReportEventListener.onTicketCompleted` 中判断 `finalStatus`：
+  - 若为 `closed`（忽略大小写）且工单历史未到过 `completed`，直接返回，不调用 `createDraftFromClosedTicket`；
+  - 若为 `closed` 但已存在“曾到过 completed”的证据（如 `resolvedAt` 非空或流转历史命中过 `to_status=completed`），仍调用 `createDraftFromClosedTicket`。
 
 ## 验收
 
-- 缺陷工单通过工作流进入 **已关闭**：详情页不应因本次关闭**新增**自动生成的简报关联（无历史关联时仍无关联）。
+- 缺陷工单直接进入 **已关闭**（未曾到过已完成）：详情页不应因本次关闭**新增**自动生成的简报关联（无历史关联时仍无关联）。
 - 缺陷工单进入 **已完成**：若此前无关联简报，仍会生成简报草稿并关联（与优化前一致）。
+- 缺陷工单执行 **已完成 -> 回退上一步 -> 已关闭**：关闭后仍应生成（或复用）简报关联，不可漏出简报闭环。
