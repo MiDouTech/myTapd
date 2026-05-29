@@ -115,6 +115,7 @@ const query = reactive<TicketPageInput>({
   keyword: '',
   ticketNo: '',
   title: '',
+  companyName: '',
   categoryId: undefined,
   statuses: [],
   priority: '',
@@ -192,6 +193,9 @@ async function loadTickets(): Promise<void> {
       if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
       if (query.title?.trim()) params.title = query.title.trim()
     }
+    if (query.companyName?.trim()) {
+      params.companyName = query.companyName.trim()
+    }
     if (!isBriefTodoView.value) {
       if (query.categoryId) params.categoryId = query.categoryId
       if (query.statuses?.length) {
@@ -255,6 +259,7 @@ function handleReset(): void {
   query.keyword = ''
   query.ticketNo = ''
   query.title = ''
+  query.companyName = ''
   query.categoryId = undefined
   query.statuses = []
   query.priority = ''
@@ -635,6 +640,14 @@ onUnmounted(() => {
         <el-form-item label="标题" class="query-form-item">
           <el-input v-model="query.title" class="query-input" placeholder="支持模糊匹配" clearable />
         </el-form-item>
+        <el-form-item label="公司名称" class="query-form-item">
+          <el-input
+            v-model="query.companyName"
+            class="query-input"
+            placeholder="支持模糊匹配"
+            clearable
+          />
+        </el-form-item>
         <el-form-item v-if="!isBriefTodoView" label="分类" class="query-form-item">
           <el-select
             v-model="query.categoryId"
@@ -752,7 +765,7 @@ onUnmounted(() => {
               {{ row.companyName || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="title" label="标题" min-width="220" :show-overflow-tooltip="true">
+          <el-table-column prop="title" label="标题" min-width="320" :show-overflow-tooltip="true">
             <template #default="{ row }">
               <el-tooltip :content="row.title" placement="top" :disabled="!row.title">
                 <el-button type="primary" link class="cell-link title-cell-btn" @click="openTitlePreview(row)">
