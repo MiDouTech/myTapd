@@ -278,4 +278,73 @@
         </if>
     </select>
 
+    <!-- 周内无效反馈总数（关闭 + 手工有效反馈=否） -->
+    <select id="selectWeeklyInvalidFeedbackTotal" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM ticket t
+        INNER JOIN ticket_bug_info bi ON bi.ticket_id = t.id AND bi.deleted = 0
+        WHERE t.deleted = 0
+          AND LOWER(t.status) = 'closed'
+          AND bi.manual_valid_report = 'NO'
+          AND COALESCE(t.closed_at, t.resolved_at) &gt;= #{startTime}
+          AND COALESCE(t.closed_at, t.resolved_at) &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
+    </select>
+
+    <!-- 周内无效反馈按反馈人统计 -->
+    <select id="selectWeeklyInvalidFeedbackByReporter"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.WeeklyInvalidReporterRow">
+        SELECT t.creator_id AS reporterId,
+               COALESCE(u.name, t.create_by, '未知') AS reporterName,
+               COUNT(1) AS total
+        FROM ticket t
+        INNER JOIN ticket_bug_info bi ON bi.ticket_id = t.id AND bi.deleted = 0
+        LEFT JOIN sys_user u ON u.id = t.creator_id AND u.deleted = 0
+        WHERE t.deleted = 0
+          AND LOWER(t.status) = 'closed'
+          AND bi.manual_valid_report = 'NO'
+          AND COALESCE(t.closed_at, t.resolved_at) &gt;= #{startTime}
+          AND COALESCE(t.closed_at, t.resolved_at) &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
+        GROUP BY t.creator_id, COALESCE(u.name, t.create_by, '未知')
+        ORDER BY total DESC, reporterId ASC
+    </select>
+
+    <!-- 周内无效反馈明细 -->
+    <select id="selectWeeklyInvalidFeedbackDetail"
+            resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.WeeklyInvalidTicketRow">
+        SELECT t.id,
+               t.ticket_no AS ticketNo,
+               t.title,
+               t.creator_id AS reporterId,
+               COALESCE(u.name, t.create_by, '未知') AS reporterName,
+               COALESCE(t.closed_at, t.resolved_at) AS closedTime
+        FROM ticket t
+        INNER JOIN ticket_bug_info bi ON bi.ticket_id = t.id AND bi.deleted = 0
+        LEFT JOIN sys_user u ON u.id = t.creator_id AND u.deleted = 0
+        WHERE t.deleted = 0
+          AND LOWER(t.status) = 'closed'
+          AND bi.manual_valid_report = 'NO'
+          AND COALESCE(t.closed_at, t.resolved_at) &gt;= #{startTime}
+          AND COALESCE(t.closed_at, t.resolved_at) &lt; #{endTime}
+        <if test="categoryIds != null and categoryIds.size() &gt; 0">
+          AND t.category_id IN
+          <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+            #{cid}
+          </foreach>
+        </if>
+        ORDER BY COALESCE(t.closed_at, t.resolved_at) DESC, t.id DESC
+        LIMIT #{limitCount}
+    </select>
+
 </mapper>

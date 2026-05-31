@@ -2,6 +2,8 @@ package com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.mapp
 
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyReportStatusRow;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.DailyReportTicketRow;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.WeeklyInvalidReporterRow;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.dashboard.model.WeeklyInvalidTicketRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -101,4 +103,26 @@ public interface DailyReportMapper {
     Long selectTotalFeedbackCount(@Param("startTime") Date startTime,
                                   @Param("endTime") Date endTime,
                                   @Param("categoryIds") List<Long> categoryIds);
+
+    /**
+     * 统计周内无效反馈总数
+     */
+    Long selectWeeklyInvalidFeedbackTotal(@Param("startTime") Date startTime,
+                                          @Param("endTime") Date endTime,
+                                          @Param("categoryIds") List<Long> categoryIds);
+
+    /**
+     * 按反馈人统计周内无效反馈数量
+     */
+    List<WeeklyInvalidReporterRow> selectWeeklyInvalidFeedbackByReporter(@Param("startTime") Date startTime,
+                                                                         @Param("endTime") Date endTime,
+                                                                         @Param("categoryIds") List<Long> categoryIds);
+
+    /**
+     * 查询周内无效反馈明细
+     */
+    List<WeeklyInvalidTicketRow> selectWeeklyInvalidFeedbackDetail(@Param("startTime") Date startTime,
+                                                                   @Param("endTime") Date endTime,
+                                                                   @Param("categoryIds") List<Long> categoryIds,
+                                                                   @Param("limitCount") Integer limitCount);
 }

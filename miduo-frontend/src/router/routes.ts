@@ -197,6 +197,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'manage/weekly-invalid-report',
+        name: 'manageWeeklyInvalidReport',
+        component: () => import('@/views/manage/WeeklyInvalidReportView.vue'),
+        meta: {
+          title: '无效反馈周报',
+        },
+      },
+      {
         path: 'manage/alert-mapping',
         name: 'manageAlertMapping',
         redirect: { name: 'manageSettings', query: { tab: 'alertMapping' } },
