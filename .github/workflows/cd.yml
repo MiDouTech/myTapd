@@ -515,7 +515,7 @@ jobs:
             if [[ "${is_prod_branch}" == "true" ]]; then
               sed -i "/- name: 生产发布-后端/,/提交时间: / {
                 s|author.*|author: ${AUTHOR}|
-                s|description: "生产后端发布.*|description: 生产后端发布-${AUTHOR}：${MSG_CLEAN}\"|
+                s|description: \"生产后端发布.*|description: \"生产后端发布-${AUTHOR}：${MSG_CLEAN}\"|
                 s|message.*|message: \"${MSG_CLEAN}\"|
                 s|deploy_version.*|deploy_version: $DOCKER_VERSION_INFO|
                 s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
@@ -537,7 +537,7 @@ jobs:
              if [[ "${is_prod_branch}" == "true" ]]; then
               sed -i "/- name: 生产发布-前端/,/提交时间: / {
                 s|author.*|author: ${AUTHOR}|
-                s|description: "生产前端发布.*|description: "生产前端发布-${AUTHOR}：${MSG_CLEAN}\"|
+                s|description: \"生产前端发布.*|description: \"生产前端发布-${AUTHOR}：${MSG_CLEAN}\"|
                 s|message.*|message: \"${MSG_CLEAN}\"|
                 s|deploy_version.*|deploy_version: ${{ needs.build-frontend.outputs.download_url }}|
                 s|publish_time.*|publish_time: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')|}" ${DEPOLY_FILE}
