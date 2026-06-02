@@ -3294,47 +3294,44 @@ vite v7.3.1 building client environment for production...
 
 ---
 
-## 69. 无效反馈周报推送（前后端）
+## 69. 无效反馈月报并入日报管理（前后端）
 
 ### 69.1 功能用途
-- **用途**：新增“每周五自动推送无效反馈周报到企微群”的能力，独立于现有线上问题日报。  
-- **类比理解**：日报像“每天看体温”，周报像“每周体检报告”，专门看“无效反馈”这件事是谁提的、提了多少。
+- **用途**：将“无效反馈报表”并入日报管理，并改为按月统计，推送时间与日报一致。  
+- **类比理解**：日报像“每天看体温”，月报像“每月体检报告”，专门看“无效反馈”这件事是谁提的、提了多少。
 
 ### 69.2 使用方法（验收步骤）
-1. 进入「管理 -> 无效反馈周报」。  
-2. 在“推送配置”中填写开关、cron、webhook、统计分类和明细上限。  
-3. 点击“保存配置”。  
-4. 在“周报预览”中查看本周统计（总数、按人统计、明细）。  
-5. 点击“手动推送到群”，确认企微群收到消息。  
-6. 到周五定时点观察自动推送，仅收到 1 条周报消息。
+1. 进入「管理 -> 日报管理」。  
+2. 在“推送配置”保存日报配置（cron、webhook、统计分类）。  
+3. 切换到“无效反馈月报预览”查看本月统计（总数、按人统计、明细）。  
+4. 点击“手动推送无效反馈月报”确认企微群收到消息。  
+5. 到日报配置时间点观察自动推送，日报和无效反馈月报同刻触发。
 
 ### 69.3 参数说明（本次改动相关）
 | 参数/字段 | 类型 | 说明 |
 |---|---|---|
 | `manual_valid_report` | `String` | 无效判定字段，`NO` 表示无效反馈 |
-| `weekly_invalid_report_enabled` | `String` | 自动推送开关配置 |
-| `weekly_invalid_report_cron` | `String` | 周报推送 cron（默认每周五 18:00） |
-| `weekly_invalid_report_webhook_urls` | `String` | 企微群 webhook 列表（逗号分隔） |
-| `weekly_invalid_report_stat_category_ids` | `String` | 统计分类 ID 列表（逗号分隔） |
-| `weekly_invalid_report_max_detail_count` | `String` | 明细最大展示条数 |
-| `weekly_invalid_report_timezone` | `String` | 周报统计与调度时区 |
+| `daily_report_enabled` | `String` | 自动推送开关配置（日报/月报共用） |
+| `daily_report_cron` | `String` | 推送 cron（日报/月报共用） |
+| `daily_report_webhook_urls` | `String` | 企微群 webhook 列表（日报/月报共用） |
+| `daily_report_stat_category_ids` | `String` | 统计分类 ID 列表（日报/月报共用） |
 
 ### 69.4 返回值说明（接口行为）
 | 接口 | 返回值 | 说明 |
 |---|---|---|
-| `GET /api/weekly-invalid-report/preview`（API000517） | `ApiResult<WeeklyInvalidReportOutput>` | 返回本周无效反馈周报结构化数据与 markdown |
-| `POST /api/weekly-invalid-report/push`（API000518） | `ApiResult<Void>` | 手动推送周报到配置的企微群 |
-| `GET /api/weekly-invalid-report/config`（API000519） | `ApiResult<WeeklyInvalidReportConfigOutput>` | 查询周报配置 |
-| `PUT /api/weekly-invalid-report/config`（API000520） | `ApiResult<Void>` | 更新周报配置 |
+| `GET /api/weekly-invalid-report/preview`（API000517） | `ApiResult<WeeklyInvalidReportOutput>` | 返回本月无效反馈月报结构化数据与 markdown |
+| `POST /api/weekly-invalid-report/push`（API000518） | `ApiResult<Void>` | 手动推送无效反馈月报到日报配置的企微群 |
+| `GET /api/weekly-invalid-report/config`（API000519） | `ApiResult<WeeklyInvalidReportConfigOutput>` | 兼容配置查询（映射到日报配置） |
+| `PUT /api/weekly-invalid-report/config`（API000520） | `ApiResult<Void>` | 兼容配置更新（映射到日报配置） |
 
 ### 69.5 常见问题（新增）
-#### Q83：为什么周报总数是 0？
+#### Q83：为什么月报总数是 0？
 - **检测**：先确认工单是否为已关闭且 `manual_valid_report=NO`，并且分类 ID 在配置范围内。  
 - **记录（错误类型）**：口径不匹配或分类配置错误。  
 - **恢复建议**：
   1. 检查“统计范围分类”配置；
   2. 抽样核对工单状态和手工有效反馈值；
-  3. 重新预览周报确认结果。
+  3. 重新预览月报确认结果。
 
 #### Q84：为什么手动推送失败？
 - **检测**：查看 webhook 是否有效、网络是否可达、消息是否过长。  
@@ -3348,3 +3345,4 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.4.32-weekly-invalid-feedback-report` | 新增“无效反馈周报推送”能力：支持每周五自动推送、手动推送、配置管理、按反馈人统计与明细展示 |
+| `v1.4.33-invalid-monthly-report-merged-into-daily` | 无效反馈报表并入日报管理：独立菜单下线、统计口径改为按月、自动推送改为复用日报配置与同一触发时间 |

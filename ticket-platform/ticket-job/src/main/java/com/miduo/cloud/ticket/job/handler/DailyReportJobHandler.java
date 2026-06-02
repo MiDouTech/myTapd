@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.job.handler;
 
 import com.miduo.cloud.ticket.application.dailyreport.DailyReportApplicationService;
+import com.miduo.cloud.ticket.application.weeklyreport.WeeklyInvalidReportApplicationService;
 import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ public class DailyReportJobHandler {
     private static final Logger log = LoggerFactory.getLogger(DailyReportJobHandler.class);
 
     private final DailyReportApplicationService dailyReportService;
+    private final WeeklyInvalidReportApplicationService weeklyInvalidReportService;
     private final StringRedisTemplate stringRedisTemplate;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -34,8 +36,10 @@ public class DailyReportJobHandler {
     private volatile String activeTimezone;
 
     public DailyReportJobHandler(DailyReportApplicationService dailyReportService,
+                                 WeeklyInvalidReportApplicationService weeklyInvalidReportService,
                                  StringRedisTemplate stringRedisTemplate) {
         this.dailyReportService = dailyReportService;
+        this.weeklyInvalidReportService = weeklyInvalidReportService;
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
@@ -109,6 +113,8 @@ public class DailyReportJobHandler {
             }
             log.info("日报推送：开始执行，dueCrons={}, timezone={}", dueCrons, timezone);
             dailyReportService.pushDailyReport();
+            // 无效反馈月报并入日报管理，和日报复用同一触发时间窗口。
+            weeklyInvalidReportService.pushWeeklyInvalidReport();
             log.info("日报推送：执行完成，dueCrons={}, timezone={}", dueCrons, timezone);
         } catch (Exception ex) {
             log.error("日报推送：执行异常，dueCrons={}, timezone={}", dueCrons, timezone, ex);
