@@ -2,9 +2,12 @@ package com.miduo.cloud.ticket.application.weeklyreport;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.dailyreport.DailyReportApplicationService;
 import com.miduo.cloud.ticket.application.notification.sender.WecomGroupWebhookSender;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
+import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigOutput;
+import com.miduo.cloud.ticket.entity.dto.dailyreport.DailyReportConfigUpdateInput;
 import com.miduo.cloud.ticket.entity.dto.weeklyreport.WeeklyInvalidReportConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.weeklyreport.WeeklyInvalidReportConfigUpdateInput;
 import com.miduo.cloud.ticket.entity.dto.weeklyreport.WeeklyInvalidReportOutput;
@@ -25,84 +28,69 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.stream.Collectors;
 
 /**
- * 无效反馈周报生成与推送应用服务
+ * 无效反馈月报（并入日报管理）生成与推送应用服务
  */
 @Service
 public class WeeklyInvalidReportApplicationService extends BaseApplicationService {
 
-    private static final String CONFIG_GROUP = "WEEKLY_INVALID_REPORT";
+    private static final String LEGACY_CONFIG_GROUP = "WEEKLY_INVALID_REPORT";
+    private static final String LEGACY_CONFIG_KEY_MAX_DETAIL_COUNT = "weekly_invalid_report_max_detail_count";
     private static final String BASIC_CONFIG_GROUP = "BASIC";
     private static final String BASIC_CONFIG_KEY_TIMEZONE = "timezone";
 
-    private static final String CONFIG_KEY_ENABLED = "weekly_invalid_report_enabled";
-    private static final String CONFIG_KEY_CRON = "weekly_invalid_report_cron";
-    private static final String CONFIG_KEY_WEBHOOK_URLS = "weekly_invalid_report_webhook_urls";
-    private static final String CONFIG_KEY_STAT_CATEGORY_IDS = "weekly_invalid_report_stat_category_ids";
-    private static final String CONFIG_KEY_MAX_DETAIL_COUNT = "weekly_invalid_report_max_detail_count";
-    private static final String CONFIG_KEY_TIMEZONE = "weekly_invalid_report_timezone";
-
-    private static final String DEFAULT_CRON = "0 0 18 ? * FRI";
-    private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
     private static final int DEFAULT_MAX_DETAIL_COUNT = 30;
     private static final int MAX_DETAIL_COUNT = 200;
-    private static final String CRON_SEPARATOR = ";";
-
-    private static final long CONFIG_CACHE_TTL_MS = 60_000L;
-
+    private final DailyReportApplicationService dailyReportService;
     private final DailyReportMapper dailyReportMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
 
-    private volatile Map<String, String> weeklyReportConfigCache;
-    private volatile long weeklyReportConfigCacheExpiresAtMs;
-
-    public WeeklyInvalidReportApplicationService(DailyReportMapper dailyReportMapper,
+    public WeeklyInvalidReportApplicationService(DailyReportApplicationService dailyReportService,
+                                                 DailyReportMapper dailyReportMapper,
                                                  SystemConfigMapper systemConfigMapper,
                                                  WecomGroupWebhookSender groupWebhookSender) {
+        this.dailyReportService = dailyReportService;
         this.dailyReportMapper = dailyReportMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.groupWebhookSender = groupWebhookSender;
     }
 
     /**
-     * 生成无效反馈周报
+     * 生成无效反馈月报（统计范围与日报管理一致：自然月）
      */
     public WeeklyInvalidReportOutput generateWeeklyInvalidReport() {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
-        String timezone = resolveScheduleTimezone(configMap.get(CONFIG_KEY_TIMEZONE));
+        DailyReportConfigOutput dailyConfig = dailyReportService.getConfig();
+        String timezone = dailyReportService.getScheduleTimezone();
         Date now = new Date();
-        Date weekStart = startOfWeek(now, timezone);
-        Date reportEnd = now;
+        Date monthStart = startOfMonth(now, timezone);
+        Date monthEnd = addMonths(monthStart, 1, timezone);
+        Date monthDisplayEnd = addMilliseconds(monthEnd, -1, timezone);
 
-        List<Long> statCategoryIds = parseStatCategoryIds(configMap.get(CONFIG_KEY_STAT_CATEGORY_IDS));
-        int maxDetailCount = parseMaxDetailCount(configMap.get(CONFIG_KEY_MAX_DETAIL_COUNT));
+        List<Long> statCategoryIds = safeStatCategoryIds(dailyConfig.getStatCategoryIds());
+        int maxDetailCount = loadMaxDetailCount();
 
         long invalidTotalCount = safeLong(
-                dailyReportMapper.selectWeeklyInvalidFeedbackTotal(weekStart, reportEnd, statCategoryIds)
+                dailyReportMapper.selectWeeklyInvalidFeedbackTotal(monthStart, monthEnd, statCategoryIds)
         );
         List<WeeklyInvalidReporterRow> reporterRows = dailyReportMapper.selectWeeklyInvalidFeedbackByReporter(
-                weekStart, reportEnd, statCategoryIds
+                monthStart, monthEnd, statCategoryIds
         );
         List<WeeklyInvalidTicketRow> detailRows = dailyReportMapper.selectWeeklyInvalidFeedbackDetail(
-                weekStart, reportEnd, statCategoryIds, maxDetailCount
+                monthStart, monthEnd, statCategoryIds, maxDetailCount
         );
 
         WeeklyInvalidReportOutput output = new WeeklyInvalidReportOutput();
         output.setReportDate(formatDate(now, "yyyy-MM-dd", timezone));
-        output.setWeekRangeLabel(formatDate(weekStart, "yyyy-MM-dd", timezone)
+        output.setWeekRangeLabel(formatDate(monthStart, "yyyy-MM-dd", timezone)
                 + " ~ "
-                + formatDate(reportEnd, "yyyy-MM-dd", timezone));
+                + formatDate(monthDisplayEnd, "yyyy-MM-dd", timezone));
 
         WeeklyInvalidReportSummary summary = new WeeklyInvalidReportSummary();
         summary.setInvalidTotalCount(invalidTotalCount);
@@ -118,118 +106,117 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
     }
 
     /**
-     * 自动推送无效反馈周报
+     * 自动推送无效反馈月报
      */
     public void pushWeeklyInvalidReport() {
         pushWeeklyInvalidReportInternal(false);
     }
 
     /**
-     * 手动推送无效反馈周报（忽略自动开关）
+     * 手动推送无效反馈月报（忽略自动开关）
      */
     public void pushWeeklyInvalidReportManually() {
         pushWeeklyInvalidReportInternal(true);
     }
 
     /**
-     * 查询周报配置
+     * 兼容接口：查询无效反馈报表配置（实际复用日报配置）
      */
     public WeeklyInvalidReportConfigOutput getConfig() {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
+        DailyReportConfigOutput dailyConfig = dailyReportService.getConfig();
         WeeklyInvalidReportConfigOutput output = new WeeklyInvalidReportConfigOutput();
-        output.setEnabled("true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false")));
-        output.setCronList(parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, DEFAULT_CRON)));
-        output.setWebhookUrls(parseWebhookUrls(configMap.get(CONFIG_KEY_WEBHOOK_URLS)));
-        output.setStatCategoryIds(parseStatCategoryIds(configMap.get(CONFIG_KEY_STAT_CATEGORY_IDS)));
-        output.setMaxDetailCount(parseMaxDetailCount(configMap.get(CONFIG_KEY_MAX_DETAIL_COUNT)));
-        output.setTimezone(resolveScheduleTimezone(configMap.get(CONFIG_KEY_TIMEZONE)));
+        output.setEnabled(dailyConfig.isEnabled());
+        output.setCronList(copyStringList(dailyConfig.getCronList()));
+        output.setWebhookUrls(copyStringList(dailyConfig.getWebhookUrls()));
+        output.setStatCategoryIds(copyLongList(dailyConfig.getStatCategoryIds()));
+        output.setMaxDetailCount(loadMaxDetailCount());
+        output.setTimezone(dailyReportService.getScheduleTimezone());
         return output;
     }
 
     /**
-     * 更新周报配置
+     * 兼容接口：更新无效反馈报表配置（实际更新日报配置）
      */
     public void updateConfig(WeeklyInvalidReportConfigUpdateInput input) {
+        DailyReportConfigUpdateInput dailyInput = new DailyReportConfigUpdateInput();
+        boolean updateDailyConfig = false;
         if (input.getEnabled() != null) {
-            upsertConfig(CONFIG_KEY_ENABLED, String.valueOf(input.getEnabled()));
+            dailyInput.setEnabled(input.getEnabled());
+            updateDailyConfig = true;
         }
         if (input.getCronList() != null) {
-            String joinedCron = input.getCronList().stream()
-                    .filter(c -> c != null && !c.trim().isEmpty())
-                    .map(String::trim)
-                    .collect(Collectors.joining(CRON_SEPARATOR));
-            if (!joinedCron.isEmpty()) {
-                upsertConfig(CONFIG_KEY_CRON, joinedCron);
-            }
+            dailyInput.setCronList(input.getCronList());
+            updateDailyConfig = true;
         }
         if (input.getWebhookUrls() != null) {
-            String joinedWebhook = input.getWebhookUrls().stream()
-                    .filter(w -> w != null && !w.trim().isEmpty())
-                    .map(String::trim)
-                    .collect(Collectors.joining(","));
-            upsertConfig(CONFIG_KEY_WEBHOOK_URLS, joinedWebhook);
+            dailyInput.setWebhookUrls(input.getWebhookUrls());
+            updateDailyConfig = true;
         }
         if (input.getStatCategoryIds() != null) {
-            upsertConfig(CONFIG_KEY_STAT_CATEGORY_IDS, joinStatCategoryIds(input.getStatCategoryIds()));
+            dailyInput.setStatCategoryIds(input.getStatCategoryIds());
+            updateDailyConfig = true;
+        }
+        if (updateDailyConfig) {
+            dailyReportService.updateConfig(dailyInput);
         }
         if (input.getMaxDetailCount() != null) {
             int safeCount = Math.max(1, Math.min(input.getMaxDetailCount(), MAX_DETAIL_COUNT));
-            upsertConfig(CONFIG_KEY_MAX_DETAIL_COUNT, String.valueOf(safeCount));
+            upsertConfig(LEGACY_CONFIG_GROUP,
+                    LEGACY_CONFIG_KEY_MAX_DETAIL_COUNT,
+                    String.valueOf(safeCount),
+                    "无效反馈月报配置-" + LEGACY_CONFIG_KEY_MAX_DETAIL_COUNT);
         }
         if (input.getTimezone() != null && !input.getTimezone().trim().isEmpty()) {
             String timezone = input.getTimezone().trim();
             try {
                 ZoneId.of(timezone);
-                upsertConfig(CONFIG_KEY_TIMEZONE, timezone);
             } catch (DateTimeException ex) {
                 throw BusinessException.of(ErrorCode.PARAM_INVALID, "时区配置无效，请填写标准时区ID，例如 Asia/Shanghai");
             }
+            // 无效反馈月报与日报必须共享时区，因此兼容接口写入 BASIC 时区配置。
+            upsertConfig(BASIC_CONFIG_GROUP, BASIC_CONFIG_KEY_TIMEZONE, timezone, "系统时区配置");
         }
-        invalidateConfigCache();
     }
 
     /**
-     * 获取推送 cron 列表
+     * 兼容保留：获取推送 cron 列表（与日报一致）
      */
     public List<String> getPushCronList() {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
-        return parseCronList(configMap.getOrDefault(CONFIG_KEY_CRON, DEFAULT_CRON));
+        return dailyReportService.getPushCronList();
     }
 
     /**
-     * 自动推送是否启用
+     * 兼容保留：自动推送是否启用（与日报一致）
      */
     public boolean isEnabled() {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
-        return "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
+        return dailyReportService.isEnabled();
     }
 
     /**
-     * 获取调度时区
+     * 兼容保留：调度时区（与日报一致）
      */
     public String getScheduleTimezone() {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
-        return resolveScheduleTimezone(configMap.get(CONFIG_KEY_TIMEZONE));
+        return dailyReportService.getScheduleTimezone();
     }
 
     private void pushWeeklyInvalidReportInternal(boolean manualTrigger) {
-        Map<String, String> configMap = loadWeeklyReportConfigMap();
-        boolean enabled = "true".equalsIgnoreCase(configMap.getOrDefault(CONFIG_KEY_ENABLED, "false"));
+        DailyReportConfigOutput dailyConfig = dailyReportService.getConfig();
+        boolean enabled = dailyConfig.isEnabled();
         if (!enabled) {
             if (manualTrigger) {
-                log.info("无效反馈周报自动推送开关关闭，但本次为手动推送，继续执行");
+                log.info("日报自动推送开关关闭，但本次为手动推送无效反馈月报，继续执行");
             } else {
-                log.info("无效反馈周报自动推送已关闭，跳过推送");
+                log.info("日报自动推送已关闭，跳过无效反馈月报推送");
                 return;
             }
         }
 
-        String webhookUrls = configMap.getOrDefault(CONFIG_KEY_WEBHOOK_URLS, "");
-        if (webhookUrls.trim().isEmpty()) {
+        List<String> webhookUrls = copyStringList(dailyConfig.getWebhookUrls());
+        if (webhookUrls.isEmpty()) {
             if (manualTrigger) {
-                throw BusinessException.of(ErrorCode.PARAM_INVALID, "请先在无效反馈周报配置中填写企微群Webhook地址");
+                throw BusinessException.of(ErrorCode.PARAM_INVALID, "请先在日报配置中填写企微群Webhook地址");
             }
-            log.warn("无效反馈周报未配置Webhook地址，跳过推送");
+            log.warn("日报配置未填写Webhook地址，跳过无效反馈月报推送");
             return;
         }
 
@@ -237,17 +224,17 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
         String markdown = report.getMarkdownContent();
         if (markdown == null || markdown.trim().isEmpty()) {
             if (manualTrigger) {
-                throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "无效反馈周报内容为空，无法推送");
+                throw BusinessException.of(ErrorCode.DATA_STATUS_ERROR, "无效反馈月报内容为空，无法推送");
             }
-            log.warn("无效反馈周报内容为空，跳过推送");
+            log.warn("无效反馈月报内容为空，跳过推送");
             return;
         }
 
         int validWebhookCount = 0;
         int successCount = 0;
         List<String> failedReasons = new ArrayList<>();
-        for (String webhookUrl : webhookUrls.split(",")) {
-            String trimmedUrl = webhookUrl.trim();
+        for (String webhookUrl : webhookUrls) {
+            String trimmedUrl = webhookUrl == null ? "" : webhookUrl.trim();
             if (trimmedUrl.isEmpty()) {
                 continue;
             }
@@ -257,16 +244,16 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
                 successCount++;
             } catch (Exception ex) {
                 failedReasons.add(sanitizePushErrorReason(ex.getMessage()));
-                log.error("无效反馈周报推送失败: webhook={}, reason={}",
+                log.error("无效反馈月报推送失败: webhook={}, reason={}",
                         sanitizeWebhookUrl(trimmedUrl), ex.getMessage(), ex);
             }
         }
 
         if (validWebhookCount == 0) {
             if (manualTrigger) {
-                throw BusinessException.of(ErrorCode.PARAM_INVALID, "无效反馈周报配置中的Webhook地址无效，请检查后重试");
+                throw BusinessException.of(ErrorCode.PARAM_INVALID, "日报配置中的Webhook地址无效，请检查后重试");
             }
-            log.warn("无效反馈周报Webhook地址全为空，跳过推送");
+            log.warn("日报配置中的Webhook地址全为空，跳过无效反馈月报推送");
             return;
         }
 
@@ -275,14 +262,14 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
                     ? "未获取到可用Webhook地址"
                     : String.join("；", new LinkedHashSet<>(failedReasons));
             if (manualTrigger) {
-                throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "无效反馈周报推送失败：" + reason);
+                throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "无效反馈月报推送失败：" + reason);
             }
-            log.error("无效反馈周报自动推送失败：全部Webhook发送失败，details={}", reason);
+            log.error("无效反馈月报自动推送失败：全部Webhook发送失败，details={}", reason);
             return;
         }
 
         if (!failedReasons.isEmpty()) {
-            log.warn("无效反馈周报推送部分失败：successCount={}, failedReasons={}",
+            log.warn("无效反馈月报推送部分失败：successCount={}, failedReasons={}",
                     successCount, new LinkedHashSet<>(failedReasons));
         }
     }
@@ -292,9 +279,9 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
         WeeklyInvalidReportSummary summary = report.getSummary();
         boolean truncated = summary.getInvalidTotalCount() > summary.getDetailDisplayCount();
 
-        markdown.append("**").append(report.getReportDate()).append(" 无效反馈周报**\n");
+        markdown.append("**").append(report.getReportDate()).append(" 无效反馈月报**\n");
         markdown.append("统计区间：").append(report.getWeekRangeLabel()).append("\n");
-        markdown.append("本周无效反馈总数：").append(summary.getInvalidTotalCount()).append("个");
+        markdown.append("本月无效反馈总数：").append(summary.getInvalidTotalCount()).append("个");
         markdown.append("，涉及反馈人：").append(summary.getReporterCount()).append("人\n");
 
         markdown.append("\n**1、按反馈人统计**\n");
@@ -378,16 +365,28 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
         return items;
     }
 
-    private Date startOfWeek(Date date, String timezone) {
+    private Date startOfMonth(Date date, String timezone) {
         Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(timezone));
         calendar.setTime(date);
+        calendar.set(Calendar.DAY_OF_MONTH, 1);
         calendar.set(Calendar.HOUR_OF_DAY, 0);
         calendar.set(Calendar.MINUTE, 0);
         calendar.set(Calendar.SECOND, 0);
         calendar.set(Calendar.MILLISECOND, 0);
-        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
-        int offset = dayOfWeek == Calendar.SUNDAY ? -6 : Calendar.MONDAY - dayOfWeek;
-        calendar.add(Calendar.DAY_OF_MONTH, offset);
+        return calendar.getTime();
+    }
+
+    private Date addMonths(Date date, int monthOffset, String timezone) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(timezone));
+        calendar.setTime(date);
+        calendar.add(Calendar.MONTH, monthOffset);
+        return calendar.getTime();
+    }
+
+    private Date addMilliseconds(Date date, int millisecondOffset, String timezone) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(timezone));
+        calendar.setTime(date);
+        calendar.add(Calendar.MILLISECOND, millisecondOffset);
         return calendar.getTime();
     }
 
@@ -397,123 +396,13 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
         return formatter.format(date);
     }
 
-    private Map<String, String> loadWeeklyReportConfigMap() {
-        long now = System.currentTimeMillis();
-        Map<String, String> cached = weeklyReportConfigCache;
-        if (cached != null && now < weeklyReportConfigCacheExpiresAtMs) {
-            return cached;
-        }
-        synchronized (this) {
-            if (weeklyReportConfigCache != null && System.currentTimeMillis() < weeklyReportConfigCacheExpiresAtMs) {
-                return weeklyReportConfigCache;
-            }
-            Map<String, String> fresh = fetchWeeklyReportConfigMapFromDb();
-            weeklyReportConfigCache = fresh;
-            weeklyReportConfigCacheExpiresAtMs = System.currentTimeMillis() + CONFIG_CACHE_TTL_MS;
-            return fresh;
-        }
-    }
-
-    private Map<String, String> fetchWeeklyReportConfigMapFromDb() {
+    private int loadMaxDetailCount() {
         LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, CONFIG_GROUP)
+        wrapper.eq(SystemConfigPO::getConfigGroup, LEGACY_CONFIG_GROUP)
+                .eq(SystemConfigPO::getConfigKey, LEGACY_CONFIG_KEY_MAX_DETAIL_COUNT)
                 .eq(SystemConfigPO::getDeleted, 0);
-        List<SystemConfigPO> configs = systemConfigMapper.selectList(wrapper);
-        Map<String, String> configMap = new HashMap<>();
-        if (configs != null) {
-            for (SystemConfigPO config : configs) {
-                if (config.getConfigKey() != null && config.getConfigValue() != null) {
-                    configMap.put(config.getConfigKey(), config.getConfigValue());
-                }
-            }
-        }
-        return configMap;
-    }
-
-    private void invalidateConfigCache() {
-        weeklyReportConfigCache = null;
-        weeklyReportConfigCacheExpiresAtMs = 0L;
-    }
-
-    private void upsertConfig(String configKey, String configValue) {
-        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, CONFIG_GROUP)
-                .eq(SystemConfigPO::getConfigKey, configKey)
-                .eq(SystemConfigPO::getDeleted, 0);
-        SystemConfigPO existing = systemConfigMapper.selectOne(wrapper);
-        if (existing != null) {
-            existing.setConfigValue(configValue);
-            existing.setUpdateBy("system");
-            existing.setUpdateTime(new Date());
-            systemConfigMapper.updateById(existing);
-        } else {
-            SystemConfigPO config = new SystemConfigPO();
-            config.setConfigGroup(CONFIG_GROUP);
-            config.setConfigKey(configKey);
-            config.setConfigValue(configValue);
-            config.setDescription("无效反馈周报配置-" + configKey);
-            config.setCreateBy("system");
-            config.setUpdateBy("system");
-            systemConfigMapper.insert(config);
-        }
-    }
-
-    private List<String> parseCronList(String cronValue) {
-        if (cronValue == null || cronValue.trim().isEmpty()) {
-            return Collections.singletonList(DEFAULT_CRON);
-        }
-        Set<String> unique = new LinkedHashSet<>();
-        for (String cron : cronValue.split(CRON_SEPARATOR)) {
-            if (cron != null && !cron.trim().isEmpty()) {
-                unique.add(cron.trim());
-            }
-        }
-        return unique.isEmpty() ? Collections.singletonList(DEFAULT_CRON) : new ArrayList<>(unique);
-    }
-
-    private List<String> parseWebhookUrls(String webhookValue) {
-        if (webhookValue == null || webhookValue.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> urls = new ArrayList<>();
-        for (String item : webhookValue.split(",")) {
-            if (item != null && !item.trim().isEmpty()) {
-                urls.add(item.trim());
-            }
-        }
-        return urls;
-    }
-
-    private List<Long> parseStatCategoryIds(String categoryIdValue) {
-        if (categoryIdValue == null || categoryIdValue.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        Set<Long> categoryIdSet = new LinkedHashSet<>();
-        for (String item : categoryIdValue.split(",")) {
-            if (item == null || item.trim().isEmpty()) {
-                continue;
-            }
-            try {
-                categoryIdSet.add(Long.parseLong(item.trim()));
-            } catch (NumberFormatException ex) {
-                log.warn("无效反馈周报统计分类ID配置包含非法值，value={}", item);
-            }
-        }
-        return new ArrayList<>(categoryIdSet);
-    }
-
-    private String joinStatCategoryIds(List<Long> categoryIds) {
-        if (categoryIds == null || categoryIds.isEmpty()) {
-            return "";
-        }
-        List<String> items = new ArrayList<>();
-        Set<Long> dedup = new HashSet<>();
-        for (Long categoryId : categoryIds) {
-            if (categoryId != null && dedup.add(categoryId)) {
-                items.add(String.valueOf(categoryId));
-            }
-        }
-        return String.join(",", items);
+        SystemConfigPO config = systemConfigMapper.selectOne(wrapper);
+        return parseMaxDetailCount(config == null ? null : config.getConfigValue());
     }
 
     private int parseMaxDetailCount(String maxDetailCountValue) {
@@ -527,39 +416,71 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
             }
             return Math.min(parsed, MAX_DETAIL_COUNT);
         } catch (NumberFormatException ex) {
-            log.warn("无效反馈周报明细条数配置非法，value={}", maxDetailCountValue);
+            log.warn("无效反馈月报明细条数配置非法，value={}", maxDetailCountValue);
             return DEFAULT_MAX_DETAIL_COUNT;
         }
     }
 
-    private String resolveScheduleTimezone(String timezoneValue) {
-        if (timezoneValue != null && !timezoneValue.trim().isEmpty()) {
-            return normalizeTimezone(timezoneValue.trim(), DEFAULT_TIMEZONE);
-        }
-        String basicTimezone = readBasicTimezoneConfig();
-        if (basicTimezone != null && !basicTimezone.trim().isEmpty()) {
-            return normalizeTimezone(basicTimezone.trim(), DEFAULT_TIMEZONE);
-        }
-        return DEFAULT_TIMEZONE;
-    }
-
-    private String readBasicTimezoneConfig() {
+    private void upsertConfig(String configGroup, String configKey, String configValue, String description) {
         LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, BASIC_CONFIG_GROUP)
-                .eq(SystemConfigPO::getConfigKey, BASIC_CONFIG_KEY_TIMEZONE)
+        wrapper.eq(SystemConfigPO::getConfigGroup, configGroup)
+                .eq(SystemConfigPO::getConfigKey, configKey)
                 .eq(SystemConfigPO::getDeleted, 0);
-        SystemConfigPO timezoneConfig = systemConfigMapper.selectOne(wrapper);
-        return timezoneConfig == null ? null : timezoneConfig.getConfigValue();
+        SystemConfigPO existing = systemConfigMapper.selectOne(wrapper);
+        if (existing != null) {
+            existing.setConfigValue(configValue);
+            existing.setUpdateBy("system");
+            existing.setUpdateTime(new Date());
+            systemConfigMapper.updateById(existing);
+            return;
+        }
+        SystemConfigPO config = new SystemConfigPO();
+        config.setConfigGroup(configGroup);
+        config.setConfigKey(configKey);
+        config.setConfigValue(configValue);
+        config.setDescription(description);
+        config.setCreateBy("system");
+        config.setUpdateBy("system");
+        systemConfigMapper.insert(config);
     }
 
-    private String normalizeTimezone(String timezone, String defaultTimezone) {
-        try {
-            ZoneId.of(timezone);
-            return timezone;
-        } catch (DateTimeException ex) {
-            log.warn("无效反馈周报读取到非法时区配置，timezone={}，回退默认时区={}", timezone, defaultTimezone);
-            return defaultTimezone;
+    private List<Long> safeStatCategoryIds(List<Long> source) {
+        if (source == null || source.isEmpty()) {
+            return Collections.emptyList();
         }
+        Set<Long> unique = new LinkedHashSet<>();
+        for (Long id : source) {
+            if (id != null) {
+                unique.add(id);
+            }
+        }
+        return new ArrayList<>(unique);
+    }
+
+    private List<String> copyStringList(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> values = new ArrayList<>();
+        for (String item : source) {
+            if (item != null && !item.trim().isEmpty()) {
+                values.add(item.trim());
+            }
+        }
+        return values;
+    }
+
+    private List<Long> copyLongList(List<Long> source) {
+        if (source == null || source.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> values = new ArrayList<>();
+        for (Long item : source) {
+            if (item != null) {
+                values.add(item);
+            }
+        }
+        return values;
     }
 
     private long safeLong(Long value) {
@@ -590,7 +511,7 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
         String lowerCase = normalized.toLowerCase(Locale.ROOT);
         if ((lowerCase.contains("exceed max length") && lowerCase.contains("4096"))
                 || lowerCase.contains("markdown.content exceed max length 4096")) {
-            return "周报内容超过企微单条消息上限（4096字符），请减少明细条数后重试";
+            return "月报内容超过企微单条消息上限（4096字符），请减少明细条数后重试";
         }
         if (lowerCase.contains("timed out") || lowerCase.contains("timeout")) {
             return "连接企微超时，请稍后重试";
@@ -599,7 +520,7 @@ public class WeeklyInvalidReportApplicationService extends BaseApplicationServic
             return "无法连接企微服务，请检查网络或Webhook可用性";
         }
         if (lowerCase.contains("invalid webhook") || lowerCase.contains("webhook key")) {
-            return "Webhook地址无效或已失效，请在周报配置中更新后重试";
+            return "Webhook地址无效或已失效，请在日报配置中更新后重试";
         }
         if (normalized.startsWith("发送企微群Webhook失败:")) {
             normalized = normalized.substring("发送企微群Webhook失败:".length()).trim();

@@ -91,7 +91,6 @@ const menuItems: MenuItem[] = [
       { index: '/manage/settings', title: '系统设置', icon: Setting },
       { index: '/manage/operation-log', title: '工单日志', icon: Notebook },
       { index: '/manage/daily-report', title: '日报管理', icon: Calendar },
-      { index: '/manage/weekly-invalid-report', title: '无效反馈周报', icon: Calendar },
     ],
   },
 ]

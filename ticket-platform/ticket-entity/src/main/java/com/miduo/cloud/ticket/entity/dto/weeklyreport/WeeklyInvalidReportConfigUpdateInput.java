@@ -7,7 +7,7 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * 无效反馈周报配置更新入参
+ * 无效反馈报表配置更新入参（兼容结构，实际复用日报配置）
  */
 @Data
 public class WeeklyInvalidReportConfigUpdateInput implements Serializable {

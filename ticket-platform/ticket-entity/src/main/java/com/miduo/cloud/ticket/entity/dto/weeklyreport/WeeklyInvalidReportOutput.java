@@ -7,7 +7,7 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * 无效反馈周报输出
+ * 无效反馈报表输出（并入日报管理后默认按月统计）
  */
 @Data
 public class WeeklyInvalidReportOutput implements Serializable {

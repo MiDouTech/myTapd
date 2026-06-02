@@ -10,17 +10,22 @@ import {
   pushDailyReport,
   updateDailyReportConfig,
 } from '@/api/dailyReport'
+import { previewWeeklyInvalidReport, pushWeeklyInvalidReport } from '@/api/weeklyInvalidReport'
 import type { CategoryTreeOutput } from '@/types/category'
 import type {
   DailyReportConfigOutput,
   DailyReportConfigUpdateInput,
   DailyReportOutput,
 } from '@/types/dailyReport'
+import type { WeeklyInvalidReportOutput } from '@/types/weeklyInvalidReport'
 import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
+import { formatDateTime } from '@/utils/formatter'
 
 const configLoading = ref(false)
 const previewLoading = ref(false)
 const pushLoading = ref(false)
+const invalidPreviewLoading = ref(false)
+const invalidPushLoading = ref(false)
 const saveLoading = ref(false)
 const categoryLoading = ref(false)
 
@@ -43,6 +48,7 @@ const configForm = reactive<DailyReportConfigUpdateInput>({
 const cronInput = ref('')
 const webhookInput = ref('')
 const previewData = ref<DailyReportOutput | null>(null)
+const invalidPreviewData = ref<WeeklyInvalidReportOutput | null>(null)
 const activeTab = ref('config')
 
 async function loadConfig() {
@@ -153,6 +159,33 @@ async function handlePush() {
   }
 }
 
+async function handleInvalidPreview() {
+  invalidPreviewLoading.value = true
+  try {
+    invalidPreviewData.value = await previewWeeklyInvalidReport()
+  } catch {
+    notifyError('预览无效反馈月报失败')
+  } finally {
+    invalidPreviewLoading.value = false
+  }
+}
+
+async function handleInvalidPush() {
+  if (!configForm.webhookUrls || configForm.webhookUrls.length === 0) {
+    notifyWarning('请先在日报配置中填写 Webhook 地址')
+    return
+  }
+  invalidPushLoading.value = true
+  try {
+    await pushWeeklyInvalidReport()
+    notifySuccess('无效反馈月报已推送到企微群')
+  } catch {
+    // 请求拦截器会直接弹出后端返回的可读错误原因，这里不重复用通用文案覆盖。
+  } finally {
+    invalidPushLoading.value = false
+  }
+}
+
 const cronPresets = [
   { label: '每天 09:00', value: '0 0 9 * * ?' },
   { label: '每天 12:00', value: '0 0 12 * * ?' },
@@ -207,6 +240,9 @@ function getCronLabel(cron: string): string {
 watch(activeTab, (tab) => {
   if (tab === 'preview' && !previewData.value) {
     handlePreview()
+  }
+  if (tab === 'invalidPreview' && !invalidPreviewData.value) {
+    handleInvalidPreview()
   }
 })
 
@@ -523,6 +559,93 @@ onMounted(() => {
           <el-empty description="暂无日报数据" />
         </div>
       </el-tab-pane>
+
+      <el-tab-pane label="无效反馈月报预览" name="invalidPreview">
+        <div class="preview-actions">
+          <el-button type="primary" :loading="invalidPreviewLoading" @click="handleInvalidPreview">
+            刷新月报预览
+          </el-button>
+          <el-button type="success" :loading="invalidPushLoading" @click="handleInvalidPush">
+            手动推送无效反馈月报
+          </el-button>
+        </div>
+
+        <div v-if="invalidPreviewData" class="preview-content">
+          <el-card shadow="never" class="summary-card">
+            <template #header>
+              <span class="card-header-title">{{ invalidPreviewData.reportDate }} 无效反馈月报</span>
+            </template>
+            <div class="summary-stats">
+              <div class="stat-item stat-invalid">
+                <span class="stat-label">本月无效反馈总数</span>
+                <span class="stat-value">{{ invalidPreviewData.summary.invalidTotalCount }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">涉及反馈人</span>
+                <span class="stat-value">{{ invalidPreviewData.summary.reporterCount }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">展示明细条数</span>
+                <span class="stat-value">{{ invalidPreviewData.summary.detailDisplayCount }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">明细上限</span>
+                <span class="stat-value">{{ invalidPreviewData.summary.detailLimitCount }}</span>
+              </div>
+            </div>
+            <div class="month-range-text">统计区间：{{ invalidPreviewData.weekRangeLabel }}</div>
+          </el-card>
+
+          <el-card shadow="never" class="section-card">
+            <template #header>
+              <span class="section-title">1、按反馈人统计</span>
+            </template>
+            <el-table
+              :data="invalidPreviewData.reporterStats"
+              :border="false"
+              :stripe="true"
+              :header-cell-style="{ backgroundColor: '#f5f7fa', textAlign: 'center' }"
+              :cell-style="{ textAlign: 'center' }"
+            >
+              <el-table-column prop="reporterName" label="反馈人" min-width="200" />
+              <el-table-column prop="invalidCount" label="无效反馈数量" width="180" />
+            </el-table>
+          </el-card>
+
+          <el-card shadow="never" class="section-card">
+            <template #header>
+              <span class="section-title">2、无效反馈明细</span>
+            </template>
+            <el-table
+              :data="invalidPreviewData.ticketDetails"
+              :border="false"
+              :stripe="true"
+              :header-cell-style="{ backgroundColor: '#f5f7fa', textAlign: 'center' }"
+              :cell-style="{ textAlign: 'center' }"
+            >
+              <el-table-column prop="ticketNo" label="工单编号" width="180" />
+              <el-table-column prop="title" label="标题" min-width="260" :show-overflow-tooltip="true" />
+              <el-table-column prop="reporterName" label="反馈人" width="140" />
+              <el-table-column label="关闭时间" width="200">
+                <template #default="{ row }">
+                  {{ formatDateTime(row.closedTime) }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
+          <el-card shadow="never" class="markdown-card">
+            <template #header>
+              <span class="section-title">企微 Markdown 预览</span>
+            </template>
+            <pre class="markdown-preview">{{ invalidPreviewData.markdownContent }}</pre>
+          </el-card>
+        </div>
+
+        <div v-else-if="!invalidPreviewLoading" class="preview-placeholder">
+          <el-empty description="暂无无效反馈月报数据" />
+        </div>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -701,6 +824,16 @@ function getSeverityType(level: string): '' | 'success' | 'warning' | 'danger' |
 
 .stat-suspended .stat-value {
   color: #f56c6c;
+}
+
+.stat-invalid .stat-value {
+  color: #e45656;
+}
+
+.month-range-text {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #606266;
 }
 
 .section-card {
