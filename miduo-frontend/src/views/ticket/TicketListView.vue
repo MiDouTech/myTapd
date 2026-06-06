@@ -117,6 +117,7 @@ const query = reactive<TicketPageInput>({
   title: '',
   companyName: '',
   categoryId: undefined,
+  categoryGroupId: undefined,
   statuses: [],
   priority: '',
   creatorId: undefined,
@@ -128,14 +129,45 @@ const query = reactive<TicketPageInput>({
 
 const timeRange = ref<string[]>([])
 
-const viewTabs: Array<{ label: string; value: TicketView }> = [
+const personalViewTabs: Array<{ label: string; value: string }> = [
   { label: '我待办的', value: 'my_todo' },
   { label: '我创建的', value: 'my_created' },
   { label: '我参与的', value: 'my_participated' },
   { label: '我关注的', value: 'my_followed' },
   { label: '待出简报工单', value: 'my_brief_todo' },
-  { label: '所有工单', value: 'all' },
 ]
+
+const workspaceViewTabs: Array<{ label: string; value: string }> = [
+  { label: '通用工单', value: 'general' },
+  { label: '缺陷工单', value: 'defect' },
+  { label: '告警工单', value: 'alert' },
+  { label: '全部工单', value: 'all' },
+]
+
+const categoryGroupTabs = computed<Array<{ label: string; value: string }>>(() =>
+  categoryTree.value
+    .filter((item) => item.isActive !== 0)
+    .map((item) => ({
+      label: item.name,
+      value: `category:${item.id}`,
+    })),
+)
+
+const activeViewTabs = computed(() =>
+  route.path === '/ticket/mine'
+    ? personalViewTabs
+    : route.path.startsWith('/ticket/category/')
+      ? categoryGroupTabs.value
+      : workspaceViewTabs,
+)
+
+const activeTabValue = computed(() => {
+  if (route.path.startsWith('/ticket/category/')) {
+    const categoryId = parseRouteCategoryGroupId()
+    return categoryId ? `category:${categoryId}` : ''
+  }
+  return query.view || ''
+})
 
 const isBriefTodoView = computed(() => query.view === 'my_brief_todo')
 const selectedBriefTicketIds = computed(() =>
@@ -163,12 +195,34 @@ const categoryOptions = computed(() => {
   return options
 })
 
+function parseRouteCategoryGroupId(): number | undefined {
+  const raw = route.params.categoryId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) {
+    return undefined
+  }
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
 function normalizeViewFromRoute(): TicketView {
+  if (route.path.startsWith('/ticket/category/')) {
+    return 'category'
+  }
+  if (route.path === '/ticket/general') {
+    return 'general'
+  }
+  if (route.path === '/ticket/defect') {
+    return 'defect'
+  }
+  if (route.path === '/ticket/alert') {
+    return 'alert'
+  }
   if (route.path === '/ticket/all') {
     return 'all'
   }
   const routeView = route.query.view
-  const values = viewTabs.map((item) => item.value)
+  const values = activeViewTabs.value.map((item) => item.value)
   if (typeof routeView === 'string' && values.includes(routeView as TicketView)) {
     return routeView as TicketView
   }
@@ -186,6 +240,9 @@ async function loadTickets(): Promise<void> {
       pageNum: query.pageNum,
       pageSize: query.pageSize,
       view: query.view,
+    }
+    if (query.categoryGroupId) {
+      params.categoryGroupId = query.categoryGroupId
     }
     if (query.keyword?.trim()) {
       params.keyword = query.keyword.trim()
@@ -278,11 +335,24 @@ function handleReset(): void {
 }
 
 function handleTabChange(value: string | number): void {
-  const view = value as TicketView
+  const rawValue = String(value)
   const qTrim = typeof route.query.q === 'string' ? route.query.q.trim() : ''
   const qPart = qTrim ? { q: qTrim } : {}
-  if (view === 'all') {
-    router.push({ path: '/ticket/all', query: qPart })
+  if (rawValue.startsWith('category:')) {
+    const categoryId = rawValue.slice('category:'.length)
+    router.push({ path: `/ticket/category/${categoryId}`, query: qPart })
+    return
+  }
+  const view = rawValue as TicketView
+  const workspacePathMap: Partial<Record<TicketView, string>> = {
+    general: '/ticket/general',
+    defect: '/ticket/defect',
+    alert: '/ticket/alert',
+    all: '/ticket/all',
+  }
+  const workspacePath = workspacePathMap[view]
+  if (workspacePath) {
+    router.push({ path: workspacePath, query: qPart })
     return
   }
   router.push({
@@ -546,6 +616,7 @@ watch(
 
     const normalized = normalizeViewFromRoute()
     query.view = normalized
+    query.categoryGroupId = parseRouteCategoryGroupId()
     query.pageNum = 1
     selectedRows.value = []
 
@@ -612,17 +683,17 @@ onUnmounted(() => {
     <el-card shadow="never" class="ticket-list-card">
       <div v-if="isMobile" class="mobile-view-switch">
         <el-select
-          :model-value="query.view"
+          :model-value="activeTabValue"
           placeholder="请选择内容"
           class="mobile-view-select"
           @change="handleTabChange"
         >
-          <el-option v-for="tab in viewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
+          <el-option v-for="tab in activeViewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
         </el-select>
       </div>
-      <el-tabs v-else :model-value="query.view" class="ticket-view-tabs" @tab-change="handleTabChange">
+      <el-tabs v-else :model-value="activeTabValue" class="ticket-view-tabs" @tab-change="handleTabChange">
         <el-tab-pane
-          v-for="tab in viewTabs"
+          v-for="tab in activeViewTabs"
           :key="tab.value"
           :label="tab.label"
           :name="tab.value"

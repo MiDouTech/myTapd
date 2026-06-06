@@ -36,7 +36,7 @@ export function createTicket(data: TicketCreateInput): Promise<number> {
 /**
  * 分页查询工单列表
  * 接口编号：API000007
- * 产品文档功能：4.2.2 工单列表与筛选 - 多视图+筛选+排序+分页（含公司名称模糊匹配缺陷客服信息）
+ * 产品文档功能：4.2.2 工单列表与筛选 - 多视图+筛选+排序+分页（含通用/缺陷/告警/全部工单视图）
  */
 export function getTicketPage(params: TicketPageInput): Promise<PageOutput<TicketListOutput>> {
   // 多状态 statuses 需重复键 status=a&status=b，避免 Spring 收不到 status[] 数组

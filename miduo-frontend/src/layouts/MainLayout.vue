@@ -26,6 +26,7 @@ import {
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getCategoryTree } from '@/api/category'
 import EmptyState from '@/components/common/EmptyState.vue'
 import NotificationContentBody from '@/components/notification/NotificationContentBody.vue'
 import {
@@ -36,6 +37,7 @@ import {
 } from '@/stores/layoutTicketSearch'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
+import type { CategoryTreeOutput } from '@/types/category'
 import type { NotificationOutput } from '@/types/notification'
 import { formatDateTime } from '@/utils/formatter'
 import { createInertiaWheelScroll } from '@/utils/inertiaWheelScroll'
@@ -60,13 +62,20 @@ const mobileSidebarVisible = ref(false)
 const MOBILE_BREAKPOINT = 768
 const DESKTOP_POINTER_MEDIA_QUERY = '(hover: hover) and (pointer: fine)'
 const mainScrollRef = ref<HTMLElement | { $el?: Element | null } | null>(null)
+const categoryGroupMenuItems = ref<MenuItem[]>([])
 let inertiaWheelController: { destroy: () => void } | null = null
 let desktopPointerMedia: MediaQueryList | null = null
 
 const menuItems: MenuItem[] = [
   { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
   { index: '/ticket/mine', title: '我的工单', icon: Tickets },
-  { index: '/ticket/all', title: '所有工单', icon: Files },
+  {
+    index: 'ticketCategoryGroups',
+    title: '分类工单',
+    icon: Files,
+    children: categoryGroupMenuItems.value,
+  },
+  { index: '/ticket/all', title: '全部工单', icon: Files },
   { index: '/ticket/kanban', title: '工单看板', icon: Grid },
   { index: '/report', title: '报表中心', icon: Histogram },
   {
@@ -96,17 +105,47 @@ const menuItems: MenuItem[] = [
 ]
 
 /** 游客（GUEST）不显示「管理」菜单 */
-const visibleMenuItems = computed(() =>
-  authStore.isGuest
-    ? menuItems.filter((item) => item.index !== 'manage')
-    : menuItems,
-)
+const canViewAllTickets = computed(() => hasAnyRole('ADMIN', 'TICKET_ADMIN'))
+
+const visibleMenuItems = computed(() => {
+  const items = menuItems.map((item) => {
+    if (item.index === 'ticketCategoryGroups') {
+      return {
+        ...item,
+        children: categoryGroupMenuItems.value,
+      }
+    }
+    return item
+  })
+  return items.filter((item) => {
+    if (item.index === 'ticketCategoryGroups' && !item.children?.length) {
+      return false
+    }
+    if (authStore.isGuest && item.index === 'manage') {
+      return false
+    }
+    if (item.index === '/ticket/all') {
+      return canViewAllTickets.value
+    }
+    return true
+  })
+})
+
+function hasAnyRole(...roles: string[]): boolean {
+  const targets = roles.map((role) => role.toUpperCase())
+  return (authStore.userInfo?.roleCodes ?? [])
+    .map((code) => String(code).toUpperCase())
+    .some((code) => targets.includes(code))
+}
 
 const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/ticket/detail/')) {
-    return '/ticket/all'
+    return categoryGroupMenuItems.value[0]?.index || '/ticket/mine'
+  }
+  if (route.path.startsWith('/ticket/category/')) {
+    return route.path
   }
   if (route.path === '/ticket/create') {
     return '/ticket/mine'
@@ -196,18 +235,36 @@ function updateViewportState(): void {
 }
 
 /**
- * 顶部工单搜索：产品 5.2 / Task012 全局入口；与架构报告建议一致，走工单分页接口（所有工单视图 + 编号/标题条件）。
+ * 顶部工单搜索：默认进入通用工单，避免普通协作搜索再次混入缺陷和告警。
  * 见 miduo-md/workflow/架构分析与问题梳理报告.md 8.3
  */
 function submitHeaderTicketSearch(): void {
   const raw = layoutTicketSearchKeyword.value.trim()
   persistLayoutTicketSearch(raw)
+  const targetPath = route.path.startsWith('/ticket/category/')
+    ? route.path
+    : categoryGroupMenuItems.value[0]?.index || '/ticket/mine'
   if (!raw) {
     markTicketListKeywordClearFromHeader()
-    void router.push({ path: '/ticket/all', query: {} })
+    void router.push({ path: targetPath, query: {} })
     return
   }
-  void router.push({ path: '/ticket/all', query: { q: raw } })
+  void router.push({ path: targetPath, query: { q: raw } })
+}
+
+async function loadCategoryGroupMenus(): Promise<void> {
+  try {
+    const tree = await getCategoryTree()
+    categoryGroupMenuItems.value = (tree || [])
+      .filter((item: CategoryTreeOutput) => item.isActive !== 0)
+      .map((item: CategoryTreeOutput) => ({
+        index: `/ticket/category/${item.id}`,
+        title: item.name,
+        icon: Files,
+      }))
+  } catch {
+    categoryGroupMenuItems.value = []
+  }
 }
 
 function resolveMainScrollElement(): HTMLElement | null {
@@ -313,6 +370,7 @@ onMounted(() => {
   }
   desktopPointerMedia = window.matchMedia(DESKTOP_POINTER_MEDIA_QUERY)
   desktopPointerMedia.addEventListener('change', setupInertiaWheelScroll)
+  void loadCategoryGroupMenus()
   void setupInertiaWheelScroll()
 })
 

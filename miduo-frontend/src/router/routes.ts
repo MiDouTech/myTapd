@@ -53,11 +53,43 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'ticket/general',
+        name: 'ticketGeneral',
+        component: () => import('@/views/ticket/TicketListView.vue'),
+        meta: {
+          title: '通用工单',
+        },
+      },
+      {
+        path: 'ticket/category/:categoryId',
+        name: 'ticketCategoryGroup',
+        component: () => import('@/views/ticket/TicketListView.vue'),
+        meta: {
+          title: '分类工单',
+        },
+      },
+      {
+        path: 'ticket/defect',
+        name: 'ticketDefect',
+        component: () => import('@/views/ticket/TicketListView.vue'),
+        meta: {
+          title: '缺陷工单',
+        },
+      },
+      {
+        path: 'ticket/alert',
+        name: 'ticketAlert',
+        component: () => import('@/views/ticket/TicketListView.vue'),
+        meta: {
+          title: '告警工单',
+        },
+      },
+      {
         path: 'ticket/all',
         name: 'ticketAll',
         component: () => import('@/views/ticket/TicketListView.vue'),
         meta: {
-          title: '所有工单',
+          title: '全部工单',
         },
       },
       {

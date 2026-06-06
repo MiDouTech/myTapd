@@ -148,11 +148,12 @@
 |---|---|---|---|
 | pageNum | int | 否 | 页码，默认1 |
 | pageSize | int | 否 | 每页条数，默认20 |
-| view | String | 否 | 视图：my_created/my_todo/my_participated/my_followed/all |
+| view | String | 否 | 视图：my_created/my_todo/my_participated/my_followed/my_brief_todo/general/defect/alert/all；其中 general=通用工单、defect=缺陷工单、alert=告警工单、all=全部工单 |
 | ticketNo | String | 否 | 工单编号（模糊匹配） |
 | title | String | 否 | 标题关键词（模糊匹配） |
 | companyName | String | 否 | 公司名称：匹配缺陷客服信息表 `ticket_bug_info.company_name`（模糊匹配）；无客服信息行的工单不会被命中 |
 | categoryId | Long | 否 | 分类ID |
+| categoryGroupId | Long | 否 | 分类分组ID：查询该分类及所有子分类下的工单，供动态「分类工单」入口使用 |
 | status | String | 否 | 状态（单值，与开放接口等旧入参兼容） |
 | statuses | String[] | 否 | 多状态筛选（OR，与 status 同时传时合并去重） |
 | priority | String | 否 | 优先级 |

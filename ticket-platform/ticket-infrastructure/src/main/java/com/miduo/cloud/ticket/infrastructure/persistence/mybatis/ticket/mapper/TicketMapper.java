@@ -21,6 +21,7 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("title") String title,
                                      @Param("companyName") String companyName,
                                      @Param("categoryId") Long categoryId,
+                                     @Param("categoryGroupIds") List<Long> categoryGroupIds,
                                      @Param("statusList") List<String> statusList,
                                      @Param("priority") String priority,
                                      @Param("creatorId") Long creatorId,
@@ -30,7 +31,12 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("orderBy") String orderBy,
                                      @Param("asc") boolean asc,
                                      @Param("slaStatus") String slaStatus,
-                                     @Param("linkableForBugReport") Boolean linkableForBugReport);
+                                     @Param("linkableForBugReport") Boolean linkableForBugReport,
+                                     @Param("viewCategoryIds") List<Long> viewCategoryIds,
+                                     @Param("excludeCategoryIds") List<Long> excludeCategoryIds,
+                                     @Param("alertCategoryIds") List<Long> alertCategoryIds,
+                                     @Param("alertSource") String alertSource,
+                                     @Param("excludeAlertSource") Boolean excludeAlertSource);
 
     List<Long> selectFollowedTicketIds(@Param("userId") Long userId);
 

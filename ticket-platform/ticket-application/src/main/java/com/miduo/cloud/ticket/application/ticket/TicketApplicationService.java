@@ -227,7 +227,9 @@ public class TicketApplicationService {
     public PageOutput<TicketListOutput> getTicketPage(TicketPageInput input, Long currentUserId) {
         Page<TicketPO> page = new Page<>(input.getPageNum(), input.getPageSize());
 
-        String viewCode = TicketView.fromCode(input.getView()).getCode();
+        TicketView ticketView = TicketView.fromCode(input.getView());
+        String viewCode = ticketView.getCode();
+        TicketViewFilter viewFilter = resolveTicketViewFilter(ticketView);
 
         String keyword = input.getKeyword() == null ? null : input.getKeyword().trim();
         if (keyword != null && keyword.isEmpty()) {
@@ -253,6 +255,7 @@ public class TicketApplicationService {
                 keyword != null ? null : input.getTitle(),
                 companyName,
                 input.getCategoryId(),
+                resolveCategoryGroupIds(input.getCategoryGroupId()),
                 statusFilterList,
                 input.getPriority(),
                 input.getCreatorId(),
@@ -262,7 +265,12 @@ public class TicketApplicationService {
                 input.getOrderBy(),
                 input.isAsc(),
                 input.getSlaStatus(),
-                input.getLinkableForBugReport()
+                input.getLinkableForBugReport(),
+                viewFilter.getViewCategoryIds(),
+                viewFilter.getExcludeCategoryIds(),
+                viewFilter.getAlertCategoryIds(),
+                viewFilter.getAlertSource(),
+                viewFilter.getExcludeAlertSource()
         );
 
         List<TicketPO> records = result.getRecords();
@@ -349,6 +357,163 @@ public class TicketApplicationService {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
         return buildDetailOutput(ticket, currentUserId);
+    }
+
+    private TicketViewFilter resolveTicketViewFilter(TicketView ticketView) {
+        TicketViewFilter filter = new TicketViewFilter();
+        filter.setAlertSource(TicketSource.ALERT.getCode());
+        if (ticketView == null || (ticketView != TicketView.GENERAL
+                && ticketView != TicketView.DEFECT
+                && ticketView != TicketView.ALERT)) {
+            return filter;
+        }
+
+        List<Long> defectCategoryIds = resolveCategoryIdsByWorkflowId(DEFECT_WORKFLOW_ID);
+        List<Long> alertCategoryIds = resolveCategoryIdsByWorkflowId(ALERT_WORKFLOW_ID);
+
+        if (ticketView == TicketView.GENERAL) {
+            filter.setExcludeCategoryIds(mergeCategoryIds(defectCategoryIds, alertCategoryIds));
+            filter.setExcludeAlertSource(true);
+            return filter;
+        }
+        if (ticketView == TicketView.DEFECT) {
+            filter.setViewCategoryIds(defectCategoryIds);
+            return filter;
+        }
+        filter.setAlertCategoryIds(alertCategoryIds);
+        return filter;
+    }
+
+    private List<Long> resolveCategoryIdsByWorkflowId(Long workflowId) {
+        if (workflowId == null) {
+            return Collections.emptyList();
+        }
+        List<TicketCategoryPO> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .select(TicketCategoryPO::getId, TicketCategoryPO::getParentId, TicketCategoryPO::getWorkflowId));
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, TicketCategoryPO> categoryById = categories.stream()
+                .filter(category -> category.getId() != null)
+                .collect(Collectors.toMap(TicketCategoryPO::getId, category -> category, (a, b) -> a));
+        Set<Long> categoryIds = new LinkedHashSet<>();
+        for (TicketCategoryPO category : categories) {
+            Long effectiveWorkflowId = resolveEffectiveWorkflowId(category, categoryById);
+            if (workflowId.equals(effectiveWorkflowId) && category.getId() != null) {
+                categoryIds.add(category.getId());
+            }
+        }
+        return new ArrayList<>(categoryIds);
+    }
+
+    private List<Long> resolveCategoryGroupIds(Long categoryGroupId) {
+        if (categoryGroupId == null) {
+            return null;
+        }
+        List<TicketCategoryPO> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .select(TicketCategoryPO::getId, TicketCategoryPO::getPath));
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String groupPath = null;
+        for (TicketCategoryPO category : categories) {
+            if (categoryGroupId.equals(category.getId())) {
+                groupPath = category.getPath();
+                break;
+            }
+        }
+        if (groupPath == null || groupPath.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<Long> categoryIds = new LinkedHashSet<>();
+        for (TicketCategoryPO category : categories) {
+            if (category.getId() == null || category.getPath() == null) {
+                continue;
+            }
+            if (categoryGroupId.equals(category.getId()) || category.getPath().startsWith(groupPath)) {
+                categoryIds.add(category.getId());
+            }
+        }
+        return new ArrayList<>(categoryIds);
+    }
+
+    private Long resolveEffectiveWorkflowId(TicketCategoryPO category, Map<Long, TicketCategoryPO> categoryById) {
+        TicketCategoryPO current = category;
+        Set<Long> visited = new HashSet<>();
+        while (current != null) {
+            if (current.getWorkflowId() != null) {
+                return current.getWorkflowId();
+            }
+            Long parentId = current.getParentId();
+            if (parentId == null || !visited.add(parentId)) {
+                return null;
+            }
+            current = categoryById.get(parentId);
+        }
+        return null;
+    }
+
+    private List<Long> mergeCategoryIds(List<Long> first, List<Long> second) {
+        Set<Long> merged = new LinkedHashSet<>();
+        if (first != null) {
+            merged.addAll(first);
+        }
+        if (second != null) {
+            merged.addAll(second);
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private static class TicketViewFilter {
+        private List<Long> viewCategoryIds = Collections.emptyList();
+        private List<Long> excludeCategoryIds = Collections.emptyList();
+        private List<Long> alertCategoryIds = Collections.emptyList();
+        private String alertSource = TicketSource.ALERT.getCode();
+        private Boolean excludeAlertSource = false;
+
+        public List<Long> getViewCategoryIds() {
+            return viewCategoryIds;
+        }
+
+        public void setViewCategoryIds(List<Long> viewCategoryIds) {
+            this.viewCategoryIds = viewCategoryIds == null ? Collections.emptyList() : viewCategoryIds;
+        }
+
+        public List<Long> getExcludeCategoryIds() {
+            return excludeCategoryIds;
+        }
+
+        public void setExcludeCategoryIds(List<Long> excludeCategoryIds) {
+            this.excludeCategoryIds = excludeCategoryIds == null ? Collections.emptyList() : excludeCategoryIds;
+        }
+
+        public List<Long> getAlertCategoryIds() {
+            return alertCategoryIds;
+        }
+
+        public void setAlertCategoryIds(List<Long> alertCategoryIds) {
+            this.alertCategoryIds = alertCategoryIds == null ? Collections.emptyList() : alertCategoryIds;
+        }
+
+        public String getAlertSource() {
+            return alertSource;
+        }
+
+        public void setAlertSource(String alertSource) {
+            this.alertSource = alertSource;
+        }
+
+        public Boolean getExcludeAlertSource() {
+            return excludeAlertSource;
+        }
+
+        public void setExcludeAlertSource(Boolean excludeAlertSource) {
+            this.excludeAlertSource = excludeAlertSource;
+        }
     }
 
     /**
