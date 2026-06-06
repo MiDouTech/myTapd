@@ -23,6 +23,8 @@ import javax.validation.Valid;
 
 import org.springframework.util.StringUtils;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/ticket")
 @Tag(name = "工单管理", description = "工单核心管理接口")
@@ -66,6 +68,9 @@ public class TicketController {
         // 未显式传 view 时按「全库」查询，避免调用方漏传时误用「我创建的」导致列表/搜索只见本人已结单（如 Bug 简报关联工单）
         if (!StringUtils.hasText(input.getView())) {
             input.setView(TicketView.ALL.getCode());
+        }
+        if (TicketView.ALL.getCode().equalsIgnoreCase(input.getView()) && !hasAllTicketPermission()) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "仅管理员可查看全部工单");
         }
         PageOutput<TicketListOutput> page = ticketService.getTicketPage(input, currentUserId);
         return ApiResult.success(page);
@@ -276,5 +281,23 @@ public class TicketController {
             throw BusinessException.of(ErrorCode.UNAUTHORIZED);
         }
         return userId;
+    }
+
+    private boolean hasAllTicketPermission() {
+        List<String> roles = SecurityUtil.getCurrentUserRoles();
+        if (roles == null || roles.isEmpty()) {
+            return false;
+        }
+        for (String role : roles) {
+            if (role == null) {
+                continue;
+            }
+            String normalized = role.trim().toUpperCase();
+            if ("ADMIN".equals(normalized) || "TICKET_ADMIN".equals(normalized)
+                    || "admin".equalsIgnoreCase(role.trim()) || "ticket_admin".equalsIgnoreCase(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
