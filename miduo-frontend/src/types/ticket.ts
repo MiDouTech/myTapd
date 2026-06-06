@@ -6,6 +6,7 @@ export type TicketView =
   | 'my_participated'
   | 'my_followed'
   | 'my_brief_todo'
+  | 'category'
   | 'general'
   | 'defect'
   | 'alert'
@@ -20,6 +21,8 @@ export interface TicketPageInput extends PageQuery {
   /** 缺陷客服信息公司名称，后端对 ticket_bug_info.company_name 模糊匹配 */
   companyName?: string
   categoryId?: number
+  /** 分类分组ID：查询该分类及所有子分类下的工单 */
+  categoryGroupId?: number
   status?: string
   /** 多状态筛选（OR）；与 status 二选一或并存时由后端合并 */
   statuses?: string[]

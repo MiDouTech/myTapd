@@ -26,6 +26,11 @@ public class TicketPageInput extends PageInput {
 
     private Long categoryId;
 
+    /**
+     * 分类分组ID：通常为分类管理中的一级分类。传入后查询该分类及所有子分类下的工单。
+     */
+    private Long categoryGroupId;
+
     private String status;
 
     /**

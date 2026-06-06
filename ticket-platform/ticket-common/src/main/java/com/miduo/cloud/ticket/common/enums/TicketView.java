@@ -12,6 +12,7 @@ public enum TicketView {
     MY_PARTICIPATED("my_participated", "我参与的"),
     MY_FOLLOWED("my_followed", "我关注的"),
     MY_BRIEF_TODO("my_brief_todo", "待出简报工单"),
+    CATEGORY("category", "分类工单"),
     GENERAL("general", "通用工单"),
     DEFECT("defect", "缺陷工单"),
     ALERT("alert", "告警工单"),

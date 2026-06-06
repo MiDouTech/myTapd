@@ -255,6 +255,7 @@ public class TicketApplicationService {
                 keyword != null ? null : input.getTitle(),
                 companyName,
                 input.getCategoryId(),
+                resolveCategoryGroupIds(input.getCategoryGroupId()),
                 statusFilterList,
                 input.getPriority(),
                 input.getCreatorId(),
@@ -400,6 +401,40 @@ public class TicketApplicationService {
         for (TicketCategoryPO category : categories) {
             Long effectiveWorkflowId = resolveEffectiveWorkflowId(category, categoryById);
             if (workflowId.equals(effectiveWorkflowId) && category.getId() != null) {
+                categoryIds.add(category.getId());
+            }
+        }
+        return new ArrayList<>(categoryIds);
+    }
+
+    private List<Long> resolveCategoryGroupIds(Long categoryGroupId) {
+        if (categoryGroupId == null) {
+            return null;
+        }
+        List<TicketCategoryPO> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .select(TicketCategoryPO::getId, TicketCategoryPO::getPath));
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String groupPath = null;
+        for (TicketCategoryPO category : categories) {
+            if (categoryGroupId.equals(category.getId())) {
+                groupPath = category.getPath();
+                break;
+            }
+        }
+        if (groupPath == null || groupPath.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<Long> categoryIds = new LinkedHashSet<>();
+        for (TicketCategoryPO category : categories) {
+            if (category.getId() == null || category.getPath() == null) {
+                continue;
+            }
+            if (categoryGroupId.equals(category.getId()) || category.getPath().startsWith(groupPath)) {
                 categoryIds.add(category.getId());
             }
         }

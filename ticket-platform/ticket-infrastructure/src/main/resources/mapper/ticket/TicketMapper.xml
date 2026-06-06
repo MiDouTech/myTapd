@@ -129,6 +129,19 @@
         <if test="categoryId != null">
             AND t.category_id = #{categoryId}
         </if>
+        <if test="categoryGroupIds != null">
+            <choose>
+                <when test="categoryGroupIds.size() &gt; 0">
+                    AND t.category_id IN
+                    <foreach collection="categoryGroupIds" item="cid" open="(" separator="," close=")">
+                        #{cid}
+                    </foreach>
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </if>
         <if test="statusList != null and statusList.size() &gt; 0">
             AND t.status IN
             <foreach collection="statusList" item="st" open="(" separator="," close=")">

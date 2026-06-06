@@ -61,6 +61,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'ticket/category/:categoryId',
+        name: 'ticketCategoryGroup',
+        component: () => import('@/views/ticket/TicketListView.vue'),
+        meta: {
+          title: '分类工单',
+        },
+      },
+      {
         path: 'ticket/defect',
         name: 'ticketDefect',
         component: () => import('@/views/ticket/TicketListView.vue'),
