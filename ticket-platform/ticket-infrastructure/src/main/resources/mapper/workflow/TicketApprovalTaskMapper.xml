@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper.TicketApprovalTaskMapper">
+
+    <select id="selectPendingPageByAssignee" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.TicketApprovalTaskPO">
+        SELECT *
+        FROM ticket_approval_task
+        WHERE assignee_id = #{assigneeId}
+          AND task_status = 'pending'
+          AND deleted = 0
+        ORDER BY create_time ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+</mapper>
