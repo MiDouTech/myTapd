@@ -59,6 +59,45 @@
                   AND bi.company_name LIKE CONCAT('%', #{companyName}, '%')
             )
         </if>
+        <!-- 通用/缺陷/告警工作台：按后端配置后的分类ID和来源口径过滤，避免前端写死分类名称。 -->
+        <if test="view == 'general'">
+            <if test="excludeCategoryIds != null and excludeCategoryIds.size() &gt; 0">
+                AND (
+                    t.category_id IS NULL
+                    OR t.category_id NOT IN
+                    <foreach collection="excludeCategoryIds" item="cid" open="(" separator="," close=")">
+                        #{cid}
+                    </foreach>
+                )
+            </if>
+            <if test="excludeAlertSource != null and excludeAlertSource == true">
+                AND (t.source IS NULL OR LOWER(t.source) != #{alertSource})
+            </if>
+        </if>
+        <if test="view == 'defect'">
+            <choose>
+                <when test="viewCategoryIds != null and viewCategoryIds.size() &gt; 0">
+                    AND t.category_id IN
+                    <foreach collection="viewCategoryIds" item="cid" open="(" separator="," close=")">
+                        #{cid}
+                    </foreach>
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </if>
+        <if test="view == 'alert'">
+            AND (
+                LOWER(t.source) = #{alertSource}
+                <if test="alertCategoryIds != null and alertCategoryIds.size() &gt; 0">
+                    OR t.category_id IN
+                    <foreach collection="alertCategoryIds" item="cid" open="(" separator="," close=")">
+                        #{cid}
+                    </foreach>
+                </if>
+            )
+        </if>
         <!-- 待出简报：主处理人为当前用户；工单已完成，或存在关联简报为已退回(REJECTED)（工单未结单也需继续改简报）；排除已归档简报；排除存在「待审核」简报 -->
         <if test="view == 'my_brief_todo'">
             AND t.assignee_id = #{currentUserId}

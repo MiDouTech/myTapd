@@ -6,6 +6,9 @@ export type TicketView =
   | 'my_participated'
   | 'my_followed'
   | 'my_brief_todo'
+  | 'general'
+  | 'defect'
+  | 'alert'
   | 'all'
 
 export interface TicketPageInput extends PageQuery {

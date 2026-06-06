@@ -57,10 +57,10 @@ public class TicketController {
     /**
      * 分页查询工单列表
      * 接口编号：API000007
-     * 产品文档功能：4.2.2 工单列表与筛选 - 多视图(我创建的/我待办的/我参与的/我关注的/所有工单)；含公司名称（缺陷客服信息）模糊筛选
+     * 产品文档功能：4.2.2 工单列表与筛选 - 多视图(我的工单/通用工单/缺陷工单/告警工单/全部工单)；含公司名称（缺陷客服信息）模糊筛选
      */
     @GetMapping("/page")
-    @Operation(summary = "分页查询工单列表", description = "接口编号：API000007；支持 companyName 模糊匹配缺陷客服公司名称")
+    @Operation(summary = "分页查询工单列表", description = "接口编号：API000007；支持通用/缺陷/告警/全部工单视图与 companyName 模糊匹配")
     public ApiResult<PageOutput<TicketListOutput>> getTicketPage(@Valid TicketPageInput input) {
         Long currentUserId = getCurrentUserId();
         // 未显式传 view 时按「全库」查询，避免调用方漏传时误用「我创建的」导致列表/搜索只见本人已结单（如 Bug 简报关联工单）

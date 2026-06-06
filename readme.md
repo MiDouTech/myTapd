@@ -3364,6 +3364,10 @@ vite v7.3.1 building client environment for production...
    - 后端 `view=general/defect/alert/all` 口径；
    - 分类 ID 配置方式；
    - 顶部搜索、权限、验收、回滚和风险。
+4. 第一阶段已落地：
+   - 后端 `GET /api/ticket/page` 支持 `view=general/defect/alert/all`；
+   - 前端新增「通用工单 / 缺陷工单 / 告警工单 / 全部工单」菜单入口；
+   - 新增 `V61__init_ticket_view_filter_config.sql` 初始化工单视图配置。
 
 ### 70.3 推荐导航
 ```text
@@ -3418,3 +3422,4 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.0-ticket-category-view-extraction-plan` | 新增工单分类视图抽离正式方案：将通用、缺陷、告警、全部工单拆成独立工作入口，明确配置、接口、权限、验收和回滚策略 |
+| `v1.5.1-ticket-category-view-extraction-phase1` | 第一阶段实现：工单分页按 view 读取分类配置过滤；前端新增通用/缺陷/告警/全部工单入口；顶部搜索默认进入通用工单 |

@@ -66,7 +66,10 @@ let desktopPointerMedia: MediaQueryList | null = null
 const menuItems: MenuItem[] = [
   { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
   { index: '/ticket/mine', title: '我的工单', icon: Tickets },
-  { index: '/ticket/all', title: '所有工单', icon: Files },
+  { index: '/ticket/general', title: '通用工单', icon: Files },
+  { index: '/ticket/defect', title: '缺陷工单', icon: Document },
+  { index: '/ticket/alert', title: '告警工单', icon: Bell },
+  { index: '/ticket/all', title: '全部工单', icon: Files },
   { index: '/ticket/kanban', title: '工单看板', icon: Grid },
   { index: '/report', title: '报表中心', icon: Histogram },
   {
@@ -106,7 +109,7 @@ const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/ticket/detail/')) {
-    return '/ticket/all'
+    return '/ticket/general'
   }
   if (route.path === '/ticket/create') {
     return '/ticket/mine'
@@ -196,7 +199,7 @@ function updateViewportState(): void {
 }
 
 /**
- * 顶部工单搜索：产品 5.2 / Task012 全局入口；与架构报告建议一致，走工单分页接口（所有工单视图 + 编号/标题条件）。
+ * 顶部工单搜索：默认进入通用工单，避免普通协作搜索再次混入缺陷和告警。
  * 见 miduo-md/workflow/架构分析与问题梳理报告.md 8.3
  */
 function submitHeaderTicketSearch(): void {
@@ -204,10 +207,10 @@ function submitHeaderTicketSearch(): void {
   persistLayoutTicketSearch(raw)
   if (!raw) {
     markTicketListKeywordClearFromHeader()
-    void router.push({ path: '/ticket/all', query: {} })
+    void router.push({ path: '/ticket/general', query: {} })
     return
   }
-  void router.push({ path: '/ticket/all', query: { q: raw } })
+  void router.push({ path: '/ticket/general', query: { q: raw } })
 }
 
 function resolveMainScrollElement(): HTMLElement | null {

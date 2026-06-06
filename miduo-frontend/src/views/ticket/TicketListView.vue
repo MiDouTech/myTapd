@@ -128,14 +128,24 @@ const query = reactive<TicketPageInput>({
 
 const timeRange = ref<string[]>([])
 
-const viewTabs: Array<{ label: string; value: TicketView }> = [
+const personalViewTabs: Array<{ label: string; value: TicketView }> = [
   { label: '我待办的', value: 'my_todo' },
   { label: '我创建的', value: 'my_created' },
   { label: '我参与的', value: 'my_participated' },
   { label: '我关注的', value: 'my_followed' },
   { label: '待出简报工单', value: 'my_brief_todo' },
-  { label: '所有工单', value: 'all' },
 ]
+
+const workspaceViewTabs: Array<{ label: string; value: TicketView }> = [
+  { label: '通用工单', value: 'general' },
+  { label: '缺陷工单', value: 'defect' },
+  { label: '告警工单', value: 'alert' },
+  { label: '全部工单', value: 'all' },
+]
+
+const activeViewTabs = computed(() =>
+  route.path === '/ticket/mine' ? personalViewTabs : workspaceViewTabs,
+)
 
 const isBriefTodoView = computed(() => query.view === 'my_brief_todo')
 const selectedBriefTicketIds = computed(() =>
@@ -164,11 +174,20 @@ const categoryOptions = computed(() => {
 })
 
 function normalizeViewFromRoute(): TicketView {
+  if (route.path === '/ticket/general') {
+    return 'general'
+  }
+  if (route.path === '/ticket/defect') {
+    return 'defect'
+  }
+  if (route.path === '/ticket/alert') {
+    return 'alert'
+  }
   if (route.path === '/ticket/all') {
     return 'all'
   }
   const routeView = route.query.view
-  const values = viewTabs.map((item) => item.value)
+  const values = activeViewTabs.value.map((item) => item.value)
   if (typeof routeView === 'string' && values.includes(routeView as TicketView)) {
     return routeView as TicketView
   }
@@ -281,8 +300,15 @@ function handleTabChange(value: string | number): void {
   const view = value as TicketView
   const qTrim = typeof route.query.q === 'string' ? route.query.q.trim() : ''
   const qPart = qTrim ? { q: qTrim } : {}
-  if (view === 'all') {
-    router.push({ path: '/ticket/all', query: qPart })
+  const workspacePathMap: Partial<Record<TicketView, string>> = {
+    general: '/ticket/general',
+    defect: '/ticket/defect',
+    alert: '/ticket/alert',
+    all: '/ticket/all',
+  }
+  const workspacePath = workspacePathMap[view]
+  if (workspacePath) {
+    router.push({ path: workspacePath, query: qPart })
     return
   }
   router.push({
@@ -617,12 +643,12 @@ onUnmounted(() => {
           class="mobile-view-select"
           @change="handleTabChange"
         >
-          <el-option v-for="tab in viewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
+          <el-option v-for="tab in activeViewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
         </el-select>
       </div>
       <el-tabs v-else :model-value="query.view" class="ticket-view-tabs" @tab-change="handleTabChange">
         <el-tab-pane
-          v-for="tab in viewTabs"
+          v-for="tab in activeViewTabs"
           :key="tab.value"
           :label="tab.label"
           :name="tab.value"

@@ -27,6 +27,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mappe
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
@@ -54,6 +56,14 @@ public class TicketApplicationService {
     private static final long ALERT_WORKFLOW_ID = 4L;
 
     private static final int COMMENT_MENTION_SUMMARY_MAX = 200;
+
+    private static final String TICKET_VIEW_CONFIG_GROUP = "TICKET_VIEW";
+
+    private static final String CONFIG_KEY_DEFECT_CATEGORY_IDS = "ticket_defect_category_ids";
+
+    private static final String CONFIG_KEY_ALERT_CATEGORY_IDS = "ticket_alert_category_ids";
+
+    private static final String CONFIG_KEY_GENERAL_EXCLUDE_ALERT_SOURCE = "ticket_general_exclude_alert_source";
 
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
 
@@ -129,6 +139,9 @@ public class TicketApplicationService {
 
     @Resource
     private TicketBugInfoMapper ticketBugInfoMapper;
+
+    @Resource
+    private SystemConfigMapper systemConfigMapper;
 
     @Resource
     private TicketAssigneeMapper ticketAssigneeMapper;
@@ -227,7 +240,9 @@ public class TicketApplicationService {
     public PageOutput<TicketListOutput> getTicketPage(TicketPageInput input, Long currentUserId) {
         Page<TicketPO> page = new Page<>(input.getPageNum(), input.getPageSize());
 
-        String viewCode = TicketView.fromCode(input.getView()).getCode();
+        TicketView ticketView = TicketView.fromCode(input.getView());
+        String viewCode = ticketView.getCode();
+        TicketViewFilter viewFilter = resolveTicketViewFilter(ticketView);
 
         String keyword = input.getKeyword() == null ? null : input.getKeyword().trim();
         if (keyword != null && keyword.isEmpty()) {
@@ -262,7 +277,12 @@ public class TicketApplicationService {
                 input.getOrderBy(),
                 input.isAsc(),
                 input.getSlaStatus(),
-                input.getLinkableForBugReport()
+                input.getLinkableForBugReport(),
+                viewFilter.getViewCategoryIds(),
+                viewFilter.getExcludeCategoryIds(),
+                viewFilter.getAlertCategoryIds(),
+                viewFilter.getAlertSource(),
+                viewFilter.getExcludeAlertSource()
         );
 
         List<TicketPO> records = result.getRecords();
@@ -349,6 +369,133 @@ public class TicketApplicationService {
             throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
         }
         return buildDetailOutput(ticket, currentUserId);
+    }
+
+    private TicketViewFilter resolveTicketViewFilter(TicketView ticketView) {
+        TicketViewFilter filter = new TicketViewFilter();
+        filter.setAlertSource(TicketSource.ALERT.getCode());
+        if (ticketView == null || (ticketView != TicketView.GENERAL
+                && ticketView != TicketView.DEFECT
+                && ticketView != TicketView.ALERT)) {
+            return filter;
+        }
+
+        Map<String, String> configMap = loadTicketViewConfigMap();
+        List<Long> defectCategoryIds = parseCategoryIdConfig(configMap.get(CONFIG_KEY_DEFECT_CATEGORY_IDS));
+        List<Long> alertCategoryIds = parseCategoryIdConfig(configMap.get(CONFIG_KEY_ALERT_CATEGORY_IDS));
+
+        if (ticketView == TicketView.GENERAL) {
+            filter.setExcludeCategoryIds(mergeCategoryIds(defectCategoryIds, alertCategoryIds));
+            filter.setExcludeAlertSource(parseBooleanConfig(
+                    configMap.get(CONFIG_KEY_GENERAL_EXCLUDE_ALERT_SOURCE), true));
+            return filter;
+        }
+        if (ticketView == TicketView.DEFECT) {
+            filter.setViewCategoryIds(defectCategoryIds);
+            return filter;
+        }
+        filter.setAlertCategoryIds(alertCategoryIds);
+        return filter;
+    }
+
+    private Map<String, String> loadTicketViewConfigMap() {
+        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SystemConfigPO::getConfigGroup, TICKET_VIEW_CONFIG_GROUP)
+                .eq(SystemConfigPO::getDeleted, 0);
+        List<SystemConfigPO> configs = systemConfigMapper.selectList(wrapper);
+        Map<String, String> map = new HashMap<>();
+        if (configs != null) {
+            for (SystemConfigPO config : configs) {
+                if (config.getConfigKey() != null && config.getConfigValue() != null) {
+                    map.put(config.getConfigKey(), config.getConfigValue());
+                }
+            }
+        }
+        return map;
+    }
+
+    private List<Long> parseCategoryIdConfig(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<Long> categoryIds = new LinkedHashSet<>();
+        for (String item : value.split(",")) {
+            if (item == null || item.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                categoryIds.add(Long.parseLong(item.trim()));
+            } catch (NumberFormatException ex) {
+                log.warn("工单视图分类ID配置包含非法值，value={}", item);
+            }
+        }
+        return new ArrayList<>(categoryIds);
+    }
+
+    private List<Long> mergeCategoryIds(List<Long> first, List<Long> second) {
+        Set<Long> merged = new LinkedHashSet<>();
+        if (first != null) {
+            merged.addAll(first);
+        }
+        if (second != null) {
+            merged.addAll(second);
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private boolean parseBooleanConfig(String value, boolean defaultValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return "true".equalsIgnoreCase(value.trim()) || "1".equals(value.trim());
+    }
+
+    private static class TicketViewFilter {
+        private List<Long> viewCategoryIds = Collections.emptyList();
+        private List<Long> excludeCategoryIds = Collections.emptyList();
+        private List<Long> alertCategoryIds = Collections.emptyList();
+        private String alertSource = TicketSource.ALERT.getCode();
+        private Boolean excludeAlertSource = false;
+
+        public List<Long> getViewCategoryIds() {
+            return viewCategoryIds;
+        }
+
+        public void setViewCategoryIds(List<Long> viewCategoryIds) {
+            this.viewCategoryIds = viewCategoryIds == null ? Collections.emptyList() : viewCategoryIds;
+        }
+
+        public List<Long> getExcludeCategoryIds() {
+            return excludeCategoryIds;
+        }
+
+        public void setExcludeCategoryIds(List<Long> excludeCategoryIds) {
+            this.excludeCategoryIds = excludeCategoryIds == null ? Collections.emptyList() : excludeCategoryIds;
+        }
+
+        public List<Long> getAlertCategoryIds() {
+            return alertCategoryIds;
+        }
+
+        public void setAlertCategoryIds(List<Long> alertCategoryIds) {
+            this.alertCategoryIds = alertCategoryIds == null ? Collections.emptyList() : alertCategoryIds;
+        }
+
+        public String getAlertSource() {
+            return alertSource;
+        }
+
+        public void setAlertSource(String alertSource) {
+            this.alertSource = alertSource;
+        }
+
+        public Boolean getExcludeAlertSource() {
+            return excludeAlertSource;
+        }
+
+        public void setExcludeAlertSource(Boolean excludeAlertSource) {
+            this.excludeAlertSource = excludeAlertSource;
+        }
     }
 
     /**
