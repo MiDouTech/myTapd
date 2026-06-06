@@ -226,6 +226,43 @@ const pagedWorkflowList = computed(() => {
   return sortedWorkflowList.value.slice(start, start + workflowQuery.pageSize)
 })
 
+/**
+ * 编辑表单实时预览：把 workflowEditForm 的状态和流转映射成 WorkflowFlowGraph 所需格式
+ * 这样左侧预览图会随着右侧表单输入实时更新
+ */
+const workflowEditPreviewDetail = computed(() => ({
+  id: 0,
+  name: workflowEditForm.name || '预览',
+  mode: workflowEditForm.mode || 'SIMPLE',
+  isActive: 1,
+  invocationCount: 0,
+  description: '',
+  createTime: '',
+  updateTime: '',
+  isBuiltin: 0,
+  states: workflowEditForm.states
+    .filter((s: any) => s.code && s.name)
+    .map((s: any) => ({
+      code: s.code,
+      name: s.name,
+      type: s.type || 'INTERMEDIATE',
+      slaAction: s.slaAction || null,
+      order: s.order ?? 0,
+    })),
+  transitions: workflowEditForm.transitions
+    .filter((t: any) => t.from && t.to && t.name)
+    .map((t: any) => ({
+      id: t.id || `${t.from}-${t.to}`,
+      from: t.from,
+      to: t.to,
+      name: t.name,
+      isReturn: !!t.isReturn,
+      allowedRoles: t.allowedRoles || [],
+      requireRemark: !!t.requireRemark,
+      allowTransfer: !!t.allowTransfer,
+    })),
+}))
+
 const filteredHandlerGroupList = computed(() => {
   const keyword = handlerGroupQuery.keyword.trim().toLowerCase()
   return handlerGroupList.value.filter((item) => {
@@ -1061,7 +1098,21 @@ onMounted(async () => {
     destroy-on-close
     @closed="resetWorkflowEditForm"
   >
-    <div v-loading="workflowEditLoading" class="workflow-edit-body">
+    <div v-loading="workflowEditLoading" class="workflow-edit-layout">
+      <!-- 左侧：实时预览流程图 -->
+      <div class="workflow-edit-preview-panel">
+        <div class="workflow-edit-preview-header">
+          <span class="workflow-edit-preview-title">实时预览</span>
+          <span class="workflow-edit-preview-hint">编辑状态/流转时图形自动更新</span>
+        </div>
+        <WorkflowFlowGraph :detail="workflowEditPreviewDetail" />
+        <div v-if="!workflowEditForm.states.length" class="workflow-edit-preview-empty">
+          在右侧添加状态后，这里会显示流程图
+        </div>
+      </div>
+
+      <!-- 右侧：编辑表单 -->
+      <div class="workflow-edit-body">
       <el-alert
         type="info"
         :closable="false"
@@ -1230,6 +1281,7 @@ onMounted(async () => {
           </el-table-column>
         </el-table>
       </el-card>
+      </div>
     </div>
     <template #footer>
       <el-button @click="workflowEditVisible = false">取消</el-button>
@@ -1500,6 +1552,61 @@ onMounted(async () => {
   padding-bottom: 16px;
 }
 
+/* 创建/编辑工作流：左图右表双栏布局 */
+.workflow-edit-layout {
+  display: flex;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+}
+
+.workflow-edit-preview-panel {
+  width: 340px;
+  min-width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: calc(100vh - 160px);
+  overflow-y: auto;
+  padding: 16px 16px 16px 0;
+  border-right: 1px solid #ebeef5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-edit-preview-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.workflow-edit-preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.workflow-edit-preview-hint {
+  font-size: 11px;
+  color: #86909c;
+}
+
+.workflow-edit-preview-empty {
+  text-align: center;
+  color: #c0c4cc;
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.workflow-edit-body {
+  flex: 1;
+  min-width: 0;
+  padding-left: 20px;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
 .workflow-edit-tip {
   margin-bottom: 16px;
   border-radius: 8px;
@@ -1538,6 +1645,18 @@ onMounted(async () => {
   .toolbar,
   .section-toolbar {
     margin-bottom: 12px;
+  }
+
+  .workflow-edit-layout {
+    flex-direction: column;
+  }
+
+  .workflow-edit-preview-panel {
+    position: static;
+    width: 100%;
+    height: 300px;
+    border-right: none;
+    border-bottom: 1px solid #ebeef5;
   }
 
   .query-form {
