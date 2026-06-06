@@ -99,11 +99,26 @@ const menuItems: MenuItem[] = [
 ]
 
 /** 游客（GUEST）不显示「管理」菜单 */
+const canViewAllTickets = computed(() => hasAnyRole('ADMIN', 'TICKET_ADMIN'))
+
 const visibleMenuItems = computed(() =>
-  authStore.isGuest
-    ? menuItems.filter((item) => item.index !== 'manage')
-    : menuItems,
+  menuItems.filter((item) => {
+    if (authStore.isGuest && item.index === 'manage') {
+      return false
+    }
+    if (item.index === '/ticket/all') {
+      return canViewAllTickets.value
+    }
+    return true
+  }),
 )
+
+function hasAnyRole(...roles: string[]): boolean {
+  const targets = roles.map((role) => role.toUpperCase())
+  return (authStore.userInfo?.roleCodes ?? [])
+    .map((code) => String(code).toUpperCase())
+    .some((code) => targets.includes(code))
+}
 
 const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
