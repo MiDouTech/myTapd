@@ -87,6 +87,14 @@ public class TicketWorkflowAppService extends BaseApplicationService {
     private final BugReportTicketMapper bugReportTicketMapper;
     private final BugReportMapper bugReportMapper;
 
+    /**
+     * 审批引擎服务（使用 @Lazy 注入打破循环依赖：
+     * TicketApprovalAppService → TicketWorkflowAppService → TicketApprovalAppService）
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private TicketApprovalAppService ticketApprovalAppService;
+
     /** 内置缺陷工单工作流 ID（与 Flyway 初始化一致） */
     private static final long DEFECT_WORKFLOW_ID = 3L;
 
@@ -161,6 +169,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             item.setRequireRemark(t.getRequireRemark());
             item.setAllowTransfer(t.getAllowTransfer());
             item.setAllowedRoles(t.getAllowedRoles());
+            item.setRequireApproval(t.needsApproval() ? Boolean.TRUE : Boolean.FALSE);
             actions.add(item);
         }
         output.setActions(actions);
@@ -256,6 +265,18 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         }
 
         ticketMapper.updateById(ticket);
+
+        // 审批引擎挂载点：若 transition 配置了 requireApproval=true，则在 FSM 状态流转后创建审批任务。
+        // 系统自动流转（isSystemOperation=true）跳过审批创建，避免审批结果触发无限递归。
+        if (!isSystemOperation && matchedTransition.needsApproval() && ticketApprovalAppService != null) {
+            try {
+                ticketApprovalAppService.startApproval(ticketId, matchedTransition, safeOperatorId);
+            } catch (Exception e) {
+                log.error("审批任务创建失败，工单状态已流转但审批未启动: ticketId={}, transitionId={}, error={}",
+                        ticketId, matchedTransition.getId(), e.getMessage(), e);
+                throw e;
+            }
+        }
 
         // 写流转日志（ticket_log 旧格式，保持兼容）
         saveTicketLog(ticketId, safeOperatorId,

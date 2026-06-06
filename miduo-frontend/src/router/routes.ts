@@ -85,6 +85,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'approval/my-pending',
+        name: 'myApprovalPending',
+        component: () => import('@/views/manage/MyApprovalListView.vue'),
+        meta: {
+          title: '待我审批',
+        },
+      },
+      {
         path: 'report',
         name: 'report',
         component: () => import('@/views/report/ReportView.vue'),

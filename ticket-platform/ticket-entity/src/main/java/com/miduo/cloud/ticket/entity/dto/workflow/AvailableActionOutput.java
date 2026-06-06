@@ -56,6 +56,9 @@ public class AvailableActionOutput implements Serializable {
 
         /** 允许执行此操作的角色（前端可据此做权限提示） */
         private List<String> allowedRoles;
+
+        /** 是否需要走审批任务层（true 时前端触发该操作后进入审批等待状态） */
+        private Boolean requireApproval;
     }
 
     @Data
