@@ -27,8 +27,6 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mappe
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
-import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
@@ -56,14 +54,6 @@ public class TicketApplicationService {
     private static final long ALERT_WORKFLOW_ID = 4L;
 
     private static final int COMMENT_MENTION_SUMMARY_MAX = 200;
-
-    private static final String TICKET_VIEW_CONFIG_GROUP = "TICKET_VIEW";
-
-    private static final String CONFIG_KEY_DEFECT_CATEGORY_IDS = "ticket_defect_category_ids";
-
-    private static final String CONFIG_KEY_ALERT_CATEGORY_IDS = "ticket_alert_category_ids";
-
-    private static final String CONFIG_KEY_GENERAL_EXCLUDE_ALERT_SOURCE = "ticket_general_exclude_alert_source";
 
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
 
@@ -139,9 +129,6 @@ public class TicketApplicationService {
 
     @Resource
     private TicketBugInfoMapper ticketBugInfoMapper;
-
-    @Resource
-    private SystemConfigMapper systemConfigMapper;
 
     @Resource
     private TicketAssigneeMapper ticketAssigneeMapper;
@@ -380,14 +367,12 @@ public class TicketApplicationService {
             return filter;
         }
 
-        Map<String, String> configMap = loadTicketViewConfigMap();
-        List<Long> defectCategoryIds = parseCategoryIdConfig(configMap.get(CONFIG_KEY_DEFECT_CATEGORY_IDS));
-        List<Long> alertCategoryIds = parseCategoryIdConfig(configMap.get(CONFIG_KEY_ALERT_CATEGORY_IDS));
+        List<Long> defectCategoryIds = resolveCategoryIdsByWorkflowId(DEFECT_WORKFLOW_ID);
+        List<Long> alertCategoryIds = resolveCategoryIdsByWorkflowId(ALERT_WORKFLOW_ID);
 
         if (ticketView == TicketView.GENERAL) {
             filter.setExcludeCategoryIds(mergeCategoryIds(defectCategoryIds, alertCategoryIds));
-            filter.setExcludeAlertSource(parseBooleanConfig(
-                    configMap.get(CONFIG_KEY_GENERAL_EXCLUDE_ALERT_SOURCE), true));
+            filter.setExcludeAlertSource(true);
             return filter;
         }
         if (ticketView == TicketView.DEFECT) {
@@ -398,38 +383,43 @@ public class TicketApplicationService {
         return filter;
     }
 
-    private Map<String, String> loadTicketViewConfigMap() {
-        LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SystemConfigPO::getConfigGroup, TICKET_VIEW_CONFIG_GROUP)
-                .eq(SystemConfigPO::getDeleted, 0);
-        List<SystemConfigPO> configs = systemConfigMapper.selectList(wrapper);
-        Map<String, String> map = new HashMap<>();
-        if (configs != null) {
-            for (SystemConfigPO config : configs) {
-                if (config.getConfigKey() != null && config.getConfigValue() != null) {
-                    map.put(config.getConfigKey(), config.getConfigValue());
-                }
-            }
-        }
-        return map;
-    }
-
-    private List<Long> parseCategoryIdConfig(String value) {
-        if (value == null || value.trim().isEmpty()) {
+    private List<Long> resolveCategoryIdsByWorkflowId(Long workflowId) {
+        if (workflowId == null) {
             return Collections.emptyList();
         }
+        List<TicketCategoryPO> categories = categoryMapper.selectList(
+                new LambdaQueryWrapper<TicketCategoryPO>()
+                        .select(TicketCategoryPO::getId, TicketCategoryPO::getParentId, TicketCategoryPO::getWorkflowId));
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, TicketCategoryPO> categoryById = categories.stream()
+                .filter(category -> category.getId() != null)
+                .collect(Collectors.toMap(TicketCategoryPO::getId, category -> category, (a, b) -> a));
         Set<Long> categoryIds = new LinkedHashSet<>();
-        for (String item : value.split(",")) {
-            if (item == null || item.trim().isEmpty()) {
-                continue;
-            }
-            try {
-                categoryIds.add(Long.parseLong(item.trim()));
-            } catch (NumberFormatException ex) {
-                log.warn("工单视图分类ID配置包含非法值，value={}", item);
+        for (TicketCategoryPO category : categories) {
+            Long effectiveWorkflowId = resolveEffectiveWorkflowId(category, categoryById);
+            if (workflowId.equals(effectiveWorkflowId) && category.getId() != null) {
+                categoryIds.add(category.getId());
             }
         }
         return new ArrayList<>(categoryIds);
+    }
+
+    private Long resolveEffectiveWorkflowId(TicketCategoryPO category, Map<Long, TicketCategoryPO> categoryById) {
+        TicketCategoryPO current = category;
+        Set<Long> visited = new HashSet<>();
+        while (current != null) {
+            if (current.getWorkflowId() != null) {
+                return current.getWorkflowId();
+            }
+            Long parentId = current.getParentId();
+            if (parentId == null || !visited.add(parentId)) {
+                return null;
+            }
+            current = categoryById.get(parentId);
+        }
+        return null;
     }
 
     private List<Long> mergeCategoryIds(List<Long> first, List<Long> second) {
@@ -441,13 +431,6 @@ public class TicketApplicationService {
             merged.addAll(second);
         }
         return new ArrayList<>(merged);
-    }
-
-    private boolean parseBooleanConfig(String value, boolean defaultValue) {
-        if (value == null || value.trim().isEmpty()) {
-            return defaultValue;
-        }
-        return "true".equalsIgnoreCase(value.trim()) || "1".equals(value.trim());
     }
 
     private static class TicketViewFilter {

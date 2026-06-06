@@ -3362,12 +3362,12 @@ vite v7.3.1 building client environment for production...
    - 菜单结构；
    - 页面字段建议；
    - 后端 `view=general/defect/alert/all` 口径；
-   - 分类 ID 配置方式；
+   - 分类管理工作流绑定识别方式；
    - 顶部搜索、权限、验收、回滚和风险。
 4. 第一阶段已落地：
    - 后端 `GET /api/ticket/page` 支持 `view=general/defect/alert/all`；
    - 前端新增「通用工单 / 缺陷工单 / 告警工单 / 全部工单」菜单入口；
-   - 新增 `V61__init_ticket_view_filter_config.sql` 初始化工单视图配置。
+   - 后端从「分类管理」里分类绑定的工作流自动推导缺陷/告警归属。
 
 ### 70.3 推荐导航
 ```text
@@ -3384,12 +3384,11 @@ vite v7.3.1 building client environment for production...
 | 参数/配置 | 类型 | 说明 |
 |---|---|---|
 | `view=general` | String | 通用工单，默认排除缺陷和告警 |
-| `view=defect` | String | 缺陷工单，只查配置的缺陷分类 |
-| `view=alert` | String | 告警工单，查 `source=alert` 或配置的告警分类 |
+| `view=defect` | String | 缺陷工单，只查分类管理中绑定「缺陷工单工作流」的分类 |
+| `view=alert` | String | 告警工单，查 `source=alert` 或分类管理中绑定「告警工单流转」的分类 |
 | `view=all` | String | 全部工单，建议仅管理员可见 |
-| `ticket_defect_category_ids` | String | 缺陷分类 ID 集合，逗号分隔 |
-| `ticket_alert_category_ids` | String | 告警分类 ID 集合，逗号分隔 |
-| `ticket_general_exclude_alert_source` | Boolean | 通用工单是否排除 `source=alert` |
+| 分类 `workflowId=3` | 分类管理配置 | 绑定缺陷工单工作流后进入缺陷工单视图 |
+| 分类 `workflowId=4` | 分类管理配置 | 绑定告警工单流转后进入告警工单视图 |
 
 ### 70.5 返回值说明（接口行为预期）
 | 场景 | 返回值 | 说明 |
@@ -3400,7 +3399,7 @@ vite v7.3.1 building client environment for production...
 | 查询全部工单 | `PageOutput<TicketListOutput>` | 管理员可查全量 |
 
 ### 70.6 验收步骤
-1. 配置测试环境真实缺陷分类 ID 和告警分类 ID。
+1. 在「管理 -> 分类管理」中确认缺陷分类绑定「缺陷工单工作流」，告警分类绑定「告警工单流转」。
 2. 打开「通用工单」，确认监控告警和功能缺陷不再混入。
 3. 打开「缺陷工单」，确认只显示缺陷类工单。
 4. 打开「告警工单」，确认 `source=alert` 的告警工单可见。
@@ -3411,15 +3410,15 @@ vite v7.3.1 building client environment for production...
 #### Q85：为什么不能直接按“监控告警”“功能缺陷”这几个字过滤？
 - **检测**：测试和生产环境分类名称可能不同，例如测试叫「功能缺陷」，生产叫「技术缺陷」。
 - **记录（错误类型）**：按中文名称写死会导致跨环境口径错位。
-- **恢复建议**：统一按分类 ID 配置；通过分类树接口先核对 ID，再保存配置。
+- **恢复建议**：统一按分类管理里的工作流绑定识别；不要在代码或系统配置里写死中文分类名。
 
 #### Q86：为什么告警工单要同时看 `source=alert` 和分类 ID？
 - **检测**：告警可能由 Webhook 自动创建，也可能被映射到不同分类。
 - **记录（错误类型）**：只按一种条件容易漏单。
-- **恢复建议**：告警视图采用 `source=alert OR category_id in ticket_alert_category_ids` 的组合口径。
+- **恢复建议**：告警视图采用 `source=alert OR 分类绑定告警工单流转` 的组合口径。
 
 ### 70.8 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.0-ticket-category-view-extraction-plan` | 新增工单分类视图抽离正式方案：将通用、缺陷、告警、全部工单拆成独立工作入口，明确配置、接口、权限、验收和回滚策略 |
-| `v1.5.1-ticket-category-view-extraction-phase1` | 第一阶段实现：工单分页按 view 读取分类配置过滤；前端新增通用/缺陷/告警/全部工单入口；顶部搜索默认进入通用工单 |
+| `v1.5.1-ticket-category-view-extraction-phase1` | 第一阶段实现：工单分页按 view 从分类管理的工作流绑定推导缺陷/告警分类；前端新增通用/缺陷/告警/全部工单入口；顶部搜索默认进入通用工单 |
