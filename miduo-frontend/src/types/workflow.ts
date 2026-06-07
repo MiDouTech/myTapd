@@ -34,6 +34,27 @@ export interface WorkflowDetailTransitionItem {
   requireRemark?: boolean
   allowTransfer?: boolean
   isReturn?: boolean
+  requireApproval?: boolean
+  approvalConfig?: WorkflowApprovalConfig
+}
+
+/** 审批节点配置（对应后端 WorkflowTransition.ApprovalConfig） */
+export interface WorkflowApprovalConfig {
+  passedStatus?: string
+  rejectedStatus?: string
+  nodes?: WorkflowApprovalNode[]
+}
+
+/** 单个审批节点（对应后端 WorkflowTransition.ApprovalNode） */
+export interface WorkflowApprovalNode {
+  nodeKey?: string
+  nodeName?: string
+  /** single / countersign / orsign / sequential */
+  approveMode?: string
+  /** member / groupLeader */
+  assigneeType?: string
+  assigneeIds?: number[]
+  dueHours?: number
 }
 
 export interface WorkflowDetailOutput {
