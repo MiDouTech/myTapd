@@ -12,6 +12,12 @@ interface GraphNode extends WorkflowDetailStateItem {
 interface GraphEdge extends WorkflowDetailTransitionItem {
   fromNode?: GraphNode
   toNode?: GraphNode
+  outgoingIndex?: number
+  outgoingCount?: number
+  incomingIndex?: number
+  incomingCount?: number
+  pairIndex?: number
+  pairCount?: number
 }
 
 const props = withDefaults(
@@ -38,6 +44,8 @@ const H_GAP = 90
 const V_GAP = 34
 const PADDING_X = 40
 const PADDING_Y = 36
+const EDGE_PORT_PADDING = 12
+const EDGE_LABEL_GAP = 16
 
 /**
  * 用状态上的 order（产品定义的主线顺序）映射到列，避免对含环图做「最长路径」松弛导致卡死或列被拉爆。
@@ -107,6 +115,71 @@ const graph = computed(() => {
     toNode: nodeMap.get(transition.to),
   }))
 
+  const outgoingMap = new Map<string, GraphEdge[]>()
+  const incomingMap = new Map<string, GraphEdge[]>()
+  const pairMap = new Map<string, GraphEdge[]>()
+
+  edges.forEach((edge) => {
+    if (!edge.fromNode || !edge.toNode) {
+      return
+    }
+    const outgoingGroup = outgoingMap.get(edge.from) || []
+    outgoingGroup.push(edge)
+    outgoingMap.set(edge.from, outgoingGroup)
+
+    const incomingGroup = incomingMap.get(edge.to) || []
+    incomingGroup.push(edge)
+    incomingMap.set(edge.to, incomingGroup)
+
+    const pairKey = `${edge.from}::${edge.to}`
+    const pairGroup = pairMap.get(pairKey) || []
+    pairGroup.push(edge)
+    pairMap.set(pairKey, pairGroup)
+  })
+
+  outgoingMap.forEach((group) => {
+    group
+      .sort((a, b) => {
+        const leftLevel = a.toNode?.level ?? 0
+        const rightLevel = b.toNode?.level ?? 0
+        if (leftLevel !== rightLevel) return leftLevel - rightLevel
+        const leftY = a.toNode?.y ?? 0
+        const rightY = b.toNode?.y ?? 0
+        if (leftY !== rightY) return leftY - rightY
+        return (a.name || '').localeCompare(b.name || '', 'zh-CN')
+      })
+      .forEach((edge, index) => {
+        edge.outgoingIndex = index
+        edge.outgoingCount = group.length
+      })
+  })
+
+  incomingMap.forEach((group) => {
+    group
+      .sort((a, b) => {
+        const leftLevel = a.fromNode?.level ?? 0
+        const rightLevel = b.fromNode?.level ?? 0
+        if (leftLevel !== rightLevel) return leftLevel - rightLevel
+        const leftY = a.fromNode?.y ?? 0
+        const rightY = b.fromNode?.y ?? 0
+        if (leftY !== rightY) return leftY - rightY
+        return (a.name || '').localeCompare(b.name || '', 'zh-CN')
+      })
+      .forEach((edge, index) => {
+        edge.incomingIndex = index
+        edge.incomingCount = group.length
+      })
+  })
+
+  pairMap.forEach((group) => {
+    group
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'))
+      .forEach((edge, index) => {
+        edge.pairIndex = index
+        edge.pairCount = group.length
+      })
+  })
+
   const maxX = nodes.reduce((max, node) => Math.max(max, node.x), 0)
   const maxY = nodes.reduce((max, node) => Math.max(max, node.y), 0)
   const width = Math.max(maxX + NODE_WIDTH + PADDING_X, 640)
@@ -115,22 +188,81 @@ const graph = computed(() => {
   return { nodes, edges, width, height }
 })
 
+function getEdgePortOffset(index?: number, count?: number): number {
+  if (!count || count <= 1) {
+    return 0
+  }
+  const safeIndex = Math.min(Math.max(index ?? 0, 0), count - 1)
+  const span = NODE_HEIGHT - EDGE_PORT_PADDING * 2
+  const step = count > 1 ? span / (count - 1) : 0
+  return -span / 2 + safeIndex * step
+}
+
+function getPairOffset(index?: number, count?: number, step = 12): number {
+  if (!count || count <= 1) {
+    return 0
+  }
+  const safeIndex = Math.min(Math.max(index ?? 0, 0), count - 1)
+  return (safeIndex - (count - 1) / 2) * step
+}
+
+function getEdgeEndpoints(edge: GraphEdge): {
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+} {
+  const startX = (edge.fromNode?.x ?? 0) + NODE_WIDTH
+  const endX = edge.toNode?.x ?? 0
+  const startY =
+    (edge.fromNode?.y ?? 0) + NODE_HEIGHT / 2 + getEdgePortOffset(edge.outgoingIndex, edge.outgoingCount)
+  const endY =
+    (edge.toNode?.y ?? 0) + NODE_HEIGHT / 2 + getEdgePortOffset(edge.incomingIndex, edge.incomingCount)
+  return { startX, startY, endX, endY }
+}
+
 function buildEdgePath(edge: GraphEdge): string {
   if (!edge.fromNode || !edge.toNode) {
     return ''
   }
-  const startX = edge.fromNode.x + NODE_WIDTH
-  const startY = edge.fromNode.y + NODE_HEIGHT / 2
-  const endX = edge.toNode.x
-  const endY = edge.toNode.y + NODE_HEIGHT / 2
+  const { startX, startY, endX, endY } = getEdgeEndpoints(edge)
+  const outgoingBias = getPairOffset(edge.outgoingIndex, edge.outgoingCount, 10)
+  const incomingBias = getPairOffset(edge.incomingIndex, edge.incomingCount, 10)
+  const pairBias = getPairOffset(edge.pairIndex, edge.pairCount, 12)
 
   if (edge.isReturn || startX > endX) {
-    const midX = Math.max(endX - 40, startX - 60)
-    return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`
+    const curveLift = 48 + Math.abs(pairBias)
+    const c1x = startX + 52
+    const c2x = endX - 52
+    const c1y = startY - curveLift + outgoingBias
+    const c2y = endY - curveLift + incomingBias
+    return `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`
   }
 
-  const midX = (startX + endX) / 2
-  return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`
+  const curveX = Math.max(42, (endX - startX) * 0.42)
+  const c1x = startX + curveX
+  const c2x = endX - curveX
+  const c1y = startY + outgoingBias + pairBias
+  const c2y = endY + incomingBias + pairBias
+  return `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`
+}
+
+function getEdgeLabelPosition(edge: GraphEdge): { x: number; y: number } {
+  const { startX, startY, endX, endY } = getEdgeEndpoints(edge)
+  const pairBias = getPairOffset(edge.pairIndex, edge.pairCount, 14)
+
+  if (edge.isReturn || startX > endX) {
+    const returnLift = 56 + Math.abs(pairBias)
+    return {
+      x: (startX + endX) / 2,
+      y: Math.min(startY, endY) - returnLift,
+    }
+  }
+
+  return {
+    x: (startX + endX) / 2,
+    y: (startY + endY) / 2 - EDGE_LABEL_GAP + pairBias,
+  }
 }
 
 function getNodeClass(node: GraphNode): string[] {
@@ -223,8 +355,8 @@ function getEdgeClass(edge: GraphEdge): string[] {
             <text
               v-if="edge.fromNode && edge.toNode"
               class="workflow-edge-label"
-              :x="(edge.fromNode.x + NODE_WIDTH + edge.toNode.x) / 2"
-              :y="(edge.fromNode.y + NODE_HEIGHT / 2 + edge.toNode.y + NODE_HEIGHT / 2) / 2 - 8"
+              :x="getEdgeLabelPosition(edge).x"
+              :y="getEdgeLabelPosition(edge).y"
             >
               {{ edge.name || `${edge.fromName || edge.from}→${edge.toName || edge.to}` }}
             </text>
@@ -337,9 +469,14 @@ function getEdgeClass(edge: GraphEdge): string[] {
 
 .workflow-edge-label {
   fill: #4e5969;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   text-anchor: middle;
   pointer-events: none;
+  paint-order: stroke;
+  stroke: #f8fafc;
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .workflow-node {
