@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { Setting } from '@element-plus/icons-vue'
 
 import { getUserList } from '@/api/user'
 import {
@@ -53,6 +54,77 @@ const workflowEditingId = ref<number | null>(null)
 const createHandlerGroupVisible = ref(false)
 const editingHandlerGroupId = ref<number | null>(null)
 const workflowDetailActiveTab = ref('graph')
+
+// ---- 审批节点配置弹窗状态 ----
+const approvalConfigDialogVisible = ref(false)
+// 当前正在编辑的 transition row（直接引用，保存时写回 workflowEditForm.transitions）
+let editingTransitionRow: Record<string, unknown> | null = null
+const editingApprovalConfig = reactive<{
+  passedStatus: string
+  rejectedStatus: string
+  nodes: Array<{
+    nodeKey: string
+    nodeName: string
+    approveMode: string
+    assigneeType: string
+    assigneeIds: number[]
+    dueHours: number | undefined
+  }>
+}>({
+  passedStatus: '',
+  rejectedStatus: '',
+  nodes: [],
+})
+
+function onRequireApprovalChange(row: Record<string, unknown>) {
+  if (row.requireApproval && !row.approvalConfig) {
+    row.approvalConfig = { passedStatus: '', rejectedStatus: '', nodes: [] }
+  }
+}
+
+function openApprovalConfigDialog(row: Record<string, unknown>) {
+  editingTransitionRow = row
+  const cfg = (row.approvalConfig || {}) as Record<string, unknown>
+  editingApprovalConfig.passedStatus = (cfg.passedStatus as string) || ''
+  editingApprovalConfig.rejectedStatus = (cfg.rejectedStatus as string) || ''
+  editingApprovalConfig.nodes = ((cfg.nodes as unknown[]) || []).map((n: unknown) => {
+    const node = n as Record<string, unknown>
+    return {
+      nodeKey: (node.nodeKey as string) || '',
+      nodeName: (node.nodeName as string) || '',
+      approveMode: (node.approveMode as string) || 'single',
+      assigneeType: (node.assigneeType as string) || 'member',
+      assigneeIds: (node.assigneeIds as number[]) || [],
+      dueHours: (node.dueHours as number | undefined) || undefined,
+    }
+  })
+  approvalConfigDialogVisible.value = true
+}
+
+function addApprovalNode() {
+  editingApprovalConfig.nodes.push({
+    nodeKey: `node_0${editingApprovalConfig.nodes.length + 1}`,
+    nodeName: '',
+    approveMode: 'single',
+    assigneeType: 'member',
+    assigneeIds: [],
+    dueHours: undefined,
+  })
+}
+
+function removeApprovalNode(idx: number) {
+  editingApprovalConfig.nodes.splice(idx, 1)
+}
+
+function saveApprovalConfig() {
+  if (!editingTransitionRow) return
+  editingTransitionRow.approvalConfig = {
+    passedStatus: editingApprovalConfig.passedStatus,
+    rejectedStatus: editingApprovalConfig.rejectedStatus,
+    nodes: editingApprovalConfig.nodes.map(n => ({ ...n })),
+  }
+  approvalConfigDialogVisible.value = false
+}
 
 const workflowList = ref<WorkflowListOutput[]>([])
 const workflowDetail = ref<WorkflowDetailOutput>()
@@ -1274,6 +1346,30 @@ onMounted(async () => {
               <el-checkbox v-model="row.isReturn" />
             </template>
           </el-table-column>
+          <el-table-column label="需要审批" width="90" align="center">
+            <template #default="{ row }">
+              <el-switch
+                v-model="row.requireApproval"
+                size="small"
+                @change="onRequireApprovalChange(row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="审批配置" width="100" align="center">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.requireApproval"
+                type="primary"
+                link
+                size="small"
+                @click="openApprovalConfigDialog(row)"
+              >
+                <el-icon><Setting /></el-icon>
+                配置
+              </el-button>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="80" align="center">
             <template #default="{ $index }">
               <el-button type="danger" link @click="removeWorkflowTransitionRow($index)">删除</el-button>
@@ -1290,6 +1386,115 @@ onMounted(async () => {
       </el-button>
     </template>
   </el-drawer>
+
+  <!-- 审批节点配置弹窗 -->
+  <el-dialog
+    v-model="approvalConfigDialogVisible"
+    title="配置审批节点"
+    width="680px"
+    :close-on-click-modal="false"
+    destroy-on-close
+  >
+    <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px"
+      title="审批节点按顺序排列。所有节点通过后工单自动流转到「通过目标状态」；任意节点驳回则流转到「驳回目标状态」。" />
+
+    <el-form label-width="120px">
+      <el-form-item label="通过目标状态" required>
+        <el-select v-model="editingApprovalConfig.passedStatus" filterable allow-create style="width:100%"
+          placeholder="审批全通过后自动流转到（如 executing）">
+          <el-option v-for="s in workflowEditForm.states" :key="s.code" :label="`${s.name}（${s.code}）`" :value="s.code" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="驳回目标状态" required>
+        <el-select v-model="editingApprovalConfig.rejectedStatus" filterable allow-create style="width:100%"
+          placeholder="审批被驳回后自动流转到（如 rejected）">
+          <el-option v-for="s in workflowEditForm.states" :key="s.code" :label="`${s.name}（${s.code}）`" :value="s.code" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+
+    <div class="approval-nodes-header">
+      <span class="approval-nodes-title">审批节点列表</span>
+      <el-button type="primary" link size="small" @click="addApprovalNode">+ 添加节点</el-button>
+    </div>
+
+    <div v-for="(node, idx) in editingApprovalConfig.nodes" :key="idx" class="approval-node-row">
+      <div class="approval-node-row__index">节点 {{ idx + 1 }}</div>
+      <el-form label-width="80px" class="approval-node-form">
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="节点名称">
+              <el-input v-model="node.nodeName" placeholder="如：部门负责人审批" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="节点标识">
+              <el-input v-model="node.nodeKey" placeholder="如：node_01" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="审批模式">
+              <el-select v-model="node.approveMode" style="width:100%">
+                <el-option label="单人审批" value="single" />
+                <el-option label="会签（全部同意）" value="countersign" />
+                <el-option label="或签（一人同意即可）" value="orsign" />
+                <el-option label="依次审批" value="sequential" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="审批人来源">
+              <el-select v-model="node.assigneeType" style="width:100%">
+                <el-option label="指定用户" value="member" />
+                <el-option label="处理组长" value="groupLeader" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row v-if="node.assigneeType === 'member'" :gutter="12">
+          <el-col :span="24">
+            <el-form-item label="指定审批人">
+              <el-select
+                v-model="node.assigneeIds"
+                multiple
+                filterable
+                collapse-tags
+                placeholder="选择审批人"
+                style="width:100%"
+              >
+                <el-option
+                  v-for="u in userSelectOptions"
+                  :key="u.value"
+                  :label="u.label"
+                  :value="u.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="超时时间(h)">
+              <el-input-number v-model="node.dueHours" :min="1" :max="720" :controls="false" style="width:100%"
+                placeholder="可选，超时后催办" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12" style="display:flex;align-items:center;padding-top:8px">
+            <el-button type="danger" link size="small" @click="removeApprovalNode(idx)">删除此节点</el-button>
+          </el-col>
+        </el-row>
+      </el-form>
+    </div>
+
+    <el-empty v-if="!editingApprovalConfig.nodes?.length" description="暂无审批节点，点击「添加节点」" :image-size="60" />
+
+    <template #footer>
+      <el-button @click="approvalConfigDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="saveApprovalConfig">确认保存</el-button>
+    </template>
+  </el-dialog>
 
   <el-dialog
     v-model="createHandlerGroupVisible"
@@ -1617,6 +1822,37 @@ onMounted(async () => {
 
   :deep(.el-form-item) {
     margin-bottom: 18px;
+  }
+}
+
+.approval-nodes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d2129;
+}
+
+.approval-node-row {
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  padding: 14px 16px 6px;
+  margin-bottom: 12px;
+  background: #fafbfc;
+
+  &__index {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1675d1;
+    margin-bottom: 8px;
+  }
+}
+
+.approval-node-form {
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
   }
 }
 
