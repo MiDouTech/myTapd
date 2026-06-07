@@ -44,8 +44,10 @@ const H_GAP = 90
 const V_GAP = 34
 const PADDING_X = 40
 const PADDING_Y = 36
-const EDGE_PORT_PADDING = 12
+const LANE_GAP = NODE_HEIGHT + V_GAP + 46
+const EDGE_PORT_STEP = 12
 const EDGE_LABEL_GAP = 16
+const EDGE_LABEL_AUTO_HIDE_THRESHOLD = 14
 
 /**
  * 用状态上的 order（产品定义的主线顺序）映射到列，避免对含环图做「最长路径」松弛导致卡死或列被拉爆。
@@ -79,30 +81,91 @@ function buildOrderBasedLevels(states: WorkflowDetailStateItem[]): Map<string, n
   return levelMap
 }
 
+/**
+ * 节点车道分层：
+ * - 主干节点保持在 lane=0
+ * - 挂起/暂停/分支汇聚节点下沉到 lane=1
+ * - 多入边终态（如“已关闭”）继续下沉到 lane=2
+ * 这样能把“主线”和“支线终点”分开，减少一条水平线上堆满连线。
+ */
+function buildNodeLanes(
+  states: WorkflowDetailStateItem[],
+  transitions: WorkflowDetailTransitionItem[],
+): Map<string, number> {
+  const incomingCount = new Map<string, number>()
+  const outgoingCount = new Map<string, number>()
+
+  transitions.forEach((transition) => {
+    incomingCount.set(transition.to, (incomingCount.get(transition.to) || 0) + 1)
+    outgoingCount.set(transition.from, (outgoingCount.get(transition.from) || 0) + 1)
+  })
+
+  const laneMap = new Map<string, number>()
+  states.forEach((state) => {
+    const incoming = incomingCount.get(state.code) || 0
+    const outgoing = outgoingCount.get(state.code) || 0
+    const keyword = `${state.code}|${state.name || ''}`.toLowerCase()
+    const isSuspendLike = /suspend|pause|hang|挂起|暂停/.test(keyword)
+    const isTerminal = state.type === 'TERMINAL'
+    const isDenseSink = incoming >= 3 && outgoing <= 2
+
+    if (isSuspendLike) {
+      laneMap.set(state.code, 1)
+      return
+    }
+    if (isTerminal && incoming >= 2) {
+      laneMap.set(state.code, 2)
+      return
+    }
+    if (isDenseSink && !isTerminal) {
+      laneMap.set(state.code, 1)
+      return
+    }
+    laneMap.set(state.code, 0)
+  })
+
+  return laneMap
+}
+
 const graph = computed(() => {
   const states = [...(props.detail?.states || [])].sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
   const transitions = props.detail?.transitions || []
   const nodeMap = new Map<string, GraphNode>()
   const levelMap = buildOrderBasedLevels(states)
+  const laneMap = buildNodeLanes(states, transitions)
 
-  const groups = new Map<number, WorkflowDetailStateItem[]>()
+  const groups = new Map<string, WorkflowDetailStateItem[]>()
   states.forEach((state) => {
     const level = levelMap.get(state.code) ?? 0
-    const group = groups.get(level) || []
+    const lane = laneMap.get(state.code) ?? 0
+    const key = `${level}:${lane}`
+    const group = groups.get(key) || []
     group.push(state)
-    groups.set(level, group)
+    groups.set(key, group)
   })
 
-  const sortedLevels = [...groups.keys()].sort((a, b) => a - b)
-  sortedLevels.forEach((level) => {
-    const group = groups.get(level) || []
+  const sortedKeys = [...groups.keys()].sort((left, right) => {
+    const leftParts = left.split(':')
+    const rightParts = right.split(':')
+    const leftLevel = Number(leftParts[0] || 0)
+    const leftLane = Number(leftParts[1] || 0)
+    const rightLevel = Number(rightParts[0] || 0)
+    const rightLane = Number(rightParts[1] || 0)
+    if (leftLevel !== rightLevel) return leftLevel - rightLevel
+    return leftLane - rightLane
+  })
+  sortedKeys.forEach((key) => {
+    const [levelRaw, laneRaw] = key.split(':')
+    const level = Number(levelRaw)
+    const lane = Number(laneRaw)
+    const group = groups.get(key) || []
     group.sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
     group.forEach((state, index) => {
       const node: GraphNode = {
         ...state,
         level,
         x: PADDING_X + level * (NODE_WIDTH + H_GAP),
-        y: PADDING_Y + index * (NODE_HEIGHT + V_GAP),
+        y: PADDING_Y + lane * LANE_GAP + index * (NODE_HEIGHT + V_GAP),
       }
       nodeMap.set(state.code, node)
     })
@@ -192,10 +255,7 @@ function getEdgePortOffset(index?: number, count?: number): number {
   if (!count || count <= 1) {
     return 0
   }
-  const safeIndex = Math.min(Math.max(index ?? 0, 0), count - 1)
-  const span = NODE_HEIGHT - EDGE_PORT_PADDING * 2
-  const step = count > 1 ? span / (count - 1) : 0
-  return -span / 2 + safeIndex * step
+  return ((index ?? 0) - (count - 1) / 2) * EDGE_PORT_STEP
 }
 
 function getPairOffset(index?: number, count?: number, step = 12): number {
@@ -229,9 +289,10 @@ function buildEdgePath(edge: GraphEdge): string {
   const outgoingBias = getPairOffset(edge.outgoingIndex, edge.outgoingCount, 10)
   const incomingBias = getPairOffset(edge.incomingIndex, edge.incomingCount, 10)
   const pairBias = getPairOffset(edge.pairIndex, edge.pairCount, 12)
+  const levelDelta = (edge.toNode.level ?? 0) - (edge.fromNode.level ?? 0)
 
   if (edge.isReturn || startX > endX) {
-    const curveLift = 48 + Math.abs(pairBias)
+    const curveLift = 88 + Math.abs(pairBias)
     const c1x = startX + 52
     const c2x = endX - 52
     const c1y = startY - curveLift + outgoingBias
@@ -239,6 +300,16 @@ function buildEdgePath(edge: GraphEdge): string {
     return `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`
   }
 
+  if (levelDelta > 1) {
+    const towardsBottom = edge.toNode.type === 'TERMINAL' || (edge.incomingCount || 0) >= 4
+    const laneLift = 68 + (levelDelta - 1) * 14 + Math.abs(pairBias)
+    const lift = towardsBottom ? laneLift : -laneLift
+    const c1x = startX + Math.max(54, (endX - startX) * 0.32)
+    const c2x = endX - Math.max(54, (endX - startX) * 0.32)
+    const c1y = startY + lift + outgoingBias
+    const c2y = endY + lift + incomingBias
+    return `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`
+  }
   const curveX = Math.max(42, (endX - startX) * 0.42)
   const c1x = startX + curveX
   const c2x = endX - curveX
@@ -250,19 +321,39 @@ function buildEdgePath(edge: GraphEdge): string {
 function getEdgeLabelPosition(edge: GraphEdge): { x: number; y: number } {
   const { startX, startY, endX, endY } = getEdgeEndpoints(edge)
   const pairBias = getPairOffset(edge.pairIndex, edge.pairCount, 14)
+  const levelDelta = (edge.toNode?.level ?? 0) - (edge.fromNode?.level ?? 0)
 
   if (edge.isReturn || startX > endX) {
-    const returnLift = 56 + Math.abs(pairBias)
+    const returnLift = 98 + Math.abs(pairBias)
     return {
       x: (startX + endX) / 2,
       y: Math.min(startY, endY) - returnLift,
     }
   }
 
+  if (levelDelta > 1) {
+    const towardsBottom = edge.toNode?.type === 'TERMINAL' || (edge.incomingCount || 0) >= 4
+    const lift = (towardsBottom ? 76 : -76) + pairBias
+    return {
+      x: (startX + endX) / 2,
+      y: (startY + endY) / 2 + lift,
+    }
+  }
   return {
     x: (startX + endX) / 2,
     y: (startY + endY) / 2 - EDGE_LABEL_GAP + pairBias,
   }
+}
+
+function shouldShowEdgeLabel(edge: GraphEdge): boolean {
+  if (props.selectedTransitionId) {
+    return edge.id === props.selectedTransitionId
+  }
+  const edgeCount = graph.value.edges.length
+  if (edgeCount > EDGE_LABEL_AUTO_HIDE_THRESHOLD) {
+    return Boolean(edge.isReturn)
+  }
+  return true
 }
 
 function getNodeClass(node: GraphNode): string[] {
@@ -293,6 +384,9 @@ function getEdgeClass(edge: GraphEdge): string[] {
         <span><i class="legend-line legend-line--normal" /> 正常流转</span>
         <span><i class="legend-line legend-line--return" /> 退回流转</span>
       </div>
+      <span v-if="graph.edges.length > EDGE_LABEL_AUTO_HIDE_THRESHOLD" class="workflow-graph-hint">
+        已启用简洁模式：仅显示退回线文字，点击线条可高亮查看
+      </span>
     </div>
 
     <div class="workflow-graph-scroll">
@@ -353,7 +447,7 @@ function getEdgeClass(edge: GraphEdge): string[] {
               @click="emit('selectTransition', edge)"
             />
             <text
-              v-if="edge.fromNode && edge.toNode"
+              v-if="edge.fromNode && edge.toNode && shouldShowEdgeLabel(edge)"
               class="workflow-edge-label"
               :x="getEdgeLabelPosition(edge).x"
               :y="getEdgeLabelPosition(edge).y"
@@ -397,6 +491,11 @@ function getEdgeClass(edge: GraphEdge): string[] {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.workflow-graph-hint {
+  font-size: 12px;
+  color: #86909c;
 }
 
 .workflow-graph-legend {
@@ -454,17 +553,20 @@ function getEdgeClass(edge: GraphEdge): string[] {
   fill: none;
   stroke: #7a8599;
   stroke-width: 2;
+  stroke-opacity: 0.68;
   cursor: pointer;
 }
 
 .workflow-edge--selected {
   stroke: #1675d1;
   stroke-width: 3;
+  stroke-opacity: 1;
 }
 
 .workflow-edge--return {
   stroke: #d97706;
   stroke-dasharray: 6 5;
+  stroke-opacity: 0.85;
 }
 
 .workflow-edge-label {
