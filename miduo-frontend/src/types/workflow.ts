@@ -163,6 +163,8 @@ export interface WorkflowUpdateTransitionItem {
   requireRemark?: boolean
   allowTransfer?: boolean
   isReturn?: boolean
+  requireApproval?: boolean
+  approvalConfig?: WorkflowApprovalConfig
 }
 
 export interface WorkflowUpdateInput {
