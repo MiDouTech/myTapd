@@ -48,5 +48,28 @@ public class WorkflowDetailOutput implements Serializable {
         private Boolean requireRemark;
         private Boolean allowTransfer;
         private Boolean isReturn;
+        /** 是否需要走审批任务层（借鉴米多星球审批引擎） */
+        private Boolean requireApproval;
+        /** 审批节点配置（requireApproval=true 时有值） */
+        private ApprovalConfigOutput approvalConfig;
+    }
+
+    /** 审批流配置输出（独立 DTO，避免跨模块依赖） */
+    @Data
+    public static class ApprovalConfigOutput implements Serializable {
+        private String passedStatus;
+        private String rejectedStatus;
+        private List<ApprovalNodeOutput> nodes;
+    }
+
+    /** 审批节点输出 */
+    @Data
+    public static class ApprovalNodeOutput implements Serializable {
+        private String nodeKey;
+        private String nodeName;
+        private String approveMode;
+        private String assigneeType;
+        private List<Long> assigneeIds;
+        private Integer dueHours;
     }
 }

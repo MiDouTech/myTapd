@@ -609,6 +609,10 @@ async function openWorkflowEdit(row: WorkflowListOutput): Promise<void> {
       requireRemark: Boolean(t.requireRemark),
       allowTransfer: Boolean(t.allowTransfer),
       isReturn: Boolean(t.isReturn),
+      requireApproval: Boolean(t.requireApproval),
+      approvalConfig: t.approvalConfig
+        ? JSON.parse(JSON.stringify(t.approvalConfig))
+        : undefined,
     }))
   } catch {
     resetWorkflowEditForm()
@@ -684,6 +688,8 @@ async function handleWorkflowEditSubmit(): Promise<void> {
       requireRemark: t.requireRemark || undefined,
       allowTransfer: t.allowTransfer || undefined,
       isReturn: t.isReturn || undefined,
+      requireApproval: t.requireApproval || undefined,
+      approvalConfig: t.requireApproval && t.approvalConfig ? t.approvalConfig : undefined,
     })),
   }
 

@@ -8,8 +8,7 @@ import com.miduo.cloud.ticket.common.enums.UserRole;
 import com.miduo.cloud.ticket.common.enums.WorkflowMode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.workflow.model.WorkflowState;
-import com.miduo.cloud.ticket.domain.workflow.model.WorkflowTransition;
-import com.miduo.cloud.ticket.domain.workflow.service.WorkflowEngine;
+import com.miduo.cloud.ticket.domain.workflow.model.WorkflowTransition;import com.miduo.cloud.ticket.domain.workflow.service.WorkflowEngine;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowListOutput;
 import com.miduo.cloud.ticket.entity.dto.workflow.WorkflowObservationOutput;
@@ -154,6 +153,8 @@ public class WorkflowAppService extends BaseApplicationService {
             item.setRequireRemark(transition.getRequireRemark());
             item.setAllowTransfer(transition.getAllowTransfer());
             item.setIsReturn(transition.isReturnTransition());
+            item.setRequireApproval(transition.getRequireApproval());
+            item.setApprovalConfig(toApprovalConfigOutput(transition.getApprovalConfig()));
             transitionItems.add(item);
         }
         output.setTransitions(transitionItems);
@@ -332,6 +333,10 @@ public class WorkflowAppService extends BaseApplicationService {
             t.setRequireRemark(item.getRequireRemark());
             t.setAllowTransfer(item.getAllowTransfer());
             t.setIsReturn(item.getIsReturn());
+            t.setRequireApproval(item.getRequireApproval());
+            if (Boolean.TRUE.equals(item.getRequireApproval()) && item.getApprovalConfig() != null) {
+                t.setApprovalConfig(buildApprovalConfig(item.getApprovalConfig()));
+            }
 
             String tid = item.getId() != null ? item.getId().trim() : "";
             if (tid.isEmpty() || usedIds.contains(tid)) {
@@ -422,6 +427,60 @@ public class WorkflowAppService extends BaseApplicationService {
             return "";
         }
         return code.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private WorkflowDetailOutput.ApprovalConfigOutput toApprovalConfigOutput(WorkflowTransition.ApprovalConfig src) {
+        if (src == null) {
+            return null;
+        }
+        WorkflowDetailOutput.ApprovalConfigOutput out = new WorkflowDetailOutput.ApprovalConfigOutput();
+        out.setPassedStatus(src.getPassedStatus());
+        out.setRejectedStatus(src.getRejectedStatus());
+        if (src.getNodes() != null) {
+            List<WorkflowDetailOutput.ApprovalNodeOutput> nodeOuts = new ArrayList<>();
+            for (WorkflowTransition.ApprovalNode n : src.getNodes()) {
+                if (n == null) {
+                    continue;
+                }
+                WorkflowDetailOutput.ApprovalNodeOutput nodeOut = new WorkflowDetailOutput.ApprovalNodeOutput();
+                nodeOut.setNodeKey(n.getNodeKey());
+                nodeOut.setNodeName(n.getNodeName());
+                nodeOut.setApproveMode(n.getApproveMode());
+                nodeOut.setAssigneeType(n.getAssigneeType());
+                nodeOut.setAssigneeIds(n.getAssigneeIds());
+                nodeOut.setDueHours(n.getDueHours());
+                nodeOuts.add(nodeOut);
+            }
+            out.setNodes(nodeOuts);
+        }
+        return out;
+    }
+
+    private WorkflowTransition.ApprovalConfig buildApprovalConfig(WorkflowUpdateInput.ApprovalConfigInput input) {
+        if (input == null) {
+            return null;
+        }
+        WorkflowTransition.ApprovalConfig config = new WorkflowTransition.ApprovalConfig();
+        config.setPassedStatus(input.getPassedStatus() != null ? input.getPassedStatus().trim() : null);
+        config.setRejectedStatus(input.getRejectedStatus() != null ? input.getRejectedStatus().trim() : null);
+        if (input.getNodes() != null) {
+            List<WorkflowTransition.ApprovalNode> nodes = new ArrayList<>();
+            for (WorkflowUpdateInput.ApprovalNodeInput n : input.getNodes()) {
+                if (n == null) {
+                    continue;
+                }
+                WorkflowTransition.ApprovalNode node = new WorkflowTransition.ApprovalNode();
+                node.setNodeKey(n.getNodeKey() != null ? n.getNodeKey().trim() : null);
+                node.setNodeName(n.getNodeName() != null ? n.getNodeName().trim() : null);
+                node.setApproveMode(n.getApproveMode() != null ? n.getApproveMode().trim() : "single");
+                node.setAssigneeType(n.getAssigneeType() != null ? n.getAssigneeType().trim() : "member");
+                node.setAssigneeIds(n.getAssigneeIds());
+                node.setDueHours(n.getDueHours());
+                nodes.add(node);
+            }
+            config.setNodes(nodes);
+        }
+        return config;
     }
 
     private boolean isWorkflowDeletable(WorkflowPO workflow) {
