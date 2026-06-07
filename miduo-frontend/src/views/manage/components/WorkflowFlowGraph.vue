@@ -145,8 +145,12 @@ const graph = computed(() => {
   })
 
   const sortedKeys = [...groups.keys()].sort((left, right) => {
-    const [leftLevel, leftLane] = left.split(':').map((item) => Number(item))
-    const [rightLevel, rightLane] = right.split(':').map((item) => Number(item))
+    const leftParts = left.split(':')
+    const rightParts = right.split(':')
+    const leftLevel = Number(leftParts[0] || 0)
+    const leftLane = Number(leftParts[1] || 0)
+    const rightLevel = Number(rightParts[0] || 0)
+    const rightLane = Number(rightParts[1] || 0)
     if (leftLevel !== rightLevel) return leftLevel - rightLevel
     return leftLane - rightLane
   })
