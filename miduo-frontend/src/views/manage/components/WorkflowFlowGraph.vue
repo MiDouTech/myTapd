@@ -310,7 +310,6 @@ function buildEdgePath(edge: GraphEdge): string {
     const c2y = endY + lift + incomingBias
     return `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`
   }
-
   const curveX = Math.max(42, (endX - startX) * 0.42)
   const c1x = startX + curveX
   const c2x = endX - curveX
@@ -340,7 +339,6 @@ function getEdgeLabelPosition(edge: GraphEdge): { x: number; y: number } {
       y: (startY + endY) / 2 + lift,
     }
   }
-
   return {
     x: (startX + endX) / 2,
     y: (startY + endY) / 2 - EDGE_LABEL_GAP + pairBias,
