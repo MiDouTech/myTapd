@@ -72,6 +72,7 @@ const formData = reactive<AlertRuleMappingCreateInput & { id?: number }>({
   priorityP2: 'high',
   priorityP3: 'medium',
   assigneeId: null,
+  assigneeIds: [],
   dedupWindowMinutes: 30,
   enabled: true,
 })
@@ -230,6 +231,7 @@ function openCreateDialog() {
   formData.priorityP2 = 'high'
   formData.priorityP3 = 'medium'
   formData.assigneeId = null
+  formData.assigneeIds = []
   formData.dedupWindowMinutes = 30
   formData.enabled = true
   dialogVisible.value = true
@@ -246,6 +248,11 @@ function openEditDialog(row: AlertRuleMappingOutput) {
   formData.priorityP2 = row.priorityP2
   formData.priorityP3 = row.priorityP3
   formData.assigneeId = row.assigneeId
+  formData.assigneeIds = row.assigneeIds && row.assigneeIds.length > 0
+    ? [...row.assigneeIds]
+    : row.assigneeId
+      ? [row.assigneeId]
+      : []
   formData.dedupWindowMinutes = row.dedupWindowMinutes
   formData.enabled = row.enabled
   dialogVisible.value = true
@@ -265,6 +272,8 @@ async function handleSubmit() {
   try {
     const isDefaultMode = formData.matchMode === 'DEFAULT'
     const effectiveRuleName = isDefaultMode ? '' : formData.ruleName
+    const selectedAssigneeIds = formData.assigneeIds || []
+    const primaryAssigneeId = selectedAssigneeIds.length > 0 ? selectedAssigneeIds[0] : null
 
     if (isEdit.value && formData.id) {
       const updateData: AlertRuleMappingUpdateInput = {
@@ -275,7 +284,8 @@ async function handleSubmit() {
         priorityP1: formData.priorityP1,
         priorityP2: formData.priorityP2,
         priorityP3: formData.priorityP3,
-        assigneeId: formData.assigneeId,
+        assigneeId: primaryAssigneeId,
+        assigneeIds: selectedAssigneeIds,
         dedupWindowMinutes: formData.dedupWindowMinutes,
         enabled: formData.enabled,
       }
@@ -289,7 +299,8 @@ async function handleSubmit() {
         priorityP1: formData.priorityP1,
         priorityP2: formData.priorityP2,
         priorityP3: formData.priorityP3,
-        assigneeId: formData.assigneeId,
+        assigneeId: primaryAssigneeId,
+        assigneeIds: selectedAssigneeIds,
         dedupWindowMinutes: formData.dedupWindowMinutes,
         enabled: formData.enabled,
       }
@@ -430,9 +441,9 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
-          <el-table-column prop="assigneeName" label="回退处理人" width="120" align="center">
+          <el-table-column prop="assigneeNames" label="固定处理人" width="160" align="center" :show-overflow-tooltip="true">
             <template #default="{ row }">
-              {{ row.assigneeName || '按夜莺推送' }}
+              {{ row.assigneeNames || row.assigneeName || '自动分派' }}
             </template>
           </el-table-column>
           <el-table-column prop="dedupWindowMinutes" label="去重窗口" width="100" align="center">
@@ -638,8 +649,8 @@ onMounted(() => {
                 <li>复制上方Webhook URL</li>
                 <li>在夜莺监控平台 → 告警规则 → 回调地址中粘贴该URL</li>
                 <li>在本页「规则映射」Tab中配置告警规则与工单分类的对应关系</li>
-                <li>告警触发后自动创建工单，处理人优先从夜莺推送的通知用户中匹配（手机号/邮箱/姓名），支持多人指派</li>
-                <li>匹配不到时使用映射配置中的回退处理人，若未设置回退处理人则走自动分派</li>
+                <li>告警触发后自动创建工单，处理人优先使用映射配置中的固定处理人，支持多人指派</li>
+                <li>未设置固定处理人时，兼容尝试匹配夜莺推送用户；仍匹配不到则走自动分派</li>
                 <li>可在「事件日志」Tab中查看告警处理记录</li>
               </ol>
             </el-alert>
@@ -692,8 +703,15 @@ onMounted(() => {
             <el-option v-for="opt in priorityOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="回退处理人">
-          <el-select v-model="formData.assigneeId" placeholder="夜莺推送用户匹配不到时使用" filterable clearable style="width: 100%">
+        <el-form-item label="固定处理人">
+          <el-select
+            v-model="formData.assigneeIds"
+            placeholder="请选择告警命中后固定指派的处理人"
+            filterable
+            clearable
+            multiple
+            style="width: 100%"
+          >
             <el-option
               v-for="user in users"
               :key="user.id"
@@ -702,7 +720,7 @@ onMounted(() => {
             />
           </el-select>
           <div class="form-tip">
-            工单处理人优先从夜莺告警推送的通知用户中自动匹配（按手机号、邮箱、姓名），支持多人指派。匹配不到时使用此回退处理人。
+            命中规则后优先指派给这里选择的人员，支持多人；未选择时才尝试旧的夜莺通知用户匹配。
           </div>
         </el-form-item>
         <el-form-item label="去重窗口(分钟)">

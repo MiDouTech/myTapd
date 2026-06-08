@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 告警规则映射 - 输出
@@ -32,7 +33,11 @@ public class AlertRuleMappingOutput implements Serializable {
      */
     private Long assigneeId;
 
+    private List<Long> assigneeIds;
+
     private String assigneeName;
+
+    private String assigneeNames;
 
     private Integer dedupWindowMinutes;
 

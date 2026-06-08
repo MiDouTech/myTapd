@@ -6,6 +6,7 @@ export interface AlertRuleMappingCreateInput {
   priorityP2?: string
   priorityP3?: string
   assigneeId?: number | null
+  assigneeIds?: number[]
   dedupWindowMinutes?: number
   enabled?: boolean
 }
@@ -19,6 +20,7 @@ export interface AlertRuleMappingUpdateInput {
   priorityP2?: string
   priorityP3?: string
   assigneeId?: number | null
+  assigneeIds?: number[]
   dedupWindowMinutes?: number
   enabled?: boolean
 }
@@ -33,7 +35,9 @@ export interface AlertRuleMappingOutput {
   priorityP2: string
   priorityP3: string
   assigneeId: number | null
+  assigneeIds: number[]
   assigneeName: string
+  assigneeNames: string
   dedupWindowMinutes: number
   enabled: boolean
   createTime: string

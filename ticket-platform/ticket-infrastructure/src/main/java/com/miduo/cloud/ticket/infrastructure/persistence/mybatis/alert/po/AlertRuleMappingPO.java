@@ -35,6 +35,9 @@ public class AlertRuleMappingPO extends BaseEntity {
     @TableField("assignee_id")
     private Long assigneeId;
 
+    @TableField("assignee_ids")
+    private String assigneeIds;
+
     @TableField("dedup_window_minutes")
     private Integer dedupWindowMinutes;
 

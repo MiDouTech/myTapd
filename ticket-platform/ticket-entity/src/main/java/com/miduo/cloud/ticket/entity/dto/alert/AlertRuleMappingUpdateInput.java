@@ -5,6 +5,7 @@ import lombok.Data;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 告警规则映射 - 更新请求
@@ -29,6 +30,8 @@ public class AlertRuleMappingUpdateInput implements Serializable {
     private String priorityP3;
 
     private Long assigneeId;
+
+    private List<Long> assigneeIds;
 
     private Integer dedupWindowMinutes;
 

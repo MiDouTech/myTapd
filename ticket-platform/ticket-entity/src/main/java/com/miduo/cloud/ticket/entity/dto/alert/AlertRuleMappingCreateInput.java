@@ -6,6 +6,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 告警规则映射 - 创建请求
@@ -29,6 +30,8 @@ public class AlertRuleMappingCreateInput implements Serializable {
     private String priorityP3;
 
     private Long assigneeId;
+
+    private List<Long> assigneeIds;
 
     private Integer dedupWindowMinutes;
 
