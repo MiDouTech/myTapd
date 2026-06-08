@@ -12,14 +12,16 @@
       :border="false"
       :stripe="true"
       :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      empty-text="暂无待审批任务">
+      empty-text="暂无待审批任务"
+    >
       <el-table-column label="工单编号" width="130" align="center">
         <template #default="{ row }">
           <el-link
             v-if="row.ticketNo"
             type="primary"
             :href="`/ticket/${row.ticketId}`"
-            target="_blank">
+            target="_blank"
+          >
             {{ row.ticketNo }}
           </el-link>
           <span v-else>-</span>
@@ -28,10 +30,7 @@
 
       <el-table-column label="工单标题" min-width="200" :show-overflow-tooltip="true">
         <template #default="{ row }">
-          <el-link
-            type="primary"
-            :href="`/ticket/${row.ticketId}`"
-            target="_blank">
+          <el-link type="primary" :href="`/ticket/${row.ticketId}`" target="_blank">
             {{ row.ticketTitle || '(无标题)' }}
           </el-link>
         </template>
@@ -81,9 +80,7 @@
           <el-button type="danger" size="small" link @click="handleAction(row, 'reject')">
             驳回
           </el-button>
-          <el-button size="small" link @click="handleAction(row, 'transfer')">
-            转交
-          </el-button>
+          <el-button size="small" link @click="handleAction(row, 'transfer')"> 转交 </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -99,7 +96,8 @@
         layout="total, sizes, prev, pager, next, jumper"
         background
         @size-change="fetchData"
-        @current-change="fetchData" />
+        @current-change="fetchData"
+      />
     </div>
 
     <!-- 审批操作弹窗 -->
@@ -107,7 +105,8 @@
       v-model="actionDialogVisible"
       :title="actionDialogTitle[currentActionType]"
       width="460px"
-      :close-on-click-modal="false">
+      :close-on-click-modal="false"
+    >
       <el-form :model="actionForm" label-width="80px">
         <el-form-item v-if="currentActionType === 'transfer'" label="转交给" required>
           <el-select
@@ -116,12 +115,14 @@
             remote
             :remote-method="searchUsers"
             placeholder="搜索用户姓名"
-            style="width: 100%">
+            style="width: 100%"
+          >
             <el-option
               v-for="user in userOptions"
               :key="user.id"
               :label="user.name"
-              :value="user.id" />
+              :value="user.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="审批意见">
@@ -129,15 +130,23 @@
             v-model="actionForm.remark"
             type="textarea"
             :rows="3"
-            :placeholder="currentActionType === 'reject' ? '请填写驳回原因（必填）' : '选填'" />
+            :placeholder="currentActionType === 'reject' ? '请填写驳回原因（必填）' : '选填'"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="actionDialogVisible = false">取消</el-button>
         <el-button
-          :type="currentActionType === 'approve' ? 'success' : currentActionType === 'reject' ? 'danger' : 'primary'"
+          :type="
+            currentActionType === 'approve'
+              ? 'success'
+              : currentActionType === 'reject'
+                ? 'danger'
+                : 'primary'
+          "
           :loading="submitting"
-          @click="submitAction">
+          @click="submitAction"
+        >
           确认{{ actionDialogTitle[currentActionType] }}
         </el-button>
       </template>
@@ -167,13 +176,13 @@ const submitting = ref(false)
 const userOptions = ref<{ id: number; name: string }[]>([])
 const actionForm = ref({
   remark: '',
-  targetAssigneeId: undefined as number | undefined
+  targetAssigneeId: undefined as number | undefined,
 })
 
 const actionDialogTitle: Record<string, string> = {
   approve: '同意',
   reject: '驳回',
-  transfer: '转交'
+  transfer: '转交',
 }
 
 onMounted(() => fetchData())
@@ -183,11 +192,11 @@ async function fetchData() {
   try {
     const result = await getMyApprovalPendingList({
       pageNum: currentPage.value,
-      pageSize: pageSize.value
+      pageSize: pageSize.value,
     })
     items.value = result.items
     total.value = Number(result.totalCount)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载审批任务失败')
   } finally {
     loading.value = false
@@ -217,7 +226,7 @@ async function submitAction() {
       taskId: currentTaskId.value,
       actionType: currentActionType.value,
       remark: actionForm.value.remark,
-      targetAssigneeId: actionForm.value.targetAssigneeId
+      targetAssigneeId: actionForm.value.targetAssigneeId,
     })
     ElMessage.success('操作成功')
     actionDialogVisible.value = false

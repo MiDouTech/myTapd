@@ -196,11 +196,16 @@ public class AlertTicketApplicationService {
     }
 
     /**
-     * 从夜莺推送的 notify_users_obj 中解析通知用户，
-     * 依次按 phone、email、nickname(name) 匹配工单系统用户。
-     * 匹配不到时回退到映射配置中的 assigneeId。
+     * 固定映射处理人优先，因为夜莺 HTTP 媒介可能传不过来告警接收人。
+     * 未配置固定处理人时，再兼容旧的 notify_users_obj 匹配逻辑。
      */
     private List<Long> resolveAssigneeIds(NightingaleAlertEvent event, AlertRuleMappingPO mapping) {
+        List<Long> mappingAssignees = resolveMappingAssigneeIds(mapping);
+        if (!mappingAssignees.isEmpty()) {
+            log.info("告警处理人已从映射规则固定处理人解析: {}", mappingAssignees);
+            return mappingAssignees;
+        }
+
         List<Long> matched = matchNotifyUsers(event.getNotifyUsersObj());
 
         if (!matched.isEmpty()) {
@@ -208,12 +213,7 @@ public class AlertTicketApplicationService {
             return matched;
         }
 
-        if (mapping != null && mapping.getAssigneeId() != null) {
-            log.info("notify_users_obj 匹配为空，回退到映射配置处理人: assigneeId={}", mapping.getAssigneeId());
-            return Collections.singletonList(mapping.getAssigneeId());
-        }
-
-        log.warn("告警处理人解析为空: notify_users_obj匹配0人, 映射配置无回退处理人(mapping={}), 将走自动分派",
+        log.warn("告警处理人解析为空: 映射规则无固定处理人, notify_users_obj匹配0人(mapping={}), 将走自动分派",
                 mapping != null ? "exists,assigneeId=null" : "null");
         return Collections.emptyList();
     }
@@ -316,6 +316,7 @@ public class AlertTicketApplicationService {
         List<AlertRuleMappingPO> allMappings = alertRuleMappingMapper.selectList(wrapper);
 
         AlertRuleMappingPO defaultMapping = null;
+        String normalizedRuleName = normalizeRuleName(ruleName);
 
         for (AlertRuleMappingPO mapping : allMappings) {
             AlertMatchMode mode = AlertMatchMode.fromCode(mapping.getMatchMode());
@@ -324,10 +325,18 @@ public class AlertTicketApplicationService {
                 continue;
             }
             if (StringUtils.hasText(ruleName)) {
-                if (mode == AlertMatchMode.EXACT && ruleName.equals(mapping.getRuleName())) {
+                String mappingRuleName = mapping.getRuleName();
+                String normalizedMappingRuleName = normalizeRuleName(mappingRuleName);
+                if (mode == AlertMatchMode.EXACT
+                        && StringUtils.hasText(normalizedMappingRuleName)
+                        && (ruleName.equals(mappingRuleName)
+                        || normalizedRuleName.equals(normalizedMappingRuleName))) {
                     return mapping;
                 }
-                if (mode == AlertMatchMode.PREFIX && ruleName.startsWith(mapping.getRuleName())) {
+                if (mode == AlertMatchMode.PREFIX
+                        && StringUtils.hasText(normalizedMappingRuleName)
+                        && (ruleName.startsWith(mappingRuleName)
+                        || normalizedRuleName.startsWith(normalizedMappingRuleName))) {
                     return mapping;
                 }
             }
@@ -649,10 +658,13 @@ public class AlertTicketApplicationService {
                 .map(AlertRuleMappingPO::getCategoryId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Set<Long> userIds = records.stream()
-                .map(AlertRuleMappingPO::getAssigneeId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        Set<Long> userIds = new HashSet<>();
+        for (AlertRuleMappingPO record : records) {
+            if (record.getAssigneeId() != null) {
+                userIds.add(record.getAssigneeId());
+            }
+            userIds.addAll(parseAssigneeIds(record.getAssigneeIds()));
+        }
 
         Map<Long, String> categoryNameMap = new HashMap<>();
         if (!categoryIds.isEmpty()) {
@@ -697,7 +709,12 @@ public class AlertTicketApplicationService {
         po.setPriorityP1(input.getPriorityP1() != null ? input.getPriorityP1() : "urgent");
         po.setPriorityP2(input.getPriorityP2() != null ? input.getPriorityP2() : "high");
         po.setPriorityP3(input.getPriorityP3() != null ? input.getPriorityP3() : "medium");
-        po.setAssigneeId(input.getAssigneeId());
+        List<Long> assigneeIds = normalizeUserIdList(input.getAssigneeIds());
+        if (assigneeIds.isEmpty() && input.getAssigneeId() != null) {
+            assigneeIds = normalizeUserIdList(Collections.singletonList(input.getAssigneeId()));
+        }
+        po.setAssigneeId(assigneeIds.isEmpty() ? null : assigneeIds.get(0));
+        po.setAssigneeIds(joinAssigneeIds(assigneeIds));
         po.setDedupWindowMinutes(input.getDedupWindowMinutes() != null ? input.getDedupWindowMinutes() : 30);
         po.setEnabled(input.getEnabled() != null ? input.getEnabled() : true);
 
@@ -740,8 +757,13 @@ public class AlertTicketApplicationService {
         if (input.getPriorityP3() != null) {
             existing.setPriorityP3(input.getPriorityP3());
         }
-        if (input.getAssigneeId() != null) {
+        if (input.getAssigneeIds() != null) {
+            List<Long> assigneeIds = normalizeUserIdList(input.getAssigneeIds());
+            existing.setAssigneeId(assigneeIds.isEmpty() ? null : assigneeIds.get(0));
+            existing.setAssigneeIds(joinAssigneeIds(assigneeIds));
+        } else if (input.getAssigneeId() != null) {
             existing.setAssigneeId(input.getAssigneeId());
+            existing.setAssigneeIds(joinAssigneeIds(Collections.singletonList(input.getAssigneeId())));
         }
         if (input.getDedupWindowMinutes() != null) {
             existing.setDedupWindowMinutes(input.getDedupWindowMinutes());
@@ -777,9 +799,13 @@ public class AlertTicketApplicationService {
         }
 
         Map<Long, String> userNameMap = new HashMap<>();
+        Set<Long> detailUserIds = new HashSet<>(parseAssigneeIds(po.getAssigneeIds()));
         if (po.getAssigneeId() != null) {
-            SysUserPO user = userMapper.selectById(po.getAssigneeId());
-            if (user != null) {
+            detailUserIds.add(po.getAssigneeId());
+        }
+        if (!detailUserIds.isEmpty()) {
+            List<SysUserPO> users = userMapper.selectBatchIds(detailUserIds);
+            for (SysUserPO user : users) {
                 userNameMap.put(user.getId(), user.getName() != null ? user.getName() : "");
             }
         }
@@ -858,8 +884,11 @@ public class AlertTicketApplicationService {
         output.setPriorityP2(po.getPriorityP2());
         output.setPriorityP3(po.getPriorityP3());
         output.setAssigneeId(po.getAssigneeId());
-        output.setAssigneeName(po.getAssigneeId() != null
-                ? userNameMap.getOrDefault(po.getAssigneeId(), "") : "");
+        List<Long> assigneeIds = resolveMappingAssigneeIds(po);
+        output.setAssigneeIds(assigneeIds);
+        output.setAssigneeName(!assigneeIds.isEmpty()
+                ? userNameMap.getOrDefault(assigneeIds.get(0), "") : "");
+        output.setAssigneeNames(joinAssigneeNames(assigneeIds, userNameMap));
         output.setDedupWindowMinutes(po.getDedupWindowMinutes());
         output.setEnabled(po.getEnabled());
         output.setCreateTime(po.getCreateTime());
@@ -888,6 +917,82 @@ public class AlertTicketApplicationService {
 
     private String safeString(String value) {
         return value != null ? value : "";
+    }
+
+    private List<Long> resolveMappingAssigneeIds(AlertRuleMappingPO mapping) {
+        if (mapping == null) {
+            return new ArrayList<>();
+        }
+        List<Long> assigneeIds = parseAssigneeIds(mapping.getAssigneeIds());
+        if (assigneeIds.isEmpty() && mapping.getAssigneeId() != null) {
+            assigneeIds.add(mapping.getAssigneeId());
+        }
+        return normalizeUserIdList(assigneeIds);
+    }
+
+    private List<Long> parseAssigneeIds(String rawAssigneeIds) {
+        List<Long> result = new ArrayList<>();
+        if (!StringUtils.hasText(rawAssigneeIds)) {
+            return result;
+        }
+        String[] parts = rawAssigneeIds.split(",");
+        for (String part : parts) {
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            try {
+                result.add(Long.parseLong(part.trim()));
+            } catch (NumberFormatException e) {
+                log.warn("告警映射多人处理人ID格式无效，已跳过: value={}", part);
+            }
+        }
+        return normalizeUserIdList(result);
+    }
+
+    private List<Long> normalizeUserIdList(Collection<Long> rawUserIds) {
+        if (rawUserIds == null || rawUserIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        LinkedHashSet<Long> userIds = new LinkedHashSet<>();
+        for (Long userId : rawUserIds) {
+            if (userId != null) {
+                userIds.add(userId);
+            }
+        }
+        return new ArrayList<>(userIds);
+    }
+
+    private String joinAssigneeIds(List<Long> assigneeIds) {
+        List<Long> normalized = normalizeUserIdList(assigneeIds);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return normalized.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+    }
+
+    private String joinAssigneeNames(List<Long> assigneeIds, Map<Long, String> userNameMap) {
+        if (assigneeIds == null || assigneeIds.isEmpty()) {
+            return "";
+        }
+        List<String> names = new ArrayList<>();
+        for (Long assigneeId : assigneeIds) {
+            String name = userNameMap.get(assigneeId);
+            if (StringUtils.hasText(name)) {
+                names.add(name);
+            }
+        }
+        return String.join("、", names);
+    }
+
+    private String normalizeRuleName(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim()
+                .replace('（', '(')
+                .replace('）', ')');
     }
 
     private String formatTimestamp(Long timestamp) {
