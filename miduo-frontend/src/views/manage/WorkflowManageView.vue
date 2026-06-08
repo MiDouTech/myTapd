@@ -28,6 +28,8 @@ import type {
   WorkflowListOutput,
   WorkflowObservationOutput,
   WorkflowUpdateInput,
+  WorkflowUpdateStateItem,
+  WorkflowUpdateTransitionItem,
 } from '@/types/workflow'
 import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -121,7 +123,7 @@ function saveApprovalConfig() {
   editingTransitionRow.approvalConfig = {
     passedStatus: editingApprovalConfig.passedStatus,
     rejectedStatus: editingApprovalConfig.rejectedStatus,
-    nodes: editingApprovalConfig.nodes.map(n => ({ ...n })),
+    nodes: editingApprovalConfig.nodes.map((n) => ({ ...n })),
   }
   approvalConfigDialogVisible.value = false
 }
@@ -313,8 +315,8 @@ const workflowEditPreviewDetail = computed(() => ({
   updateTime: '',
   isBuiltin: 0,
   states: workflowEditForm.states
-    .filter((s: any) => s.code && s.name)
-    .map((s: any) => ({
+    .filter((s: WorkflowUpdateStateItem) => s.code && s.name)
+    .map((s: WorkflowUpdateStateItem) => ({
       code: s.code,
       name: s.name,
       type: s.type || 'INTERMEDIATE',
@@ -322,8 +324,8 @@ const workflowEditPreviewDetail = computed(() => ({
       order: s.order ?? 0,
     })),
   transitions: workflowEditForm.transitions
-    .filter((t: any) => t.from && t.to && t.name)
-    .map((t: any) => ({
+    .filter((t: WorkflowUpdateTransitionItem) => t.from && t.to && t.name)
+    .map((t: WorkflowUpdateTransitionItem) => ({
       id: t.id || `${t.from}-${t.to}`,
       from: t.from,
       to: t.to,
@@ -541,7 +543,7 @@ async function openWorkflowDetail(row: WorkflowListOutput): Promise<void> {
   workflowObservation.value = undefined
 
   try {
-    workflowDetail.value = await getWorkflowDetail(row.id) ?? undefined
+    workflowDetail.value = (await getWorkflowDetail(row.id)) ?? undefined
   } catch {
     // 详情加载失败，抽屉会展示空状态提示
   } finally {
@@ -610,9 +612,7 @@ async function openWorkflowEdit(row: WorkflowListOutput): Promise<void> {
       allowTransfer: Boolean(t.allowTransfer),
       isReturn: Boolean(t.isReturn),
       requireApproval: Boolean(t.requireApproval),
-      approvalConfig: t.approvalConfig
-        ? JSON.parse(JSON.stringify(t.approvalConfig))
-        : undefined,
+      approvalConfig: t.approvalConfig ? JSON.parse(JSON.stringify(t.approvalConfig)) : undefined,
     }))
   } catch {
     resetWorkflowEditForm()
@@ -861,7 +861,12 @@ onMounted(async () => {
         </el-space>
       </div>
 
-      <el-form :inline="true" label-width="72px" class="query-form" @submit.prevent="handleWorkflowSearch">
+      <el-form
+        :inline="true"
+        label-width="72px"
+        class="query-form"
+        @submit.prevent="handleWorkflowSearch"
+      >
         <el-form-item label="关键字" class="query-form-item">
           <el-input
             v-model="workflowQuery.keyword"
@@ -871,20 +876,32 @@ onMounted(async () => {
           />
         </el-form-item>
         <el-form-item label="模式" class="query-form-item">
-          <el-select v-model="workflowQuery.mode" class="query-input" clearable placeholder="请选择内容">
+          <el-select
+            v-model="workflowQuery.mode"
+            class="query-input"
+            clearable
+            placeholder="请选择内容"
+          >
             <el-option label="简单模式" value="SIMPLE" />
             <el-option label="高级模式" value="ADVANCED" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态" class="query-form-item">
-          <el-select v-model="workflowQuery.isActive" class="query-input" clearable placeholder="请选择内容">
+          <el-select
+            v-model="workflowQuery.isActive"
+            class="query-input"
+            clearable
+            placeholder="请选择内容"
+          >
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
-            <el-button type="primary" native-type="submit" @click="handleWorkflowSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleWorkflowSearch"
+              >查询</el-button
+            >
             <el-button @click="handleWorkflowReset">重置</el-button>
           </el-space>
         </el-form-item>
@@ -908,7 +925,9 @@ onMounted(async () => {
           <el-table-column prop="invocationCount" label="调用次数" width="100" sortable="custom" />
           <el-table-column label="启用状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.isActive)">{{ row.isActive === 1 ? '启用' : '停用' }}</el-tag>
+              <el-tag :type="getStatusTagType(row.isActive)">{{
+                row.isActive === 1 ? '启用' : '停用'
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
@@ -975,14 +994,19 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item class="query-form-item query-form-actions">
           <el-space wrap class="handler-query-actions">
-            <el-button type="primary" native-type="submit" @click="handleHandlerGroupSearch">查询</el-button>
+            <el-button type="primary" native-type="submit" @click="handleHandlerGroupSearch"
+              >查询</el-button
+            >
             <el-button @click="handleHandlerGroupReset">重置</el-button>
             <el-button link @click="loadHandlerGroups">刷新</el-button>
           </el-space>
         </el-form-item>
       </el-form>
 
-      <EmptyState v-if="!handlerGroupLoading && handlerGroupTotal === 0" description="暂无处理组数据" />
+      <EmptyState
+        v-if="!handlerGroupLoading && handlerGroupTotal === 0"
+        description="暂无处理组数据"
+      />
       <template v-else>
         <BaseTable
           :data="pagedHandlerGroupList"
@@ -1011,7 +1035,9 @@ onMounted(async () => {
           </el-table-column>
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
-              <el-tag :type="getStatusTagType(row.isActive)">{{ row.isActive === 1 ? '启用' : '停用' }}</el-tag>
+              <el-tag :type="getStatusTagType(row.isActive)">{{
+                row.isActive === 1 ? '启用' : '停用'
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
@@ -1021,7 +1047,9 @@ onMounted(async () => {
           </el-table-column>
           <el-table-column label="操作" width="100" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" link @click="openEditHandlerGroupDialog(row)">编辑</el-button>
+              <el-button type="primary" link @click="openEditHandlerGroupDialog(row)"
+                >编辑</el-button
+              >
             </template>
           </el-table-column>
         </BaseTable>
@@ -1036,7 +1064,10 @@ onMounted(async () => {
   </div>
 
   <el-drawer v-model="workflowDetailVisible" title="工作流详情" size="96%">
-    <div v-loading="workflowDetailLoading || workflowObservationLoading" class="workflow-detail-workbench">
+    <div
+      v-loading="workflowDetailLoading || workflowObservationLoading"
+      class="workflow-detail-workbench"
+    >
       <template v-if="workflowDetail">
         <div class="workflow-overview-panel">
           <div class="workflow-overview-header">
@@ -1064,7 +1095,9 @@ onMounted(async () => {
             </div>
             <div class="overview-card">
               <div class="overview-card__label">初始状态</div>
-              <div class="overview-card__value">{{ workflowOverview?.initialStateName || '-' }}</div>
+              <div class="overview-card__value">
+                {{ workflowOverview?.initialStateName || '-' }}
+              </div>
             </div>
             <div class="overview-card">
               <div class="overview-card__label">终态数量</div>
@@ -1135,7 +1168,11 @@ onMounted(async () => {
                     </template>
                   </el-table-column>
                   <el-table-column prop="name" label="流转名称" min-width="140" />
-                  <el-table-column label="角色可见条件" min-width="220" :show-overflow-tooltip="true">
+                  <el-table-column
+                    label="角色可见条件"
+                    min-width="220"
+                    :show-overflow-tooltip="true"
+                  >
                     <template #default="{ row }">
                       {{ formatAllowedRoles(row.allowedRoles) }}
                     </template>
@@ -1191,203 +1228,216 @@ onMounted(async () => {
 
       <!-- 右侧：编辑表单 -->
       <div class="workflow-edit-body">
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        class="workflow-edit-tip"
-        title="请按业务流程配置状态与流转，保存后将用于后续工单。流转中的角色须使用大写枚举：SUBMITTER、HANDLER、ADMIN、TICKET_ADMIN 等。"
-      />
-      <el-form label-width="100px" class="workflow-edit-form">
-        <el-form-item label="名称" required>
-          <el-input v-model="workflowEditForm.name" maxlength="100" show-word-limit />
-        </el-form-item>
-        <el-form-item label="模式" required>
-          <el-select v-model="workflowEditForm.mode" style="width: 200px">
-            <el-option label="简单模式" value="SIMPLE" />
-            <el-option label="高级模式" value="ADVANCED" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="启用">
-          <el-radio-group v-model="workflowEditForm.isActive">
-            <el-radio :label="1">启用</el-radio>
-            <el-radio :label="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input
-            v-model="workflowEditForm.description"
-            type="textarea"
-            :rows="2"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
-      </el-form>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="workflow-edit-tip"
+          title="请按业务流程配置状态与流转，保存后将用于后续工单。流转中的角色须使用大写枚举：SUBMITTER、HANDLER、ADMIN、TICKET_ADMIN 等。"
+        />
+        <el-form label-width="100px" class="workflow-edit-form">
+          <el-form-item label="名称" required>
+            <el-input v-model="workflowEditForm.name" maxlength="100" show-word-limit />
+          </el-form-item>
+          <el-form-item label="模式" required>
+            <el-select v-model="workflowEditForm.mode" style="width: 200px">
+              <el-option label="简单模式" value="SIMPLE" />
+              <el-option label="高级模式" value="ADVANCED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-radio-group v-model="workflowEditForm.isActive">
+              <el-radio :label="1">启用</el-radio>
+              <el-radio :label="0">停用</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input
+              v-model="workflowEditForm.description"
+              type="textarea"
+              :rows="2"
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
+        </el-form>
 
-      <el-card shadow="never" class="edit-section-card">
-        <template #header>
-          <div class="section-header-row">
-            <span class="section-title">状态定义</span>
-            <el-button type="primary" link @click="addWorkflowStateRow">添加状态</el-button>
-          </div>
-        </template>
-        <el-table
-          :data="workflowEditForm.states"
-          :border="false"
-          :stripe="true"
-          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-        >
-          <el-table-column label="编码" min-width="140">
-            <template #default="{ row }">
-              <el-input v-model="row.code" placeholder="如 PENDING" />
-            </template>
-          </el-table-column>
-          <el-table-column label="名称" min-width="120">
-            <template #default="{ row }">
-              <el-input v-model="row.name" />
-            </template>
-          </el-table-column>
-          <el-table-column label="类型" width="200">
-            <template #default="{ row }">
-              <el-select v-model="row.type" style="width: 100%">
-                <el-option
-                  v-for="opt in STATE_TYPE_OPTIONS"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
+        <el-card shadow="never" class="edit-section-card">
+          <template #header>
+            <div class="section-header-row">
+              <span class="section-title">状态定义</span>
+              <el-button type="primary" link @click="addWorkflowStateRow">添加状态</el-button>
+            </div>
+          </template>
+          <el-table
+            :data="workflowEditForm.states"
+            :border="false"
+            :stripe="true"
+            :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+          >
+            <el-table-column label="编码" min-width="140">
+              <template #default="{ row }">
+                <el-input v-model="row.code" placeholder="如 PENDING" />
+              </template>
+            </el-table-column>
+            <el-table-column label="名称" min-width="120">
+              <template #default="{ row }">
+                <el-input v-model="row.name" />
+              </template>
+            </el-table-column>
+            <el-table-column label="类型" width="200">
+              <template #default="{ row }">
+                <el-select v-model="row.type" style="width: 100%">
+                  <el-option
+                    v-for="opt in STATE_TYPE_OPTIONS"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="SLA动作" min-width="160">
+              <template #default="{ row }">
+                <el-input v-model="row.slaAction" placeholder="如 START_RESPONSE" />
+              </template>
+            </el-table-column>
+            <el-table-column label="排序" width="90">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.order"
+                  :min="0"
+                  :controls="false"
+                  style="width: 100%"
                 />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="SLA动作" min-width="160">
-            <template #default="{ row }">
-              <el-input v-model="row.slaAction" placeholder="如 START_RESPONSE" />
-            </template>
-          </el-table-column>
-          <el-table-column label="排序" width="90">
-            <template #default="{ row }">
-              <el-input-number v-model="row.order" :min="0" :controls="false" style="width: 100%" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="{ $index }">
-              <el-button type="danger" link @click="removeWorkflowStateRow($index)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="{ $index }">
+                <el-button type="danger" link @click="removeWorkflowStateRow($index)"
+                  >删除</el-button
+                >
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
 
-      <el-card shadow="never" class="edit-section-card">
-        <template #header>
-          <div class="section-header-row">
-            <span class="section-title">流转规则</span>
-            <el-button type="primary" link @click="addWorkflowTransitionRow">添加流转</el-button>
-          </div>
-        </template>
-        <el-table
-          :data="workflowEditForm.transitions"
-          :border="false"
-          :stripe="true"
-          :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-        >
-          <el-table-column label="ID" width="100">
-            <template #default="{ row }">
-              <el-input v-model="row.id" placeholder="可空自动生成" />
-            </template>
-          </el-table-column>
-          <el-table-column label="起始" min-width="160">
-            <template #default="{ row }">
-              <el-select v-model="row.from" filterable allow-create style="width: 100%">
-                <el-option
-                  v-for="opt in workflowStateCodeOptions"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
+        <el-card shadow="never" class="edit-section-card">
+          <template #header>
+            <div class="section-header-row">
+              <span class="section-title">流转规则</span>
+              <el-button type="primary" link @click="addWorkflowTransitionRow">添加流转</el-button>
+            </div>
+          </template>
+          <el-table
+            :data="workflowEditForm.transitions"
+            :border="false"
+            :stripe="true"
+            :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+          >
+            <el-table-column label="ID" width="100">
+              <template #default="{ row }">
+                <el-input v-model="row.id" placeholder="可空自动生成" />
+              </template>
+            </el-table-column>
+            <el-table-column label="起始" min-width="160">
+              <template #default="{ row }">
+                <el-select v-model="row.from" filterable allow-create style="width: 100%">
+                  <el-option
+                    v-for="opt in workflowStateCodeOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="目标" min-width="160">
+              <template #default="{ row }">
+                <el-select v-model="row.to" filterable allow-create style="width: 100%">
+                  <el-option
+                    v-for="opt in workflowStateCodeOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="名称" min-width="120">
+              <template #default="{ row }">
+                <el-input v-model="row.name" />
+              </template>
+            </el-table-column>
+            <el-table-column label="角色" min-width="200">
+              <template #default="{ row }">
+                <el-select v-model="row.allowedRoles" multiple collapse-tags style="width: 100%">
+                  <el-option
+                    v-for="opt in WORKFLOW_ROLE_OPTIONS"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="备注必填" width="90" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.requireRemark" />
+              </template>
+            </el-table-column>
+            <el-table-column label="可转派" width="90" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.allowTransfer" />
+              </template>
+            </el-table-column>
+            <el-table-column label="退回" width="70" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.isReturn" />
+              </template>
+            </el-table-column>
+            <el-table-column label="需要审批" width="90" align="center">
+              <template #default="{ row }">
+                <el-switch
+                  v-model="row.requireApproval"
+                  size="small"
+                  @change="onRequireApprovalChange(row)"
                 />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="目标" min-width="160">
-            <template #default="{ row }">
-              <el-select v-model="row.to" filterable allow-create style="width: 100%">
-                <el-option
-                  v-for="opt in workflowStateCodeOptions"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="名称" min-width="120">
-            <template #default="{ row }">
-              <el-input v-model="row.name" />
-            </template>
-          </el-table-column>
-          <el-table-column label="角色" min-width="200">
-            <template #default="{ row }">
-              <el-select v-model="row.allowedRoles" multiple collapse-tags style="width: 100%">
-                <el-option
-                  v-for="opt in WORKFLOW_ROLE_OPTIONS"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="备注必填" width="90" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.requireRemark" />
-            </template>
-          </el-table-column>
-          <el-table-column label="可转派" width="90" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.allowTransfer" />
-            </template>
-          </el-table-column>
-          <el-table-column label="退回" width="70" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.isReturn" />
-            </template>
-          </el-table-column>
-          <el-table-column label="需要审批" width="90" align="center">
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.requireApproval"
-                size="small"
-                @change="onRequireApprovalChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="审批配置" width="100" align="center">
-            <template #default="{ row }">
-              <el-button
-                v-if="row.requireApproval"
-                type="primary"
-                link
-                size="small"
-                @click="openApprovalConfigDialog(row)"
-              >
-                <el-icon><Setting /></el-icon>
-                配置
-              </el-button>
-              <span v-else class="text-muted">-</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="{ $index }">
-              <el-button type="danger" link @click="removeWorkflowTransitionRow($index)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
+              </template>
+            </el-table-column>
+            <el-table-column label="审批配置" width="100" align="center">
+              <template #default="{ row }">
+                <el-button
+                  v-if="row.requireApproval"
+                  type="primary"
+                  link
+                  size="small"
+                  @click="openApprovalConfigDialog(row)"
+                >
+                  <el-icon><Setting /></el-icon>
+                  配置
+                </el-button>
+                <span v-else class="text-muted">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="{ $index }">
+                <el-button type="danger" link @click="removeWorkflowTransitionRow($index)"
+                  >删除</el-button
+                >
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
       </div>
     </div>
     <template #footer>
       <el-button @click="workflowEditVisible = false">取消</el-button>
-      <el-button type="primary" :loading="workflowEditSubmitLoading" @click="handleWorkflowEditSubmit">
+      <el-button
+        type="primary"
+        :loading="workflowEditSubmitLoading"
+        @click="handleWorkflowEditSubmit"
+      >
         {{ workflowEditMode === 'create' ? '创建工作流' : '保存修改' }}
       </el-button>
     </template>
@@ -1401,20 +1451,45 @@ onMounted(async () => {
     :close-on-click-modal="false"
     destroy-on-close
   >
-    <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px"
-      title="审批节点按顺序排列。所有节点通过后工单自动流转到「通过目标状态」；任意节点驳回则流转到「驳回目标状态」。" />
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+      title="审批节点按顺序排列。所有节点通过后工单自动流转到「通过目标状态」；任意节点驳回则流转到「驳回目标状态」。"
+    />
 
     <el-form label-width="120px">
       <el-form-item label="通过目标状态" required>
-        <el-select v-model="editingApprovalConfig.passedStatus" filterable allow-create style="width:100%"
-          placeholder="审批全通过后自动流转到（如 executing）">
-          <el-option v-for="s in workflowEditForm.states" :key="s.code" :label="`${s.name}（${s.code}）`" :value="s.code" />
+        <el-select
+          v-model="editingApprovalConfig.passedStatus"
+          filterable
+          allow-create
+          style="width: 100%"
+          placeholder="审批全通过后自动流转到（如 executing）"
+        >
+          <el-option
+            v-for="s in workflowEditForm.states"
+            :key="s.code"
+            :label="`${s.name}（${s.code}）`"
+            :value="s.code"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="驳回目标状态" required>
-        <el-select v-model="editingApprovalConfig.rejectedStatus" filterable allow-create style="width:100%"
-          placeholder="审批被驳回后自动流转到（如 rejected）">
-          <el-option v-for="s in workflowEditForm.states" :key="s.code" :label="`${s.name}（${s.code}）`" :value="s.code" />
+        <el-select
+          v-model="editingApprovalConfig.rejectedStatus"
+          filterable
+          allow-create
+          style="width: 100%"
+          placeholder="审批被驳回后自动流转到（如 rejected）"
+        >
+          <el-option
+            v-for="s in workflowEditForm.states"
+            :key="s.code"
+            :label="`${s.name}（${s.code}）`"
+            :value="s.code"
+          />
         </el-select>
       </el-form-item>
     </el-form>
@@ -1442,7 +1517,7 @@ onMounted(async () => {
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="审批模式">
-              <el-select v-model="node.approveMode" style="width:100%">
+              <el-select v-model="node.approveMode" style="width: 100%">
                 <el-option label="单人审批" value="single" />
                 <el-option label="会签（全部同意）" value="countersign" />
                 <el-option label="或签（一人同意即可）" value="orsign" />
@@ -1452,7 +1527,7 @@ onMounted(async () => {
           </el-col>
           <el-col :span="12">
             <el-form-item label="审批人来源">
-              <el-select v-model="node.assigneeType" style="width:100%">
+              <el-select v-model="node.assigneeType" style="width: 100%">
                 <el-option label="指定用户" value="member" />
                 <el-option label="处理组长" value="groupLeader" />
               </el-select>
@@ -1468,7 +1543,7 @@ onMounted(async () => {
                 filterable
                 collapse-tags
                 placeholder="选择审批人"
-                style="width:100%"
+                style="width: 100%"
               >
                 <el-option
                   v-for="u in userSelectOptions"
@@ -1483,18 +1558,30 @@ onMounted(async () => {
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="超时时间(h)">
-              <el-input-number v-model="node.dueHours" :min="1" :max="720" :controls="false" style="width:100%"
-                placeholder="可选，超时后催办" />
+              <el-input-number
+                v-model="node.dueHours"
+                :min="1"
+                :max="720"
+                :controls="false"
+                style="width: 100%"
+                placeholder="可选，超时后催办"
+              />
             </el-form-item>
           </el-col>
-          <el-col :span="12" style="display:flex;align-items:center;padding-top:8px">
-            <el-button type="danger" link size="small" @click="removeApprovalNode(idx)">删除此节点</el-button>
+          <el-col :span="12" style="display: flex; align-items: center; padding-top: 8px">
+            <el-button type="danger" link size="small" @click="removeApprovalNode(idx)"
+              >删除此节点</el-button
+            >
           </el-col>
         </el-row>
       </el-form>
     </div>
 
-    <el-empty v-if="!editingApprovalConfig.nodes?.length" description="暂无审批节点，点击「添加节点」" :image-size="60" />
+    <el-empty
+      v-if="!editingApprovalConfig.nodes?.length"
+      description="暂无审批节点，点击「添加节点」"
+      :image-size="60"
+    />
 
     <template #footer>
       <el-button @click="approvalConfigDialogVisible = false">取消</el-button>
@@ -1565,7 +1652,11 @@ onMounted(async () => {
     </el-form>
     <template #footer>
       <el-button @click="createHandlerGroupVisible = false">取消</el-button>
-      <el-button type="primary" :loading="handlerGroupSubmitLoading" @click="handleCreateHandlerGroup">
+      <el-button
+        type="primary"
+        :loading="handlerGroupSubmitLoading"
+        @click="handleCreateHandlerGroup"
+      >
         {{ editingHandlerGroupId === null ? '确认创建' : '保存修改' }}
       </el-button>
     </template>

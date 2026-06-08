@@ -1,9 +1,11 @@
 <template>
   <div class="approval-panel">
     <!-- 无审批任务时的占位 -->
-    <el-empty v-if="!loading && (!data || !data.nodes || data.nodes.length === 0)"
-              description="暂无审批任务"
-              :image-size="80" />
+    <el-empty
+      v-if="!loading && (!data || !data.nodes || data.nodes.length === 0)"
+      description="暂无审批任务"
+      :image-size="80"
+    />
 
     <template v-else>
       <!-- 我的待审批操作区 -->
@@ -45,13 +47,12 @@
                 <el-tag
                   :type="taskStatusType(task.taskStatus)"
                   size="small"
-                  class="approval-task-item__status">
+                  class="approval-task-item__status"
+                >
                   {{ task.taskStatusLabel }}
                 </el-tag>
               </div>
-              <div v-if="task.remark" class="approval-task-item__remark">
-                "{{ task.remark }}"
-              </div>
+              <div v-if="task.remark" class="approval-task-item__remark">"{{ task.remark }}"</div>
               <div v-if="task.operateTime" class="approval-task-item__time">
                 {{ formatTime(task.operateTime) }}
               </div>
@@ -69,7 +70,8 @@
             :key="record.recordId"
             :timestamp="formatTime(record.createTime)"
             placement="top"
-            :type="timelineItemType(record.actionType)">
+            :type="timelineItemType(record.actionType)"
+          >
             <div class="approval-timeline-item">
               <span class="approval-timeline-item__operator">{{ record.operatorName }}</span>
               <el-tag :type="actionTagType(record.actionType)" size="small">
@@ -92,7 +94,8 @@
       v-model="actionDialogVisible"
       :title="actionDialogTitle"
       width="460px"
-      :close-on-click-modal="false">
+      :close-on-click-modal="false"
+    >
       <el-form :model="actionForm" label-width="80px">
         <el-form-item v-if="actionType === 'transfer'" label="转交给" required>
           <el-select
@@ -101,12 +104,14 @@
             remote
             :remote-method="searchUsers"
             placeholder="搜索用户"
-            style="width: 100%">
+            style="width: 100%"
+          >
             <el-option
               v-for="user in userOptions"
               :key="user.id"
               :label="user.name"
-              :value="user.id" />
+              :value="user.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="审批意见">
@@ -114,15 +119,19 @@
             v-model="actionForm.remark"
             type="textarea"
             :rows="3"
-            :placeholder="actionType === 'reject' ? '请填写驳回原因' : '选填'" />
+            :placeholder="actionType === 'reject' ? '请填写驳回原因' : '选填'"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="actionDialogVisible = false">取消</el-button>
         <el-button
-          :type="actionType === 'approve' ? 'success' : actionType === 'reject' ? 'danger' : 'primary'"
+          :type="
+            actionType === 'approve' ? 'success' : actionType === 'reject' ? 'danger' : 'primary'
+          "
           :loading="submitting"
-          @click="submitAction">
+          @click="submitAction"
+        >
           确认{{ actionDialogTitle }}
         </el-button>
       </template>
@@ -156,19 +165,21 @@ const submitting = ref(false)
 const userOptions = ref<{ id: number; name: string }[]>([])
 const actionForm = ref({
   remark: '',
-  targetAssigneeId: undefined as number | undefined
+  targetAssigneeId: undefined as number | undefined,
 })
 
 const actionDialogTitle = {
   approve: '同意',
   reject: '驳回',
-  transfer: '转交'
+  transfer: '转交',
 }
 
 watch(
   () => props.ticketId,
-  (id) => { if (id) fetchData(id) },
-  { immediate: true }
+  (id) => {
+    if (id) fetchData(id)
+  },
+  { immediate: true },
 )
 
 async function fetchData(ticketId: number) {
@@ -200,7 +211,7 @@ async function submitAction() {
       taskId: data.value.myPendingTaskId,
       actionType: actionType.value,
       remark: actionForm.value.remark,
-      targetAssigneeId: actionForm.value.targetAssigneeId
+      targetAssigneeId: actionForm.value.targetAssigneeId,
     })
     ElMessage.success('操作成功')
     actionDialogVisible.value = false
@@ -228,7 +239,12 @@ function approveModeLabel(mode: string): string {
 }
 
 function taskStatusType(status: string): '' | 'success' | 'warning' | 'info' | 'danger' {
-  return (APPROVAL_TASK_STATUS_TYPES[status] ?? '') as '' | 'success' | 'warning' | 'info' | 'danger'
+  return (APPROVAL_TASK_STATUS_TYPES[status] ?? '') as
+    | ''
+    | 'success'
+    | 'warning'
+    | 'info'
+    | 'danger'
 }
 
 function timelineItemType(actionType: string): 'success' | 'danger' | 'warning' | 'info' | '' {
