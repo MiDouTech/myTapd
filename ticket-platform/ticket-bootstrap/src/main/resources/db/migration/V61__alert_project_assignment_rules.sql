@@ -1,6 +1,6 @@
 -- ============================================================
--- V61: 告警心跳规则按项目编号固定分派
--- 说明：夜莺 HTTP 媒介无法稳定传递告警接收人，改为按规则名中的 YY 项目编号固定分派。
+-- V61: 告警心跳规则按项目编号预置映射
+-- 说明：夜莺 HTTP 媒介无法稳定传递告警接收人，先预置 YY 项目规则，处理人在后台规则映射页配置。
 -- ============================================================
 
 ALTER TABLE `alert_rule_mapping`
@@ -35,23 +35,22 @@ CREATE TEMPORARY TABLE `tmp_alert_project_assignment` (
     `project_name` varchar(50) NOT NULL,
     `project_code` varchar(20) NOT NULL,
     `rule_name` varchar(200) NOT NULL,
-    `assignee_names` varchar(200) NOT NULL,
     PRIMARY KEY (`project_code`)
 ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `tmp_alert_project_assignment` (`project_name`, `project_code`, `rule_name`, `assignee_names`) VALUES
-('智能营销', 'YY001', '监控中心异常告警-心跳超过10分钟(YY001）', '周满'),
-('社交云店', 'YY002', '监控中心异常告警-心跳超过10分钟(YY002）', '宇凡'),
-('DCRM', 'YY003', '监控中心异常告警-心跳超过10分钟(YY003）', '宇凡'),
-('防窜物流', 'YY004', '监控中心异常告警-心跳超过10分钟(YY004）', '仁平,舒怀'),
-('万能溯源', 'YY005', '监控中心异常告警-心跳超过10分钟(YY005）', '王忠'),
-('微商城', 'YY006', '监控中心异常告警-心跳超过10分钟(YY006）', '宇凡'),
-('智慧零售', 'YY007', '监控中心异常告警-心跳超过10分钟(YY007）', '宇凡'),
-('商户后台', 'YY008', '监控中心异常告警-心跳超过10分钟(YY008）', '宇凡'),
-('企业微信', 'YY009', '监控中心异常告警-心跳超过10分钟(YY009）', '宇凡'),
-('互动营销', 'YY010', '监控中心异常告警-心跳超过10分钟(YY010）', '卫杰'),
-('外勤管理', 'YY011', '监控中心异常告警-心跳超过10分钟(YY011）', '卫杰'),
-('米多星球', 'YY012', '监控中心异常告警-心跳超过10分钟(YY012）', '志涛');
+INSERT INTO `tmp_alert_project_assignment` (`project_name`, `project_code`, `rule_name`) VALUES
+('智能营销', 'YY001', '监控中心异常告警-心跳超过10分钟(YY001）'),
+('社交云店', 'YY002', '监控中心异常告警-心跳超过10分钟(YY002）'),
+('DCRM', 'YY003', '监控中心异常告警-心跳超过10分钟(YY003）'),
+('防窜物流', 'YY004', '监控中心异常告警-心跳超过10分钟(YY004）'),
+('万能溯源', 'YY005', '监控中心异常告警-心跳超过10分钟(YY005）'),
+('微商城', 'YY006', '监控中心异常告警-心跳超过10分钟(YY006）'),
+('智慧零售', 'YY007', '监控中心异常告警-心跳超过10分钟(YY007）'),
+('商户后台', 'YY008', '监控中心异常告警-心跳超过10分钟(YY008）'),
+('企业微信', 'YY009', '监控中心异常告警-心跳超过10分钟(YY009）'),
+('互动营销', 'YY010', '监控中心异常告警-心跳超过10分钟(YY010）'),
+('外勤管理', 'YY011', '监控中心异常告警-心跳超过10分钟(YY011）'),
+('米多星球', 'YY012', '监控中心异常告警-心跳超过10分钟(YY012）');
 
 INSERT INTO `alert_rule_mapping` (
     `rule_name`,
@@ -74,17 +73,13 @@ SELECT
     'urgent',
     'high',
     'medium',
-    CAST(SUBSTRING_INDEX(GROUP_CONCAT(u.`id` ORDER BY FIND_IN_SET(u.`name`, t.`assignee_names`)), ',', 1) AS UNSIGNED),
-    COALESCE(GROUP_CONCAT(u.`id` ORDER BY FIND_IN_SET(u.`name`, t.`assignee_names`)), ''),
+    NULL,
+    '',
     30,
     1,
     'system',
     'system'
 FROM `tmp_alert_project_assignment` t
-LEFT JOIN `sys_user` u
-    ON FIND_IN_SET(u.`name`, t.`assignee_names`) > 0
-   AND u.`deleted` = 0
-   AND u.`account_status` = 1
 WHERE @alert_category_id IS NOT NULL
   AND NOT EXISTS (
       SELECT 1
@@ -92,22 +87,10 @@ WHERE @alert_category_id IS NOT NULL
       WHERE m.`deleted` = 0
         AND REPLACE(REPLACE(m.`rule_name`, '（', '('), '）', ')')
             = REPLACE(REPLACE(t.`rule_name`, '（', '('), '）', ')')
-  )
-GROUP BY t.`project_code`, t.`rule_name`;
+  );
 
 UPDATE `alert_rule_mapping` m
-JOIN (
-    SELECT
-        t.`rule_name`,
-        CAST(SUBSTRING_INDEX(GROUP_CONCAT(u.`id` ORDER BY FIND_IN_SET(u.`name`, t.`assignee_names`)), ',', 1) AS UNSIGNED) AS `assignee_id`,
-        COALESCE(GROUP_CONCAT(u.`id` ORDER BY FIND_IN_SET(u.`name`, t.`assignee_names`)), '') AS `assignee_ids`
-    FROM `tmp_alert_project_assignment` t
-    LEFT JOIN `sys_user` u
-        ON FIND_IN_SET(u.`name`, t.`assignee_names`) > 0
-       AND u.`deleted` = 0
-       AND u.`account_status` = 1
-    GROUP BY t.`project_code`, t.`rule_name`
-) s
+JOIN `tmp_alert_project_assignment` s
     ON REPLACE(REPLACE(m.`rule_name`, '（', '('), '）', ')')
         = REPLACE(REPLACE(s.`rule_name`, '（', '('), '）', ')')
 SET
@@ -116,8 +99,6 @@ SET
     m.`priority_p1` = 'urgent',
     m.`priority_p2` = 'high',
     m.`priority_p3` = 'medium',
-    m.`assignee_id` = COALESCE(s.`assignee_id`, m.`assignee_id`),
-    m.`assignee_ids` = CASE WHEN s.`assignee_ids` <> '' THEN s.`assignee_ids` ELSE m.`assignee_ids` END,
     m.`dedup_window_minutes` = 30,
     m.`enabled` = 1,
     m.`update_by` = 'system',
