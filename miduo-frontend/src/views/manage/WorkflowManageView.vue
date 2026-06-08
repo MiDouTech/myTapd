@@ -320,7 +320,7 @@ const workflowEditPreviewDetail = computed(() => ({
       code: s.code,
       name: s.name,
       type: s.type || 'INTERMEDIATE',
-      slaAction: s.slaAction || null,
+      slaAction: s.slaAction || undefined,
       order: s.order ?? 0,
     })),
   transitions: workflowEditForm.transitions
