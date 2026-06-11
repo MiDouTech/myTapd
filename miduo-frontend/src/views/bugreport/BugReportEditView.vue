@@ -564,7 +564,8 @@ async function searchTickets(keyword: string): Promise<void> {
     const result = await getTicketPage({
       pageNum: 1,
       pageSize: 20,
-      view: 'all',
+      // 简报关联只允许缺陷工单，使用 defect 视图可避开 all 视图的管理员权限限制。
+      view: 'defect',
       keyword: normalized || undefined,
       // 这里用后端过滤：简报只能关联「临时解决」或已结单类状态，避免下拉出现进行中工单
       linkableForBugReport: true,
