@@ -38,6 +38,13 @@
 | API000018 | 处理组列表 | GET | /api/handler-group/list | 处理组列表 |
 | API000019 | 处理组创建 | POST | /api/handler-group/create | 新增处理组 |
 
+### API000015 状态流转补充说明
+
+- **缺陷工单 `testing -> pending_dev_accept`（确认缺陷转开发）**：
+  - `reproduceEnv` 必填或已在测试信息中维护，取值：`PRODUCTION/TEST/BOTH`。
+  - `severityLevel` 必填或已在测试信息中维护，取值：`P0/P1/P2/P3/P4`。
+  - 流转时传入的 `severityLevel` 会同步保存到测试信息，供后续 Bug 简报自动带入。
+
 ## 四、验收标准
 
 - [x] 三种工作流状态流转符合产品 4.4 定义  

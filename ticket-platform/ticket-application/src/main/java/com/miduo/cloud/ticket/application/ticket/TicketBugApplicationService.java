@@ -182,27 +182,44 @@ public class TicketBugApplicationService extends BaseApplicationService {
     }
 
     /**
-     * 缺陷工作流：测试复现中 → 待开发受理 前，复现环境必须已填写（流转参数或测试信息表）
+     * 缺陷工作流：测试复现中 → 待开发受理前，复现环境和缺陷等级必须已填写（流转参数或测试信息表）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void requireReproduceEnvBeforeDevTransfer(Long ticketId, String reproduceEnvFromTransit) {
+    public void requireTestInfoBeforeDevTransfer(Long ticketId, String reproduceEnvFromTransit,
+                                                 String severityLevelFromTransit) {
         requireTicket(ticketId);
+        TicketBugTestInfoPO testInfoPO = null;
+        if (StringUtils.hasText(reproduceEnvFromTransit) || StringUtils.hasText(severityLevelFromTransit)) {
+            // 这里先保存弹窗里的值，是因为后续 Bug 简报会从测试信息表自动带出缺陷等级。
+            testInfoPO = getOrCreateBugTestInfo(ticketId);
+        }
         if (StringUtils.hasText(reproduceEnvFromTransit)) {
             String code = reproduceEnvFromTransit.trim();
             if (BugReproduceEnv.fromCode(code) == null) {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR,
                         "复现环境取值无效，请选择：生产环境(PRODUCTION)、测试环境(TEST) 或 均可复现(BOTH)");
             }
-            TicketBugTestInfoPO testInfoPO = getOrCreateBugTestInfo(ticketId);
             testInfoPO.setReproduceEnv(code);
+        }
+        if (StringUtils.hasText(severityLevelFromTransit)) {
+            testInfoPO.setSeverityLevel(normalizeSeverityLevel(severityLevelFromTransit));
+        }
+        if (testInfoPO != null) {
             saveBugTestInfo(testInfoPO);
         }
-        TicketBugTestInfoPO testInfoPO = getBugTestInfoByTicketId(ticketId);
-        String env = testInfoPO != null ? testInfoPO.getReproduceEnv() : null;
+
+        TicketBugTestInfoPO savedTestInfoPO = testInfoPO != null ? testInfoPO : getBugTestInfoByTicketId(ticketId);
+        String env = savedTestInfoPO != null ? savedTestInfoPO.getReproduceEnv() : null;
         if (!StringUtils.hasText(env) || BugReproduceEnv.fromCode(env.trim()) == null) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR,
                     "确认缺陷转开发前必须填写复现环境，请在流转时选择或在测试信息中维护");
         }
+        String severity = savedTestInfoPO != null ? savedTestInfoPO.getSeverityLevel() : null;
+        if (!StringUtils.hasText(severity)) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR,
+                    "确认缺陷转开发前必须填写缺陷等级，请在流转时选择或在测试信息中维护");
+        }
+        normalizeSeverityLevel(severity);
     }
 
     /**

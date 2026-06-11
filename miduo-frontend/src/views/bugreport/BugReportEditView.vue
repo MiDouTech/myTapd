@@ -637,20 +637,21 @@ function buildProblemDescSummary(tickets: TicketSummarySource[]): string {
   return sections.join('\n').slice(0, 1000)
 }
 
-const SEVERITY_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 }
+const SEVERITY_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3, P4: 4 }
 
 function pickHighestSeverity(levels: (string | undefined | null)[]): string {
-  let best = 'P2'
-  let bestRank: number = SEVERITY_ORDER['P2'] ?? 2
+  let best = ''
+  let bestRank = Number.POSITIVE_INFINITY
   for (const level of levels) {
     if (!level) continue
-    const rank = SEVERITY_ORDER[level]
+    const normalizedLevel = String(level).trim().toUpperCase()
+    const rank = SEVERITY_ORDER[normalizedLevel]
     if (rank !== undefined && rank < bestRank) {
-      best = level
+      best = normalizedLevel
       bestRank = rank
     }
   }
-  return best
+  return best || 'P2'
 }
 
 /**

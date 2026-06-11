@@ -227,8 +227,8 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         if (workflow.getId() != null && workflow.getId().longValue() == DEFECT_WORKFLOW_ID) {
             if (TicketStatus.TESTING.getCode().equalsIgnoreCase(oldStatus)
                     && TicketStatus.PENDING_DEV_ACCEPT.getCode().equalsIgnoreCase(targetStatus)) {
-                ticketBugApplicationService.requireReproduceEnvBeforeDevTransfer(
-                        ticketId, input.getReproduceEnv());
+                ticketBugApplicationService.requireTestInfoBeforeDevTransfer(
+                        ticketId, input.getReproduceEnv(), input.getSeverityLevel());
             }
             if (TicketStatus.TEMP_RESOLVED.getCode().equalsIgnoreCase(targetStatus)
                     && matchedTransition.getName() != null

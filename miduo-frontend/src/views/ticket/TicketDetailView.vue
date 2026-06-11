@@ -115,6 +115,7 @@ const transitForm = reactive({
   newAssigneeId: undefined as number | undefined,
   newAssigneeIds: [] as number[],
   reproduceEnv: '' as string,
+  severityLevel: '' as string,
   plannedFullResolveAt: '' as string,
 })
 
@@ -801,6 +802,12 @@ function openTransitDialog(action: TicketActionItem): void {
     action.targetStatus === 'pending_dev_accept'
       ? testInfoForm.reproduceEnv || ''
       : ''
+  transitForm.severityLevel =
+    isDefectWorkflow.value &&
+    currentStatus.value === 'testing' &&
+    action.targetStatus === 'pending_dev_accept'
+      ? testInfoForm.severityLevel || ''
+      : ''
   transitForm.plannedFullResolveAt =
     isDefectWorkflow.value &&
     action.targetStatus === 'temp_resolved' &&
@@ -833,6 +840,11 @@ async function handleProcess(): Promise<void> {
         notifyError('确认缺陷转开发前请选择复现环境')
         return
       }
+      const severity = transitForm.severityLevel?.trim() || testInfoForm.severityLevel?.trim()
+      if (!severity) {
+        notifyError('确认缺陷转开发前请选择缺陷等级')
+        return
+      }
     }
     if (
       isDefectWorkflow.value &&
@@ -852,6 +864,7 @@ async function handleProcess(): Promise<void> {
       newAssigneeId?: number
       newAssigneeIds?: number[]
       reproduceEnv?: string
+      severityLevel?: string
       plannedFullResolveAt?: string
     } = {
       transitionId: transitForm.transitionId,
@@ -869,6 +882,7 @@ async function handleProcess(): Promise<void> {
       selectedAction.value.targetStatus === 'pending_dev_accept'
     ) {
       transitPayload.reproduceEnv = transitForm.reproduceEnv?.trim() || testInfoForm.reproduceEnv?.trim()
+      transitPayload.severityLevel = transitForm.severityLevel?.trim() || testInfoForm.severityLevel?.trim()
     }
     if (
       isDefectWorkflow.value &&
@@ -2392,6 +2406,24 @@ watch(
           <el-option label="均可复现" value="BOTH" />
         </el-select>
         <div class="form-hint">将同步写入测试信息，也可事先在「测试信息」页维护</div>
+      </el-form-item>
+      <el-form-item
+        v-if="
+          isDefectWorkflow &&
+          currentStatus === 'testing' &&
+          selectedAction?.targetStatus === 'pending_dev_accept'
+        "
+        label="缺陷等级"
+        required
+      >
+        <el-select v-model="transitForm.severityLevel" placeholder="转开发必填" style="width: 100%">
+          <el-option label="P0（致命）" value="P0" />
+          <el-option label="P1（严重）" value="P1" />
+          <el-option label="P2（一般）" value="P2" />
+          <el-option label="P3（轻微）" value="P3" />
+          <el-option label="P4（建议）" value="P4" />
+        </el-select>
+        <div class="form-hint">将同步写入测试信息，后续填写 Bug 简报时会自动带入</div>
       </el-form-item>
       <el-form-item
         v-if="
