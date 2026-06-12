@@ -3672,3 +3672,46 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.6-defect-transfer-severity-to-brief` | 确认缺陷转开发时缺陷等级必填并保存到测试信息；Bug 简报自动草稿/编辑预填自动带入 P0-P4，修复 P3/P4 被默认 P2 覆盖的问题 |
+
+---
+
+## 76. CDS 远程数据库初始化 Flyway 版本冲突修复（后端）
+
+### 76.1 功能用途
+- **用途**：修复远程 CDS 启动后端时，Flyway 因两个迁移脚本同为 `V54` 而拒绝初始化数据库的问题。
+- **类比理解**：数据库迁移像按号码排队进站，两个脚本都拿了 54 号票，检票口无法判断谁先上车；现在把后来的工作流脚本改成 62 号票。
+
+### 76.2 使用方法（远程 CDS 初始化）
+1. 推送包含本修复的分支到远程仓库。
+2. 在 CDS 中部署对应分支。
+3. 后端 `ticket-bootstrap` 启动时会自动执行 Flyway 迁移。
+4. 预期结果：不再出现 `Found more than one migration with version 54`，数据库表结构可继续初始化。
+
+### 76.3 参数说明
+| 文件 | 调整 | 说明 |
+|---|---|---|
+| `V54__workflow_customization_delete_guard.sql` | 重命名为 `V62__workflow_customization_delete_guard.sql` | 避免与更早存在的 `V54__bug_report_add_resolve_time.sql` 冲突 |
+| `workflow.invocation_count` | 条件新增 | 字段不存在时才添加 |
+| `workflow.first_invoked_time` | 条件新增 | 字段不存在时才添加 |
+| `workflow.last_invoked_time` | 条件新增 | 字段不存在时才添加 |
+| `idx_invocation_count` | 条件新增 | 索引不存在时才添加 |
+
+### 76.4 返回值说明（启动行为）
+| 场景 | 结果 | 说明 |
+|---|---|---|
+| 修复前 | 后端启动失败 | Flyway 检测到两个 `V54` 版本，直接退出 |
+| 修复后 | 后端继续启动 | Flyway 版本号唯一，可继续执行数据库初始化 |
+
+### 76.5 常见问题（新增）
+#### Q93：CDS 后端容器为什么一启动就退出？
+- **检测**：查看 CDS 容器日志，若出现 `Found more than one migration with version 54`，说明是 Flyway 迁移版本冲突。
+- **记录（错误类型）**：数据库迁移脚本版本号重复。
+- **恢复建议**：
+  1. 升级到包含 `V62__workflow_customization_delete_guard.sql` 的版本；
+  2. 重新部署 CDS 分支；
+  3. 再查看后端日志确认 Flyway 继续执行。
+
+### 76.6 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.5.7-cds-flyway-v54-conflict-fix` | 修复 CDS 远程数据库初始化时 Flyway `V54` 重复版本冲突，并让工作流调用统计字段迁移具备重复执行保护 |
