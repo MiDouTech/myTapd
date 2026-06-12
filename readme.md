@@ -3691,6 +3691,7 @@ vite v7.3.1 building client environment for production...
 | 文件 | 调整 | 说明 |
 |---|---|---|
 | `V54__workflow_customization_delete_guard.sql` | 重命名为 `V62__workflow_customization_delete_guard.sql` | 避免与更早存在的 `V54__bug_report_add_resolve_time.sql` 冲突 |
+| `V57__ensure_ticket_bug_info_manual_valid_report.sql` | 改为信息架构检查 + 动态 SQL | 避免 MySQL 不支持 `ADD COLUMN IF NOT EXISTS` 导致远程初始化失败 |
 | `workflow.invocation_count` | 条件新增 | 字段不存在时才添加 |
 | `workflow.first_invoked_time` | 条件新增 | 字段不存在时才添加 |
 | `workflow.last_invoked_time` | 条件新增 | 字段不存在时才添加 |
@@ -3711,7 +3712,16 @@ vite v7.3.1 building client environment for production...
   2. 重新部署 CDS 分支；
   3. 再查看后端日志确认 Flyway 继续执行。
 
+#### Q94：修复 V54 后又卡在 V57 是什么原因？
+- **检测**：查看日志是否出现 `Migration V57__ensure_ticket_bug_info_manual_valid_report.sql failed`，并提示 `ADD COLUMN IF NOT EXISTS` 附近 SQL 语法错误。
+- **记录（错误类型）**：MySQL DDL 兼容性问题。
+- **恢复建议**：
+  1. 升级到包含 V57 动态 SQL 修复的版本；
+  2. 重新部署 CDS 分支；
+  3. Flyway 会先 repair 失败记录，再继续执行后续迁移。
+
 ### 76.6 版本历史（新增）
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.7-cds-flyway-v54-conflict-fix` | 修复 CDS 远程数据库初始化时 Flyway `V54` 重复版本冲突，并让工作流调用统计字段迁移具备重复执行保护 |
+| `v1.5.8-cds-flyway-v57-mysql-ddl-fix` | 修复 V57 使用 MySQL 不兼容 `ADD COLUMN IF NOT EXISTS` 导致远程初始化继续失败的问题 |
