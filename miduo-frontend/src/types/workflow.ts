@@ -218,6 +218,8 @@ export interface TransitInput {
   newAssigneeIds?: number[]
   /** 缺陷：转开发时复现环境 PRODUCTION | TEST | BOTH */
   reproduceEnv?: string
+  /** 缺陷：转开发时缺陷等级 P0 | P1 | P2 | P3 | P4 */
+  severityLevel?: string
   /** 缺陷：临时解决时计划彻底解决时间（ISO 日期时间字符串） */
   plannedFullResolveAt?: string
 }

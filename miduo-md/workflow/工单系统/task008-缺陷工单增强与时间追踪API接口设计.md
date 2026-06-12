@@ -59,12 +59,16 @@
   "reproduceSteps": "1. 登录系统 2. 提交订单 3. 点击确认",
   "actualResult": "系统返回500错误",
   "impactScope": "PARTIAL",
-  "severityLevel": "CRITICAL",
+  "severityLevel": "P1",
   "moduleName": "订单中心",
   "reproduceScreenshot": "https://cdn.example.com/bug/repro.png",
   "testRemark": "生产环境稳定复现"
 }
 ```
+
+- **字段规则**：
+  - `severityLevel` 统一使用 `P0/P1/P2/P3/P4`；历史别名 `FATAL/CRITICAL/NORMAL/MINOR` 由后端兼容规范化。
+  - 缺陷工单从「测试中」确认转开发前，`severityLevel` 必须已填写或在流转弹窗中填写。
 
 ### API000023 - 更新缺陷工单开发信息
 
