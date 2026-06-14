@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
-import type { TicketPublicDetailOutput } from '@/types/ticket'
+import type { TicketPublicDetailOutput, TicketPublicSlaTimerOutput } from '@/types/ticket'
 import { filterHttpImageUrls, parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 
@@ -11,6 +11,8 @@ const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 const detail = ref<TicketPublicDetailOutput>()
+const nowTick = ref(Date.now())
+let countdownTimerId: number | undefined
 
 const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
 const archivedBugReport = computed(() => detail.value?.archivedBugReport)
@@ -133,10 +135,6 @@ function handleLightboxKeydown(event: KeyboardEvent): void {
   }
 }
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleLightboxKeydown)
-})
-
 const priorityColorMap: Record<string, string> = {
   urgent: '#f56c6c',
   high: '#e6a23c',
@@ -181,6 +179,67 @@ function formatDate(dateStr?: string): string {
   } catch {
     return dateStr
   }
+}
+
+const slaTimers = computed(() => detail.value?.slaTimers ?? [])
+
+function getSlaRemainingSeconds(timer: TicketPublicSlaTimerOutput): number {
+  // 这里读取 nowTick，是因为运行中的 SLA 倒计时需要每秒重新渲染。
+  const currentTime = nowTick.value
+  const status = timer.status?.toUpperCase()
+  if (status === 'COMPLETED' || status === 'BREACHED' || timer.breached) {
+    return 0
+  }
+  if (status === 'RUNNING' && timer.deadline) {
+    const deadlineAt = new Date(timer.deadline).getTime()
+    if (!Number.isNaN(deadlineAt)) {
+      return Math.max(0, Math.floor((deadlineAt - currentTime) / 1000))
+    }
+  }
+  return Math.max(0, Math.floor(timer.remainingSeconds ?? 0))
+}
+
+function formatCountdown(totalSeconds?: number): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds ?? 0))
+  const days = Math.floor(safeSeconds / 86400)
+  const hours = Math.floor((safeSeconds % 86400) / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const seconds = safeSeconds % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const time = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+  return days > 0 ? `${days}天 ${time}` : time
+}
+
+function getSlaDisplayText(timer: TicketPublicSlaTimerOutput): string {
+  const status = timer.status?.toUpperCase()
+  if (status === 'COMPLETED') {
+    return '已完成'
+  }
+  if (status === 'BREACHED' || timer.breached) {
+    return '已超时'
+  }
+  if (status === 'PAUSED') {
+    return `暂停中，剩余 ${formatCountdown(getSlaRemainingSeconds(timer))}`
+  }
+  return `剩余 ${formatCountdown(getSlaRemainingSeconds(timer))}`
+}
+
+function getSlaTimerClass(timer: TicketPublicSlaTimerOutput): string {
+  const status = timer.status?.toUpperCase()
+  if (status === 'BREACHED' || timer.breached || getSlaRemainingSeconds(timer) <= 0) {
+    return 'is-danger'
+  }
+  if (status === 'PAUSED') {
+    return 'is-paused'
+  }
+  if (status === 'COMPLETED') {
+    return 'is-completed'
+  }
+  const thresholdSeconds = (timer.thresholdMinutes ?? 0) * 60
+  if (thresholdSeconds > 0 && getSlaRemainingSeconds(timer) / thresholdSeconds <= 0.25) {
+    return 'is-warning'
+  }
+  return 'is-running'
 }
 
 /** Bug 简报内「开始/临时解决/彻底解决」为日期口径，只展示到日，避免 00:00 造成误解 */
@@ -266,6 +325,16 @@ async function loadDetail(): Promise<void> {
 onMounted(() => {
   loadDetail()
   document.addEventListener('keydown', handleLightboxKeydown)
+  countdownTimerId = window.setInterval(() => {
+    nowTick.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleLightboxKeydown)
+  if (countdownTimerId !== undefined) {
+    window.clearInterval(countdownTimerId)
+  }
 })
 </script>
 
@@ -352,6 +421,29 @@ onMounted(() => {
           </div>
           <h1 class="ticket-title">{{ detail.title || '（无标题）' }}</h1>
           <p class="ticket-no">{{ detail.ticketNo }}</p>
+        </div>
+
+        <!-- SLA倒计时 -->
+        <div v-if="slaTimers.length > 0" class="card sla-countdown-card">
+          <h2 class="card-title">SLA倒计时</h2>
+          <div class="sla-timer-list">
+            <div
+              v-for="timer in slaTimers"
+              :key="timer.id"
+              class="sla-timer-item"
+              :class="getSlaTimerClass(timer)"
+            >
+              <div class="sla-timer-main">
+                <span class="sla-timer-name">{{ timer.timerTypeLabel || timer.timerType || 'SLA' }}</span>
+                <strong class="sla-timer-count">{{ getSlaDisplayText(timer) }}</strong>
+              </div>
+              <div class="sla-timer-meta">
+                <span>总时限 {{ timer.thresholdMinutes ?? '-' }} 分钟</span>
+                <span v-if="timer.deadline">截止 {{ formatDate(timer.deadline) }}</span>
+                <span>{{ timer.statusLabel || timer.status || '-' }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 工单基本信息 -->
@@ -763,6 +855,95 @@ onMounted(() => {
   font-weight: 500;
 }
 
+/* SLA倒计时 */
+.sla-countdown-card {
+  border: 1px solid rgba(22, 117, 209, 0.16);
+  background: linear-gradient(145deg, #f5faff 0%, #ffffff 70%);
+}
+
+.sla-timer-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sla-timer-item {
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid #d7e8f8;
+  background: #f7fbff;
+}
+
+.sla-timer-item.is-running {
+  border-color: rgba(22, 117, 209, 0.35);
+  background: #f0f8ff;
+}
+
+.sla-timer-item.is-warning {
+  border-color: rgba(230, 162, 60, 0.45);
+  background: #fff8ec;
+}
+
+.sla-timer-item.is-danger {
+  border-color: rgba(245, 108, 108, 0.45);
+  background: #fff2f2;
+}
+
+.sla-timer-item.is-paused {
+  border-color: rgba(144, 147, 153, 0.35);
+  background: #f7f8fa;
+}
+
+.sla-timer-item.is-completed {
+  border-color: rgba(103, 194, 58, 0.38);
+  background: #f3fbef;
+}
+
+.sla-timer-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sla-timer-name {
+  color: #606266;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sla-timer-count {
+  color: #1675d1;
+  font-size: 18px;
+  line-height: 1.3;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-timer-item.is-warning .sla-timer-count {
+  color: #b66d00;
+}
+
+.sla-timer-item.is-danger .sla-timer-count {
+  color: #d93026;
+}
+
+.sla-timer-item.is-paused .sla-timer-count {
+  color: #606266;
+}
+
+.sla-timer-item.is-completed .sla-timer-count {
+  color: #3f8f24;
+}
+
+.sla-timer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  color: #909399;
+  font-size: 12px;
+}
+
 /* 信息网格 */
 .info-grid {
   display: grid;
@@ -1110,6 +1291,16 @@ onMounted(() => {
 
   .archived-bug-report-title {
     font-size: 18px;
+  }
+
+  .sla-timer-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sla-timer-count {
+    text-align: left;
   }
 
   .info-grid {

@@ -2,6 +2,7 @@ package com.miduo.cloud.ticket.application.ticket;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.common.enums.BugChangeTypeEnum;
 import com.miduo.cloud.ticket.common.enums.BugReproduceEnv;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -37,17 +38,20 @@ public class TicketBugApplicationService extends BaseApplicationService {
     private final TicketBugTestInfoMapper bugTestInfoMapper;
     private final TicketBugDevInfoMapper bugDevInfoMapper;
     private final TicketChangeHistoryRecorder changeHistoryRecorder;
+    private final SlaTimerService slaTimerService;
 
     public TicketBugApplicationService(TicketMapper ticketMapper,
                                        TicketBugInfoMapper bugInfoMapper,
                                        TicketBugTestInfoMapper bugTestInfoMapper,
                                        TicketBugDevInfoMapper bugDevInfoMapper,
-                                       TicketChangeHistoryRecorder changeHistoryRecorder) {
+                                       TicketChangeHistoryRecorder changeHistoryRecorder,
+                                       SlaTimerService slaTimerService) {
         this.ticketMapper = ticketMapper;
         this.bugInfoMapper = bugInfoMapper;
         this.bugTestInfoMapper = bugTestInfoMapper;
         this.bugDevInfoMapper = bugDevInfoMapper;
         this.changeHistoryRecorder = changeHistoryRecorder;
+        this.slaTimerService = slaTimerService;
     }
 
     /**
@@ -101,6 +105,7 @@ public class TicketBugApplicationService extends BaseApplicationService {
 
         applyTestInfoChanges(testInfoPO, normalizedInput);
         saveBugTestInfo(testInfoPO);
+        adjustResolveSlaWhenSeverityPresent(ticketId, normalizedInput.getSeverityLevel());
 
         changeHistoryRecorder.recordWithTimeTrack(ticketId, currentUserId, BugChangeTypeEnum.MANUAL_CHANGE, changes);
     }
@@ -219,7 +224,8 @@ public class TicketBugApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.PARAM_ERROR,
                     "确认缺陷转开发前必须填写缺陷等级，请在流转时选择或在测试信息中维护");
         }
-        normalizeSeverityLevel(severity);
+        String normalizedSeverity = normalizeSeverityLevel(severity);
+        adjustResolveSlaWhenSeverityPresent(ticketId, normalizedSeverity);
     }
 
     /**
@@ -312,6 +318,14 @@ public class TicketBugApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "有效报告仅支持 YES 或 NO");
         }
         return option.getCode();
+    }
+
+    private void adjustResolveSlaWhenSeverityPresent(Long ticketId, String severityLevel) {
+        if (!StringUtils.hasText(severityLevel)) {
+            return;
+        }
+        // 这里仅调整解决计时，是因为客成建单时还不知道缺陷等级，响应计时必须先按分类策略执行。
+        slaTimerService.adjustResolveTimerBySeverity(ticketId, severityLevel);
     }
 
     private String trimToNull(String source) {

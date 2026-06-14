@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bell,
   Calendar,
+  CollectionTag,
   Connection,
   DataAnalysis,
   Document,
@@ -100,6 +101,7 @@ const menuItems: MenuItem[] = [
       { index: '/manage/settings', title: '系统设置', icon: Setting },
       { index: '/manage/operation-log', title: '工单日志', icon: Notebook },
       { index: '/manage/daily-report', title: '日报管理', icon: Calendar },
+      { index: '/manage/update-center', title: '更新中心', icon: CollectionTag },
     ],
   },
 ]
