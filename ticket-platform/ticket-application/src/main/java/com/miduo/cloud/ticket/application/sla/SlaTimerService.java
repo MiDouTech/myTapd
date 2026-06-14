@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.sla;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.common.enums.DefectSeverityResolveSlaRule;
 import com.miduo.cloud.ticket.common.enums.SlaLevel;
 import com.miduo.cloud.ticket.common.enums.SlaTimerStatus;
 import com.miduo.cloud.ticket.common.enums.SlaTimerType;
@@ -146,6 +147,71 @@ public class SlaTimerService extends BaseApplicationService {
     }
 
     /**
+     * 根据测试确认的缺陷等级调整解决计时器，不影响首次响应计时器。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void adjustResolveTimerBySeverity(Long ticketId, String severityLevel) {
+        if (ticketId == null) {
+            return;
+        }
+        DefectSeverityResolveSlaRule rule = DefectSeverityResolveSlaRule.fromSeverityLevel(severityLevel);
+        if (rule == null) {
+            log.warn("缺陷等级未配置解决SLA规则: ticketId={}, severityLevel={}", ticketId, severityLevel);
+            return;
+        }
+
+        SlaTimerPO timer = slaTimerMapper.selectOne(new LambdaQueryWrapper<SlaTimerPO>()
+                .eq(SlaTimerPO::getTicketId, ticketId)
+                .eq(SlaTimerPO::getTimerType, SlaTimerType.RESOLVE.getCode())
+                .ne(SlaTimerPO::getStatus, SlaTimerStatus.COMPLETED.getCode())
+                .orderByDesc(SlaTimerPO::getId)
+                .last("LIMIT 1"));
+        if (timer == null) {
+            log.info("缺陷等级已保存但未找到解决SLA计时器: ticketId={}, severityLevel={}", ticketId, severityLevel);
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int elapsed = calculateCurrentElapsed(timer, now);
+        int threshold = rule.getResolveMinutes();
+        boolean wasBreached = SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())
+                || Integer.valueOf(1).equals(timer.getIsBreached());
+
+        timer.setThresholdMinutes(threshold);
+        timer.setElapsedMinutes(elapsed);
+        timer.setBaseElapsedMinutes(elapsed);
+        timer.setStartAt(toDate(now));
+        timer.setIsWarned(0);
+
+        if (elapsed >= threshold) {
+            timer.setStatus(SlaTimerStatus.BREACHED.getCode());
+            timer.setIsBreached(1);
+            timer.setBreachedAt(new Date());
+            timer.setDeadline(toDate(now));
+            slaTimerMapper.updateById(timer);
+            if (!wasBreached) {
+                eventPublisher.publishEvent(new SlaBreachedEvent(
+                        timer.getTicketId(), timer.getId(), timer.getTimerType(), elapsed, threshold));
+            }
+            log.warn("缺陷等级调整后解决SLA已超时: ticketId={}, severityLevel={}, elapsed={}, threshold={}",
+                    ticketId, severityLevel, elapsed, threshold);
+            return;
+        }
+
+        if (SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())) {
+            timer.setStatus(SlaTimerStatus.RUNNING.getCode());
+        }
+        timer.setIsBreached(0);
+        timer.setBreachedAt(null);
+        int remainingMinutes = threshold - elapsed;
+        LocalDateTime deadline = workingTimeCalculator.calculateDeadline(now, remainingMinutes);
+        timer.setDeadline(toDate(deadline));
+        slaTimerMapper.updateById(timer);
+        log.info("缺陷等级调整解决SLA成功: ticketId={}, severityLevel={}, threshold={}, elapsed={}, deadline={}",
+                ticketId, severityLevel, threshold, elapsed, deadline);
+    }
+
+    /**
      * 检查所有运行中的计时器，触发预警或超时事件
      */
     @Transactional(rollbackFor = Exception.class)
@@ -236,6 +302,20 @@ public class SlaTimerService extends BaseApplicationService {
         wrapper.eq(SlaTimerPO::getTicketId, ticketId)
                 .eq(SlaTimerPO::getStatus, SlaTimerStatus.PAUSED.getCode());
         return slaTimerMapper.selectList(wrapper);
+    }
+
+    private int calculateCurrentElapsed(SlaTimerPO timer, LocalDateTime now) {
+        if (timer == null) {
+            return 0;
+        }
+        int savedElapsed = timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0;
+        if (SlaTimerStatus.PAUSED.getCode().equals(timer.getStatus())
+                || SlaTimerStatus.COMPLETED.getCode().equals(timer.getStatus())) {
+            return savedElapsed;
+        }
+        int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : savedElapsed;
+        LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
+        return baseElapsed + workingTimeCalculator.calculateWorkingMinutes(startAt, now);
     }
 
     private LocalDateTime toLocalDateTime(Date date) {
