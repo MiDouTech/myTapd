@@ -3845,3 +3845,72 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.8-public-ticket-sla-countdown` | 公开工单详情接口返回 SLA 计时器信息，公开页展示响应/解决 SLA 倒计时 |
+
+---
+
+## 79. 管理端更新中心（前后端）
+
+### 79.1 功能用途
+- **用途**：在工单系统「管理 → 更新中心」里查看系统最近改了什么。
+- **类比理解**：像小区公告栏，`CHANGELOG.md` 是正式公告，`changelogs/` 是还没贴到正式公告栏的小便签，Git 提交记录是每次搬砖留下的脚印。
+
+### 79.2 使用方法（验收步骤）
+1. 启动后端和前端。
+2. 登录工单系统。
+3. 打开左侧菜单「管理 → 更新中心」。
+4. 依次查看：
+   - 「已发布」：应看到 `CHANGELOG.md` 中的版本更新。
+   - 「待发布」：应看到 `changelogs/*.md` 中的待发布更新。
+   - 「GitHub提交」：应看到本地 Git 提交记录。
+5. 点击「刷新」，页面应重新拉取最新数据。
+6. 点击类型筛选（如“新功能”“文档”），列表应只展示对应类型的更新。
+
+### 79.3 参数说明
+
+| 接口 | 参数 | 类型 | 说明 |
+|---|---|---|---|
+| `GET /api/update-center/current-week` | `daysLimit` | `Integer` | 返回多少个待发布日期组，默认 4 |
+| `GET /api/update-center/current-week` | `daysOffset` | `Integer` | 跳过多少个日期组，用于加载更多 |
+| `GET /api/update-center/releases` | `limit` | `Integer` | 返回多少个版本，默认 8，最大 100 |
+| `GET /api/update-center/releases` | `summary` | `Boolean` | 是否只返回概要，详情可再按版本加载 |
+| `GET /api/update-center/releases/detail/{version}` | `version` | `String` | 版本号，例如 `v1.0.0` |
+| `GET /api/update-center/github-logs` | `limit` | `Integer` | 返回多少条 Git 提交，默认 80，最大 1000 |
+| `GET /api/update-center/github-logs` | `before` | `String` | 游标 SHA，用于继续加载更早提交 |
+
+### 79.4 返回值说明
+
+| 返回对象 | 说明 |
+|---|---|
+| `CurrentWeekOutput` | 待发布更新，包含日期组、文件名、类型、模块、描述 |
+| `ReleasesOutput` | 已发布版本列表，包含版本号、发布日期、亮点和条目数 |
+| `ChangelogReleaseOutput` | 单个版本详情，包含该版本每天的更新条目 |
+| `GitHubLogsOutput` | Git 提交列表，包含 SHA、作者、提交时间和 GitHub 链接 |
+
+### 79.5 常见问题（新增）
+#### Q98：为什么更新中心是空的？
+- **检测**：确认仓库根目录是否存在 `CHANGELOG.md` 或 `changelogs/*.md`。
+- **记录（错误类型）**：更新数据源缺失。
+- **恢复建议**：
+  1. 在仓库根目录新增 `CHANGELOG.md`；
+  2. 或在 `changelogs/` 下新增 `YYYY-MM-DD_xxx.md`；
+  3. 按 `| 类型 | 模块 | 描述 |` 表格格式填写。
+
+#### Q99：为什么 GitHub提交为空？
+- **检测**：确认运行后端的目录上级是否能找到 `.git`。
+- **记录（错误类型）**：运行环境缺少 Git 元数据。
+- **恢复建议**：
+  1. 在完整 Git 仓库环境运行后端；
+  2. 或配置 `update-center.repo-root` 指向仓库根目录；
+  3. 重新刷新更新中心页面。
+
+### 79.6 示例截图（终端运行效果）
+```text
+GET /api/update-center/current-week
+GET /api/update-center/releases
+GET /api/update-center/github-logs
+```
+
+### 79.7 版本历史（新增）
+| 版本 | 变更内容 |
+|---|---|
+| `v1.6.0-update-center` | 参考 prd_agent 更新中心核心逻辑，新增工单系统管理端更新中心、4个只读接口、更新日志文件规范 |
