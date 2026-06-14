@@ -145,3 +145,20 @@
 ## 执行顺序
 
 task001 → task002 → task003 → task004 → task005 → task006 → task007 → task008 → task009 → task010
+
+---
+
+## 完成情况
+
+- [x] task001 — `McpConstants`（ticket-common）+ `AgentApiKeyConstants` 增 `Authorization/Bearer`
+- [x] task002 — `AgentApiKeyAuthenticationFilter` 支持 `Authorization: Bearer <mdt_...>`（保留 `X-Api-Key`）
+- [x] task003 — `ticket-entity/dto/mcp`：`JsonRpcResponse` / `JsonRpcError` / `McpToolDefinition` / `McpContent` / `McpToolResult`
+- [x] task004 — `McpToolService`：5 个只读工具 + JSON Schema + 视图越权降级
+- [x] task005 — `McpDispatchService`：initialize / tools.list / tools.call / ping / notifications
+- [x] task006 — `McpController` `POST /api/mcp`（接口编号 API000521）
+- [x] task007 — 工具调用审计日志（userId + tool；不落完整密钥）
+- [x] task008 — 技能包 `docs/lobster-skill/mcp/`（manifest + 开发/测试 SKILL）+ `SKILL.md`/`config.example.json` 增补
+- [x] task009 — `miduo-md/workflow/工单系统/WorkBuddy-MCP接入说明.md` + 接口编号登记
+- [x] task010 — **后端 `mvn clean install -DskipTests` 编译通过（JDK8）**；真实 WorkBuddy 客户端 **联调待在已配置 Nacos/DB/Redis 的环境执行**（本 VM 未注入密钥）
+
+> 说明：本 VM 为未完全初始化环境（需手动安装 Maven 与 JDK8、无 Nacos 密钥），故 task010 的"运行时客户端联调"未在此执行，建议在已配置密钥的测试环境完成验收（curl 示例见接入说明文档）。
