@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { Grid } from '@element-plus/icons-vue'
 import VueDraggable from 'vuedraggable'
 
+import { useAuthStore } from '@/stores/auth'
 import type { DashboardOverviewOutput } from '@/types/dashboard'
 
 type OverviewCardKey =
@@ -25,6 +26,12 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const authStore = useAuthStore()
+const canViewAllTickets = computed(() =>
+  (authStore.userInfo?.roleCodes ?? [])
+    .map((code) => String(code).toUpperCase())
+    .some((code) => code === 'ADMIN' || code === 'TICKET_ADMIN'),
+)
 
 const defaultOrder: OverviewCardKey[] = [
   'pending_accept',
@@ -48,13 +55,14 @@ const cardMap = computed(() =>
 
 function handleCardClick(key: OverviewCardKey): void {
   if (props.editable) return
-  if (key === 'total') {
-    router.push({ path: '/ticket/all' })
-  } else if (key === 'sla_breached') {
-    router.push({ path: '/ticket/all', query: { slaStatus: 'BREACHED' } })
-  } else {
-    router.push({ path: '/ticket/all', query: { status: key } })
+  const targetPath = canViewAllTickets.value ? '/ticket/all' : '/ticket/mine'
+  const query: Record<string, string> = canViewAllTickets.value ? {} : { view: 'my_todo' }
+  if (key === 'sla_breached') {
+    query.slaStatus = 'BREACHED'
+  } else if (key !== 'total') {
+    query.status = key
   }
+  router.push({ path: targetPath, query })
 }
 
 const normalizedOrder = computed<OverviewCardKey[]>(() => {
