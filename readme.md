@@ -3889,11 +3889,12 @@ vite v7.3.1 building client environment for production...
 ### 79.5 常见问题（新增）
 #### Q98：为什么更新中心是空的？
 - **检测**：确认仓库根目录是否存在 `CHANGELOG.md` 或 `changelogs/*.md`。
-- **记录（错误类型）**：更新数据源缺失。
+- **记录（错误类型）**：更新数据源缺失，或后端启动目录无法向上找到更新日志文件。
 - **恢复建议**：
   1. 在仓库根目录新增 `CHANGELOG.md`；
   2. 或在 `changelogs/` 下新增 `YYYY-MM-DD_xxx.md`；
-  3. 按 `| 类型 | 模块 | 描述 |` 表格格式填写。
+  3. 按 `| 类型 | 模块 | 描述 |` 表格格式填写；
+  4. 如果后端不是从仓库目录启动，可配置 `update-center.repo-root=/实际仓库根目录`。
 
 #### Q99：为什么 GitHub提交为空？
 - **检测**：确认运行后端的目录上级是否能找到 `.git`。
@@ -3901,7 +3902,8 @@ vite v7.3.1 building client environment for production...
 - **恢复建议**：
   1. 在完整 Git 仓库环境运行后端；
   2. 或配置 `update-center.repo-root` 指向仓库根目录；
-  3. 重新刷新更新中心页面。
+  3. 确认该目录下存在 `.git`；
+  4. 重新刷新更新中心页面。
 
 ### 79.6 示例截图（终端运行效果）
 ```text

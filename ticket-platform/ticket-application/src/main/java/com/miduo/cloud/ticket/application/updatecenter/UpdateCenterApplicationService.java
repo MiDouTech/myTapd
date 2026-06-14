@@ -493,17 +493,34 @@ public class UpdateCenterApplicationService {
     }
 
     private Path getRepoRoot() {
+        List<Path> candidates = new ArrayList<>();
         if (configuredRepoRoot != null && !configuredRepoRoot.trim().isEmpty()) {
-            return Paths.get(configuredRepoRoot.trim()).toAbsolutePath().normalize();
+            candidates.add(Paths.get(configuredRepoRoot.trim()).toAbsolutePath().normalize());
         }
-        Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        Path userDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        Path current = userDir;
         while (current != null) {
-            if (Files.isDirectory(current.resolve(".git"))) {
-                return current;
-            }
+            candidates.add(current);
             current = current.getParent();
         }
-        return Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        candidates.add(Paths.get("/workspace"));
+        candidates.add(Paths.get("/app"));
+
+        for (Path candidate : candidates) {
+            if (isUpdateCenterRoot(candidate)) {
+                return candidate;
+            }
+        }
+        return userDir;
+    }
+
+    private boolean isUpdateCenterRoot(Path candidate) {
+        if (candidate == null || !Files.isDirectory(candidate)) {
+            return false;
+        }
+        return Files.isDirectory(candidate.resolve(".git"))
+                || Files.isRegularFile(candidate.resolve("CHANGELOG.md"))
+                || Files.isDirectory(candidate.resolve("changelogs"));
     }
 
     private String nowIso() {
