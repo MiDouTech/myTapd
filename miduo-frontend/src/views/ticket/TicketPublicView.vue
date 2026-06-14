@@ -185,7 +185,9 @@ const slaTimers = computed(() => detail.value?.slaTimers ?? [])
 
 function parseTimeToSeconds(value?: string): number {
   const source = value || '09:00'
-  const [h, m] = source.split(':').map((item) => Number(item))
+  const parts = source.split(':')
+  const h = Number(parts[0] ?? '9')
+  const m = Number(parts[1] ?? '0')
   if (Number.isNaN(h) || Number.isNaN(m)) {
     return 9 * 3600
   }
