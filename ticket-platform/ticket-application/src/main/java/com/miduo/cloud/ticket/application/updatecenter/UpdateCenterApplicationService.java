@@ -1,5 +1,8 @@
 package com.miduo.cloud.ticket.application.updatecenter;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.UpdateCenterSource;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -10,6 +13,10 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -41,19 +48,44 @@ public class UpdateCenterApplicationService {
     private static final int MAX_RELEASE_LIMIT = 100;
     private static final int MAX_GIT_LOG_LIMIT = 1000;
     private static final int GIT_COMMAND_TIMEOUT_SECONDS = 8;
+    private static final int HTTP_TIMEOUT_MS = 8000;
+    private static final String DEFAULT_GITHUB_OWNER = "MiDouTech";
+    private static final String DEFAULT_GITHUB_REPO = "myTapd";
+    private static final String DEFAULT_GITHUB_BRANCH = "main";
+    private static final String DEFAULT_GITHUB_API_BASE = "https://api.github.com";
+    private static final String DEFAULT_GITHUB_RAW_BASE = "https://raw.githubusercontent.com";
     private static final Pattern DATE_IN_FILE_NAME = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2}).*");
     private static final Pattern RELEASE_HEADER = Pattern.compile("^##\\s+\\[?([^\\]\\-]+)]?\\s*(?:-\\s*(\\d{4}-\\d{2}-\\d{2}))?.*$");
     private static final Pattern DAY_HEADER = Pattern.compile("^###\\s+(\\d{4}-\\d{2}-\\d{2}).*$");
     private static final Pattern SHA_PATTERN = Pattern.compile("^[0-9a-fA-F]{4,40}$");
 
     private final String configuredRepoRoot;
+    private final String githubOwner;
+    private final String githubRepo;
+    private final String githubBranch;
+    private final String githubApiBase;
+    private final String githubRawBase;
+    private final String githubToken;
 
-    public UpdateCenterApplicationService(@Value("${update-center.repo-root:}") String configuredRepoRoot) {
+    public UpdateCenterApplicationService(@Value("${update-center.repo-root:}") String configuredRepoRoot,
+                                          @Value("${update-center.github-owner:" + DEFAULT_GITHUB_OWNER + "}") String githubOwner,
+                                          @Value("${update-center.github-repo:" + DEFAULT_GITHUB_REPO + "}") String githubRepo,
+                                          @Value("${update-center.github-branch:" + DEFAULT_GITHUB_BRANCH + "}") String githubBranch,
+                                          @Value("${update-center.github-api-base:" + DEFAULT_GITHUB_API_BASE + "}") String githubApiBase,
+                                          @Value("${update-center.github-raw-base:" + DEFAULT_GITHUB_RAW_BASE + "}") String githubRawBase,
+                                          @Value("${update-center.github-token:${GITHUB_TOKEN:}}") String githubToken) {
         this.configuredRepoRoot = configuredRepoRoot;
+        this.githubOwner = normalizeConfig(githubOwner, DEFAULT_GITHUB_OWNER);
+        this.githubRepo = normalizeConfig(githubRepo, DEFAULT_GITHUB_REPO);
+        this.githubBranch = normalizeConfig(githubBranch, DEFAULT_GITHUB_BRANCH);
+        this.githubApiBase = trimTrailingSlash(normalizeConfig(githubApiBase, DEFAULT_GITHUB_API_BASE));
+        this.githubRawBase = trimTrailingSlash(normalizeConfig(githubRawBase, DEFAULT_GITHUB_RAW_BASE));
+        this.githubToken = githubToken == null ? "" : githubToken.trim();
     }
 
     public UpdateCenterOutput.CurrentWeekOutput getCurrentWeek(Integer daysLimit, Integer daysOffset, Boolean force) {
-        List<UpdateCenterOutput.ChangelogFragmentOutput> allFragments = readFragments();
+        SourceResult<List<UpdateCenterOutput.ChangelogFragmentOutput>> fragmentResult = readFragments();
+        List<UpdateCenterOutput.ChangelogFragmentOutput> allFragments = fragmentResult.getData();
         Collections.sort(allFragments, new Comparator<UpdateCenterOutput.ChangelogFragmentOutput>() {
             @Override
             public int compare(UpdateCenterOutput.ChangelogFragmentOutput left,
@@ -73,8 +105,8 @@ public class UpdateCenterApplicationService {
         List<UpdateCenterOutput.ChangelogFragmentOutput> pageFragments = new ArrayList<>(allFragments.subList(fromIndex, toIndex));
 
         UpdateCenterOutput.CurrentWeekOutput output = new UpdateCenterOutput.CurrentWeekOutput();
-        output.setDataSourceAvailable(Files.isDirectory(getChangelogsPath()));
-        output.setSource(output.getDataSourceAvailable() ? UpdateCenterSource.LOCAL.getCode() : UpdateCenterSource.NONE.getCode());
+        output.setDataSourceAvailable(fragmentResult.isAvailable());
+        output.setSource(fragmentResult.getSource().getCode());
         output.setFetchedAt(nowIso());
         output.setTotalDays(allFragments.size());
         output.setTotalEntries(countFragmentEntries(allFragments));
@@ -94,7 +126,8 @@ public class UpdateCenterApplicationService {
     }
 
     public UpdateCenterOutput.ReleasesOutput getReleases(Integer limit, Boolean summary, Boolean force) {
-        List<UpdateCenterOutput.ChangelogReleaseOutput> allReleases = readReleases(false);
+        SourceResult<List<UpdateCenterOutput.ChangelogReleaseOutput>> releaseResult = readReleases(false);
+        List<UpdateCenterOutput.ChangelogReleaseOutput> allReleases = releaseResult.getData();
         int normalizedLimit = normalizePositive(limit, DEFAULT_RELEASE_LIMIT, MAX_RELEASE_LIMIT);
         List<UpdateCenterOutput.ChangelogReleaseOutput> pageReleases =
                 new ArrayList<>(allReleases.subList(0, Math.min(normalizedLimit, allReleases.size())));
@@ -106,8 +139,8 @@ public class UpdateCenterApplicationService {
         }
 
         UpdateCenterOutput.ReleasesOutput output = new UpdateCenterOutput.ReleasesOutput();
-        output.setDataSourceAvailable(Files.isRegularFile(getChangelogPath()));
-        output.setSource(output.getDataSourceAvailable() ? UpdateCenterSource.LOCAL.getCode() : UpdateCenterSource.NONE.getCode());
+        output.setDataSourceAvailable(releaseResult.isAvailable());
+        output.setSource(releaseResult.getSource().getCode());
         output.setFetchedAt(nowIso());
         output.setTotalReleases(allReleases.size());
         output.setTotalEntries(countReleaseEntries(allReleases));
@@ -119,7 +152,7 @@ public class UpdateCenterApplicationService {
         if (version == null || version.trim().isEmpty()) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "版本号不能为空");
         }
-        List<UpdateCenterOutput.ChangelogReleaseOutput> allReleases = readReleases(false);
+        List<UpdateCenterOutput.ChangelogReleaseOutput> allReleases = readReleases(false).getData();
         for (UpdateCenterOutput.ChangelogReleaseOutput release : allReleases) {
             if (version.trim().equals(release.getVersion())) {
                 release.setEntriesOmitted(false);
@@ -141,11 +174,11 @@ public class UpdateCenterApplicationService {
         output.setRepoTotalCommitCount(0);
         output.setHasMore(false);
         output.setNextCursor(null);
+        String safeBefore = sanitizeSha(before);
         if (!output.getDataSourceAvailable()) {
-            return output;
+            return getGitHubLogsFromApi(normalizedLimit, safeBefore);
         }
 
-        String safeBefore = sanitizeSha(before);
         List<String> command = new ArrayList<>();
         command.add("git");
         command.add("-C");
@@ -159,6 +192,9 @@ public class UpdateCenterApplicationService {
         }
 
         List<String> lines = runCommand(command);
+        if (lines.isEmpty()) {
+            return getGitHubLogsFromApi(normalizedLimit, safeBefore);
+        }
         String commitBaseUrl = getCommitBaseUrl(repoRoot);
         List<UpdateCenterOutput.GitHubLogEntryOutput> logs = new ArrayList<>();
         for (String line : lines) {
@@ -193,10 +229,10 @@ public class UpdateCenterApplicationService {
         return output;
     }
 
-    private List<UpdateCenterOutput.ChangelogFragmentOutput> readFragments() {
+    private SourceResult<List<UpdateCenterOutput.ChangelogFragmentOutput>> readFragments() {
         Path changelogsPath = getChangelogsPath();
         if (!Files.isDirectory(changelogsPath)) {
-            return new ArrayList<>();
+            return readFragmentsFromGitHub();
         }
         List<UpdateCenterOutput.ChangelogFragmentOutput> result = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(changelogsPath, "*.md")) {
@@ -210,13 +246,13 @@ public class UpdateCenterApplicationService {
         } catch (IOException ex) {
             throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "读取待发布更新失败：" + ex.getMessage());
         }
-        return result;
+        return SourceResult.available(result, UpdateCenterSource.LOCAL);
     }
 
-    private List<UpdateCenterOutput.ChangelogReleaseOutput> readReleases(boolean includeUnreleased) {
+    private SourceResult<List<UpdateCenterOutput.ChangelogReleaseOutput>> readReleases(boolean includeUnreleased) {
         Path changelogPath = getChangelogPath();
         if (!Files.isRegularFile(changelogPath)) {
-            return new ArrayList<>();
+            return readReleasesFromGitHub(includeUnreleased);
         }
         List<String> lines;
         try {
@@ -224,7 +260,11 @@ public class UpdateCenterApplicationService {
         } catch (IOException ex) {
             throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "读取已发布更新失败：" + ex.getMessage());
         }
+        return SourceResult.available(parseReleaseLines(lines, includeUnreleased), UpdateCenterSource.LOCAL);
+    }
 
+    private List<UpdateCenterOutput.ChangelogReleaseOutput> parseReleaseLines(List<String> lines,
+                                                                              boolean includeUnreleased) {
         List<UpdateCenterOutput.ChangelogReleaseOutput> releases = new ArrayList<>();
         UpdateCenterOutput.ChangelogReleaseOutput currentRelease = null;
         String currentDay = null;
@@ -262,6 +302,94 @@ public class UpdateCenterApplicationService {
         }
         appendRelease(releases, currentRelease, currentDays, includeUnreleased);
         return releases;
+    }
+
+    private SourceResult<List<UpdateCenterOutput.ChangelogFragmentOutput>> readFragmentsFromGitHub() {
+        String body = httpGet(buildGitHubApiUrl("contents/changelogs", "ref=" + encodeQueryValue(githubBranch)));
+        if (body == null || body.trim().isEmpty()) {
+            return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.ChangelogFragmentOutput>());
+        }
+        List<UpdateCenterOutput.ChangelogFragmentOutput> result = new ArrayList<>();
+        try {
+            JSONArray files = JSON.parseArray(body);
+            for (int i = 0; i < files.size(); i++) {
+                JSONObject file = files.getJSONObject(i);
+                String name = file.getString("name");
+                String path = file.getString("path");
+                if (name == null || path == null || !name.endsWith(".md")) {
+                    continue;
+                }
+                String content = fetchRawGitHubFile(path);
+                if (content == null) {
+                    continue;
+                }
+                UpdateCenterOutput.ChangelogFragmentOutput fragment = new UpdateCenterOutput.ChangelogFragmentOutput();
+                fragment.setFileName(name);
+                fragment.setDate(resolveFragmentDate(name));
+                fragment.setEntries(parseEntries(splitLines(content)));
+                result.add(fragment);
+            }
+            return SourceResult.available(result, UpdateCenterSource.GITHUB);
+        } catch (RuntimeException ex) {
+            return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.ChangelogFragmentOutput>());
+        }
+    }
+
+    private SourceResult<List<UpdateCenterOutput.ChangelogReleaseOutput>> readReleasesFromGitHub(boolean includeUnreleased) {
+        String content = fetchRawGitHubFile("CHANGELOG.md");
+        if (content == null || content.trim().isEmpty()) {
+            return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.ChangelogReleaseOutput>());
+        }
+        return SourceResult.available(parseReleaseLines(splitLines(content), includeUnreleased), UpdateCenterSource.GITHUB);
+    }
+
+    private UpdateCenterOutput.GitHubLogsOutput getGitHubLogsFromApi(int normalizedLimit, String safeBefore) {
+        UpdateCenterOutput.GitHubLogsOutput output = new UpdateCenterOutput.GitHubLogsOutput();
+        output.setFetchedAt(nowIso());
+        output.setDataSourceAvailable(false);
+        output.setSource(UpdateCenterSource.NONE.getCode());
+        output.setLogs(new ArrayList<UpdateCenterOutput.GitHubLogEntryOutput>());
+        output.setTotalCount(0);
+        output.setRepoTotalCommitCount(null);
+        output.setHasMore(false);
+        output.setNextCursor(null);
+
+        StringBuilder query = new StringBuilder();
+        query.append("sha=").append(encodeQueryValue(safeBefore != null ? safeBefore : githubBranch));
+        query.append("&per_page=").append(normalizedLimit + (safeBefore == null ? 1 : 2));
+        String body = httpGet(buildGitHubApiUrl("commits", query.toString()));
+        if (body == null || body.trim().isEmpty()) {
+            return output;
+        }
+
+        try {
+            JSONArray commits = JSON.parseArray(body);
+            List<UpdateCenterOutput.GitHubLogEntryOutput> logs = new ArrayList<>();
+            for (int i = 0; i < commits.size(); i++) {
+                if (safeBefore != null && i == 0) {
+                    continue;
+                }
+                JSONObject item = commits.getJSONObject(i);
+                UpdateCenterOutput.GitHubLogEntryOutput log = mapGitHubCommit(item);
+                if (log != null) {
+                    logs.add(log);
+                }
+            }
+            boolean hasMore = logs.size() > normalizedLimit;
+            if (hasMore) {
+                logs = new ArrayList<>(logs.subList(0, normalizedLimit));
+            }
+            output.setDataSourceAvailable(true);
+            output.setSource(UpdateCenterSource.GITHUB.getCode());
+            output.setLogs(logs);
+            output.setTotalCount(logs.size());
+            output.setRepoTotalCommitCount(readGitHubTotalCommitCount());
+            output.setHasMore(hasMore);
+            output.setNextCursor(hasMore && !logs.isEmpty() ? logs.get(logs.size() - 1).getSha() : null);
+            return output;
+        } catch (RuntimeException ex) {
+            return output;
+        }
     }
 
     private void appendRelease(List<UpdateCenterOutput.ChangelogReleaseOutput> releases,
@@ -484,6 +612,165 @@ public class UpdateCenterApplicationService {
         return output;
     }
 
+    private UpdateCenterOutput.GitHubLogEntryOutput mapGitHubCommit(JSONObject item) {
+        if (item == null) {
+            return null;
+        }
+        String sha = item.getString("sha");
+        JSONObject commit = item.getJSONObject("commit");
+        if (sha == null || commit == null) {
+            return null;
+        }
+        JSONObject commitAuthor = commit.getJSONObject("author");
+        JSONObject committer = commit.getJSONObject("committer");
+        JSONObject githubAuthor = item.getJSONObject("author");
+
+        String message = commit.getString("message");
+        String authorName = githubAuthor == null ? null : githubAuthor.getString("login");
+        if (authorName == null || authorName.trim().isEmpty()) {
+            authorName = commitAuthor == null ? "" : nullSafe(commitAuthor.getString("name"));
+        }
+        String commitTime = null;
+        if (committer != null) {
+            commitTime = committer.getString("date");
+        }
+        if ((commitTime == null || commitTime.trim().isEmpty()) && commitAuthor != null) {
+            commitTime = commitAuthor.getString("date");
+        }
+
+        UpdateCenterOutput.GitHubLogEntryOutput output = new UpdateCenterOutput.GitHubLogEntryOutput();
+        output.setSha(sha);
+        output.setShortSha(sha.length() > 7 ? sha.substring(0, 7) : sha);
+        output.setMessage(firstLine(message));
+        output.setAuthorName(authorName);
+        output.setAuthorAvatarUrl(githubAuthor == null ? null : githubAuthor.getString("avatar_url"));
+        output.setCommitTimeUtc(commitTime);
+        output.setHtmlUrl(item.getString("html_url"));
+        output.setCoAuthors(new ArrayList<UpdateCenterOutput.GitHubCoAuthorOutput>());
+        return output;
+    }
+
+    private Integer readGitHubTotalCommitCount() {
+        // GitHub commits API 的总数需要解析 Link header。列表内容更重要，统计失败时前端会降级展示已加载条数。
+        return null;
+    }
+
+    private String fetchRawGitHubFile(String repoPath) {
+        String url = githubRawBase + "/" + encodePath(githubOwner) + "/" + encodePath(githubRepo)
+                + "/" + encodePath(githubBranch) + "/" + encodePath(repoPath);
+        return httpGet(url);
+    }
+
+    private String buildGitHubApiUrl(String path, String query) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(githubApiBase)
+                .append("/repos/")
+                .append(encodePath(githubOwner))
+                .append("/")
+                .append(encodePath(githubRepo))
+                .append("/")
+                .append(path);
+        if (query != null && !query.trim().isEmpty()) {
+            builder.append("?").append(query);
+        }
+        return builder.toString();
+    }
+
+    private String httpGet(String url) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(HTTP_TIMEOUT_MS);
+            connection.setReadTimeout(HTTP_TIMEOUT_MS);
+            connection.setRequestProperty("User-Agent", "miduo-ticket-update-center");
+            connection.setRequestProperty("Accept", "application/vnd.github+json,text/plain,*/*");
+            if (githubToken != null && !githubToken.trim().isEmpty()) {
+                connection.setRequestProperty("Authorization", "Bearer " + githubToken.trim());
+            }
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) {
+                return null;
+            }
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder builder = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line).append('\n');
+                }
+                return builder.toString();
+            }
+        } catch (IOException ex) {
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private List<String> splitLines(String content) {
+        List<String> lines = new ArrayList<>();
+        if (content == null || content.isEmpty()) {
+            return lines;
+        }
+        String[] rawLines = content.split("\\r?\\n");
+        Collections.addAll(lines, rawLines);
+        return lines;
+    }
+
+    private String resolveFragmentDate(String fileName) {
+        Matcher matcher = DATE_IN_FILE_NAME.matcher(fileName);
+        if (matcher.matches()) {
+            return matcher.group(1);
+        }
+        return LocalDate.now().toString();
+    }
+
+    private String firstLine(String value) {
+        if (value == null) {
+            return "";
+        }
+        int index = value.indexOf('\n');
+        return index >= 0 ? value.substring(0, index) : value;
+    }
+
+    private String encodePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        String[] segments = path.split("/");
+        List<String> encoded = new ArrayList<>();
+        for (String segment : segments) {
+            encoded.add(encodeQueryValue(segment));
+        }
+        return String.join("/", encoded);
+    }
+
+    private String encodeQueryValue(String value) {
+        try {
+            return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8.name()).replace("+", "%20");
+        } catch (UnsupportedEncodingException ex) {
+            return value == null ? "" : value;
+        }
+    }
+
+    private String normalizeConfig(String value, String fallback) {
+        if (value == null || value.trim().isEmpty()) {
+            return fallback;
+        }
+        return value.trim();
+    }
+
+    private String trimTrailingSlash(String value) {
+        String result = value;
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
+    }
+
     private Path getChangelogPath() {
         return getRepoRoot().resolve("CHANGELOG.md");
     }
@@ -529,5 +816,38 @@ public class UpdateCenterApplicationService {
 
     private String nullSafe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static class SourceResult<T> {
+
+        private final T data;
+        private final boolean available;
+        private final UpdateCenterSource source;
+
+        private SourceResult(T data, boolean available, UpdateCenterSource source) {
+            this.data = data;
+            this.available = available;
+            this.source = source;
+        }
+
+        private static <T> SourceResult<T> available(T data, UpdateCenterSource source) {
+            return new SourceResult<>(data, true, source);
+        }
+
+        private static <T> SourceResult<T> unavailable(T data) {
+            return new SourceResult<>(data, false, UpdateCenterSource.NONE);
+        }
+
+        private T getData() {
+            return data;
+        }
+
+        private boolean isAvailable() {
+            return available;
+        }
+
+        private UpdateCenterSource getSource() {
+            return source;
+        }
     }
 }

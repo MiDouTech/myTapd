@@ -3889,21 +3889,35 @@ vite v7.3.1 building client environment for production...
 ### 79.5 常见问题（新增）
 #### Q98：为什么更新中心是空的？
 - **检测**：确认仓库根目录是否存在 `CHANGELOG.md` 或 `changelogs/*.md`。
-- **记录（错误类型）**：更新数据源缺失，或后端启动目录无法向上找到更新日志文件。
+- **记录（错误类型）**：更新数据源缺失、本地启动目录无法向上找到更新日志文件，且 GitHub 回退读取失败。
 - **恢复建议**：
   1. 在仓库根目录新增 `CHANGELOG.md`；
   2. 或在 `changelogs/` 下新增 `YYYY-MM-DD_xxx.md`；
   3. 按 `| 类型 | 模块 | 描述 |` 表格格式填写；
-  4. 如果后端不是从仓库目录启动，可配置 `update-center.repo-root=/实际仓库根目录`。
+  4. 如果后端不是从仓库目录启动，可配置 `update-center.repo-root=/实际仓库根目录`；
+  5. 如果部署环境没有本地文件，系统会自动回退读取 GitHub：默认 `MiDouTech/myTapd/main`。
 
 #### Q99：为什么 GitHub提交为空？
 - **检测**：确认运行后端的目录上级是否能找到 `.git`。
-- **记录（错误类型）**：运行环境缺少 Git 元数据。
+- **记录（错误类型）**：运行环境缺少 Git 元数据，且 GitHub commits API 回退读取失败。
 - **恢复建议**：
   1. 在完整 Git 仓库环境运行后端；
   2. 或配置 `update-center.repo-root` 指向仓库根目录；
   3. 确认该目录下存在 `.git`；
-  4. 重新刷新更新中心页面。
+  4. 如果运行容器没有 `.git`，确认能访问 `https://api.github.com/repos/MiDouTech/myTapd/commits`；
+  5. 如仓库改为私有，配置 `update-center.github-token` 或环境变量 `GITHUB_TOKEN`；
+  6. 重新刷新更新中心页面。
+
+### 79.8 GitHub 回退配置（新增）
+
+| 配置 | 默认值 | 说明 |
+|---|---|---|
+| `update-center.github-owner` | `MiDouTech` | GitHub 仓库 owner |
+| `update-center.github-repo` | `myTapd` | GitHub 仓库名 |
+| `update-center.github-branch` | `main` | 读取更新日志和提交记录的分支 |
+| `update-center.github-api-base` | `https://api.github.com` | GitHub API 地址 |
+| `update-center.github-raw-base` | `https://raw.githubusercontent.com` | raw 文件地址 |
+| `update-center.github-token` | 空 | 私有仓或限流时使用；也可用 `GITHUB_TOKEN` 环境变量 |
 
 ### 79.6 示例截图（终端运行效果）
 ```text

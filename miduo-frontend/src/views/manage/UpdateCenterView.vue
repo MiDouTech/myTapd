@@ -241,7 +241,13 @@ function hasVisibleReleaseEntries(release: ChangelogReleaseOutput): boolean {
 }
 
 function formatSourceLabel(source?: string): string {
-  return source === 'local' ? '本地仓库' : '暂无数据源'
+  if (source === 'local') {
+    return '本地仓库'
+  }
+  if (source === 'github') {
+    return 'GitHub'
+  }
+  return '暂无数据源'
 }
 </script>
 
