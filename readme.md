@@ -3795,15 +3795,16 @@ vite v7.3.1 building client environment for production...
 ## 78. 公开工单详情页 SLA 倒计时（前后端）
 
 ### 78.1 功能用途
-- **用途**：在无需登录的公开工单详情页 `/open/ticket/{ticketNo}` 展示 SLA 倒计时，让外部链接打开后也能看到响应/解决还剩多久。
+- **用途**：在无需登录的公开工单详情页 `/open/ticket/{ticketNo}` 用小条展示 SLA 倒计时，让外部链接打开后也能看到响应/解决还剩多少“工作时间”。
 - **类比理解**：像外卖订单上的“预计还剩 12 分钟送达”，处理人不用进后台也能快速判断是否快超时。
 
 ### 78.2 使用方法（验收步骤）
 1. 打开任意有 SLA 的公开工单链接，例如 `/open/ticket/WO-xxxx`。
-2. 查看标题卡片下方是否出现“SLA倒计时”卡片。
-3. 如果 SLA 正在运行，应看到“剩余 HH:mm:ss”每秒变化。
-4. 如果 SLA 已暂停，应看到“暂停中”。
-5. 如果 SLA 已完成或已超时，应分别看到“已完成”或“已超时”。
+2. 查看标题卡片下方是否出现小型“SLA”条。
+3. 如果 SLA 正在运行且当前处于工作时间，应看到“剩余 HH:mm:ss”每秒变化。
+4. 如果当前不在工作时间，应看到“非工作 HH:mm:ss”，倒计时不继续减少。
+5. 如果 SLA 已暂停，应看到“暂停 HH:mm:ss”。
+6. 如果 SLA 已完成或已超时，应分别看到“已完成”或“已超时”。
 
 ### 78.3 参数说明
 
@@ -3816,13 +3817,18 @@ vite v7.3.1 building client environment for production...
 | `elapsedMinutes` | `number` | 已消耗分钟数 |
 | `remainingSeconds` | `number` | 剩余秒数 |
 | `deadline` | `string` | 截止时间，前端用它计算运行中倒计时 |
+| `workingTime.workTimeStart` | `string` | 工作开始时间，默认 `09:00` |
+| `workingTime.workTimeEnd` | `string` | 工作结束时间，默认 `18:00` |
+| `workingTime.workingDays` | `number[]` | 工作日，默认 `[1,2,3,4,5]`，1=周一 |
+| `serverTime` | `string` | 后端返回详情时的服务器时间 |
 
 ### 78.4 返回值说明
 
 | 场景 | 页面展示 |
 |---|---|
-| 有运行中 SLA | 显示倒计时，例如 `剩余 01:25:36` |
-| SLA 暂停 | 显示 `暂停中`，并展示剩余时长 |
+| 工作时间内运行中 SLA | 显示倒计时，例如 `剩余 01:25:36` |
+| 非工作时间运行中 SLA | 显示 `非工作 01:25:36`，倒计时停住 |
+| SLA 暂停 | 显示 `暂停 01:25:36`，并展示剩余时长 |
 | SLA 完成 | 显示 `已完成` |
 | SLA 超时 | 显示 `已超时` |
 | 无 SLA | 不展示 SLA 空卡片 |
@@ -3845,3 +3851,4 @@ vite v7.3.1 building client environment for production...
 | 版本 | 变更内容 |
 |---|---|
 | `v1.5.8-public-ticket-sla-countdown` | 公开工单详情接口返回 SLA 计时器信息，公开页展示响应/解决 SLA 倒计时 |
+| `v1.5.9-public-ticket-worktime-compact-sla` | 公开页 SLA 倒计时改为按工作时间扣秒，并压缩为小型 SLA 条展示 |
