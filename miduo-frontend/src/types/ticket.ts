@@ -396,6 +396,19 @@ export interface TicketPublicArchivedBugReportSummary {
   updateTime?: string
 }
 
+export interface TicketPublicSlaTimerOutput {
+  id: number
+  timerType?: string
+  timerTypeLabel?: string
+  status?: string
+  statusLabel?: string
+  thresholdMinutes?: number
+  elapsedMinutes?: number
+  remainingSeconds?: number
+  deadline?: string
+  breached?: boolean
+}
+
 export interface TicketPublicDetailOutput {
   id: number
   ticketNo: string
@@ -421,5 +434,7 @@ export interface TicketPublicDetailOutput {
   bugCustomerInfo?: TicketPublicBugCustomerInfo
   /** 最新归档简报摘要，无归档简报时为空 */
   archivedBugReport?: TicketPublicArchivedBugReportSummary
+  /** SLA计时器列表，用于公开页倒计时展示 */
+  slaTimers?: TicketPublicSlaTimerOutput[]
   comments?: TicketPublicCommentOutput[]
 }

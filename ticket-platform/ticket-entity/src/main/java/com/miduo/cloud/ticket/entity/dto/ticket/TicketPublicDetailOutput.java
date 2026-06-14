@@ -65,6 +65,11 @@ public class TicketPublicDetailOutput implements Serializable {
      */
     private ArchivedBugReportSummary archivedBugReport;
 
+    /**
+     * SLA计时器（公开页倒计时展示）
+     */
+    private List<SlaTimerOutput> slaTimers;
+
     private List<CommentOutput> comments;
 
     @Data
@@ -115,5 +120,19 @@ public class TicketPublicDetailOutput implements Serializable {
         private Date tempResolveDate;
         /** 彻底解决日期 */
         private Date resolveDate;
+    }
+
+    @Data
+    public static class SlaTimerOutput implements Serializable {
+        private Long id;
+        private String timerType;
+        private String timerTypeLabel;
+        private String status;
+        private String statusLabel;
+        private Integer thresholdMinutes;
+        private Integer elapsedMinutes;
+        private Long remainingSeconds;
+        private Date deadline;
+        private Boolean breached;
     }
 }
