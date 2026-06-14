@@ -70,6 +70,16 @@ public class TicketPublicDetailOutput implements Serializable {
      */
     private List<SlaTimerOutput> slaTimers;
 
+    /**
+     * SLA工作时间配置（公开页按工作时间倒计时）
+     */
+    private WorkingTimeOutput workingTime;
+
+    /**
+     * 服务器返回时间，用于公开页计算已经过的工作秒数
+     */
+    private Date serverTime;
+
     private List<CommentOutput> comments;
 
     @Data
@@ -134,5 +144,12 @@ public class TicketPublicDetailOutput implements Serializable {
         private Long remainingSeconds;
         private Date deadline;
         private Boolean breached;
+    }
+
+    @Data
+    public static class WorkingTimeOutput implements Serializable {
+        private String workTimeStart;
+        private String workTimeEnd;
+        private List<Integer> workingDays;
     }
 }

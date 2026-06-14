@@ -28,6 +28,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.Bu
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
@@ -39,6 +41,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -139,6 +143,12 @@ public class TicketApplicationService {
 
     @Resource
     private com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaTimerMapper slaTimerMapper;
+
+    @Resource
+    private SystemConfigMapper systemConfigMapper;
+
+    @Resource
+    private com.miduo.cloud.ticket.application.sla.WorkingTimeCalculator workingTimeCalculator;
 
     @Transactional(rollbackFor = Exception.class)
     public Long createTicket(TicketCreateInput input, Long currentUserId) {
@@ -747,6 +757,8 @@ public class TicketApplicationService {
         }
         output.setArchivedBugReport(buildArchivedBugReportSummary(ticket.getId()));
         output.setSlaTimers(buildPublicSlaTimers(ticket.getId()));
+        output.setWorkingTime(buildPublicWorkingTime());
+        output.setServerTime(new Date());
 
         List<TicketCommentPO> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<TicketCommentPO>()
@@ -808,7 +820,6 @@ public class TicketApplicationService {
             return Collections.emptyList();
         }
 
-        Date now = new Date();
         List<TicketPublicDetailOutput.SlaTimerOutput> outputs = new ArrayList<>();
         for (SlaTimerPO timer : timers) {
             if (timer == null) {
@@ -823,17 +834,18 @@ public class TicketApplicationService {
             SlaTimerStatus status = SlaTimerStatus.fromCode(timer.getStatus());
             output.setStatusLabel(status != null ? status.getLabel() : timer.getStatus());
             output.setThresholdMinutes(timer.getThresholdMinutes());
-            output.setElapsedMinutes(timer.getElapsedMinutes());
+            int elapsedMinutes = calculatePublicSlaElapsedMinutes(timer);
+            output.setElapsedMinutes(elapsedMinutes);
             output.setDeadline(timer.getDeadline());
             output.setBreached(Integer.valueOf(1).equals(timer.getIsBreached())
                     || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus()));
-            output.setRemainingSeconds(calculatePublicSlaRemainingSeconds(timer, now));
+            output.setRemainingSeconds(calculatePublicSlaRemainingSeconds(timer, elapsedMinutes));
             outputs.add(output);
         }
         return outputs;
     }
 
-    private long calculatePublicSlaRemainingSeconds(SlaTimerPO timer, Date now) {
+    private long calculatePublicSlaRemainingSeconds(SlaTimerPO timer, int elapsedMinutes) {
         if (timer == null) {
             return 0L;
         }
@@ -842,15 +854,73 @@ public class TicketApplicationService {
                 || Integer.valueOf(1).equals(timer.getIsBreached())) {
             return 0L;
         }
-        if (SlaTimerStatus.RUNNING.getCode().equals(timer.getStatus())
-                && timer.getDeadline() != null
-                && now != null) {
-            long remainingMillis = timer.getDeadline().getTime() - now.getTime();
-            return Math.max(0L, remainingMillis / 1000L);
-        }
         int threshold = timer.getThresholdMinutes() != null ? timer.getThresholdMinutes() : 0;
-        int elapsed = timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0;
-        return Math.max(0L, (long) (threshold - elapsed) * 60L);
+        return Math.max(0L, (long) (threshold - elapsedMinutes) * 60L);
+    }
+
+    private int calculatePublicSlaElapsedMinutes(SlaTimerPO timer) {
+        if (timer == null) {
+            return 0;
+        }
+        int savedElapsed = timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0;
+        if (SlaTimerStatus.PAUSED.getCode().equals(timer.getStatus())
+                || SlaTimerStatus.COMPLETED.getCode().equals(timer.getStatus())
+                || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())) {
+            return savedElapsed;
+        }
+        int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : savedElapsed;
+        LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
+        int elapsedAfterStart = workingTimeCalculator.calculateWorkingMinutes(startAt, LocalDateTime.now());
+        return baseElapsed + elapsedAfterStart;
+    }
+
+    private TicketPublicDetailOutput.WorkingTimeOutput buildPublicWorkingTime() {
+        Map<String, String> configMap = loadWorkingTimeConfigMap();
+        String start = configMap.getOrDefault("working_time_start", "09:00");
+        String end = configMap.getOrDefault("working_time_end", "18:00");
+        String days = configMap.getOrDefault("working_days", "1,2,3,4,5");
+
+        TicketPublicDetailOutput.WorkingTimeOutput output = new TicketPublicDetailOutput.WorkingTimeOutput();
+        output.setWorkTimeStart(start);
+        output.setWorkTimeEnd(end);
+        output.setWorkingDays(parsePublicWorkingDays(days));
+        return output;
+    }
+
+    private Map<String, String> loadWorkingTimeConfigMap() {
+        List<SystemConfigPO> configs = systemConfigMapper.selectByGroup("WORKING_TIME");
+        if (configs == null || configs.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return configs.stream()
+                .filter(Objects::nonNull)
+                .filter(c -> c.getConfigKey() != null)
+                .collect(Collectors.toMap(SystemConfigPO::getConfigKey, SystemConfigPO::getConfigValue, (a, b) -> a));
+    }
+
+    private List<Integer> parsePublicWorkingDays(String rawDays) {
+        if (rawDays == null || rawDays.trim().isEmpty()) {
+            return Arrays.asList(1, 2, 3, 4, 5);
+        }
+        List<Integer> days = new ArrayList<>();
+        for (String part : rawDays.split(",")) {
+            try {
+                int day = Integer.parseInt(part.trim());
+                if (day >= 1 && day <= 7) {
+                    days.add(day);
+                }
+            } catch (NumberFormatException ignored) {
+                // 忽略单个非法配置，是因为默认工作日兜底能保证公开页继续可用。
+            }
+        }
+        return days.isEmpty() ? Arrays.asList(1, 2, 3, 4, 5) : days;
+    }
+
+    private LocalDateTime toLocalDateTime(Date date) {
+        if (date == null) {
+            return LocalDateTime.now();
+        }
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
     }
 
     /**

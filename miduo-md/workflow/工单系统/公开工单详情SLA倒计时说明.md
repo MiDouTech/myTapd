@@ -13,15 +13,15 @@
 
 ## 二、目标
 
-1. 公开详情页展示 SLA 时长计时器。
+1. 公开详情页展示小型 SLA 时长计时器。
 2. 同时展示响应 SLA 和解决 SLA。
-3. 运行中的 SLA 每秒倒计时刷新。
+3. 运行中的 SLA 只在工作时间内每秒倒计时刷新，非工作时间停住。
 4. 暂停、完成、超时等状态用文字说明，不误导用户。
 
 ## 三、非目标
 
 1. 不新增接口，只扩展现有公开详情接口返回值。
-2. 不改变 SLA 计算规则，仍以 `sla_timer.deadline`、`threshold_minutes`、`elapsed_minutes` 为准。
+2. 不改变 SLA 后台超时判定规则，仍以 `sla_timer.threshold_minutes`、`elapsed_minutes` 和工作时间计算器为准。
 3. 不在公开页提供 SLA 管理或工单处理操作。
 
 ## 四、字段设计
@@ -40,20 +40,26 @@
 | `slaTimers[].remainingSeconds` | `Long` | 后端计算的剩余秒数 |
 | `slaTimers[].deadline` | `Date` | 截止时间 |
 | `slaTimers[].breached` | `Boolean` | 是否已超时 |
+| `workingTime.workTimeStart` | `String` | 工作开始时间，如 `09:00` |
+| `workingTime.workTimeEnd` | `String` | 工作结束时间，如 `18:00` |
+| `workingTime.workingDays` | `Array<Integer>` | 工作日，1=周一，7=周日 |
+| `serverTime` | `Date` | 后端返回数据时的服务器时间 |
 
 ## 五、展示规则
 
 | 状态 | 公开页展示 |
 |---|---|
-| RUNNING | 显示“剩余 HH:mm:ss”并每秒刷新 |
-| PAUSED | 显示“暂停中”，展示剩余时长但不跳秒 |
+| RUNNING + 工作时间内 | 显示“剩余 HH:mm:ss”并每秒刷新 |
+| RUNNING + 非工作时间 | 显示“非工作时间，剩余 HH:mm:ss”，倒计时停住 |
+| PAUSED | 显示“暂停中 HH:mm:ss”，不跳秒 |
 | COMPLETED | 显示“已完成” |
 | BREACHED | 显示“已超时” |
 
 ## 六、验收标准
 
-- [ ] 打开公开工单详情页时，基础信息上方/附近出现“SLA倒计时”卡片。
+- [ ] 打开公开工单详情页时，标题卡片下方出现小型“SLA”条，不再占用大块空间。
 - [ ] 有 SLA 的工单展示“首次响应”和“解决”两条计时信息。
-- [ ] 运行中的计时器每秒刷新倒计时。
+- [ ] 工作时间内运行中的计时器每秒刷新倒计时。
+- [ ] 非工作时间打开页面时，运行中计时器不继续减少。
 - [ ] 超时计时器显示“已超时”，完成计时器显示“已完成”。
 - [ ] 无 SLA 的工单不展示空卡片。

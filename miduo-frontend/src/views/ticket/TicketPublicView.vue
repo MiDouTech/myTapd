@@ -183,18 +183,95 @@ function formatDate(dateStr?: string): string {
 
 const slaTimers = computed(() => detail.value?.slaTimers ?? [])
 
+function parseTimeToSeconds(value?: string): number {
+  const source = value || '09:00'
+  const parts = source.split(':')
+  const h = Number(parts[0] ?? '9')
+  const m = Number(parts[1] ?? '0')
+  if (Number.isNaN(h) || Number.isNaN(m)) {
+    return 9 * 3600
+  }
+  return h * 3600 + m * 60
+}
+
+function getIsoDay(date: Date): number {
+  const day = date.getDay()
+  return day === 0 ? 7 : day
+}
+
+function getDayStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function isWorkingTimeAt(date: Date): boolean {
+  const config = detail.value?.workingTime
+  const workingDays = config?.workingDays?.length ? config.workingDays : [1, 2, 3, 4, 5]
+  if (!workingDays.includes(getIsoDay(date))) {
+    return false
+  }
+  const startSeconds = parseTimeToSeconds(config?.workTimeStart)
+  const endSeconds = parseTimeToSeconds(config?.workTimeEnd || '18:00')
+  const currentSeconds = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds()
+  return currentSeconds >= startSeconds && currentSeconds < endSeconds
+}
+
+function calculateWorkingSecondsBetween(start: Date, end: Date): number {
+  if (end.getTime() <= start.getTime()) {
+    return 0
+  }
+  const config = detail.value?.workingTime
+  const workingDays = config?.workingDays?.length ? config.workingDays : [1, 2, 3, 4, 5]
+  const startSeconds = parseTimeToSeconds(config?.workTimeStart)
+  const endSeconds = parseTimeToSeconds(config?.workTimeEnd || '18:00')
+  if (endSeconds <= startSeconds) {
+    return 0
+  }
+
+  let totalSeconds = 0
+  let dayCursor = getDayStart(start)
+  const endDay = getDayStart(end)
+  while (dayCursor.getTime() <= endDay.getTime()) {
+    if (workingDays.includes(getIsoDay(dayCursor))) {
+      const workStart = new Date(dayCursor.getTime() + startSeconds * 1000)
+      const workEnd = new Date(dayCursor.getTime() + endSeconds * 1000)
+      const effectiveStart = new Date(Math.max(workStart.getTime(), start.getTime()))
+      const effectiveEnd = new Date(Math.min(workEnd.getTime(), end.getTime()))
+      if (effectiveEnd.getTime() > effectiveStart.getTime()) {
+        totalSeconds += Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / 1000)
+      }
+    }
+    dayCursor = addDays(dayCursor, 1)
+  }
+  return totalSeconds
+}
+
+function getCountdownBaseTime(): Date {
+  const serverTime = detail.value?.serverTime
+  if (serverTime) {
+    const parsed = new Date(serverTime)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+  return new Date(nowTick.value)
+}
+
 function getSlaRemainingSeconds(timer: TicketPublicSlaTimerOutput): number {
-  // 这里读取 nowTick，是因为运行中的 SLA 倒计时需要每秒重新渲染。
   const currentTime = nowTick.value
   const status = timer.status?.toUpperCase()
   if (status === 'COMPLETED' || status === 'BREACHED' || timer.breached) {
     return 0
   }
-  if (status === 'RUNNING' && timer.deadline) {
-    const deadlineAt = new Date(timer.deadline).getTime()
-    if (!Number.isNaN(deadlineAt)) {
-      return Math.max(0, Math.floor((deadlineAt - currentTime) / 1000))
-    }
+  if (status === 'RUNNING') {
+    const baseRemaining = Math.max(0, Math.floor(timer.remainingSeconds ?? 0))
+    const workedSeconds = calculateWorkingSecondsBetween(getCountdownBaseTime(), new Date(currentTime))
+    return Math.max(0, baseRemaining - workedSeconds)
   }
   return Math.max(0, Math.floor(timer.remainingSeconds ?? 0))
 }
@@ -219,7 +296,10 @@ function getSlaDisplayText(timer: TicketPublicSlaTimerOutput): string {
     return '已超时'
   }
   if (status === 'PAUSED') {
-    return `暂停中，剩余 ${formatCountdown(getSlaRemainingSeconds(timer))}`
+    return `暂停 ${formatCountdown(getSlaRemainingSeconds(timer))}`
+  }
+  if (status === 'RUNNING' && !isWorkingTimeAt(new Date(nowTick.value))) {
+    return `非工作 ${formatCountdown(getSlaRemainingSeconds(timer))}`
   }
   return `剩余 ${formatCountdown(getSlaRemainingSeconds(timer))}`
 }
@@ -424,24 +504,17 @@ onUnmounted(() => {
         </div>
 
         <!-- SLA倒计时 -->
-        <div v-if="slaTimers.length > 0" class="card sla-countdown-card">
-          <h2 class="card-title">SLA倒计时</h2>
-          <div class="sla-timer-list">
+        <div v-if="slaTimers.length > 0" class="sla-compact-card">
+          <span class="sla-compact-title">SLA</span>
+          <div class="sla-compact-list">
             <div
               v-for="timer in slaTimers"
               :key="timer.id"
-              class="sla-timer-item"
+              class="sla-compact-item"
               :class="getSlaTimerClass(timer)"
             >
-              <div class="sla-timer-main">
-                <span class="sla-timer-name">{{ timer.timerTypeLabel || timer.timerType || 'SLA' }}</span>
-                <strong class="sla-timer-count">{{ getSlaDisplayText(timer) }}</strong>
-              </div>
-              <div class="sla-timer-meta">
-                <span>总时限 {{ timer.thresholdMinutes ?? '-' }} 分钟</span>
-                <span v-if="timer.deadline">截止 {{ formatDate(timer.deadline) }}</span>
-                <span>{{ timer.statusLabel || timer.status || '-' }}</span>
-              </div>
+              <span class="sla-compact-name">{{ timer.timerTypeLabel || timer.timerType || 'SLA' }}</span>
+              <strong class="sla-compact-count">{{ getSlaDisplayText(timer) }}</strong>
             </div>
           </div>
         </div>
@@ -855,93 +928,81 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-/* SLA倒计时 */
-.sla-countdown-card {
-  border: 1px solid rgba(22, 117, 209, 0.16);
-  background: linear-gradient(145deg, #f5faff 0%, #ffffff 70%);
-}
-
-.sla-timer-list {
-  display: grid;
-  gap: 10px;
-}
-
-.sla-timer-item {
-  border-radius: 10px;
-  padding: 12px;
-  border: 1px solid #d7e8f8;
-  background: #f7fbff;
-}
-
-.sla-timer-item.is-running {
-  border-color: rgba(22, 117, 209, 0.35);
-  background: #f0f8ff;
-}
-
-.sla-timer-item.is-warning {
-  border-color: rgba(230, 162, 60, 0.45);
-  background: #fff8ec;
-}
-
-.sla-timer-item.is-danger {
-  border-color: rgba(245, 108, 108, 0.45);
-  background: #fff2f2;
-}
-
-.sla-timer-item.is-paused {
-  border-color: rgba(144, 147, 153, 0.35);
-  background: #f7f8fa;
-}
-
-.sla-timer-item.is-completed {
-  border-color: rgba(103, 194, 58, 0.38);
-  background: #f3fbef;
-}
-
-.sla-timer-main {
+/* SLA倒计时：小条展示，避免公开页被大卡片占满 */
+.sla-compact-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(22, 117, 209, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-.sla-timer-name {
-  color: #606266;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.sla-timer-count {
+.sla-compact-title {
+  flex-shrink: 0;
   color: #1675d1;
-  font-size: 18px;
-  line-height: 1.3;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.sla-timer-item.is-warning .sla-timer-count {
+.sla-compact-list {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sla-compact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 117, 209, 0.25);
+  background: #f3f9ff;
+  color: #1675d1;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.sla-compact-item.is-warning {
+  border-color: rgba(230, 162, 60, 0.45);
+  background: #fff8ec;
   color: #b66d00;
 }
 
-.sla-timer-item.is-danger .sla-timer-count {
+.sla-compact-item.is-danger {
+  border-color: rgba(245, 108, 108, 0.45);
+  background: #fff2f2;
   color: #d93026;
 }
 
-.sla-timer-item.is-paused .sla-timer-count {
+.sla-compact-item.is-paused {
+  border-color: rgba(144, 147, 153, 0.35);
+  background: #f7f8fa;
   color: #606266;
 }
 
-.sla-timer-item.is-completed .sla-timer-count {
+.sla-compact-item.is-completed {
+  border-color: rgba(103, 194, 58, 0.38);
+  background: #f3fbef;
   color: #3f8f24;
 }
 
-.sla-timer-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-top: 8px;
-  color: #909399;
-  font-size: 12px;
+.sla-compact-name {
+  color: #606266;
+  font-weight: 500;
+}
+
+.sla-compact-count {
+  color: currentColor;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* 信息网格 */
@@ -1293,14 +1354,13 @@ onUnmounted(() => {
     font-size: 18px;
   }
 
-  .sla-timer-main {
+  .sla-compact-card {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
   }
 
-  .sla-timer-count {
-    text-align: left;
+  .sla-compact-item {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .info-grid {

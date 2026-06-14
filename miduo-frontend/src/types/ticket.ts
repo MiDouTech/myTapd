@@ -409,6 +409,12 @@ export interface TicketPublicSlaTimerOutput {
   breached?: boolean
 }
 
+export interface TicketPublicWorkingTimeOutput {
+  workTimeStart?: string
+  workTimeEnd?: string
+  workingDays?: number[]
+}
+
 export interface TicketPublicDetailOutput {
   id: number
   ticketNo: string
@@ -436,5 +442,9 @@ export interface TicketPublicDetailOutput {
   archivedBugReport?: TicketPublicArchivedBugReportSummary
   /** SLA计时器列表，用于公开页倒计时展示 */
   slaTimers?: TicketPublicSlaTimerOutput[]
+  /** SLA工作时间配置，用于公开页按工作时间倒计时 */
+  workingTime?: TicketPublicWorkingTimeOutput
+  /** 后端返回数据时的服务器时间 */
+  serverTime?: string
   comments?: TicketPublicCommentOutput[]
 }
