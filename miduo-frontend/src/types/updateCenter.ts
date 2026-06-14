@@ -1,4 +1,4 @@
-export type UpdateCenterSource = 'local' | 'none'
+export type UpdateCenterSource = 'local' | 'github' | 'none'
 
 export interface ChangelogEntryOutput {
   type: string

@@ -6,6 +6,7 @@ package com.miduo.cloud.ticket.common.enums;
 public enum UpdateCenterSource {
 
     LOCAL("local"),
+    GITHUB("github"),
     NONE("none");
 
     private final String code;
