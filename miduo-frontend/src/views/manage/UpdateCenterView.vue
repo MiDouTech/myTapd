@@ -204,7 +204,9 @@ async function handleLoadReleaseDetail(release: ChangelogReleaseOutput): Promise
 }
 
 function normalizeType(type: string): string {
-  return String(type || '').trim().toLowerCase()
+  return String(type || '')
+    .trim()
+    .toLowerCase()
 }
 
 function getTypeLabel(type: string): string {
@@ -249,9 +251,7 @@ function formatSourceLabel(source?: string): string {
       <div>
         <el-tag class="hero-tag" type="primary" effect="plain">管理 / 更新中心</el-tag>
         <h1>更新中心</h1>
-        <p>
-          像公告栏一样，把仓库里的版本日志、待发布变更和 Git 提交整理到一起。
-        </p>
+        <p>像公告栏一样，把仓库里的版本日志、待发布变更和 Git 提交整理到一起。</p>
       </div>
       <el-button type="primary" :icon="Refresh" :loading="refreshing" @click="handleRefresh">
         刷新
@@ -297,11 +297,7 @@ function formatSourceLabel(source?: string): string {
       <div class="filter-row">
         <span class="filter-title">筛选</span>
         <el-radio-group v-model="selectedType" size="small">
-          <el-radio-button
-            v-for="option in typeOptions"
-            :key="option.value"
-            :label="option.value"
-          >
+          <el-radio-button v-for="option in typeOptions" :key="option.value" :label="option.value">
             {{ option.label }} {{ option.count }}
           </el-radio-button>
         </el-radio-group>
@@ -361,7 +357,11 @@ function formatSourceLabel(source?: string): string {
 
               <div v-for="day in filteredReleaseDays(release)" :key="day.date" class="day-group">
                 <h4>{{ day.date }}</h4>
-                <div v-for="entry in day.entries" :key="`${day.date}-${entry.description}`" class="entry-row">
+                <div
+                  v-for="entry in day.entries"
+                  :key="`${day.date}-${entry.description}`"
+                  class="entry-row"
+                >
                   <el-tag :type="getTypeTagType(entry.type)" effect="light">
                     {{ getTypeLabel(entry.type) }}
                   </el-tag>
@@ -402,7 +402,10 @@ function formatSourceLabel(source?: string): string {
               </div>
             </el-card>
             <div v-if="currentWeek?.hasMore" class="load-more">
-              <el-button :loading="loadingMoreFragments" @click="updateCenterStore.loadMoreFragments">
+              <el-button
+                :loading="loadingMoreFragments"
+                @click="updateCenterStore.loadMoreFragments"
+              >
                 加载更多待发布更新
               </el-button>
             </div>
