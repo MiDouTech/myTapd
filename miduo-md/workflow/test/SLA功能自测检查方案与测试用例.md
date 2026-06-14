@@ -40,6 +40,7 @@
 |------|--------|----------|------|
 | BASE-TIMER-01 | 创建属于已绑定 SLA 策略的工单分类的工单后，`sla_timer` 表中有新记录 | 2 条 timer（RESPONSE + RESOLVE），状态均为 RUNNING | ⬜ |
 | BASE-TIMER-02 | 定时任务 `SlaCheckJobHandler` 每分钟执行 | 应用日志中每分钟有 SLA check 日志输出 | ⬜ |
+| BASE-TIMER-03 | 缺陷工单测试信息保存 P0-P4 后只调整 `RESOLVE` 计时器 | `RESPONSE` 的 `threshold_minutes` 不变，`RESOLVE` 按等级变为 60/360/480/1440/1440 | ⬜ |
 
 ### 1.4 通知基线
 
@@ -49,9 +50,45 @@
 | BASE-NOTIF-02 | 未读数徽标在导航栏显示 | `GET /api/notification/unread/count` 返回值 ≥ 0 | ⬜ |
 | BASE-NOTIF-03 | WebSocket 连接建立成功 | 浏览器控制台 Network - WS 中有 `/ws/notification` 连接且状态为 101 | ⬜ |
 
+## 二、测试用例（Test Cases）
+
+### 2.0 缺陷等级动态解决 SLA
+
+#### TC-SLA-013：测试填写缺陷等级后动态调整解决 SLA
+
+| 字段 | 内容 |
+|------|------|
+| **用例编号** | TC-SLA-013 |
+| **用例名称** | 缺陷等级驱动解决计时器时限调整 |
+| **对应接口** | PUT /api/ticket/bug/test-info/{ticketId} 或 PUT /api/ticket/transit/{ticketId}（API000015） |
+| **前置条件** | 已创建缺陷工单，分类已绑定 SLA 策略，`sla_timer` 中存在 RESPONSE + RESOLVE 计时器 |
+| **测试步骤** | 1. 记录该工单 RESPONSE/RESOLVE 的 `threshold_minutes`；2. 在测试信息中保存 `severityLevel=P0`；3. 查询 `sla_timer`；4. 再将等级改为 `P3` 并查询 |
+| **预期结果** | 保存 P0 后，RESPONSE 时限不变，RESOLVE 时限变为 60；保存 P3 后，RESPONSE 仍不变，RESOLVE 时限变为 1440；`deadline` 按剩余工作时间重算 |
+| **优先级** | P0 |
+| **执行状态** | ⬜ 待执行 |
+
+**验证 SQL**：
+```sql
+SELECT timer_type, status, threshold_minutes, elapsed_minutes, base_elapsed_minutes, deadline, is_breached
+FROM sla_timer
+WHERE ticket_id = ${TICKET_ID} AND deleted = 0
+ORDER BY timer_type;
+```
+
 ---
 
-## 二、测试用例（Test Cases）
+#### TC-SLA-014：缺陷等级收紧后已消耗时间超过新时限
+
+| 字段 | 内容 |
+|------|------|
+| **用例编号** | TC-SLA-014 |
+| **用例名称** | 解决 SLA 收紧后立即进入超时 |
+| **对应接口** | PUT /api/ticket/bug/test-info/{ticketId} 或 PUT /api/ticket/transit/{ticketId}（API000015） |
+| **前置条件** | 缺陷工单 RESOLVE 计时器已消耗工作时间超过 60 分钟，且尚未完成 |
+| **测试步骤** | 1. 在测试信息中保存 `severityLevel=P0`；2. 查询该工单 RESOLVE 计时器 |
+| **预期结果** | RESOLVE 计时器 `threshold_minutes=60`，`status=BREACHED`，`is_breached=1`，`breached_at` 不为空；RESPONSE 计时器不被修改 |
+| **优先级** | P0 |
+| **执行状态** | ⬜ 待执行 |
 
 ### 2.1 SLA 策略管理
 

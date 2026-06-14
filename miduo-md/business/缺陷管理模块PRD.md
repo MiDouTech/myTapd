@@ -131,7 +131,7 @@
 | 创建时间 | createTime | ticket.create_time | 只读 | 系统锁定 |
 | 引入项目 | projectName | bug_report.project → dict_project | 管理员 | 可选，关联项目字典 |
 | 影响范围 | impactScope | ticket_bug_test_info.impact_scope | 测试/管理员 | 枚举：单一/部分/全部商户 |
-| 缺陷等级 | severityLevel | ticket_bug_test_info.severity_level | 测试/管理员 | P0/P1/P2/P3/P4 |
+| 缺陷等级 | severityLevel | ticket_bug_test_info.severity_level | 测试/管理员 | P0/P1/P2/P3/P4；保存后动态调整解决 SLA，响应 SLA 不调整 |
 | 缺陷划分 | defectCategory | bug_report.defect_category | 管理员 | 关联字典 |
 | 有效报告 | isValidReport | 默认：bug_report（从简报关联取）；关闭状态可人工修正（ticket_bug_info.manual_valid_report） | 管理员 | 是/否（仅关闭状态可手工选择） |
 | 处理人 | assigneeName | ticket.assignee_id → sys_user | 管理员/分派 | 可通过分派操作修改 |
@@ -144,6 +144,17 @@
 - 「缺陷划分」「责任人」来自 Bug简报关联数据，若工单未关联简报则显示「-」
 - 「有效报告」默认来自 Bug简报关联；当工单状态为 `closed` 且已设置人工值时，优先展示人工值
 - 「是否逾期」为前端/后端计算字段，无需存储
+- 「缺陷等级」由测试阶段确认；客成新建工单时通常无法判断等级，因此响应 SLA 继续按分类策略执行，解决 SLA 在测试填写等级后按 P0-P4 规则重算。
+
+**缺陷等级与解决 SLA 规则**：
+
+| 缺陷等级 | 解决时限 | 说明 |
+|---|---:|---|
+| P0 | 60 分钟 | 1 小时内解决或实施有效临时方案 |
+| P1 | 360 分钟 | 6 小时内解决或实施有效临时方案 |
+| P2 | 480 分钟 | 1 个工作日内解决或转为临时处理状态 |
+| P3 | 1440 分钟 | 3 个工作日内解决或转为临时处理状态 |
+| P4 | 1440 分钟 | 3 个工作日内解决或转为临时处理状态 |
 
 #### 3.3.2 字段展示交互规则
 - 字段值为空时统一展示「-」

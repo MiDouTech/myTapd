@@ -27,6 +27,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.mappe
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportResponsiblePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.bugreport.po.BugReportTicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.*;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
@@ -745,6 +746,7 @@ public class TicketApplicationService {
             output.setBugCustomerInfo(bugCustomerInfo);
         }
         output.setArchivedBugReport(buildArchivedBugReportSummary(ticket.getId()));
+        output.setSlaTimers(buildPublicSlaTimers(ticket.getId()));
 
         List<TicketCommentPO> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<TicketCommentPO>()
@@ -792,6 +794,63 @@ public class TicketApplicationService {
         }
 
         return output;
+    }
+
+    private List<TicketPublicDetailOutput.SlaTimerOutput> buildPublicSlaTimers(Long ticketId) {
+        if (ticketId == null) {
+            return Collections.emptyList();
+        }
+        List<SlaTimerPO> timers = slaTimerMapper.selectList(
+                new LambdaQueryWrapper<SlaTimerPO>()
+                        .eq(SlaTimerPO::getTicketId, ticketId)
+                        .orderByAsc(SlaTimerPO::getId));
+        if (timers == null || timers.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Date now = new Date();
+        List<TicketPublicDetailOutput.SlaTimerOutput> outputs = new ArrayList<>();
+        for (SlaTimerPO timer : timers) {
+            if (timer == null) {
+                continue;
+            }
+            TicketPublicDetailOutput.SlaTimerOutput output = new TicketPublicDetailOutput.SlaTimerOutput();
+            output.setId(timer.getId());
+            output.setTimerType(timer.getTimerType());
+            SlaTimerType timerType = SlaTimerType.fromCode(timer.getTimerType());
+            output.setTimerTypeLabel(timerType != null ? timerType.getLabel() : timer.getTimerType());
+            output.setStatus(timer.getStatus());
+            SlaTimerStatus status = SlaTimerStatus.fromCode(timer.getStatus());
+            output.setStatusLabel(status != null ? status.getLabel() : timer.getStatus());
+            output.setThresholdMinutes(timer.getThresholdMinutes());
+            output.setElapsedMinutes(timer.getElapsedMinutes());
+            output.setDeadline(timer.getDeadline());
+            output.setBreached(Integer.valueOf(1).equals(timer.getIsBreached())
+                    || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus()));
+            output.setRemainingSeconds(calculatePublicSlaRemainingSeconds(timer, now));
+            outputs.add(output);
+        }
+        return outputs;
+    }
+
+    private long calculatePublicSlaRemainingSeconds(SlaTimerPO timer, Date now) {
+        if (timer == null) {
+            return 0L;
+        }
+        if (SlaTimerStatus.COMPLETED.getCode().equals(timer.getStatus())
+                || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())
+                || Integer.valueOf(1).equals(timer.getIsBreached())) {
+            return 0L;
+        }
+        if (SlaTimerStatus.RUNNING.getCode().equals(timer.getStatus())
+                && timer.getDeadline() != null
+                && now != null) {
+            long remainingMillis = timer.getDeadline().getTime() - now.getTime();
+            return Math.max(0L, remainingMillis / 1000L);
+        }
+        int threshold = timer.getThresholdMinutes() != null ? timer.getThresholdMinutes() : 0;
+        int elapsed = timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0;
+        return Math.max(0L, (long) (threshold - elapsed) * 60L);
     }
 
     /**
