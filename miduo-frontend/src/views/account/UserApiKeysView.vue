@@ -18,11 +18,39 @@ const createName = ref('')
 const createSubmitting = ref(false)
 const revealVisible = ref(false)
 const revealedKey = ref('')
+const mcpConfigText = ref('')
 
 const baseUrl = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
   : `${import.meta.env.BASE_URL}/`
 const skillPackHref = `${baseUrl}lobster-skill.zip`
+
+/** 解析 MCP 端点绝对地址：相对 API 基址时以当前站点 origin 拼接，便于在 WorkBuddy（浏览器外）直接粘贴使用 */
+function resolveMcpUrl(): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string) || '/api'
+  const trimmed = apiBase.replace(/\/+$/, '')
+  if (/^https?:\/\//i.test(trimmed)) {
+    return `${trimmed}/mcp`
+  }
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return `${window.location.origin}${path}/mcp`
+}
+
+/** 生成可直接粘贴到 WorkBuddy 的 MCP 配置（已内联本次密钥） */
+function buildMcpConfig(key: string): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        'miduo-ticket': {
+          url: resolveMcpUrl(),
+          headers: { Authorization: `Bearer ${key}` },
+        },
+      },
+    },
+    null,
+    2,
+  )
+}
 
 async function loadList(): Promise<void> {
   loading.value = true
@@ -53,6 +81,7 @@ async function submitCreate(): Promise<void> {
     const res = await createUserApiKey({ name })
     createVisible.value = false
     revealedKey.value = res.apiKey
+    mcpConfigText.value = buildMcpConfig(res.apiKey)
     revealVisible.value = true
     await loadList()
     ElMessage.success('密钥已创建，请立即复制保存（仅显示一次）')
@@ -68,6 +97,20 @@ async function copyKey(): Promise<void> {
   } catch {
     ElMessage.error('复制失败，请手动选择复制')
   }
+}
+
+async function copyMcpConfig(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(mcpConfigText.value)
+    ElMessage.success('MCP 配置已复制，粘贴到 WorkBuddy 即可')
+  } catch {
+    ElMessage.error('复制失败，请手动选择复制')
+  }
+}
+
+function onRevealClosed(): void {
+  revealedKey.value = ''
+  mcpConfigText.value = ''
 }
 
 async function handleDisable(row: UserApiKeyListOutput): Promise<void> {
@@ -125,9 +168,9 @@ function statusTagType(status: number): 'success' | 'info' {
     <el-alert type="info" :closable="false" show-icon class="tip-alert">
       <template #default>
         <span>
-          请求时在 HTTP 头携带 <code>X-Api-Key</code>（值为完整密钥）。与 JWT 二选一即可访问已授权接口。
-          技能包为 zip（含 <code>README</code>、<code>SKILL.md</code>、示例配置），
-          <strong>不含</strong>密钥，请在本页创建后自行配置环境变量或 <code>config.json</code>。
+          请求时在 HTTP 头携带 <code>X-Api-Key</code> 或 <code>Authorization: Bearer &lt;密钥&gt;</code>，与 JWT 二选一即可访问已授权接口。
+          接入 <strong>WorkBuddy</strong> 时：<strong>新建密钥后</strong>在弹窗里「一键复制 MCP 配置」，直接粘贴即可，无需自己拼接地址与密钥。
+          技能包 zip（含 <code>SKILL.md</code> 与 <code>mcp/</code> 示例）<strong>不含</strong>密钥。
         </span>
       </template>
     </el-alert>
@@ -188,13 +231,36 @@ function statusTagType(status: number): 'success' | 'info' {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="revealVisible" title="请保存您的密钥" width="520px" @closed="revealedKey = ''">
+    <el-dialog v-model="revealVisible" title="请保存您的密钥" width="600px" @closed="onRevealClosed">
       <el-alert type="warning" :closable="false" show-icon class="reveal-alert">
         此密钥仅显示一次，关闭窗口后无法再次查看完整内容。
       </el-alert>
-      <el-input v-model="revealedKey" type="textarea" :rows="3" readonly class="reveal-input" />
+
+      <div class="reveal-section">
+        <div class="reveal-section-title">完整密钥</div>
+        <el-input v-model="revealedKey" type="textarea" :rows="3" readonly class="reveal-input" />
+        <div class="reveal-section-actions">
+          <el-button :icon="DocumentCopy" size="small" @click="copyKey">复制密钥</el-button>
+        </div>
+      </div>
+
+      <div class="reveal-section">
+        <div class="reveal-section-title">
+          WorkBuddy / MCP 一键配置
+          <span class="reveal-section-tag">已内联本次密钥</span>
+        </div>
+        <el-input v-model="mcpConfigText" type="textarea" :rows="9" readonly class="reveal-input mcp-config" />
+        <div class="reveal-section-hint">
+          粘贴到 WorkBuddy → 设置 → 连接器(MCP) → 添加 MCP Server。无需自己拼接地址与密钥。
+        </div>
+        <div class="reveal-section-actions">
+          <el-button :icon="DocumentCopy" type="primary" size="small" @click="copyMcpConfig">
+            一键复制 MCP 配置
+          </el-button>
+        </div>
+      </div>
+
       <template #footer>
-        <el-button :icon="DocumentCopy" type="primary" @click="copyKey">复制密钥</el-button>
         <el-button @click="revealVisible = false">已保存</el-button>
       </template>
     </el-dialog>
@@ -270,5 +336,49 @@ function statusTagType(status: number): 'success' | 'info' {
 .reveal-input :deep(textarea) {
   font-family: ui-monospace, monospace;
   font-size: 13px;
+}
+
+.reveal-section {
+  margin-top: 16px;
+
+  &:first-of-type {
+    margin-top: 4px;
+  }
+}
+
+.reveal-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.reveal-section-tag {
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #1675d1;
+  background: #ecf5ff;
+  border-radius: 10px;
+}
+
+.reveal-section-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.reveal-section-actions {
+  margin-top: 8px;
+  text-align: right;
+}
+
+.mcp-config :deep(textarea) {
+  font-size: 12px;
+  line-height: 1.6;
 }
 </style>

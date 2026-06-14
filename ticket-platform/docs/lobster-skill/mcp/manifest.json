@@ -1,0 +1,24 @@
+{
+  "name": "miduo-ticket-mcp",
+  "displayName": "米多工单 MCP（只读）",
+  "version": "0.1.0",
+  "minApiVersion": "1.0.0",
+  "description": "WorkBuddy/MCP 客户端通过 MCP 协议只读访问工单：我的待办、工单详情、流转历史、条件检索、可执行动作（P0，不含写操作）。",
+  "transport": {
+    "type": "http",
+    "endpoint": "/api/mcp"
+  },
+  "auth": {
+    "type": "header",
+    "headerName": "Authorization",
+    "headerValueTemplate": "Bearer {{apiKey}}",
+    "altHeaderName": "X-Api-Key"
+  },
+  "tools": [
+    {"name": "list_my_tickets", "readOnly": true, "description": "按当前用户身份分页查询其工单列表（待办/创建/参与/关注等视图）"},
+    {"name": "get_ticket", "readOnly": true, "description": "获取工单详情"},
+    {"name": "get_ticket_flow_history", "readOnly": true, "description": "获取工单流转历史"},
+    {"name": "query_tickets", "readOnly": true, "description": "按关键词/状态/分类/优先级/时间范围检索工单"},
+    {"name": "get_available_actions", "readOnly": true, "description": "查看工单当前可执行的工作流动作（仅展示，不执行）"}
+  ]
+}

@@ -51,12 +51,11 @@ public class AgentApiKeyAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            String header = request.getHeader(AgentApiKeyConstants.HEADER_NAME);
-            if (!StringUtils.hasText(header)) {
+            String apiKey = resolveApiKey(request);
+            if (!StringUtils.hasText(apiKey)) {
                 filterChain.doFilter(request, response);
                 return;
             }
-            String apiKey = header.trim();
             SysUserApiKeyPO keyRow = userApiKeyApplicationService.validatePlaintextKey(apiKey);
             if (keyRow == null) {
                 filterChain.doFilter(request, response);
@@ -87,5 +86,25 @@ public class AgentApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 解析个人 API 密钥：优先 {@code X-Api-Key}，其次 {@code Authorization: Bearer <mdt_...>}。
+     *
+     * <p>仅当 Bearer 值以 API Key 前缀（{@code mdt_}）开头时才视为密钥，避免与标准 JWT Bearer 冲突。
+     */
+    private String resolveApiKey(HttpServletRequest request) {
+        String header = request.getHeader(AgentApiKeyConstants.HEADER_NAME);
+        if (StringUtils.hasText(header)) {
+            return header.trim();
+        }
+        String authorization = request.getHeader(AgentApiKeyConstants.AUTHORIZATION_HEADER);
+        if (StringUtils.hasText(authorization) && authorization.startsWith(AgentApiKeyConstants.BEARER_PREFIX)) {
+            String token = authorization.substring(AgentApiKeyConstants.BEARER_PREFIX.length()).trim();
+            if (token.startsWith(AgentApiKeyConstants.KEY_PREFIX_LABEL)) {
+                return token;
+            }
+        }
+        return null;
     }
 }
