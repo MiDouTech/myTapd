@@ -3909,6 +3909,17 @@ vite v7.3.1 building client environment for production...
   5. 如仓库改为私有，配置 `update-center.github-token` 或环境变量 `GITHUB_TOKEN`；
   6. 重新刷新更新中心页面。
 
+#### Q100：为什么我今天提交了代码，但「已发布/待发布」没有记录？
+- **检测**：查看今天是否新增了 `changelogs/YYYY-MM-DD_xxx.md`，或是否把内容归档进 `CHANGELOG.md`。
+- **记录（错误类型）**：Git 提交记录和更新日志是两条线；提交代码只会进入「GitHub提交」，不会自动生成「已发布/待发布」。
+- **恢复建议**：
+  1. 后续写完代码后，必须同步更新更新中心内容；
+  2. 还没发布的改动，新增 `changelogs/YYYY-MM-DD_xxx.md`；
+  3. 已经发布的改动，写入 `CHANGELOG.md`；
+  4. 已归档进 `CHANGELOG.md` 的碎片，要从 `changelogs/` 删除；
+  5. 表格统一使用 `| 类型 | 模块 | 描述 |`；
+  6. 合并后刷新更新中心。
+
 ### 79.8 GitHub 回退配置（新增）
 
 | 配置 | 默认值 | 说明 |
