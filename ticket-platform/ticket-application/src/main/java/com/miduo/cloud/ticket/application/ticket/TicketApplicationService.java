@@ -836,6 +836,7 @@ public class TicketApplicationService {
             output.setThresholdMinutes(timer.getThresholdMinutes());
             int elapsedMinutes = calculatePublicSlaElapsedMinutes(timer);
             output.setElapsedMinutes(elapsedMinutes);
+            output.setElapsedSeconds(calculatePublicSlaElapsedSeconds(timer, elapsedMinutes));
             output.setDeadline(timer.getDeadline());
             output.setBreached(Integer.valueOf(1).equals(timer.getIsBreached())
                     || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus()));
@@ -863,8 +864,14 @@ public class TicketApplicationService {
             return 0;
         }
         int savedElapsed = timer.getElapsedMinutes() != null ? timer.getElapsedMinutes() : 0;
+        if (SlaTimerStatus.COMPLETED.getCode().equals(timer.getStatus())
+                && timer.getCompletedAt() != null
+                && timer.getStartAt() != null) {
+            int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : savedElapsed;
+            return baseElapsed + workingTimeCalculator.calculateWorkingMinutes(
+                    toLocalDateTime(timer.getStartAt()), toLocalDateTime(timer.getCompletedAt()));
+        }
         if (SlaTimerStatus.PAUSED.getCode().equals(timer.getStatus())
-                || SlaTimerStatus.COMPLETED.getCode().equals(timer.getStatus())
                 || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())) {
             return savedElapsed;
         }
@@ -872,6 +879,13 @@ public class TicketApplicationService {
         LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
         int elapsedAfterStart = workingTimeCalculator.calculateWorkingMinutes(startAt, LocalDateTime.now());
         return baseElapsed + elapsedAfterStart;
+    }
+
+    private long calculatePublicSlaElapsedSeconds(SlaTimerPO timer, int elapsedMinutes) {
+        if (timer == null) {
+            return 0L;
+        }
+        return Math.max(0L, (long) elapsedMinutes * 60L);
     }
 
     private TicketPublicDetailOutput.WorkingTimeOutput buildPublicWorkingTime() {

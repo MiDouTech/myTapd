@@ -141,6 +141,7 @@ public class TicketPublicDetailOutput implements Serializable {
         private String statusLabel;
         private Integer thresholdMinutes;
         private Integer elapsedMinutes;
+        private Long elapsedSeconds;
         private Long remainingSeconds;
         private Date deadline;
         private Boolean breached;
