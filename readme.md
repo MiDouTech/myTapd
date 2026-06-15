@@ -3895,7 +3895,8 @@ vite v7.3.1 building client environment for production...
   2. 或在 `changelogs/` 下新增 `YYYY-MM-DD_xxx.md`；
   3. 按 `| 类型 | 模块 | 描述 |` 表格格式填写；
   4. 如果后端不是从仓库目录启动，可配置 `update-center.repo-root=/实际仓库根目录`；
-  5. 如果部署环境没有本地文件，系统会自动回退读取 GitHub：默认 `MiDouTech/myTapd/main`。
+  5. 如果部署环境没有本地文件，系统会自动回退读取 GitHub：默认 `MiDouTech/myTapd/main`；
+  6. GitHub 文件读取会先尝试 `raw.githubusercontent.com`，失败后再走 `api.github.com/repos/.../contents/...` 解码文件内容。
 
 #### Q99：为什么 GitHub提交为空？
 - **检测**：确认运行后端的目录上级是否能找到 `.git`。
@@ -3916,7 +3917,7 @@ vite v7.3.1 building client environment for production...
 | `update-center.github-repo` | `myTapd` | GitHub 仓库名 |
 | `update-center.github-branch` | `main` | 读取更新日志和提交记录的分支 |
 | `update-center.github-api-base` | `https://api.github.com` | GitHub API 地址 |
-| `update-center.github-raw-base` | `https://raw.githubusercontent.com` | raw 文件地址 |
+| `update-center.github-raw-base` | `https://raw.githubusercontent.com` | raw 文件地址；访问失败时会回退 Contents API |
 | `update-center.github-token` | 空 | 私有仓或限流时使用；也可用 `GITHUB_TOKEN` 环境变量 |
 
 ### 79.6 示例截图（终端运行效果）

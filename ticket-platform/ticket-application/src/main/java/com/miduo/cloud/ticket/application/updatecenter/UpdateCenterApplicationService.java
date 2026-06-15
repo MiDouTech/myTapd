@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -319,7 +320,7 @@ public class UpdateCenterApplicationService {
                 if (name == null || path == null || !name.endsWith(".md")) {
                     continue;
                 }
-                String content = fetchRawGitHubFile(path);
+                String content = fetchGitHubFileContent(path);
                 if (content == null) {
                     continue;
                 }
@@ -336,7 +337,7 @@ public class UpdateCenterApplicationService {
     }
 
     private SourceResult<List<UpdateCenterOutput.ChangelogReleaseOutput>> readReleasesFromGitHub(boolean includeUnreleased) {
-        String content = fetchRawGitHubFile("CHANGELOG.md");
+        String content = fetchGitHubFileContent("CHANGELOG.md");
         if (content == null || content.trim().isEmpty()) {
             return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.ChangelogReleaseOutput>());
         }
@@ -659,6 +660,33 @@ public class UpdateCenterApplicationService {
         String url = githubRawBase + "/" + encodePath(githubOwner) + "/" + encodePath(githubRepo)
                 + "/" + encodePath(githubBranch) + "/" + encodePath(repoPath);
         return httpGet(url);
+    }
+
+    private String fetchGitHubFileContent(String repoPath) {
+        String rawContent = fetchRawGitHubFile(repoPath);
+        if (rawContent != null && !rawContent.trim().isEmpty()) {
+            return rawContent;
+        }
+        return fetchGitHubContentsFile(repoPath);
+    }
+
+    private String fetchGitHubContentsFile(String repoPath) {
+        String body = httpGet(buildGitHubApiUrl("contents/" + encodePath(repoPath), "ref=" + encodeQueryValue(githubBranch)));
+        if (body == null || body.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            JSONObject file = JSON.parseObject(body);
+            String encoding = file.getString("encoding");
+            String content = file.getString("content");
+            if (!"base64".equalsIgnoreCase(encoding) || content == null || content.trim().isEmpty()) {
+                return null;
+            }
+            byte[] bytes = Base64.getMimeDecoder().decode(content);
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private String buildGitHubApiUrl(String path, String query) {
