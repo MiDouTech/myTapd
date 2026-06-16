@@ -287,10 +287,15 @@ function formatCountdown(totalSeconds?: number): string {
   return days > 0 ? `${days}天 ${time}` : time
 }
 
+function formatSlaElapsed(timer: TicketPublicSlaTimerOutput): string {
+  const seconds = timer.elapsedSeconds ?? (timer.elapsedMinutes ?? 0) * 60
+  return formatCountdown(seconds)
+}
+
 function getSlaDisplayText(timer: TicketPublicSlaTimerOutput): string {
   const status = timer.status?.toUpperCase()
   if (status === 'COMPLETED') {
-    return '已完成'
+    return `已完成 用时 ${formatSlaElapsed(timer)}`
   }
   if (status === 'BREACHED' || timer.breached) {
     return '已超时'

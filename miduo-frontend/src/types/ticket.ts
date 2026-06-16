@@ -404,6 +404,7 @@ export interface TicketPublicSlaTimerOutput {
   statusLabel?: string
   thresholdMinutes?: number
   elapsedMinutes?: number
+  elapsedSeconds?: number
   remainingSeconds?: number
   deadline?: string
   breached?: boolean

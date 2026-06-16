@@ -3829,7 +3829,7 @@ vite v7.3.1 building client environment for production...
 | 工作时间内运行中 SLA | 显示倒计时，例如 `剩余 01:25:36` |
 | 非工作时间运行中 SLA | 显示 `非工作 01:25:36`，倒计时停住 |
 | SLA 暂停 | 显示 `暂停 01:25:36`，并展示剩余时长 |
-| SLA 完成 | 显示 `已完成` |
+| SLA 完成 | 显示 `已完成 用时 00:12:00`，不再用截止时间当主信息 |
 | SLA 超时 | 显示 `已超时` |
 | 无 SLA | 不展示 SLA 空卡片 |
 
@@ -3852,3 +3852,4 @@ vite v7.3.1 building client environment for production...
 |---|---|
 | `v1.5.8-public-ticket-sla-countdown` | 公开工单详情接口返回 SLA 计时器信息，公开页展示响应/解决 SLA 倒计时 |
 | `v1.5.9-public-ticket-worktime-compact-sla` | 公开页 SLA 倒计时改为按工作时间扣秒，并压缩为小型 SLA 条展示 |
+| `v1.5.10-public-ticket-completed-sla-duration` | 公开页 SLA 已完成状态展示响应/解决总用时，减少截止时间误导 |
