@@ -3816,7 +3816,8 @@ vite v7.3.1 building client environment for production...
 | `thresholdMinutes` | `number` | SLA 总时限分钟数 |
 | `elapsedMinutes` | `number` | 已消耗分钟数 |
 | `remainingSeconds` | `number` | 剩余秒数 |
-| `deadline` | `string` | 截止时间，前端用它计算运行中倒计时 |
+| `deadline` | `string` | 截止时间；完成/超时态为空，避免公开页误展示历史截止 |
+| `showDeadline` | `boolean` | 是否允许展示截止时间 |
 | `workingTime.workTimeStart` | `string` | 工作开始时间，默认 `09:00` |
 | `workingTime.workTimeEnd` | `string` | 工作结束时间，默认 `18:00` |
 | `workingTime.workingDays` | `number[]` | 工作日，默认 `[1,2,3,4,5]`，1=周一 |
@@ -3853,3 +3854,4 @@ vite v7.3.1 building client environment for production...
 | `v1.5.8-public-ticket-sla-countdown` | 公开工单详情接口返回 SLA 计时器信息，公开页展示响应/解决 SLA 倒计时 |
 | `v1.5.9-public-ticket-worktime-compact-sla` | 公开页 SLA 倒计时改为按工作时间扣秒，并压缩为小型 SLA 条展示 |
 | `v1.5.10-public-ticket-completed-sla-duration` | 公开页 SLA 已完成状态展示响应/解决总用时，减少截止时间误导 |
+| `v1.5.11-public-ticket-hide-completed-sla-deadline` | 完成/超时 SLA 在公开接口中不返回截止时间，并提供 `showDeadline=false` 兜底避免旧页面误展示 |

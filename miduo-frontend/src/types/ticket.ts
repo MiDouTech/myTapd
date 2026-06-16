@@ -407,6 +407,7 @@ export interface TicketPublicSlaTimerOutput {
   elapsedSeconds?: number
   remainingSeconds?: number
   deadline?: string
+  showDeadline?: boolean
   breached?: boolean
 }
 

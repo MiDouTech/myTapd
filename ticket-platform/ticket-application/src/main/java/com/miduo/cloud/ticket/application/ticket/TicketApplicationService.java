@@ -837,13 +837,26 @@ public class TicketApplicationService {
             int elapsedMinutes = calculatePublicSlaElapsedMinutes(timer);
             output.setElapsedMinutes(elapsedMinutes);
             output.setElapsedSeconds(calculatePublicSlaElapsedSeconds(timer, elapsedMinutes));
-            output.setDeadline(timer.getDeadline());
             output.setBreached(Integer.valueOf(1).equals(timer.getIsBreached())
                     || SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus()));
+            boolean showDeadline = shouldShowPublicSlaDeadline(timer, output.getBreached());
+            output.setShowDeadline(showDeadline);
+            output.setDeadline(showDeadline ? timer.getDeadline() : null);
             output.setRemainingSeconds(calculatePublicSlaRemainingSeconds(timer, elapsedMinutes));
             outputs.add(output);
         }
         return outputs;
+    }
+
+    private boolean shouldShowPublicSlaDeadline(SlaTimerPO timer, Boolean breached) {
+        if (timer == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(breached)) {
+            return false;
+        }
+        return SlaTimerStatus.RUNNING.getCode().equals(timer.getStatus())
+                || SlaTimerStatus.PAUSED.getCode().equals(timer.getStatus());
     }
 
     private long calculatePublicSlaRemainingSeconds(SlaTimerPO timer, int elapsedMinutes) {

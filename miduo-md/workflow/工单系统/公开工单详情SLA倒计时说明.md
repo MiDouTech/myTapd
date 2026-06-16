@@ -39,7 +39,8 @@
 | `slaTimers[].elapsedMinutes` | `Integer` | 已消耗分钟数 |
 | `slaTimers[].elapsedSeconds` | `Long` | 已消耗工作秒数，完成态用于展示总用时 |
 | `slaTimers[].remainingSeconds` | `Long` | 后端计算的剩余秒数 |
-| `slaTimers[].deadline` | `Date` | 截止时间 |
+| `slaTimers[].deadline` | `Date` | 截止时间；完成/超时态为空，避免公开页误展示历史截止 |
+| `slaTimers[].showDeadline` | `Boolean` | 是否允许展示截止时间 |
 | `slaTimers[].breached` | `Boolean` | 是否已超时 |
 | `workingTime.workTimeStart` | `String` | 工作开始时间，如 `09:00` |
 | `workingTime.workTimeEnd` | `String` | 工作结束时间，如 `18:00` |
@@ -53,7 +54,7 @@
 | RUNNING + 工作时间内 | 显示“剩余 HH:mm:ss”并每秒刷新 |
 | RUNNING + 非工作时间 | 显示“非工作时间，剩余 HH:mm:ss”，倒计时停住 |
 | PAUSED | 显示“暂停中 HH:mm:ss”，不跳秒 |
-| COMPLETED | 显示“已完成，用时 HH:mm:ss”，不展示截止时间，避免误解 |
+| COMPLETED | 显示“已完成，用时 HH:mm:ss”，接口 `deadline=null` 且 `showDeadline=false`，不展示截止时间，避免误解 |
 | BREACHED | 显示“已超时” |
 
 ## 六、验收标准
