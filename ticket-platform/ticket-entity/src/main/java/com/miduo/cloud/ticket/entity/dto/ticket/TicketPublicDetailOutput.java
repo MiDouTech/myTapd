@@ -144,6 +144,7 @@ public class TicketPublicDetailOutput implements Serializable {
         private Long elapsedSeconds;
         private Long remainingSeconds;
         private Date deadline;
+        private Boolean showDeadline;
         private Boolean breached;
     }
 
