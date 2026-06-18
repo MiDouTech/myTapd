@@ -146,6 +146,12 @@ public class TicketEventNotificationListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
+        if (event == null) {
+            return;
+        }
+        if (event.isSuppressGroupNotification()) {
+            return;
+        }
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null) {
             return;
@@ -240,6 +246,9 @@ public class TicketEventNotificationListener {
         LinkedHashSet<Long> mentionUserIds = new LinkedHashSet<>(receiverIds);
         if (event.getOperatorId() != null) {
             mentionUserIds.add(event.getOperatorId());
+        }
+        if (event.getPreviousAssigneeIdForGroupMention() != null) {
+            mentionUserIds.add(event.getPreviousAssigneeIdForGroupMention());
         }
         wecomGroupPushService.pushByTicketWithUserMentions(
                 ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);

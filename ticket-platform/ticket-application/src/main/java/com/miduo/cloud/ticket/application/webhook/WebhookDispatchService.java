@@ -102,8 +102,9 @@ public class WebhookDispatchService extends BaseApplicationService {
         WebhookPayload payload = buildPayload(eventType, ticketId, snapshot, eventData);
         String payloadJson = JSON.toJSONString(payload);
 
+        Set<String> pushedWebhookUrls = new LinkedHashSet<>();
         for (WebhookConfigPO config : subscribedConfigs) {
-            pushToWebhook(config, eventType, ticketId, payloadJson);
+            pushToWebhookWithDedup(config, eventType, ticketId, payloadJson, pushedWebhookUrls);
         }
     }
 
@@ -256,6 +257,23 @@ public class WebhookDispatchService extends BaseApplicationService {
         payload.setTicket(snapshot);
         payload.setData(eventData);
         return payload;
+    }
+
+    private void pushToWebhookWithDedup(WebhookConfigPO config,
+                                        WebhookEventType eventType,
+                                        Long ticketId,
+                                        String payloadJson,
+                                        Set<String> pushedWebhookUrls) {
+        if (config == null || config.getUrl() == null || config.getUrl().trim().isEmpty()) {
+            return;
+        }
+        String normalizedUrl = config.getUrl().trim();
+        if (pushedWebhookUrls != null && !pushedWebhookUrls.add(normalizedUrl)) {
+            log.debug("Webhook分发去重：重复URL已跳过, eventType={}, ticketId={}, configId={}",
+                    eventType == null ? null : eventType.getCode(), ticketId, config.getId());
+            return;
+        }
+        pushToWebhook(config, eventType, ticketId, payloadJson);
     }
 
     private void pushToWebhook(WebhookConfigPO config, WebhookEventType eventType, Long ticketId, String payloadJson) {

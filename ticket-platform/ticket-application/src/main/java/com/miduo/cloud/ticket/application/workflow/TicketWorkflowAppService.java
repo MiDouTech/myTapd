@@ -304,9 +304,13 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             dispatchSlaAction(ticketId, targetState.getSlaAction());
         }
 
-        // 发布领域事件
-        eventPublisher.publishEvent(
-                new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, safeOperatorId));
+        boolean assigneeChangedInTransit = willApplyAssignees
+                && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds);
+
+        // 发布领域事件（同次流转若改处理人：群通知合并到状态变更，分派事件 suppressGroupNotification）
+        eventPublisher.publishEvent(new TicketStatusChangedEvent(
+                ticketId, oldStatus, targetStatus, safeOperatorId,
+                assigneeChangedInTransit ? oldAssigneeId : null));
 
         if (targetState != null && targetState.isTerminal()) {
             eventPublisher.publishEvent(
@@ -314,13 +318,12 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         }
 
         // 处理人变更事件（主处理人或协同处理人列表变化时通知）
-        if (willApplyAssignees && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds)) {
+        if (assigneeChangedInTransit) {
             String assignmentReason = Boolean.TRUE.equals(matchedTransition.getAllowTransfer())
                     ? TicketAssignType.TRANSFER_ON_TRANSIT.getCode()
                     : TicketAssignType.ACCEPT_CLAIM.getCode();
-            eventPublisher.publishEvent(
-                    new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
-                            oldAssigneeId, safeOperatorId, assignmentReason));
+            eventPublisher.publishEvent(new TicketAssignedEvent(ticketId, ticket.getAssigneeId(),
+                    oldAssigneeId, safeOperatorId, assignmentReason, true));
         }
     }
 

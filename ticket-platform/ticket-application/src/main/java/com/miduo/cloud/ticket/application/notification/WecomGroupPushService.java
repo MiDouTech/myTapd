@@ -9,6 +9,8 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.Sys
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.mapper.WecomGroupBindingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.wecom.po.WecomGroupBindingPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -24,15 +26,18 @@ public class WecomGroupPushService extends BaseApplicationService {
     private final WecomGroupBindingMapper groupBindingMapper;
     private final WecomGroupWebhookSender groupWebhookSender;
     private final SysUserMapper sysUserMapper;
+    private final WebhookConfigMapper webhookConfigMapper;
 
     public WecomGroupPushService(TicketMapper ticketMapper,
                                  WecomGroupBindingMapper groupBindingMapper,
                                  WecomGroupWebhookSender groupWebhookSender,
-                                 SysUserMapper sysUserMapper) {
+                                 SysUserMapper sysUserMapper,
+                                 WebhookConfigMapper webhookConfigMapper) {
         this.ticketMapper = ticketMapper;
         this.groupBindingMapper = groupBindingMapper;
         this.groupWebhookSender = groupWebhookSender;
         this.sysUserMapper = sysUserMapper;
+        this.webhookConfigMapper = webhookConfigMapper;
     }
 
     /**
@@ -85,6 +90,7 @@ public class WecomGroupPushService extends BaseApplicationService {
         }
 
         Set<String> pushedWebhookUrls = new HashSet<>();
+        Set<String> globalWebhookUrls = loadActiveGlobalWebhookUrls();
         for (WecomGroupBindingPO binding : bindings) {
             String webhookUrl = binding.getWebhookUrl();
             if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
@@ -92,7 +98,13 @@ public class WecomGroupPushService extends BaseApplicationService {
                         binding.getId(), binding.getChatId());
                 continue;
             }
-            if (!pushedWebhookUrls.add(webhookUrl)) {
+            String normalizedUrl = webhookUrl.trim();
+            if (globalWebhookUrls.contains(normalizedUrl)) {
+                log.debug("企微群推送跳过：URL已由全局Webhook配置覆盖, bindingId={}, chatId={}",
+                        binding.getId(), binding.getChatId());
+                continue;
+            }
+            if (!pushedWebhookUrls.add(normalizedUrl)) {
                 log.debug("企微群推送去重：重复Webhook地址已跳过, bindingId={}, chatId={}",
                         binding.getId(), binding.getChatId());
                 continue;
@@ -264,6 +276,24 @@ public class WecomGroupPushService extends BaseApplicationService {
             wrapper.eq(WecomGroupBindingPO::getDefaultCategoryId, categoryId);
         }
         return groupBindingMapper.selectList(wrapper);
+    }
+
+    private Set<String> loadActiveGlobalWebhookUrls() {
+        List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
+        if (configs == null || configs.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> urls = new HashSet<>();
+        for (WebhookConfigPO config : configs) {
+            if (config == null || config.getUrl() == null) {
+                continue;
+            }
+            String url = config.getUrl().trim();
+            if (!url.isEmpty()) {
+                urls.add(url);
+            }
+        }
+        return urls;
     }
 
     private String sanitizeWebhookUrl(String webhookUrl) {
