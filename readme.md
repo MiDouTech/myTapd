@@ -3855,3 +3855,50 @@ vite v7.3.1 building client environment for production...
 | `v1.5.9-public-ticket-worktime-compact-sla` | 公开页 SLA 倒计时改为按工作时间扣秒，并压缩为小型 SLA 条展示 |
 | `v1.5.10-public-ticket-completed-sla-duration` | 公开页 SLA 已完成状态展示响应/解决总用时，减少截止时间误导 |
 | `v1.5.11-public-ticket-hide-completed-sla-deadline` | 完成/超时 SLA 在公开接口中不返回截止时间，并提供 `showDeadline=false` 兜底避免旧页面误展示 |
+| `v1.5.12-sla-business-timezone-deadline-fix` | SLA 截止时间计算统一使用系统业务时区，修复 JVM 默认时区导致 14:40+1分钟错误落为 17:01 的问题 |
+
+---
+
+## 79. SLA 截止时间业务时区修复（后端）
+
+### 79.1 功能用途
+- **用途**：保证以后新建工单时，SLA 截止时间按业务时区和工作时间正确计算。
+- **类比理解**：以前像两个人拿着不同时区的手表算倒计时；现在统一拿“公司北京时间手表”计算。
+
+### 79.2 修复内容
+- `WorkingTimeCalculator` 新增业务时区能力：
+  - 默认 `Asia/Shanghai`
+  - 优先读取 `system_config` 中 `BASIC/timezone`
+- `SlaTimerService` 不再直接用 JVM 默认时区计算 SLA 工作时间。
+- `Date` 和 `LocalDateTime` 转换统一走业务时区，避免服务器是 UTC 时把截止时间推迟 8 小时。
+
+### 79.3 验收步骤
+1. 确认配置：
+   ```sql
+   SELECT config_key, config_value, config_group
+   FROM system_config
+   WHERE config_key IN ('timezone', 'working_time_start', 'working_time_end', 'working_days')
+     AND deleted = 0;
+   ```
+2. 新建一张响应 SLA 为 `1 分钟` 的工单。
+3. 如果创建时间是 `2026-06-18 14:40:33`，查询：
+   ```sql
+   SELECT timer_type, threshold_minutes, start_at, deadline
+   FROM sla_timer
+   WHERE ticket_id = (SELECT id FROM ticket WHERE ticket_no = '<工单号>')
+     AND timer_type = 'RESPONSE'
+     AND deleted = 0;
+   ```
+4. 预期：
+   ```text
+   deadline = 2026-06-18 14:41:33
+   ```
+
+### 79.4 常见问题
+#### Q98：历史工单的 deadline 还显示错怎么办？
+- **检测**：查 `sla_timer.deadline` 是否已经落库为错误时间。
+- **记录（错误类型）**：历史数据已落错，不会被代码自动回滚。
+- **恢复建议**：
+  1. 对历史数据执行一次性 SQL 修复；
+  2. 或触发 SLA 重算逻辑；
+  3. 新建工单应不再复现该问题。

@@ -42,7 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -890,7 +889,7 @@ public class TicketApplicationService {
         }
         int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : savedElapsed;
         LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
-        int elapsedAfterStart = workingTimeCalculator.calculateWorkingMinutes(startAt, LocalDateTime.now());
+        int elapsedAfterStart = workingTimeCalculator.calculateWorkingMinutes(startAt, workingTimeCalculator.now());
         return baseElapsed + elapsedAfterStart;
     }
 
@@ -945,9 +944,9 @@ public class TicketApplicationService {
 
     private LocalDateTime toLocalDateTime(Date date) {
         if (date == null) {
-            return LocalDateTime.now();
+            return workingTimeCalculator.now();
         }
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        return workingTimeCalculator.toBusinessLocalDateTime(date);
     }
 
     /**
