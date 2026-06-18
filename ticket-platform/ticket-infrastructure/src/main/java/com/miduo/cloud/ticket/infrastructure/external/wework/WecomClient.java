@@ -405,6 +405,44 @@ public class WecomClient {
     }
 
     /**
+     * 发送企微群机器人 text 消息，支持 @ 成员
+     */
+    public void sendGroupWebhookText(String webhookUrl,
+                                     String content,
+                                     List<String> mentionedWecomUserIds,
+                                     List<String> mentionedMobileList) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            log.warn("企微群Webhook地址为空，跳过发送");
+            return;
+        }
+
+        JSONObject text = new JSONObject();
+        text.put("content", content == null ? "" : content);
+        if (mentionedWecomUserIds != null && !mentionedWecomUserIds.isEmpty()) {
+            JSONArray mentionedList = new JSONArray();
+            mentionedList.addAll(mentionedWecomUserIds);
+            text.put("mentioned_list", mentionedList);
+        }
+        if (mentionedMobileList != null && !mentionedMobileList.isEmpty()) {
+            JSONArray mentionedMobileListJson = new JSONArray();
+            mentionedMobileListJson.addAll(mentionedMobileList);
+            text.put("mentioned_mobile_list", mentionedMobileListJson);
+        }
+
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "text");
+        payload.put("text", text);
+
+        String response = HttpUtil.post(webhookUrl, payload.toJSONString());
+        JSONObject result = JSON.parseObject(response);
+        if (result == null || result.getIntValue("errcode") != 0) {
+            String errMsg = result != null ? result.getString("errmsg") : "response is null";
+            log.error("发送企微群Webhook text 失败: webhookUrl={}, errMsg={}", webhookUrl, errMsg);
+            throw BusinessException.of(ErrorCode.WECOM_API_ERROR, "发送企微群Webhook失败: " + errMsg);
+        }
+    }
+
+    /**
      * 发送企微群机器人Markdown消息
      */
     public void sendGroupWebhookMarkdown(String webhookUrl, String markdownContent) {

@@ -43,6 +43,7 @@ public class TicketEventNotificationListener {
     private final SysUserMapper sysUserMapper;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
     private final TicketLinkProperties ticketLinkProperties;
+    private final TicketWecomCompactNotificationBuilder compactNotificationBuilder;
 
     public TicketEventNotificationListener(NotificationOrchestrator notificationOrchestrator,
                                            WecomGroupPushService wecomGroupPushService,
@@ -50,7 +51,8 @@ public class TicketEventNotificationListener {
                                            TicketFollowerMapper ticketFollowerMapper,
                                            SysUserMapper sysUserMapper,
                                            TicketAssigneeSyncService ticketAssigneeSyncService,
-                                           TicketLinkProperties ticketLinkProperties) {
+                                           TicketLinkProperties ticketLinkProperties,
+                                           TicketWecomCompactNotificationBuilder compactNotificationBuilder) {
         this.notificationOrchestrator = notificationOrchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.ticketMapper = ticketMapper;
@@ -58,6 +60,7 @@ public class TicketEventNotificationListener {
         this.sysUserMapper = sysUserMapper;
         this.ticketAssigneeSyncService = ticketAssigneeSyncService;
         this.ticketLinkProperties = ticketLinkProperties;
+        this.compactNotificationBuilder = compactNotificationBuilder;
     }
 
     @Async
@@ -143,7 +146,8 @@ public class TicketEventNotificationListener {
         if (ticket.getCreatorId() != null) {
             mentionUserIds.add(ticket.getCreatorId());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
+        wecomGroupPushService.pushByTicketWithUserMentions(
+                ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);
     }
 
     @Async
@@ -192,7 +196,8 @@ public class TicketEventNotificationListener {
         if (event.getOperatorId() != null) {
             mentionUserIds.add(event.getOperatorId());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
+        wecomGroupPushService.pushByTicketWithUserMentions(
+                ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);
     }
 
     @Async
@@ -243,7 +248,8 @@ public class TicketEventNotificationListener {
         if (event.getOperatorId() != null) {
             mentionUserIds.add(event.getOperatorId());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(ticket.getId(), title, content, mentionUserIds);
+        wecomGroupPushService.pushByTicketWithUserMentions(
+                ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);
     }
 
     private String resolveTicketDetailLink(TicketPO ticket) {

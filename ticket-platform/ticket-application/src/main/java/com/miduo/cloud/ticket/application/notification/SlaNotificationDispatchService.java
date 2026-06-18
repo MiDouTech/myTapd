@@ -6,6 +6,8 @@ import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.common.enums.SlaNotificationPendingStatus;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.notification.mapper.SlaNotificationPendingMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.notification.po.SlaNotificationPendingPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,15 +36,21 @@ public class SlaNotificationDispatchService {
     private final WecomGroupPushService wecomGroupPushService;
     private final SlaNotificationQuietHours quietHours;
     private final SlaNotificationPendingMapper pendingMapper;
+    private final TicketMapper ticketMapper;
+    private final TicketWecomCompactNotificationBuilder compactNotificationBuilder;
 
     public SlaNotificationDispatchService(NotificationOrchestrator orchestrator,
                                           WecomGroupPushService wecomGroupPushService,
                                           SlaNotificationQuietHours quietHours,
-                                          SlaNotificationPendingMapper pendingMapper) {
+                                          SlaNotificationPendingMapper pendingMapper,
+                                          TicketMapper ticketMapper,
+                                          TicketWecomCompactNotificationBuilder compactNotificationBuilder) {
         this.orchestrator = orchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
         this.quietHours = quietHours;
         this.pendingMapper = pendingMapper;
+        this.ticketMapper = ticketMapper;
+        this.compactNotificationBuilder = compactNotificationBuilder;
     }
 
     /**
@@ -184,7 +192,9 @@ public class SlaNotificationDispatchService {
         if (type == NotificationType.SLA_WARNING || type == NotificationType.SLA_BREACHED) {
             Set<Long> mentions = mentionUserIds != null
                     ? new LinkedHashSet<>(mentionUserIds) : new LinkedHashSet<>();
-            wecomGroupPushService.pushByTicketWithUserMentions(ticketId, title, content, mentions);
+            TicketPO ticket = ticketMapper.selectById(ticketId);
+            String compactLine = compactNotificationBuilder.build(ticket);
+            wecomGroupPushService.pushByTicketWithUserMentions(ticketId, compactLine, mentions);
         }
     }
 

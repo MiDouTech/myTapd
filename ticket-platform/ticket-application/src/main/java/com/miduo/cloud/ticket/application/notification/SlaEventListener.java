@@ -39,6 +39,7 @@ public class SlaEventListener {
     private final TicketCategoryMapper ticketCategoryMapper;
     private final HandlerGroupMapper handlerGroupMapper;
     private final TicketLinkProperties ticketLinkProperties;
+    private final TicketWecomCompactNotificationBuilder compactNotificationBuilder;
 
     public SlaEventListener(SlaNotificationDispatchService slaNotificationDispatchService,
                             NotificationOrchestrator orchestrator,
@@ -46,7 +47,8 @@ public class SlaEventListener {
                             TicketMapper ticketMapper,
                             TicketCategoryMapper ticketCategoryMapper,
                             HandlerGroupMapper handlerGroupMapper,
-                            TicketLinkProperties ticketLinkProperties) {
+                            TicketLinkProperties ticketLinkProperties,
+                            TicketWecomCompactNotificationBuilder compactNotificationBuilder) {
         this.slaNotificationDispatchService = slaNotificationDispatchService;
         this.orchestrator = orchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
@@ -54,6 +56,7 @@ public class SlaEventListener {
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.handlerGroupMapper = handlerGroupMapper;
         this.ticketLinkProperties = ticketLinkProperties;
+        this.compactNotificationBuilder = compactNotificationBuilder;
     }
 
     @Async
@@ -174,7 +177,8 @@ public class SlaEventListener {
         if (event.getUrgerId() != null) {
             mentionUserIds.add(event.getUrgerId());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(event.getTicketId(), title, content, mentionUserIds);
+        wecomGroupPushService.pushByTicketWithUserMentions(
+                event.getTicketId(), compactNotificationBuilder.build(ticket), mentionUserIds);
     }
 
     private TicketPO getTicket(Long ticketId) {
