@@ -203,7 +203,7 @@ public class TicketApplicationService {
         if (ticket.getAssigneeId() != null) {
             safePublishEvent(new TicketAssignedEvent(
                     ticket.getId(), ticket.getAssigneeId(), null, currentUserId,
-                    TicketAssignType.CREATE_ASSIGN.getCode()));
+                    TicketAssignType.CREATE_ASSIGN.getCode(), true));
         }
 
         // 启动SLA计时器（若分类绑定了SLA策略）

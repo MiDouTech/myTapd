@@ -99,6 +99,9 @@ public class TicketWebhookEventListener {
             payload.setOldStatus(event.getOldStatus());
             payload.setNewStatus(event.getNewStatus());
             payload.setOperatorId(event.getOperatorId());
+            if (event.getPreviousAssigneeIdForGroupMention() != null) {
+                payload.setPreviousAssigneeId(event.getPreviousAssigneeIdForGroupMention());
+            }
             webhookDispatchService.dispatch(WebhookEventType.TICKET_STATUS_CHANGED, event.getTicketId(), payload);
 
             TicketStatus newStatus = TicketStatus.fromCode(event.getNewStatus());
@@ -115,6 +118,14 @@ public class TicketWebhookEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
+        if (event == null) {
+            return;
+        }
+        if (event.isSuppressGroupNotification()) {
+            log.debug("分派 Webhook 已合并到同次状态变更，跳过: ticketId={}, assignType={}",
+                    event.getTicketId(), event.getAssignType());
+            return;
+        }
         try {
             log.info("接收工单分派事件并触发Webhook分发: eventId={}, ticketId={}, assigneeId={}, previousAssigneeId={}, operatorId={}, assignType={}",
                     event.getEventId(), event.getTicketId(), event.getAssigneeId(),
@@ -168,6 +179,7 @@ public class TicketWebhookEventListener {
         private String oldStatus;
         private String newStatus;
         private Long operatorId;
+        private Long previousAssigneeId;
     }
 
     @Data
