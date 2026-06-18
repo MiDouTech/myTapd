@@ -8,11 +8,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +29,9 @@ import java.util.stream.Collectors;
 public class WorkingTimeCalculator {
 
     private static final Logger log = LoggerFactory.getLogger(WorkingTimeCalculator.class);
+    private static final String CONFIG_GROUP_BASIC = "BASIC";
+    private static final String CONFIG_KEY_TIMEZONE = "timezone";
+    private static final String DEFAULT_TIMEZONE = "Asia/Shanghai";
 
     private final SystemConfigMapper systemConfigMapper;
 
@@ -40,7 +46,34 @@ public class WorkingTimeCalculator {
      * @return 工作分钟数
      */
     public int calculateElapsedWorkingMinutes(LocalDateTime startTime) {
-        return calculateWorkingMinutes(startTime, LocalDateTime.now());
+        return calculateWorkingMinutes(startTime, now());
+    }
+
+    /**
+     * 当前业务时间。
+     */
+    public LocalDateTime now() {
+        return LocalDateTime.now(getBusinessZoneId());
+    }
+
+    /**
+     * 将数据库时间转换为业务时区下的本地时间，是因为 SLA 配置的 09:00-18:00 是业务时间口径。
+     */
+    public LocalDateTime toBusinessLocalDateTime(Date date) {
+        if (date == null) {
+            return now();
+        }
+        return date.toInstant().atZone(getBusinessZoneId()).toLocalDateTime();
+    }
+
+    /**
+     * 将业务本地时间转换为 Date 后落库，避免 JVM 默认时区为 UTC 时把截止时间推迟 8 小时。
+     */
+    public Date toDate(LocalDateTime localDateTime) {
+        if (localDateTime == null) {
+            return null;
+        }
+        return Date.from(localDateTime.atZone(getBusinessZoneId()).toInstant());
     }
 
     /**
@@ -138,7 +171,7 @@ public class WorkingTimeCalculator {
      */
     public boolean isCurrentlyWorkingTime() {
         WorkingTimeConfig config = loadWorkingTimeConfig();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = now();
         if (!isWorkingDay(now.toLocalDate(), config)) {
             return false;
         }
@@ -150,6 +183,22 @@ public class WorkingTimeCalculator {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
         int isoDay = dayOfWeek.getValue();
         return config.getWorkingDays().contains(isoDay);
+    }
+
+    public ZoneId getBusinessZoneId() {
+        try {
+            List<SystemConfigPO> configs = systemConfigMapper.selectByGroup(CONFIG_GROUP_BASIC);
+            Map<String, String> configMap = configs.stream()
+                    .collect(Collectors.toMap(SystemConfigPO::getConfigKey, SystemConfigPO::getConfigValue, (a, b) -> a));
+            String timezone = configMap.getOrDefault(CONFIG_KEY_TIMEZONE, DEFAULT_TIMEZONE);
+            return ZoneId.of(timezone);
+        } catch (DateTimeException e) {
+            log.warn("系统时区配置非法，使用默认时区: timezone={}", DEFAULT_TIMEZONE, e);
+            return ZoneId.of(DEFAULT_TIMEZONE);
+        } catch (Exception e) {
+            log.warn("读取系统时区配置失败，使用默认时区: timezone={}", DEFAULT_TIMEZONE, e);
+            return ZoneId.of(DEFAULT_TIMEZONE);
+        }
     }
 
     private WorkingTimeConfig loadWorkingTimeConfig() {
