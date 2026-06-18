@@ -30,6 +30,15 @@ public class TicketWecomCompactNotificationBuilder {
                 detailLink);
     }
 
+    public String buildCommentMention(TicketPO ticket, String authorName, String commentSummary) {
+        if (ticket == null) {
+            return TicketWecomCompactNotificationFormat.buildCommentMention("-", authorName, commentSummary, "");
+        }
+        String detailLink = ticketLinkProperties.buildOpenTicketLink(ticket.getTicketNo());
+        return TicketWecomCompactNotificationFormat.buildCommentMention(
+                ticket.getTicketNo(), authorName, commentSummary, detailLink);
+    }
+
     private String resolveStatusLabel(String code) {
         if (code == null || code.trim().isEmpty()) {
             return "-";

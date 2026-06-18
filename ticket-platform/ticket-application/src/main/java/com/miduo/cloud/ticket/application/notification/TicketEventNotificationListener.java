@@ -96,16 +96,9 @@ public class TicketEventNotificationListener {
             return;
         }
         String authorName = resolveUserName(event.getCommentAuthorUserId());
-        String ticketLabel = ticket.getTicketNo() != null && !ticket.getTicketNo().trim().isEmpty()
-                ? ticket.getTicketNo().trim()
-                : ("#" + ticket.getId());
-        String title = "工单评论@提醒";
-        String summary = event.getCommentPlainSummary() != null ? event.getCommentPlainSummary().trim() : "";
-        if (summary.isEmpty()) {
-            summary = "（无文本摘要）";
-        }
-        String content = String.format("【%s】%s 在评论中@了你：%s。请到工单系统查看详情。",
-                ticketLabel, authorName, summary);
+        String summary = event.getCommentPlainSummary();
+        String content = compactNotificationBuilder.buildCommentMention(ticket, authorName, summary);
+        String title = "评论@提醒";
         String detailLink = resolveTicketDetailLink(ticket);
         for (Long uid : event.getMentionedUserIds()) {
             if (uid == null) {
