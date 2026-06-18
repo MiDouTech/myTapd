@@ -101,9 +101,9 @@ public class SlaTimerService extends BaseApplicationService {
             timer.setPauseAt(null);
             int remainingMinutes = timer.getThresholdMinutes() - timer.getElapsedMinutes();
             if (remainingMinutes > 0) {
-                LocalDateTime now = workingTimeCalculator.now();
+                LocalDateTime businessNow = workingTimeCalculator.now();
                 LocalDateTime deadline = workingTimeCalculator.calculateDeadline(
-                        now, remainingMinutes);
+                        businessNow, remainingMinutes);
                 timer.setDeadline(toDate(deadline));
             }
             slaTimerMapper.updateById(timer);
