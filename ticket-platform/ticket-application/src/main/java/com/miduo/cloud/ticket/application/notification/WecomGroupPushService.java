@@ -38,7 +38,7 @@ public class WecomGroupPushService extends BaseApplicationService {
     /**
      * 按工单关联关系推送群消息（默认 @ 创建人）
      */
-    public void pushByTicket(Long ticketId, String title, String content) {
+    public void pushByTicket(Long ticketId, String compactLine) {
         if (ticketId == null) {
             log.debug("企微群推送跳过：ticketId为空");
             return;
@@ -51,13 +51,13 @@ public class WecomGroupPushService extends BaseApplicationService {
         String creatorWecomUserid = resolveCreatorWecomUserid(ticket.getCreatorId());
         List<String> mention = creatorWecomUserid != null
                 ? Collections.singletonList(creatorWecomUserid) : null;
-        pushByTicketInternal(ticket, title, content, mention);
+        pushByTicketInternal(ticket, compactLine, mention);
     }
 
     /**
      * 按工单推送群消息并 @ 指定系统用户（有企微 userid 的才会出现在 @ 列表）
      */
-    public void pushByTicketWithUserMentions(Long ticketId, String title, String content,
+    public void pushByTicketWithUserMentions(Long ticketId, String compactLine,
                                              Collection<Long> userIdsToMention) {
         if (ticketId == null) {
             log.debug("企微群推送跳过：ticketId为空");
@@ -69,10 +69,10 @@ public class WecomGroupPushService extends BaseApplicationService {
             return;
         }
         List<String> wecomIds = resolveWecomUserids(userIdsToMention);
-        pushByTicketInternal(ticket, title, content, wecomIds.isEmpty() ? null : wecomIds);
+        pushByTicketInternal(ticket, compactLine, wecomIds.isEmpty() ? null : wecomIds);
     }
 
-    private void pushByTicketInternal(TicketPO ticket, String title, String content,
+    private void pushByTicketInternal(TicketPO ticket, String compactLine,
                                       List<String> mentionedWecomUserIds) {
         Long ticketId = ticket.getId();
         log.debug("开始企微群推送: ticketId={}, sourceChatId={}, categoryId={}",
@@ -100,7 +100,7 @@ public class WecomGroupPushService extends BaseApplicationService {
             try {
                 log.info("企微群推送发送中: ticketId={}, bindingId={}, chatId={}, webhook={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl));
-                groupWebhookSender.sendToWebhookWithMention(webhookUrl, title, content, mentionedWecomUserIds);
+                groupWebhookSender.sendCompactTextToWebhook(webhookUrl, compactLine, mentionedWecomUserIds);
             } catch (Exception ex) {
                 log.error("企微群推送失败: ticketId={}, bindingId={}, chatId={}, webhook={}, reason={}",
                         ticketId, binding.getId(), binding.getChatId(), sanitizeWebhookUrl(webhookUrl), ex.getMessage(), ex);

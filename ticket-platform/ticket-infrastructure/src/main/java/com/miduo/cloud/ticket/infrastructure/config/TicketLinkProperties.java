@@ -24,6 +24,16 @@ public class TicketLinkProperties {
     private String spaDetailBaseUrl = "";
 
     /**
+     * 企微群/Webhook 工单通知使用的开放详情链接：detail-url + "/" + ticketNo
+     */
+    public String buildOpenTicketLink(String ticketNo) {
+        if (StringUtils.hasText(detailUrl) && StringUtils.hasText(ticketNo)) {
+            return stripTrailingSlash(detailUrl.trim()) + "/" + ticketNo.trim();
+        }
+        return "";
+    }
+
+    /**
      * 生成可点击的工单详情链接：优先 SPA（按数字 id），否则回退到 detail-url + "/" + ticketNo
      */
     public String buildDetailLink(Long ticketId, String ticketNo) {

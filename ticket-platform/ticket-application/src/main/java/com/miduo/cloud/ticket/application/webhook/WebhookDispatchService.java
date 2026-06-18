@@ -11,6 +11,7 @@ import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookDispatchStatus;
 import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
+import com.miduo.cloud.ticket.common.util.TicketWecomCompactNotificationFormat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
@@ -393,7 +394,6 @@ public class WebhookDispatchService extends BaseApplicationService {
             log.warn("解析Webhook原始负载失败，企微消息将降级输出简版文本: {}", ex.getMessage());
         }
 
-        String eventName = safeJsonString(sourcePayload, "eventName");
         String eventTime = safeJsonString(sourcePayload, "eventTime");
         JSONObject ticket = sourcePayload == null ? null : sourcePayload.getJSONObject("ticket");
         Object data = sourcePayload == null ? null : sourcePayload.get("data");
@@ -402,46 +402,68 @@ public class WebhookDispatchService extends BaseApplicationService {
             return buildWecomRobotBugReportArchivedPayload(ticket, eventTime, data);
         }
 
-        StringBuilder content = new StringBuilder();
-        content.append("【工单事件通知】\n\n");
-        content.append("【事件】")
-                .append(eventName == null || eventName.isEmpty() ? eventType.getLabel() : eventName)
-                .append("\n");
-        if (eventTime != null && !eventTime.isEmpty()) {
-            content.append("【时间】").append(eventTime).append("\n");
-        }
-        content.append("\n");
-        if (ticket != null) {
-            content.append("【工单信息】\n");
-            content.append(WECOM_LIST_BULLET).append("工单编号: ").append(safeJsonString(ticket, "ticketNo", "-")).append("\n");
-            content.append(WECOM_LIST_BULLET).append("标题: ").append(safeJsonString(ticket, "title", "-")).append("\n");
-            String statusCode = safeJsonString(ticket, "status", "-");
-            content.append(WECOM_LIST_BULLET).append("状态: ").append(resolveStatusLabel(statusCode)).append("\n");
-            String priorityCode = safeJsonString(ticket, "priority", "-");
-            content.append(WECOM_LIST_BULLET).append("优先级: ").append(resolvePriorityDisplay(priorityCode)).append("\n");
-            if (eventType == WebhookEventType.TICKET_STATUS_CHANGED && isPendingAcceptanceStatusCode(statusCode)) {
-                Long assigneeId = ticket.getLong("assigneeId");
-                content.append(WECOM_LIST_BULLET).append("当前处理人: ").append(resolveUserNameById(assigneeId)).append("\n");
-            }
-            content.append("\n");
-        }
-        if (eventType != WebhookEventType.TICKET_COMMENT_MENTION) {
-            appendWecomTicketChangeSection(content, data, eventType);
-        }
         if (eventType == WebhookEventType.TICKET_COMMENT_MENTION) {
-            appendCommentMentionSection(content, data);
+            return buildWecomRobotCommentMentionPayload(ticket, eventTime, data);
         }
-        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", null) : null;
-        if (ticketNo != null && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+
+        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", "-") : "-";
+        String statusCode = ticket != null ? safeJsonString(ticket, "status", "-") : "-";
+        String ticketTitle = ticket != null ? safeJsonString(ticket, "title", "-") : "-";
+        String detailLink = "";
+        if (ticketNo != null && !"-".equals(ticketNo) && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
-            content.append("\n【详情】").append(baseUrl).append("/").append(ticketNo);
+            detailLink = baseUrl + "/" + ticketNo;
+        }
+        String compactLine = TicketWecomCompactNotificationFormat.build(
+                ticketNo, resolveStatusLabel(statusCode), ticketTitle, detailLink);
+
+        MentionTargets mentionTargets = collectMentionTargets(ticket, data);
+
+        String normalizedContent = truncateByUtf8Bytes(compactLine, WECOM_TEXT_MAX_BYTES);
+        JSONObject text = new JSONObject();
+        text.put("content", normalizedContent);
+        if (!mentionTargets.getWecomUserids().isEmpty()) {
+            JSONArray mentionedList = new JSONArray();
+            mentionedList.addAll(mentionTargets.getWecomUserids());
+            text.put("mentioned_list", mentionedList);
+        }
+        if (!mentionTargets.getMobileList().isEmpty()) {
+            JSONArray mentionedMobileList = new JSONArray();
+            mentionedMobileList.addAll(mentionTargets.getMobileList());
+            text.put("mentioned_mobile_list", mentionedMobileList);
         }
 
-        MentionTargets mentionTargets = eventType == WebhookEventType.TICKET_COMMENT_MENTION
-                ? collectCommentMentionTargets(data)
-                : collectMentionTargets(ticket, data);
+        JSONObject payload = new JSONObject();
+        payload.put("msgtype", "text");
+        payload.put("text", text);
+        return JSON.toJSONString(payload);
+    }
 
-        String normalizedContent = truncateByUtf8Bytes(content.toString(), WECOM_TEXT_MAX_BYTES);
+    private String buildWecomRobotCommentMentionPayload(JSONObject ticket, String eventTime, Object data) {
+        String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", "-") : "-";
+        String authorName = "-";
+        String commentSummary = null;
+        if (data != null) {
+            try {
+                JSONObject json = JSON.parseObject(JSON.toJSONString(data));
+                if (json != null) {
+                    authorName = resolveUserNameById(json.getLong("commentAuthorUserId"));
+                    commentSummary = json.getString("commentPlainSummary");
+                }
+            } catch (Exception ex) {
+                log.warn("解析评论@Webhook data失败: {}", ex.getMessage());
+            }
+        }
+        String detailLink = "";
+        if (ticketNo != null && !"-".equals(ticketNo) && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
+            String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
+            detailLink = baseUrl + "/" + ticketNo;
+        }
+        String compactLine = TicketWecomCompactNotificationFormat.buildCommentMention(
+                ticketNo, authorName, commentSummary, detailLink);
+
+        MentionTargets mentionTargets = collectCommentMentionTargets(data);
+        String normalizedContent = truncateByUtf8Bytes(compactLine, WECOM_TEXT_MAX_BYTES);
         JSONObject text = new JSONObject();
         text.put("content", normalizedContent);
         if (!mentionTargets.getWecomUserids().isEmpty()) {
@@ -745,39 +767,6 @@ public class WebhookDispatchService extends BaseApplicationService {
             return line;
         }
         return line.substring(0, idx) + ": " + line.substring(idx + 1);
-    }
-
-    private void appendCommentMentionSection(StringBuilder content, Object data) {
-        if (data == null) {
-            return;
-        }
-        try {
-            JSONObject json = JSON.parseObject(JSON.toJSONString(data));
-            if (json == null) {
-                return;
-            }
-            content.append("【变更内容】\n");
-            Long authorId = json.getLong("commentAuthorUserId");
-            content.append(WECOM_LIST_BULLET).append("评论人: ").append(resolveUserNameById(authorId)).append("\n");
-            String summary = json.getString("commentPlainSummary");
-            if (summary == null || summary.trim().isEmpty()) {
-                summary = "（无文本摘要）";
-            }
-            content.append(WECOM_LIST_BULLET).append("摘要: ").append(summary.trim()).append("\n");
-            JSONArray mentioned = json.getJSONArray("mentionedUserIds");
-            if (mentioned != null && !mentioned.isEmpty()) {
-                List<String> names = new ArrayList<>();
-                for (int i = 0; i < mentioned.size(); i++) {
-                    Long uid = mentioned.getLong(i);
-                    if (uid != null) {
-                        names.add(resolveUserNameById(uid));
-                    }
-                }
-                content.append(WECOM_LIST_BULLET).append("被@: ").append(String.join("、", names)).append("\n");
-            }
-        } catch (Exception ex) {
-            log.warn("组装评论@Webhook正文失败: {}", ex.getMessage());
-        }
     }
 
     /**

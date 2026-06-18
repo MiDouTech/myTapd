@@ -33,6 +33,20 @@ public class WecomGroupWebhookSender implements NotificationSender {
     }
 
     /**
+     * 按Webhook地址发送紧凑单行 text 群通知，并@指定成员
+     */
+    public void sendCompactTextToWebhook(String webhookUrl, String compactLine,
+                                         java.util.List<String> mentionedWecomUserIds) {
+        if (webhookUrl == null || webhookUrl.trim().isEmpty()) {
+            log.warn("企微群Webhook地址为空，跳过发送: compactLine={}", compactLine);
+            return;
+        }
+        wecomClient.sendGroupWebhookText(webhookUrl, compactLine, mentionedWecomUserIds, null);
+        log.info("企微群Webhook紧凑通知推送成功: mentionCount={}",
+                mentionedWecomUserIds == null ? 0 : mentionedWecomUserIds.size());
+    }
+
+    /**
      * 按Webhook地址发送群通知
      */
     public void sendToWebhook(String webhookUrl, String title, String content) {
