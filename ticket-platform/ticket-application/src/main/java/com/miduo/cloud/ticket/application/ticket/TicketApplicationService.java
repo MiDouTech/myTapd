@@ -771,9 +771,15 @@ public class TicketApplicationService {
         if (creator != null) {
             output.setCreatorName(creator.getName());
         }
-        SysUserPO assignee = userMap.get(ticket.getAssigneeId());
-        if (assignee != null) {
-            output.setAssigneeName(assignee.getName());
+        List<String> publicAssigneeNames = new ArrayList<>();
+        for (Long aid : publicAssigneeIdList) {
+            SysUserPO u = userMap.get(aid);
+            if (u != null && u.getName() != null) {
+                publicAssigneeNames.add(u.getName());
+            }
+        }
+        if (!publicAssigneeNames.isEmpty()) {
+            output.setAssigneeName(String.join("、", publicAssigneeNames));
         }
         output.setTestFollowAssigneeNames(buildTestFollowAssigneeNames(publicTestAcceptUserId, userMap));
 
