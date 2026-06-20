@@ -423,7 +423,7 @@ watch(selectedWeeklyReportFile, (fileName) => {
   <div class="update-center-page">
     <section class="update-hero">
       <div>
-        <el-tag class="hero-tag" type="primary" effect="plain">管理 / 更新中心</el-tag>
+        <el-tag class="hero-tag" type="primary" effect="plain">更新中心</el-tag>
         <h1>更新中心</h1>
         <p>像公告栏一样，把仓库里的版本日志、待发布变更和 Git 提交整理到一起。</p>
       </div>

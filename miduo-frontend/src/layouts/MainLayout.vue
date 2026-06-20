@@ -101,9 +101,9 @@ const menuItems: MenuItem[] = [
       { index: '/manage/settings', title: '系统设置', icon: Setting },
       { index: '/manage/operation-log', title: '工单日志', icon: Notebook },
       { index: '/manage/daily-report', title: '日报管理', icon: Calendar },
-      { index: '/manage/update-center', title: '更新中心', icon: CollectionTag },
     ],
   },
+  { index: '/update-center', title: '更新中心', icon: CollectionTag },
 ]
 
 /** 游客（GUEST）不显示「管理」菜单 */
@@ -163,7 +163,6 @@ const activeMenu = computed(() => {
   }
   return route.path
 })
-
 
 function handleMenuSelect(index: string): void {
   router.push(index)
@@ -443,7 +442,12 @@ watch(
     >
       <div class="mobile-sidebar-panel">
         <div class="logo">米多工单系统</div>
-        <el-menu :default-active="activeMenu" :unique-opened="true" class="menu" @select="handleMenuSelect">
+        <el-menu
+          :default-active="activeMenu"
+          :unique-opened="true"
+          class="menu"
+          @select="handleMenuSelect"
+        >
           <template v-for="item in visibleMenuItems" :key="item.index">
             <el-sub-menu v-if="item.children?.length" :index="item.index">
               <template #title>
@@ -515,18 +519,27 @@ watch(
           <RouterView />
         </div>
       </el-main>
-      <el-drawer v-model="notificationDrawerVisible" title="通知消息" :size="isMobile ? '92vw' : '420px'">
+      <el-drawer
+        v-model="notificationDrawerVisible"
+        title="通知消息"
+        :size="isMobile ? '92vw' : '420px'"
+      >
         <div class="notification-drawer-toolbar">
           <el-tag :type="realtimeConnected ? 'success' : 'warning'">
             {{ realtimeConnected ? '实时推送中' : '轮询兜底中' }}
           </el-tag>
           <el-space>
-            <el-button type="primary" link @click="handleRefreshNotificationOverview">刷新</el-button>
+            <el-button type="primary" link @click="handleRefreshNotificationOverview"
+              >刷新</el-button
+            >
             <el-button type="primary" link @click="handleMarkAllAsRead">全部已读</el-button>
           </el-space>
         </div>
 
-        <EmptyState v-if="!recentLoading && recentNotifications.length === 0" description="暂无通知消息" />
+        <EmptyState
+          v-if="!recentLoading && recentNotifications.length === 0"
+          description="暂无通知消息"
+        />
         <el-scrollbar v-else height="calc(100vh - 220px)">
           <div
             v-for="item in recentNotifications"
@@ -762,7 +775,9 @@ watch(
   padding: 12px 14px;
   margin-bottom: 10px;
   background: #ffffff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   cursor: pointer;
 
   &:hover {
