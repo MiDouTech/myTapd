@@ -103,7 +103,7 @@ const menuItems: MenuItem[] = [
       { index: '/manage/daily-report', title: '日报管理', icon: Calendar },
     ],
   },
-  { index: '/update-center', title: '更新中心', icon: CollectionTag },
+  { index: '/update-center', title: '动态', icon: CollectionTag },
 ]
 
 /** 游客（GUEST）不显示「管理」菜单 */

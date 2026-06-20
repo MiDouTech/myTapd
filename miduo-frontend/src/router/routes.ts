@@ -241,7 +241,7 @@ export const routes: RouteRecordRaw[] = [
         name: 'updateCenter',
         component: () => import('@/views/manage/UpdateCenterView.vue'),
         meta: {
-          title: '更新中心',
+          title: '动态',
         },
       },
       {
