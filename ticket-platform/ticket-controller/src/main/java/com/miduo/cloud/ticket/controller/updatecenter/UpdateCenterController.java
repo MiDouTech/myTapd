@@ -79,4 +79,29 @@ public class UpdateCenterController {
             @RequestParam(value = "force", required = false) Boolean force) {
         return ApiResult.success(updateCenterApplicationService.getGitHubLogs(limit, before, force));
     }
+
+    /**
+     * 查询周报列表
+     * 接口编号：API000525
+     * 产品文档功能：管理 / 更新中心 - 周报列表
+     */
+    @Operation(summary = "查询周报列表", description = "接口编号：API000525")
+    @GetMapping("/weekly-reports")
+    public ApiResult<UpdateCenterOutput.WeeklyReportsOutput> getWeeklyReports(
+            @RequestParam(value = "force", required = false) Boolean force) {
+        return ApiResult.success(updateCenterApplicationService.getWeeklyReports(force));
+    }
+
+    /**
+     * 查询周报详情
+     * 接口编号：API000526
+     * 产品文档功能：管理 / 更新中心 - 周报详情
+     */
+    @Operation(summary = "查询周报详情", description = "接口编号：API000526")
+    @GetMapping("/weekly-reports/detail/{fileName:.+}")
+    public ApiResult<UpdateCenterOutput.WeeklyReportDetailOutput> getWeeklyReportDetail(
+            @PathVariable("fileName") String fileName,
+            @RequestParam(value = "force", required = false) Boolean force) {
+        return ApiResult.success(updateCenterApplicationService.getWeeklyReportDetail(fileName, force));
+    }
 }

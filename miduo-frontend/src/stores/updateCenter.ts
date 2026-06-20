@@ -6,6 +6,8 @@ import {
   getUpdateCenterGitHubLogs,
   getUpdateCenterReleaseDetail,
   getUpdateCenterReleases,
+  getUpdateCenterWeeklyReportDetail,
+  getUpdateCenterWeeklyReports,
 } from '@/api/updateCenter'
 import type {
   ChangelogEntryOutput,
@@ -13,6 +15,8 @@ import type {
   CurrentWeekOutput,
   GitHubLogsOutput,
   ReleasesOutput,
+  WeeklyReportDetailOutput,
+  WeeklyReportsOutput,
 } from '@/types/updateCenter'
 
 const STORAGE_KEY = 'miduo:update-center:v1'
@@ -25,6 +29,8 @@ interface UpdateCenterCachePayload {
   currentWeek: CurrentWeekOutput | null
   releases: ReleasesOutput | null
   githubLogs: GitHubLogsOutput | null
+  weeklyReports: WeeklyReportsOutput | null
+  weeklyReportDetails: Record<string, WeeklyReportDetailOutput>
   lastSeenAt: string | null
 }
 
@@ -45,6 +51,8 @@ function emptyCache(): UpdateCenterCachePayload {
     currentWeek: null,
     releases: null,
     githubLogs: null,
+    weeklyReports: null,
+    weeklyReportDetails: {},
     lastSeenAt: null,
   }
 }
@@ -66,6 +74,10 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
   const currentWeek = ref<CurrentWeekOutput | null>(cached.currentWeek)
   const releases = ref<ReleasesOutput | null>(cached.releases)
   const githubLogs = ref<GitHubLogsOutput | null>(cached.githubLogs)
+  const weeklyReports = ref<WeeklyReportsOutput | null>(cached.weeklyReports)
+  const weeklyReportDetails = ref<Record<string, WeeklyReportDetailOutput>>(
+    cached.weeklyReportDetails || {},
+  )
   const lastSeenAt = ref<string | null>(cached.lastSeenAt)
   const loadingCurrent = ref(false)
   const loadingReleases = ref(false)
@@ -73,11 +85,14 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
   const loadingReleaseVersions = ref<Record<string, boolean>>({})
   const loadingGitHubLogs = ref(false)
   const loadingMoreGitHubLogs = ref(false)
+  const loadingWeeklyReports = ref(false)
+  const loadingWeeklyReportDetails = ref<Record<string, boolean>>({})
   const error = ref<string | null>(null)
 
   let currentWeekSeq = 0
   let releasesSeq = 0
   let githubSeq = 0
+  let weeklyReportsSeq = 0
 
   const unreadCount = computed(() => {
     if (!currentWeek.value?.dataSourceAvailable) {
@@ -115,6 +130,8 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
       currentWeek: currentWeek.value,
       releases: releases.value,
       githubLogs: githubLogs.value,
+      weeklyReports: weeklyReports.value,
+      weeklyReportDetails: weeklyReportDetails.value,
       lastSeenAt: lastSeenAt.value,
     })
   }
@@ -260,6 +277,58 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
     }
   }
 
+  async function loadWeeklyReports(options?: { force?: boolean }): Promise<void> {
+    const hasCache = weeklyReports.value !== null
+    if (!hasCache) {
+      loadingWeeklyReports.value = true
+    }
+    error.value = null
+    const seq = ++weeklyReportsSeq
+    try {
+      const data = await getUpdateCenterWeeklyReports({
+        force: options?.force === true,
+      })
+      if (seq !== weeklyReportsSeq) {
+        return
+      }
+      weeklyReports.value = data
+      persist()
+    } catch {
+      if (!hasCache) {
+        error.value = '加载周报列表失败'
+      }
+    } finally {
+      if (seq === weeklyReportsSeq) {
+        loadingWeeklyReports.value = false
+      }
+    }
+  }
+
+  async function loadWeeklyReportDetail(fileName: string, force = false): Promise<void> {
+    if (!fileName || (weeklyReportDetails.value[fileName] && !force)) {
+      return
+    }
+    if (loadingWeeklyReportDetails.value[fileName]) {
+      return
+    }
+    loadingWeeklyReportDetails.value = {
+      ...loadingWeeklyReportDetails.value,
+      [fileName]: true,
+    }
+    try {
+      const detail = await getUpdateCenterWeeklyReportDetail(fileName, force)
+      weeklyReportDetails.value = {
+        ...weeklyReportDetails.value,
+        [fileName]: detail,
+      }
+      persist()
+    } finally {
+      const next = { ...loadingWeeklyReportDetails.value }
+      delete next[fileName]
+      loadingWeeklyReportDetails.value = next
+    }
+  }
+
   async function loadMoreGitHubLogs(): Promise<void> {
     if (!githubLogs.value?.hasMore || !githubLogs.value.nextCursor || loadingMoreGitHubLogs.value) {
       return
@@ -285,6 +354,7 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
       loadCurrentWeek({ force: true }),
       loadReleases({ summary: true, force: true }),
       loadGitHubLogs({ force: true }),
+      loadWeeklyReports({ force: true }),
     ])
   }
 
@@ -297,6 +367,8 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
     currentWeek,
     releases,
     githubLogs,
+    weeklyReports,
+    weeklyReportDetails,
     lastSeenAt,
     unreadCount,
     recentEntries,
@@ -306,6 +378,8 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
     loadingReleaseVersions,
     loadingGitHubLogs,
     loadingMoreGitHubLogs,
+    loadingWeeklyReports,
+    loadingWeeklyReportDetails,
     error,
     loadCurrentWeek,
     loadMoreFragments,
@@ -313,6 +387,8 @@ export const useUpdateCenterStore = defineStore('updateCenter', () => {
     loadReleaseDetail,
     loadGitHubLogs,
     loadMoreGitHubLogs,
+    loadWeeklyReports,
+    loadWeeklyReportDetail,
     refreshAll,
     markAsSeen,
   }
