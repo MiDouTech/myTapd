@@ -3931,6 +3931,30 @@ vite v7.3.1 building client environment for production...
 | `update-center.github-raw-base` | `https://raw.githubusercontent.com` | raw 文件地址；访问失败时会回退 Contents API |
 | `update-center.github-token` | 空 | 私有仓或限流时使用；也可用 `GITHUB_TOKEN` 环境变量 |
 
+### 79.9 生产发布自动归档（新增）
+
+生产分支 CD 构建、镜像推送和版本信息更新成功后，流水线会自动执行：
+
+```bash
+scripts/archive-changelogs.sh
+```
+
+它会做三件事：
+
+1. 把 `changelogs/*.md` 汇总到 `CHANGELOG.md` 的新版本块；
+2. 删除已经归档的 `changelogs/*.md`；
+3. 用 `[skip ci]` 提交归档结果，避免再次触发构建循环。
+
+触发条件：
+
+| 场景 | 是否自动归档 |
+|---|---|
+| push 到 `main/master` 且 CD 成功 | 是 |
+| PR 检查 | 否 |
+| tag 构建 | 否 |
+| develop / release 分支构建 | 否 |
+| 没有 `changelogs/*.md` | 跳过，不提交 |
+
 ### 79.6 示例截图（终端运行效果）
 ```text
 GET /api/update-center/current-week
