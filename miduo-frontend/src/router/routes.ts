@@ -237,12 +237,17 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
-        path: 'manage/update-center',
-        name: 'manageUpdateCenter',
+        path: 'update-center',
+        name: 'updateCenter',
         component: () => import('@/views/manage/UpdateCenterView.vue'),
         meta: {
           title: '更新中心',
         },
+      },
+      {
+        path: 'manage/update-center',
+        name: 'manageUpdateCenter',
+        redirect: { name: 'updateCenter' },
       },
       {
         path: 'manage/alert-mapping',
