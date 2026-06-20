@@ -93,7 +93,8 @@ const {
   loadingWeeklyReportDetails,
 } = storeToRefs(updateCenterStore)
 
-const activeTab = ref<'releases' | 'fragments' | 'weekly_reports' | 'github_logs'>('releases')
+const primaryTab = ref<'update_center' | 'weekly_reports' | 'ai_news'>('update_center')
+const activeTab = ref<'releases' | 'fragments' | 'github_logs'>('releases')
 const selectedType = ref('all')
 const refreshing = ref(false)
 const selectedWeeklyReportFile = ref('')
@@ -160,7 +161,6 @@ const totalFragmentEntryCount = computed(() => currentWeek.value?.totalEntries |
 const totalGitCount = computed(
   () => githubLogs.value?.repoTotalCommitCount || githubLogs.value?.totalCount || 0,
 )
-const totalWeeklyReportCount = computed(() => weeklyReports.value?.totalReports || 0)
 const weeklyReportList = computed<WeeklyReportSummaryOutput[]>(
   () => weeklyReports.value?.reports || [],
 )
@@ -432,167 +432,223 @@ watch(selectedWeeklyReportFile, (fileName) => {
       </el-button>
     </section>
 
-    <section class="stat-grid">
-      <el-card shadow="never" class="stat-card">
-        <el-icon><DocumentChecked /></el-icon>
-        <div>
-          <span>已发布版本</span>
-          <strong>{{ totalReleaseCount }}</strong>
-          <small>{{ totalReleaseEntryCount }} 条更新</small>
-        </div>
-      </el-card>
-      <el-card shadow="never" class="stat-card">
-        <el-icon><Tickets /></el-icon>
-        <div>
-          <span>待发布更新</span>
-          <strong>{{ totalFragmentEntryCount }}</strong>
-          <small>{{ currentWeek?.totalDays || 0 }} 个日期组</small>
-        </div>
-      </el-card>
-      <el-card shadow="never" class="stat-card">
-        <el-icon><Promotion /></el-icon>
-        <div>
-          <span>Git 提交</span>
-          <strong>{{ totalGitCount }}</strong>
-          <small>{{ githubLogs?.logs.length || 0 }} 条已加载</small>
-        </div>
-      </el-card>
-      <el-card shadow="never" class="stat-card">
-        <el-icon><Files /></el-icon>
-        <div>
-          <span>周报</span>
-          <strong>{{ totalWeeklyReportCount }}</strong>
-          <small>{{ selectedWeeklyReportDetail?.reportWeek || '仓库周报' }}</small>
-        </div>
-      </el-card>
-      <el-card shadow="never" class="stat-card">
-        <el-icon><CollectionTag /></el-icon>
-        <div>
-          <span>未读提醒</span>
-          <strong>{{ unreadCount }}</strong>
-          <small>进入页面后自动标记已读</small>
-        </div>
-      </el-card>
-    </section>
-
-    <el-card shadow="never" class="filter-card">
-      <div class="filter-row">
-        <span class="filter-title">筛选</span>
-        <el-radio-group v-model="selectedType" size="small">
-          <el-radio-button v-for="option in typeOptions" :key="option.value" :label="option.value">
-            {{ option.label }} {{ option.count }}
-          </el-radio-button>
-        </el-radio-group>
-      </div>
-      <div class="source-line">
-        <span>待发布：{{ formatSourceLabel(currentWeek?.source) }}</span>
-        <span>已发布：{{ formatSourceLabel(releases?.source) }}</span>
-        <span>周报：{{ formatSourceLabel(weeklyReports?.source) }}</span>
-        <span>Git：{{ formatSourceLabel(githubLogs?.source) }}</span>
-        <span>最近刷新：{{ formatDateTime(latestFetchedAt) }}</span>
-      </div>
-    </el-card>
-
-    <el-card shadow="never" class="content-card">
-      <el-tabs v-model="activeTab">
-        <el-tab-pane label="已发布" name="releases">
-          <div v-loading="loadingReleases" class="release-list">
-            <el-empty
-              v-if="!releases?.dataSourceAvailable || !releases.releases.length"
-              description="暂无已发布更新，请先维护 CHANGELOG.md"
-            />
-            <el-card
-              v-for="release in releases?.releases || []"
-              v-show="hasVisibleReleaseEntries(release)"
-              :key="release.version"
-              shadow="never"
-              class="release-card"
-            >
-              <div class="release-head">
-                <div>
-                  <h3>{{ release.version }}</h3>
-                  <p>
-                    <el-icon><Calendar /></el-icon>
-                    {{ release.releaseDate || '未填写发布日期' }}
-                    · {{ release.entryCount || 0 }} 条更新
-                  </p>
-                </div>
-                <el-button
-                  v-if="release.entriesOmitted"
-                  :loading="loadingReleaseVersions[release.version]"
-                  size="small"
-                  @click="handleLoadReleaseDetail(release)"
-                >
-                  加载详情
-                </el-button>
-              </div>
-
-              <div v-if="release.highlights?.length" class="highlight-list">
-                <el-tag
-                  v-for="item in release.highlights"
-                  :key="item"
-                  type="primary"
-                  effect="plain"
-                >
-                  {{ item }}
-                </el-tag>
-              </div>
-
-              <div v-for="day in filteredReleaseDays(release)" :key="day.date" class="day-group">
-                <h4>{{ day.date }}</h4>
-                <div
-                  v-for="entry in day.entries"
-                  :key="`${day.date}-${entry.description}`"
-                  class="entry-row"
-                >
-                  <el-tag :type="getTypeTagType(entry.type)" effect="light">
-                    {{ getTypeLabel(entry.type) }}
-                  </el-tag>
-                  <span class="entry-module">{{ entry.module }}</span>
-                  <span class="entry-desc">{{ entry.description }}</span>
-                </div>
+    <el-card shadow="never" class="section-card">
+      <el-tabs v-model="primaryTab" class="primary-tabs">
+        <el-tab-pane label="更新中心" name="update_center">
+          <section class="stat-grid">
+            <el-card shadow="never" class="stat-card">
+              <el-icon><DocumentChecked /></el-icon>
+              <div>
+                <span>已发布版本</span>
+                <strong>{{ totalReleaseCount }}</strong>
+                <small>{{ totalReleaseEntryCount }} 条更新</small>
               </div>
             </el-card>
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="待发布" name="fragments">
-          <div v-loading="loadingCurrent" class="fragment-list">
-            <el-empty
-              v-if="!currentWeek?.dataSourceAvailable || !filteredFragments.length"
-              description="暂无待发布更新，请在 changelogs/ 下新增更新碎片"
-            />
-            <el-card
-              v-for="fragment in filteredFragments"
-              :key="fragment.fileName"
-              shadow="never"
-              class="fragment-card"
-            >
-              <div class="fragment-head">
-                <h3>{{ fragment.date }}</h3>
-                <el-tag type="info" effect="plain">{{ fragment.fileName }}</el-tag>
-              </div>
-              <div
-                v-for="entry in fragment.entries"
-                :key="`${fragment.fileName}-${entry.description}`"
-                class="entry-row"
-              >
-                <el-tag :type="getTypeTagType(entry.type)" effect="light">
-                  {{ getTypeLabel(entry.type) }}
-                </el-tag>
-                <span class="entry-module">{{ entry.module }}</span>
-                <span class="entry-desc">{{ entry.description }}</span>
+            <el-card shadow="never" class="stat-card">
+              <el-icon><Tickets /></el-icon>
+              <div>
+                <span>待发布更新</span>
+                <strong>{{ totalFragmentEntryCount }}</strong>
+                <small>{{ currentWeek?.totalDays || 0 }} 个日期组</small>
               </div>
             </el-card>
-            <div v-if="currentWeek?.hasMore" class="load-more">
-              <el-button
-                :loading="loadingMoreFragments"
-                @click="updateCenterStore.loadMoreFragments"
-              >
-                加载更多待发布更新
-              </el-button>
+            <el-card shadow="never" class="stat-card">
+              <el-icon><Promotion /></el-icon>
+              <div>
+                <span>Git 提交</span>
+                <strong>{{ totalGitCount }}</strong>
+                <small>{{ githubLogs?.logs.length || 0 }} 条已加载</small>
+              </div>
+            </el-card>
+            <el-card shadow="never" class="stat-card">
+              <el-icon><CollectionTag /></el-icon>
+              <div>
+                <span>未读提醒</span>
+                <strong>{{ unreadCount }}</strong>
+                <small>进入页面后自动标记已读</small>
+              </div>
+            </el-card>
+          </section>
+
+          <el-card shadow="never" class="filter-card">
+            <div class="filter-row">
+              <span class="filter-title">筛选</span>
+              <el-radio-group v-model="selectedType" size="small">
+                <el-radio-button
+                  v-for="option in typeOptions"
+                  :key="option.value"
+                  :label="option.value"
+                >
+                  {{ option.label }} {{ option.count }}
+                </el-radio-button>
+              </el-radio-group>
             </div>
-          </div>
+            <div class="source-line">
+              <span>待发布：{{ formatSourceLabel(currentWeek?.source) }}</span>
+              <span>已发布：{{ formatSourceLabel(releases?.source) }}</span>
+              <span>Git：{{ formatSourceLabel(githubLogs?.source) }}</span>
+              <span>最近刷新：{{ formatDateTime(latestFetchedAt) }}</span>
+            </div>
+          </el-card>
+
+          <el-tabs v-model="activeTab" class="content-tabs">
+            <el-tab-pane label="已发布" name="releases">
+              <div v-loading="loadingReleases" class="release-list">
+                <el-empty
+                  v-if="!releases?.dataSourceAvailable || !releases.releases.length"
+                  description="暂无已发布更新，请先维护 CHANGELOG.md"
+                />
+                <el-card
+                  v-for="release in releases?.releases || []"
+                  v-show="hasVisibleReleaseEntries(release)"
+                  :key="release.version"
+                  shadow="never"
+                  class="release-card"
+                >
+                  <div class="release-head">
+                    <div>
+                      <h3>{{ release.version }}</h3>
+                      <p>
+                        <el-icon><Calendar /></el-icon>
+                        {{ release.releaseDate || '未填写发布日期' }}
+                        · {{ release.entryCount || 0 }} 条更新
+                      </p>
+                    </div>
+                    <el-button
+                      v-if="release.entriesOmitted"
+                      :loading="loadingReleaseVersions[release.version]"
+                      size="small"
+                      @click="handleLoadReleaseDetail(release)"
+                    >
+                      加载详情
+                    </el-button>
+                  </div>
+
+                  <div v-if="release.highlights?.length" class="highlight-list">
+                    <el-tag
+                      v-for="item in release.highlights"
+                      :key="item"
+                      type="primary"
+                      effect="plain"
+                    >
+                      {{ item }}
+                    </el-tag>
+                  </div>
+
+                  <div
+                    v-for="day in filteredReleaseDays(release)"
+                    :key="day.date"
+                    class="day-group"
+                  >
+                    <h4>{{ day.date }}</h4>
+                    <div
+                      v-for="entry in day.entries"
+                      :key="`${day.date}-${entry.description}`"
+                      class="entry-row"
+                    >
+                      <el-tag :type="getTypeTagType(entry.type)" effect="light">
+                        {{ getTypeLabel(entry.type) }}
+                      </el-tag>
+                      <span class="entry-module">{{ entry.module }}</span>
+                      <span class="entry-desc">{{ entry.description }}</span>
+                    </div>
+                  </div>
+                </el-card>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="待发布" name="fragments">
+              <div v-loading="loadingCurrent" class="fragment-list">
+                <el-empty
+                  v-if="!currentWeek?.dataSourceAvailable || !filteredFragments.length"
+                  description="暂无待发布更新，请在 changelogs/ 下新增更新碎片"
+                />
+                <el-card
+                  v-for="fragment in filteredFragments"
+                  :key="fragment.fileName"
+                  shadow="never"
+                  class="fragment-card"
+                >
+                  <div class="fragment-head">
+                    <h3>{{ fragment.date }}</h3>
+                    <el-tag type="info" effect="plain">{{ fragment.fileName }}</el-tag>
+                  </div>
+                  <div
+                    v-for="entry in fragment.entries"
+                    :key="`${fragment.fileName}-${entry.description}`"
+                    class="entry-row"
+                  >
+                    <el-tag :type="getTypeTagType(entry.type)" effect="light">
+                      {{ getTypeLabel(entry.type) }}
+                    </el-tag>
+                    <span class="entry-module">{{ entry.module }}</span>
+                    <span class="entry-desc">{{ entry.description }}</span>
+                  </div>
+                </el-card>
+                <div v-if="currentWeek?.hasMore" class="load-more">
+                  <el-button
+                    :loading="loadingMoreFragments"
+                    @click="updateCenterStore.loadMoreFragments"
+                  >
+                    加载更多待发布更新
+                  </el-button>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="GitHub提交" name="github_logs">
+              <div v-loading="loadingGitHubLogs" class="github-panel">
+                <el-empty
+                  v-if="!githubLogs?.dataSourceAvailable || !githubLogs.logs.length"
+                  description="暂无 Git 提交记录，请确认运行环境包含 .git 目录"
+                />
+                <el-table
+                  v-else
+                  :data="githubLogs.logs"
+                  :border="false"
+                  :stripe="true"
+                  :header-cell-style="{ backgroundColor: '#f5f7fa' }"
+                >
+                  <el-table-column label="提交" min-width="260" align="center">
+                    <template #default="{ row }">
+                      <div class="commit-cell">
+                        <el-tag type="info" effect="plain">{{ row.shortSha }}</el-tag>
+                        <span>{{ row.message }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="authorName" label="作者" width="150" align="center" />
+                  <el-table-column label="提交时间" width="190" align="center">
+                    <template #default="{ row }">
+                      {{ formatDateTime(row.commitTimeUtc) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="链接" width="120" align="center">
+                    <template #default="{ row }">
+                      <el-link
+                        v-if="row.htmlUrl"
+                        :href="row.htmlUrl"
+                        target="_blank"
+                        type="primary"
+                      >
+                        查看
+                        <el-icon><Link /></el-icon>
+                      </el-link>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div v-if="githubLogs?.hasMore" class="load-more">
+                  <el-button
+                    :loading="loadingMoreGitHubLogs"
+                    @click="updateCenterStore.loadMoreGitHubLogs"
+                  >
+                    加载更多提交
+                  </el-button>
+                </div>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
         </el-tab-pane>
 
         <el-tab-pane label="周报" name="weekly_reports">
@@ -633,7 +689,6 @@ watch(selectedWeeklyReportFile, (fileName) => {
                     }}
                   </el-tag>
                 </div>
-                <!-- eslint-disable-next-line vue/no-v-html -- 周报 Markdown 已在 renderMarkdown 中先 escapeHtml，再生成受控 HTML 标签。 -->
                 <div
                   v-loading="
                     Boolean(
@@ -649,51 +704,11 @@ watch(selectedWeeklyReportFile, (fileName) => {
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="GitHub提交" name="github_logs">
-          <div v-loading="loadingGitHubLogs" class="github-panel">
-            <el-empty
-              v-if="!githubLogs?.dataSourceAvailable || !githubLogs.logs.length"
-              description="暂无 Git 提交记录，请确认运行环境包含 .git 目录"
-            />
-            <el-table
-              v-else
-              :data="githubLogs.logs"
-              :border="false"
-              :stripe="true"
-              :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-            >
-              <el-table-column label="提交" min-width="260" align="center">
-                <template #default="{ row }">
-                  <div class="commit-cell">
-                    <el-tag type="info" effect="plain">{{ row.shortSha }}</el-tag>
-                    <span>{{ row.message }}</span>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column prop="authorName" label="作者" width="150" align="center" />
-              <el-table-column label="提交时间" width="190" align="center">
-                <template #default="{ row }">
-                  {{ formatDateTime(row.commitTimeUtc) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="链接" width="120" align="center">
-                <template #default="{ row }">
-                  <el-link v-if="row.htmlUrl" :href="row.htmlUrl" target="_blank" type="primary">
-                    查看
-                    <el-icon><Link /></el-icon>
-                  </el-link>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-            </el-table>
-            <div v-if="githubLogs?.hasMore" class="load-more">
-              <el-button
-                :loading="loadingMoreGitHubLogs"
-                @click="updateCenterStore.loadMoreGitHubLogs"
-              >
-                加载更多提交
-              </el-button>
-            </div>
+        <el-tab-pane label="AI 大事" name="ai_news">
+          <div class="ai-news-placeholder">
+            <el-icon><Files /></el-icon>
+            <h3>AI 大事</h3>
+            <p>暂未接入数据源，后续可接入 AI 新闻、内部智能体更新或行业动态。</p>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -772,11 +787,24 @@ watch(selectedWeeklyReportFile, (fileName) => {
   color: #1f2937;
 }
 
+.section-card,
 .filter-card,
 .content-card {
   margin-top: 16px;
   border: none;
   border-radius: 14px;
+}
+
+.section-card :deep(.el-card__body) {
+  padding-top: 12px;
+}
+
+.primary-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
+
+.content-tabs {
+  margin-top: 16px;
 }
 
 .filter-row {
@@ -883,6 +911,37 @@ watch(selectedWeeklyReportFile, (fileName) => {
   display: flex;
   justify-content: center;
   padding: 14px 0 2px;
+}
+
+.ai-news-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  color: #6b7280;
+  text-align: center;
+  background: #f8fafc;
+  border: 1px dashed #dbe4f0;
+  border-radius: 14px;
+}
+
+.ai-news-placeholder .el-icon {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 12px;
+  color: #1675d1;
+  background: #e8f3ff;
+  border-radius: 16px;
+}
+
+.ai-news-placeholder h3 {
+  margin: 0 0 8px;
+  color: #1f2937;
+}
+
+.ai-news-placeholder p {
+  margin: 0;
 }
 
 .weekly-report-panel {
