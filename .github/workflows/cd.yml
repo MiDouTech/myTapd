@@ -565,7 +565,11 @@ jobs:
     needs: [prepare, build-and-push, build-frontend, update-version]
     permissions:
       contents: write
+    # 暂停自动归档：当前 GitHub main 构建成功只代表测试/版本仓更新，
+    # 不能等同于 CNB「生产发布-前端/后端」按钮真正发布成功。
+    # 后续接入 CNB 生产发布成功回调后，再在该回调中执行 scripts/archive-changelogs.sh。
     if: |
+      false &&
       always() &&
       !cancelled() &&
       github.event_name == 'push' &&
