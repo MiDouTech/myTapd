@@ -101,4 +101,35 @@ public class UpdateCenterOutput {
         private String nextCursor;
         private List<GitHubLogEntryOutput> logs = new ArrayList<>();
     }
+
+    @Data
+    public static class WeeklyReportSummaryOutput {
+        private String fileName;
+        private String title;
+        private String reportWeek;
+        private String period;
+        private String updatedAt;
+    }
+
+    @Data
+    public static class WeeklyReportsOutput {
+        private Boolean dataSourceAvailable;
+        private String source;
+        private String fetchedAt;
+        private Integer totalReports;
+        private List<WeeklyReportSummaryOutput> reports = new ArrayList<>();
+    }
+
+    @Data
+    public static class WeeklyReportDetailOutput {
+        private String fileName;
+        private String title;
+        private String reportWeek;
+        private String period;
+        private String updatedAt;
+        private String content;
+        private Boolean dataSourceAvailable;
+        private String source;
+        private String fetchedAt;
+    }
 }

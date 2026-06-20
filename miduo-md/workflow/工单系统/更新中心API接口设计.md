@@ -15,6 +15,8 @@
 | API000522 | 查询已发布更新 | GET | /api/update-center/releases | 基于 `CHANGELOG.md` 返回版本更新记录 |
 | API000523 | 查询指定版本更新详情 | GET | /api/update-center/releases/detail/{version} | 返回单个版本的完整更新条目 |
 | API000524 | 查询Git提交日志 | GET | /api/update-center/github-logs | 返回本地 Git 提交记录 |
+| API000525 | 查询周报列表 | GET | /api/update-center/weekly-reports | 基于 `doc/report.*.md` 返回周报列表 |
+| API000526 | 查询周报详情 | GET | /api/update-center/weekly-reports/detail/{fileName} | 返回指定周报 Markdown 正文 |
 
 ---
 
@@ -126,6 +128,57 @@ GET /api/update-center/github-logs?limit=80
 }
 ```
 
+### 2.5 查询周报列表（API000525）
+
+请求示例：
+
+```http
+GET /api/update-center/weekly-reports
+```
+
+响应 `data` 示例：
+
+```json
+{
+  "dataSourceAvailable": true,
+  "source": "github",
+  "fetchedAt": "2026-06-20T06:40:00Z",
+  "totalReports": 1,
+  "reports": [
+    {
+      "fileName": "report.2026-W24.md",
+      "title": "周报 2026-W24",
+      "reportWeek": "2026-W24",
+      "period": "2026-06-08 ~ 2026-06-14",
+      "updatedAt": null
+    }
+  ]
+}
+```
+
+### 2.6 查询周报详情（API000526）
+
+请求示例：
+
+```http
+GET /api/update-center/weekly-reports/detail/report.2026-W24.md
+```
+
+响应 `data` 示例：
+
+```json
+{
+  "fileName": "report.2026-W24.md",
+  "title": "周报 2026-W24",
+  "reportWeek": "2026-W24",
+  "period": "2026-06-08 ~ 2026-06-14",
+  "content": "# 周报 2026-W24 ...",
+  "dataSourceAvailable": true,
+  "source": "github",
+  "fetchedAt": "2026-06-20T06:40:00Z"
+}
+```
+
 ---
 
 ## 3. 通用返回结构
@@ -148,3 +201,4 @@ GET /api/update-center/github-logs?limit=80
 1. 本次接口均为只读接口，不新增数据库表。
 2. `source=local` 表示来自本地仓库文件或本地 Git；`source=none` 表示数据源不存在。
 3. 前端请求路径不写 `/api` 前缀，由 `VITE_API_BASE_URL` 统一补齐。
+4. 周报文件命名必须符合 `report.YYYY-Wxx.md`，例如 `report.2026-W24.md`。

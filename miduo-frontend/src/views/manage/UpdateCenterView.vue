@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+/* eslint-disable vue/no-v-html -- 周报 Markdown 已在 renderMarkdown 中先 escapeHtml，再生成受控 HTML 标签。 */
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   Calendar,
   CollectionTag,
   DocumentChecked,
+  Files,
   Link,
   Promotion,
   Refresh,
@@ -17,6 +19,7 @@ import type {
   ChangelogEntryOutput,
   ChangelogFragmentOutput,
   ChangelogReleaseOutput,
+  WeeklyReportSummaryOutput,
 } from '@/types/updateCenter'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -77,6 +80,8 @@ const {
   currentWeek,
   releases,
   githubLogs,
+  weeklyReports,
+  weeklyReportDetails,
   unreadCount,
   loadingCurrent,
   loadingReleases,
@@ -84,11 +89,14 @@ const {
   loadingReleaseVersions,
   loadingGitHubLogs,
   loadingMoreGitHubLogs,
+  loadingWeeklyReports,
+  loadingWeeklyReportDetails,
 } = storeToRefs(updateCenterStore)
 
-const activeTab = ref<'releases' | 'fragments' | 'github_logs'>('releases')
+const activeTab = ref<'releases' | 'fragments' | 'weekly_reports' | 'github_logs'>('releases')
 const selectedType = ref('all')
 const refreshing = ref(false)
+const selectedWeeklyReportFile = ref('')
 
 const typeOptions = computed<TypeOption[]>(() => {
   const counter = new Map<string, number>()
@@ -152,11 +160,24 @@ const totalFragmentEntryCount = computed(() => currentWeek.value?.totalEntries |
 const totalGitCount = computed(
   () => githubLogs.value?.repoTotalCommitCount || githubLogs.value?.totalCount || 0,
 )
+const totalWeeklyReportCount = computed(() => weeklyReports.value?.totalReports || 0)
+const weeklyReportList = computed<WeeklyReportSummaryOutput[]>(
+  () => weeklyReports.value?.reports || [],
+)
+const selectedWeeklyReportDetail = computed(() =>
+  selectedWeeklyReportFile.value
+    ? weeklyReportDetails.value[selectedWeeklyReportFile.value] || null
+    : null,
+)
+const renderedWeeklyReport = computed(() =>
+  renderMarkdown(selectedWeeklyReportDetail.value?.content || ''),
+)
 const latestFetchedAt = computed(() => {
   const values = [
     currentWeek.value?.fetchedAt,
     releases.value?.fetchedAt,
     githubLogs.value?.fetchedAt,
+    weeklyReports.value?.fetchedAt,
   ].filter(Boolean) as string[]
   const sortedValues = values.sort()
   return sortedValues.length > 0 ? sortedValues[sortedValues.length - 1] : ''
@@ -172,8 +193,10 @@ async function loadInitialData(): Promise<void> {
     updateCenterStore.loadCurrentWeek(),
     updateCenterStore.loadReleases({ summary: true }),
     updateCenterStore.loadGitHubLogs(),
+    updateCenterStore.loadWeeklyReports(),
   ])
   await ensureReleaseDetails()
+  await ensureWeeklyReportSelection()
 }
 
 async function ensureReleaseDetails(): Promise<void> {
@@ -191,12 +214,28 @@ async function handleRefresh(): Promise<void> {
   try {
     await updateCenterStore.refreshAll()
     await ensureReleaseDetails()
+    await ensureWeeklyReportSelection(true)
     notifySuccess('更新中心已刷新')
   } catch {
     notifyError('刷新更新中心失败')
   } finally {
     refreshing.value = false
   }
+}
+
+async function ensureWeeklyReportSelection(force = false): Promise<void> {
+  const reports = weeklyReportList.value
+  if (!reports.length) {
+    selectedWeeklyReportFile.value = ''
+    return
+  }
+  if (
+    !selectedWeeklyReportFile.value ||
+    !reports.some((item) => item.fileName === selectedWeeklyReportFile.value)
+  ) {
+    selectedWeeklyReportFile.value = reports[0]?.fileName || ''
+  }
+  await updateCenterStore.loadWeeklyReportDetail(selectedWeeklyReportFile.value, force)
 }
 
 async function handleLoadReleaseDetail(release: ChangelogReleaseOutput): Promise<void> {
@@ -249,6 +288,135 @@ function formatSourceLabel(source?: string): string {
   }
   return '暂无数据源'
 }
+
+function handleSelectWeeklyReport(fileName: string): void {
+  selectedWeeklyReportFile.value = fileName
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderInlineMarkdown(value: string): string {
+  let result = escapeHtml(value)
+  result = result.replace(/`([^`]+)`/g, '<code>$1</code>')
+  result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  return result
+}
+
+function renderMarkdown(markdown: string): string {
+  if (!markdown) {
+    return ''
+  }
+  const lines = markdown.split(/\r?\n/)
+  const html: string[] = []
+  let inCodeBlock = false
+  let codeLines: string[] = []
+  let inTable = false
+
+  const closeTable = () => {
+    if (inTable) {
+      html.push('</tbody></table>')
+      inTable = false
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd()
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        html.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`)
+        codeLines = []
+        inCodeBlock = false
+      } else {
+        closeTable()
+        inCodeBlock = true
+      }
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(rawLine)
+      continue
+    }
+
+    if (!line.trim()) {
+      closeTable()
+      continue
+    }
+
+    if (line === '---') {
+      closeTable()
+      html.push('<hr />')
+      continue
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/)
+    if (heading) {
+      closeTable()
+      const level = heading[1]?.length || 1
+      const headingText = heading[2] || ''
+      html.push(`<h${level}>${renderInlineMarkdown(headingText)}</h${level}>`)
+      continue
+    }
+
+    if (line.startsWith('>')) {
+      closeTable()
+      html.push(`<blockquote>${renderInlineMarkdown(line.replace(/^>\s?/, ''))}</blockquote>`)
+      continue
+    }
+
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const cells = line
+        .slice(1, -1)
+        .split('|')
+        .map((cell) => cell.trim())
+      const isDivider = cells.every((cell) => /^:?-{3,}:?$/.test(cell))
+      if (isDivider) {
+        continue
+      }
+      if (!inTable) {
+        html.push('<table><tbody>')
+        inTable = true
+      }
+      html.push(
+        `<tr>${cells.map((cell) => `<td>${renderInlineMarkdown(cell)}</td>`).join('')}</tr>`,
+      )
+      continue
+    }
+
+    const listItem = line.match(/^[-*]\s+(.+)$/)
+    if (listItem) {
+      closeTable()
+      html.push(`<p class="weekly-list-item">• ${renderInlineMarkdown(listItem[1] || '')}</p>`)
+      continue
+    }
+
+    closeTable()
+    html.push(`<p>${renderInlineMarkdown(line)}</p>`)
+  }
+
+  closeTable()
+  if (inCodeBlock) {
+    html.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`)
+  }
+  return html.join('')
+}
+
+watch(weeklyReportList, () => {
+  void ensureWeeklyReportSelection()
+})
+
+watch(selectedWeeklyReportFile, (fileName) => {
+  if (fileName) {
+    void updateCenterStore.loadWeeklyReportDetail(fileName)
+  }
+})
 </script>
 
 <template>
@@ -290,6 +458,14 @@ function formatSourceLabel(source?: string): string {
         </div>
       </el-card>
       <el-card shadow="never" class="stat-card">
+        <el-icon><Files /></el-icon>
+        <div>
+          <span>周报</span>
+          <strong>{{ totalWeeklyReportCount }}</strong>
+          <small>{{ selectedWeeklyReportDetail?.reportWeek || '仓库周报' }}</small>
+        </div>
+      </el-card>
+      <el-card shadow="never" class="stat-card">
         <el-icon><CollectionTag /></el-icon>
         <div>
           <span>未读提醒</span>
@@ -311,6 +487,7 @@ function formatSourceLabel(source?: string): string {
       <div class="source-line">
         <span>待发布：{{ formatSourceLabel(currentWeek?.source) }}</span>
         <span>已发布：{{ formatSourceLabel(releases?.source) }}</span>
+        <span>周报：{{ formatSourceLabel(weeklyReports?.source) }}</span>
         <span>Git：{{ formatSourceLabel(githubLogs?.source) }}</span>
         <span>最近刷新：{{ formatDateTime(latestFetchedAt) }}</span>
       </div>
@@ -418,6 +595,60 @@ function formatSourceLabel(source?: string): string {
           </div>
         </el-tab-pane>
 
+        <el-tab-pane label="周报" name="weekly_reports">
+          <div v-loading="loadingWeeklyReports" class="weekly-report-panel">
+            <el-empty
+              v-if="!weeklyReports?.dataSourceAvailable || !weeklyReportList.length"
+              description="暂无周报，请在 doc/ 下新增 report.YYYY-Wxx.md"
+            />
+            <template v-else>
+              <aside class="weekly-report-sidebar">
+                <button
+                  v-for="report in weeklyReportList"
+                  :key="report.fileName"
+                  type="button"
+                  class="weekly-report-item"
+                  :class="{ active: selectedWeeklyReportFile === report.fileName }"
+                  @click="handleSelectWeeklyReport(report.fileName)"
+                >
+                  <strong>{{ report.title }}</strong>
+                  <span>{{ report.period || report.reportWeek || report.fileName }}</span>
+                  <small>{{ report.fileName }}</small>
+                </button>
+              </aside>
+              <article class="weekly-report-content">
+                <div class="weekly-report-head">
+                  <div>
+                    <h3>{{ selectedWeeklyReportDetail?.title || '周报' }}</h3>
+                    <p>
+                      {{
+                        selectedWeeklyReportDetail?.period || selectedWeeklyReportDetail?.reportWeek
+                      }}
+                      · {{ selectedWeeklyReportDetail?.fileName }}
+                    </p>
+                  </div>
+                  <el-tag type="primary" effect="plain">
+                    {{
+                      formatSourceLabel(selectedWeeklyReportDetail?.source || weeklyReports?.source)
+                    }}
+                  </el-tag>
+                </div>
+                <!-- eslint-disable-next-line vue/no-v-html -- 周报 Markdown 已在 renderMarkdown 中先 escapeHtml，再生成受控 HTML 标签。 -->
+                <div
+                  v-loading="
+                    Boolean(
+                      selectedWeeklyReportFile &&
+                      loadingWeeklyReportDetails[selectedWeeklyReportFile],
+                    )
+                  "
+                  class="weekly-markdown"
+                  v-html="renderedWeeklyReport"
+                />
+              </article>
+            </template>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="GitHub提交" name="github_logs">
           <div v-loading="loadingGitHubLogs" class="github-panel">
             <el-empty
@@ -509,7 +740,7 @@ function formatSourceLabel(source?: string): string {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin-top: 16px;
 }
@@ -654,9 +885,157 @@ function formatSourceLabel(source?: string): string {
   padding: 14px 0 2px;
 }
 
+.weekly-report-panel {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 520px;
+}
+
+.weekly-report-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 12px;
+  overflow-y: auto;
+  border-right: 1px solid #edf0f5;
+}
+
+.weekly-report-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  transition: all 0.18s ease;
+}
+
+.weekly-report-item:hover,
+.weekly-report-item.active {
+  background: #eef6ff;
+  border-color: #1675d1;
+  box-shadow: 0 8px 20px rgba(22, 117, 209, 0.1);
+}
+
+.weekly-report-item strong {
+  color: #1f2937;
+}
+
+.weekly-report-item span,
+.weekly-report-item small {
+  color: #6b7280;
+}
+
+.weekly-report-content {
+  min-width: 0;
+  padding: 4px 6px 4px 0;
+}
+
+.weekly-report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.weekly-report-head h3 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.weekly-report-head p {
+  margin: 6px 0 0;
+  color: #6b7280;
+}
+
+.weekly-markdown {
+  min-height: 420px;
+  overflow-x: auto;
+  color: #1f2937;
+  line-height: 1.75;
+}
+
+.weekly-markdown :deep(h1),
+.weekly-markdown :deep(h2),
+.weekly-markdown :deep(h3),
+.weekly-markdown :deep(h4) {
+  margin: 18px 0 10px;
+  color: #111827;
+}
+
+.weekly-markdown :deep(p) {
+  margin: 8px 0;
+}
+
+.weekly-markdown :deep(blockquote) {
+  padding: 10px 14px;
+  margin: 12px 0;
+  color: #4b5563;
+  background: #f5f9ff;
+  border-left: 3px solid #1675d1;
+  border-radius: 8px;
+}
+
+.weekly-markdown :deep(table) {
+  width: 100%;
+  margin: 12px 0;
+  overflow: hidden;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.weekly-markdown :deep(td) {
+  padding: 9px 10px;
+  border: 1px solid #e5e7eb;
+}
+
+.weekly-markdown :deep(tr:first-child td) {
+  font-weight: 600;
+  background: #f5f7fa;
+}
+
+.weekly-markdown :deep(pre) {
+  padding: 12px;
+  overflow-x: auto;
+  color: #e5e7eb;
+  background: #111827;
+  border-radius: 10px;
+}
+
+.weekly-markdown :deep(code) {
+  padding: 2px 5px;
+  color: #0f4f96;
+  background: #e8f3ff;
+  border-radius: 5px;
+}
+
+.weekly-markdown :deep(pre code) {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
 @media (max-width: 1024px) {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weekly-report-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-report-sidebar {
+    padding-right: 0;
+    border-right: none;
   }
 }
 

@@ -3861,6 +3861,7 @@ vite v7.3.1 building client environment for production...
 4. 依次查看：
    - 「已发布」：应看到 `CHANGELOG.md` 中的版本更新。
    - 「待发布」：应看到 `changelogs/*.md` 中的待发布更新。
+   - 「周报」：应看到 `doc/report.*.md` 中的周报列表与正文。
    - 「GitHub提交」：应看到本地 Git 提交记录。
 5. 点击「刷新」，页面应重新拉取最新数据。
 6. 点击类型筛选（如“新功能”“文档”），列表应只展示对应类型的更新。
@@ -3876,6 +3877,8 @@ vite v7.3.1 building client environment for production...
 | `GET /api/update-center/releases/detail/{version}` | `version` | `String` | 版本号，例如 `v1.0.0` |
 | `GET /api/update-center/github-logs` | `limit` | `Integer` | 返回多少条 Git 提交，默认 80，最大 1000 |
 | `GET /api/update-center/github-logs` | `before` | `String` | 游标 SHA，用于继续加载更早提交 |
+| `GET /api/update-center/weekly-reports` | `force` | `Boolean` | 查询 `doc/report.*.md` 周报列表 |
+| `GET /api/update-center/weekly-reports/detail/{fileName}` | `fileName` | `String` | 周报文件名，例如 `report.2026-W24.md` |
 
 ### 79.4 返回值说明
 
@@ -3884,6 +3887,8 @@ vite v7.3.1 building client environment for production...
 | `CurrentWeekOutput` | 待发布更新，包含日期组、文件名、类型、模块、描述 |
 | `ReleasesOutput` | 已发布版本列表，包含版本号、发布日期、亮点和条目数 |
 | `ChangelogReleaseOutput` | 单个版本详情，包含该版本每天的更新条目 |
+| `WeeklyReportsOutput` | 周报列表，包含文件名、标题、周次和日期区间 |
+| `WeeklyReportDetailOutput` | 单篇周报详情，包含 Markdown 正文 |
 | `GitHubLogsOutput` | Git 提交列表，包含 SHA、作者、提交时间和 GitHub 链接 |
 
 ### 79.5 常见问题（新增）
@@ -3919,6 +3924,15 @@ vite v7.3.1 building client environment for production...
   4. 已归档进 `CHANGELOG.md` 的碎片，要从 `changelogs/` 删除；
   5. 表格统一使用 `| 类型 | 模块 | 描述 |`；
   6. 合并后刷新更新中心。
+
+#### Q101：周报为什么没有显示？
+- **检测**：确认仓库 `doc/` 目录下是否存在 `report.YYYY-Wxx.md` 文件，例如 `doc/report.2026-W24.md`。
+- **记录（错误类型）**：周报数据源缺失，或文件命名不符合 `report.YYYY-Wxx.md`。
+- **恢复建议**：
+  1. 在 `doc/` 下新增周报 Markdown 文件；
+  2. 文件名使用 `report.2026-W24.md` 这类格式；
+  3. 文件第一行建议使用 `# 周报 2026-W24 (2026-06-08 ~ 2026-06-14)`；
+  4. 合并后刷新更新中心「周报」Tab。
 
 ### 79.8 GitHub 回退配置（新增）
 
@@ -3959,6 +3973,7 @@ scripts/archive-changelogs.sh
 ```text
 GET /api/update-center/current-week
 GET /api/update-center/releases
+GET /api/update-center/weekly-reports
 GET /api/update-center/github-logs
 ```
 

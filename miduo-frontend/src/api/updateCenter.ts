@@ -5,6 +5,8 @@ import type {
   GitHubLogsOutput,
   ReleasesOutput,
   UpdateCenterGitHubQuery,
+  WeeklyReportDetailOutput,
+  WeeklyReportsOutput,
 } from '@/types/updateCenter'
 
 /**
@@ -59,4 +61,32 @@ export function getUpdateCenterGitHubLogs(
   params?: UpdateCenterGitHubQuery,
 ): Promise<GitHubLogsOutput> {
   return request.get<GitHubLogsOutput>('/update-center/github-logs', { params })
+}
+
+/**
+ * 查询周报列表
+ * 接口编号：API000525
+ * 产品文档功能：管理 / 更新中心 - 周报列表
+ */
+export function getUpdateCenterWeeklyReports(params?: {
+  force?: boolean
+}): Promise<WeeklyReportsOutput> {
+  return request.get<WeeklyReportsOutput>('/update-center/weekly-reports', { params })
+}
+
+/**
+ * 查询周报详情
+ * 接口编号：API000526
+ * 产品文档功能：管理 / 更新中心 - 周报详情
+ */
+export function getUpdateCenterWeeklyReportDetail(
+  fileName: string,
+  force = false,
+): Promise<WeeklyReportDetailOutput> {
+  return request.get<WeeklyReportDetailOutput>(
+    `/update-center/weekly-reports/detail/${encodeURIComponent(fileName)}`,
+    {
+      params: force ? { force: true } : undefined,
+    },
+  )
 }

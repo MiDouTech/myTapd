@@ -85,3 +85,26 @@ export interface UpdateCenterGitHubQuery {
   before?: string | null
   force?: boolean
 }
+
+export interface WeeklyReportSummaryOutput {
+  fileName: string
+  title: string
+  reportWeek?: string | null
+  period?: string | null
+  updatedAt?: string | null
+}
+
+export interface WeeklyReportsOutput {
+  dataSourceAvailable: boolean
+  source: UpdateCenterSource
+  fetchedAt: string
+  totalReports: number
+  reports: WeeklyReportSummaryOutput[]
+}
+
+export interface WeeklyReportDetailOutput extends WeeklyReportSummaryOutput {
+  content: string
+  dataSourceAvailable: boolean
+  source: UpdateCenterSource
+  fetchedAt: string
+}

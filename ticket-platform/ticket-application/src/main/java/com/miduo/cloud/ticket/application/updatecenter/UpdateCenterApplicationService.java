@@ -59,6 +59,8 @@ public class UpdateCenterApplicationService {
     private static final Pattern RELEASE_HEADER = Pattern.compile("^##\\s+\\[?([^\\]\\-]+)]?\\s*(?:-\\s*(\\d{4}-\\d{2}-\\d{2}))?.*$");
     private static final Pattern DAY_HEADER = Pattern.compile("^###\\s+(\\d{4}-\\d{2}-\\d{2}).*$");
     private static final Pattern SHA_PATTERN = Pattern.compile("^[0-9a-fA-F]{4,40}$");
+    private static final Pattern REPORT_FILE_NAME = Pattern.compile("^report\\.(\\d{4}-W\\d{2})\\.md$");
+    private static final Pattern REPORT_TITLE = Pattern.compile("^#\\s+周报\\s+(.+?)\\s*(?:\\((.+?)\\))?\\s*$");
 
     private final String configuredRepoRoot;
     private final String githubOwner;
@@ -230,6 +232,46 @@ public class UpdateCenterApplicationService {
         return output;
     }
 
+    public UpdateCenterOutput.WeeklyReportsOutput getWeeklyReports(Boolean force) {
+        SourceResult<List<UpdateCenterOutput.WeeklyReportDetailOutput>> reportResult = readWeeklyReports();
+        List<UpdateCenterOutput.WeeklyReportSummaryOutput> reports = new ArrayList<>();
+        for (UpdateCenterOutput.WeeklyReportDetailOutput detail : reportResult.getData()) {
+            reports.add(toWeeklyReportSummary(detail));
+        }
+
+        Collections.sort(reports, new Comparator<UpdateCenterOutput.WeeklyReportSummaryOutput>() {
+            @Override
+            public int compare(UpdateCenterOutput.WeeklyReportSummaryOutput left,
+                               UpdateCenterOutput.WeeklyReportSummaryOutput right) {
+                return nullSafe(right.getFileName()).compareTo(nullSafe(left.getFileName()));
+            }
+        });
+
+        UpdateCenterOutput.WeeklyReportsOutput output = new UpdateCenterOutput.WeeklyReportsOutput();
+        output.setDataSourceAvailable(reportResult.isAvailable());
+        output.setSource(reportResult.getSource().getCode());
+        output.setFetchedAt(nowIso());
+        output.setTotalReports(reports.size());
+        output.setReports(reports);
+        return output;
+    }
+
+    public UpdateCenterOutput.WeeklyReportDetailOutput getWeeklyReportDetail(String fileName, Boolean force) {
+        if (fileName == null || fileName.trim().isEmpty() || !REPORT_FILE_NAME.matcher(fileName.trim()).matches()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "周报文件名不合法");
+        }
+        SourceResult<List<UpdateCenterOutput.WeeklyReportDetailOutput>> reportResult = readWeeklyReports();
+        for (UpdateCenterOutput.WeeklyReportDetailOutput detail : reportResult.getData()) {
+            if (fileName.trim().equals(detail.getFileName())) {
+                detail.setDataSourceAvailable(reportResult.isAvailable());
+                detail.setSource(reportResult.getSource().getCode());
+                detail.setFetchedAt(nowIso());
+                return detail;
+            }
+        }
+        throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "未找到对应周报");
+    }
+
     private SourceResult<List<UpdateCenterOutput.ChangelogFragmentOutput>> readFragments() {
         Path changelogsPath = getChangelogsPath();
         if (!Files.isDirectory(changelogsPath)) {
@@ -262,6 +304,104 @@ public class UpdateCenterApplicationService {
             throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "读取已发布更新失败：" + ex.getMessage());
         }
         return SourceResult.available(parseReleaseLines(lines, includeUnreleased), UpdateCenterSource.LOCAL);
+    }
+
+    private SourceResult<List<UpdateCenterOutput.WeeklyReportDetailOutput>> readWeeklyReports() {
+        Path reportPath = getReportPath();
+        if (!Files.isDirectory(reportPath)) {
+            return readWeeklyReportsFromGitHub();
+        }
+        List<UpdateCenterOutput.WeeklyReportDetailOutput> reports = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(reportPath, "report.*.md")) {
+            for (Path file : stream) {
+                String fileName = file.getFileName().toString();
+                if (!REPORT_FILE_NAME.matcher(fileName).matches()) {
+                    continue;
+                }
+                String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                UpdateCenterOutput.WeeklyReportDetailOutput detail = buildWeeklyReportDetail(
+                        fileName,
+                        content,
+                        Files.getLastModifiedTime(file).toInstant().toString());
+                reports.add(detail);
+            }
+        } catch (IOException ex) {
+            throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "读取周报失败：" + ex.getMessage());
+        }
+        return SourceResult.available(reports, UpdateCenterSource.LOCAL);
+    }
+
+    private SourceResult<List<UpdateCenterOutput.WeeklyReportDetailOutput>> readWeeklyReportsFromGitHub() {
+        String body = httpGet(buildGitHubApiUrl("contents/doc", "ref=" + encodeQueryValue(githubBranch)));
+        if (body == null || body.trim().isEmpty()) {
+            return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.WeeklyReportDetailOutput>());
+        }
+        List<UpdateCenterOutput.WeeklyReportDetailOutput> reports = new ArrayList<>();
+        try {
+            JSONArray files = JSON.parseArray(body);
+            for (int i = 0; i < files.size(); i++) {
+                JSONObject file = files.getJSONObject(i);
+                String name = file.getString("name");
+                String path = file.getString("path");
+                if (name == null || path == null || !REPORT_FILE_NAME.matcher(name).matches()) {
+                    continue;
+                }
+                String content = fetchGitHubFileContent(path);
+                if (content == null || content.trim().isEmpty()) {
+                    continue;
+                }
+                reports.add(buildWeeklyReportDetail(name, content, null));
+            }
+            return SourceResult.available(reports, UpdateCenterSource.GITHUB);
+        } catch (RuntimeException ex) {
+            return SourceResult.unavailable(new ArrayList<UpdateCenterOutput.WeeklyReportDetailOutput>());
+        }
+    }
+
+    private UpdateCenterOutput.WeeklyReportDetailOutput buildWeeklyReportDetail(String fileName,
+                                                                                String content,
+                                                                                String updatedAt) {
+        UpdateCenterOutput.WeeklyReportDetailOutput detail = new UpdateCenterOutput.WeeklyReportDetailOutput();
+        detail.setFileName(fileName);
+        detail.setContent(content);
+        detail.setUpdatedAt(updatedAt);
+        Matcher fileMatcher = REPORT_FILE_NAME.matcher(fileName);
+        if (fileMatcher.matches()) {
+            detail.setReportWeek(fileMatcher.group(1));
+        }
+        for (String line : splitLines(content)) {
+            Matcher titleMatcher = REPORT_TITLE.matcher(line.trim());
+            if (titleMatcher.matches()) {
+                detail.setTitle("周报 " + titleMatcher.group(1).trim());
+                detail.setPeriod(titleMatcher.group(2));
+                break;
+            }
+            if (line.startsWith("# ")) {
+                detail.setTitle(line.substring(2).trim());
+                break;
+            }
+        }
+        if (detail.getTitle() == null || detail.getTitle().trim().isEmpty()) {
+            detail.setTitle(fileName);
+        }
+        if (detail.getPeriod() == null) {
+            detail.setPeriod("");
+        }
+        detail.setDataSourceAvailable(true);
+        detail.setSource(UpdateCenterSource.LOCAL.getCode());
+        detail.setFetchedAt(nowIso());
+        return detail;
+    }
+
+    private UpdateCenterOutput.WeeklyReportSummaryOutput toWeeklyReportSummary(
+            UpdateCenterOutput.WeeklyReportDetailOutput detail) {
+        UpdateCenterOutput.WeeklyReportSummaryOutput summary = new UpdateCenterOutput.WeeklyReportSummaryOutput();
+        summary.setFileName(detail.getFileName());
+        summary.setTitle(detail.getTitle());
+        summary.setReportWeek(detail.getReportWeek());
+        summary.setPeriod(detail.getPeriod());
+        summary.setUpdatedAt(detail.getUpdatedAt());
+        return summary;
     }
 
     private List<UpdateCenterOutput.ChangelogReleaseOutput> parseReleaseLines(List<String> lines,
@@ -805,6 +945,10 @@ public class UpdateCenterApplicationService {
 
     private Path getChangelogsPath() {
         return getRepoRoot().resolve("changelogs");
+    }
+
+    private Path getReportPath() {
+        return getRepoRoot().resolve("doc");
     }
 
     private Path getRepoRoot() {
