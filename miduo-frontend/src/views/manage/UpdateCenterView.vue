@@ -218,9 +218,9 @@ async function handleRefresh(): Promise<void> {
     await updateCenterStore.refreshAll()
     await ensureReleaseDetails()
     await ensureWeeklyReportSelection(true)
-    notifySuccess('更新中心已刷新')
+    notifySuccess('动态已刷新')
   } catch {
-    notifyError('刷新更新中心失败')
+    notifyError('刷新动态失败')
   } finally {
     refreshing.value = false
   }
@@ -445,8 +445,8 @@ watch(selectedWeeklyReportFile, (fileName) => {
   <div class="update-center-page">
     <section class="update-hero">
       <div>
-        <el-tag class="hero-tag" type="primary" effect="plain">管理 / 更新中心</el-tag>
-        <h1>更新中心</h1>
+        <el-tag class="hero-tag" type="primary" effect="plain">动态</el-tag>
+        <h1>动态</h1>
         <p>像公告栏一样，把仓库里的版本日志、待发布变更和 Git 提交整理到一起。</p>
       </div>
       <el-button type="primary" :icon="Refresh" :loading="refreshing" @click="handleRefresh">
