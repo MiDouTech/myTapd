@@ -360,6 +360,22 @@ jobs:
             mvn clean package -DskipTests -B
           fi
 
+      - name: Stage update center data for Docker
+        if: matrix.build_output != '' && needs.prepare.outputs.build_type == 'java' && github.event_name != 'pull_request'
+        working-directory: ${{ matrix.context }}
+        run: |
+          set -euo pipefail
+          STAGE_DIR="deployment/docker/repo-data"
+          rm -rf "${STAGE_DIR}"
+          mkdir -p "${STAGE_DIR}/changelogs" "${STAGE_DIR}/doc"
+          cp ../CHANGELOG.md "${STAGE_DIR}/CHANGELOG.md"
+          cp ../changelogs/*.md "${STAGE_DIR}/changelogs/"
+          if compgen -G "../doc/report.*.md" > /dev/null; then
+            cp ../doc/report.*.md "${STAGE_DIR}/doc/"
+          fi
+          echo "Staged update center files:"
+          find "${STAGE_DIR}" -type f | sort
+
       # ── Docker 准备 ────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
         if: github.event_name != 'pull_request'

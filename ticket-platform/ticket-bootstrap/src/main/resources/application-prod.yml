@@ -72,3 +72,6 @@ logging:
   level:
     com.miduo.cloud.ticket: info
     org.springframework: warn
+
+update-center:
+  repo-root: ${UPDATE_CENTER_REPO_ROOT:/data/repo}

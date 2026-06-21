@@ -35,3 +35,5 @@ logs/
 .env.*.local
 *.local
 deployment/docker/.env
+deployment/docker/repo-data/*
+!deployment/docker/repo-data/.gitkeep

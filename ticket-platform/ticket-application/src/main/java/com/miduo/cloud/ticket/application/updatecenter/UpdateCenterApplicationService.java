@@ -36,6 +36,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 
 /**
  * 更新中心应用服务
@@ -848,9 +850,11 @@ public class UpdateCenterApplicationService {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
+            applyHttpsCompatibility(connection);
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(HTTP_TIMEOUT_MS);
             connection.setReadTimeout(HTTP_TIMEOUT_MS);
+            connection.setInstanceFollowRedirects(true);
             connection.setRequestProperty("User-Agent", "miduo-ticket-update-center");
             connection.setRequestProperty("Accept", "application/vnd.github+json,text/plain,*/*");
             if (githubToken != null && !githubToken.trim().isEmpty()) {
@@ -875,6 +879,19 @@ public class UpdateCenterApplicationService {
             if (connection != null) {
                 connection.disconnect();
             }
+        }
+    }
+
+    private void applyHttpsCompatibility(HttpURLConnection connection) {
+        if (!(connection instanceof HttpsURLConnection)) {
+            return;
+        }
+        try {
+            SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+            sslContext.init(null, null, null);
+            ((HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+        } catch (Exception ex) {
+            // 为什么忽略：容器已配置 -Djdk.tls.client.protocols 时，这里只是额外兜底。
         }
     }
 
