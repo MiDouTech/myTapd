@@ -181,14 +181,16 @@ function applyAutoGrowLayout() {
     return
   }
   scrollEl.style.height = 'auto'
-  scrollEl.style.overflow = 'visible'
+  scrollEl.style.overflowY = 'hidden'
+  scrollEl.style.overflowX = 'hidden'
   textContainer.style.height = 'auto'
-  const contentH = editable.scrollHeight
+  const contentH = Math.max(editable.scrollHeight, scrollEl.scrollHeight)
   const next = Math.min(Math.max(contentH, props.height), props.maxHeight)
   root.style.height = `${next}px`
+  textContainer.style.height = '100%'
+  scrollEl.style.height = '100%'
   if (contentH > props.maxHeight) {
-    scrollEl.style.overflow = 'auto'
-    scrollEl.style.height = '100%'
+    scrollEl.style.overflowY = 'auto'
   }
 }
 
