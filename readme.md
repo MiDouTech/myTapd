@@ -3966,12 +3966,12 @@ scripts/archive-changelogs.sh
 
 | 场景 | 是否归档 |
 |---|---|
-| GitHub main 构建成功 | 不自动归档 |
-| CNB 测试环境发布 | 不归档 |
-| CNB 生产发布成功 | 应归档 |
+| 生产分支 CD 构建成功并完成 CNB 版本记录更新 | 自动归档 |
+| CNB 测试环境发布 / 非生产分支构建 | 不归档 |
+| 绕过 CD 直接手动发布旧制品 | 需手动归档或重新触发生产分支 CD |
 | 没有 `changelogs/*.md` | 跳过 |
 
-> 注意：GitHub main 构建成功只能说明测试/版本仓更新，不能等同于 CNB 生产发布按钮成功。当前已暂停 GitHub CD 自动归档，后续需要接入 CNB 生产发布成功回调后再执行 `scripts/archive-changelogs.sh`。
+> 注意：自动归档只在生产分支（`.deploy/config.env` 的 `PROD_BRANCHES`，当前为 `main master`）构建成功、CNB 版本记录仓库更新成功后执行；归档提交带 `[skip ci]`，避免再次触发构建循环。若绕过 CD 直接在 CNB 手动发布旧制品，需要手动运行 `scripts/archive-changelogs.sh` 或重新触发生产分支 CD。
 
 ### 79.6 示例截图（终端运行效果）
 ```text
