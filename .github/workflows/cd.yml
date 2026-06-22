@@ -369,7 +369,11 @@ jobs:
           rm -rf "${STAGE_DIR}"
           mkdir -p "${STAGE_DIR}/changelogs" "${STAGE_DIR}/doc"
           cp ../CHANGELOG.md "${STAGE_DIR}/CHANGELOG.md"
-          cp ../changelogs/*.md "${STAGE_DIR}/changelogs/"
+          if compgen -G "../changelogs/*.md" > /dev/null; then
+            cp ../changelogs/*.md "${STAGE_DIR}/changelogs/"
+          else
+            echo "No changelog fragments to stage."
+          fi
           if compgen -G "../doc/report.*.md" > /dev/null; then
             cp ../doc/report.*.md "${STAGE_DIR}/doc/"
           fi
@@ -581,11 +585,9 @@ jobs:
     needs: [prepare, build-and-push, build-frontend, update-version]
     permissions:
       contents: write
-    # 暂停自动归档：当前 GitHub main 构建成功只代表测试/版本仓更新，
-    # 不能等同于 CNB「生产发布-前端/后端」按钮真正发布成功。
-    # 后续接入 CNB 生产发布成功回调后，再在该回调中执行 scripts/archive-changelogs.sh。
+    # 只在生产分支的非 PR 构建完成并成功更新 CNB 版本记录后运行。
+    # 归档提交使用 [skip ci]，避免归档动作再次触发构建/发布循环。
     if: |
-      false &&
       always() &&
       !cancelled() &&
       github.event_name == 'push' &&
