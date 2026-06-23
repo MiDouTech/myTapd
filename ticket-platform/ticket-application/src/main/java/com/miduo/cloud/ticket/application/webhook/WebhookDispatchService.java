@@ -33,10 +33,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -83,29 +86,132 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (eventType == null) {
             return;
         }
+        dispatchUnion(Collections.singletonList(eventType), ticketId, eventData);
+    }
+
+    /**
+     * 合并多个事件类型的订阅配置后按 URL 去重推送，避免同一工单状态变更触发多条语义重叠事件时重复通知。
+     * 典型场景：同时订阅「工单状态变更」与「工单完结/关闭」时，进入终态只应收到一条企微消息。
+     */
+    public void dispatchUnion(List<WebhookEventType> eventTypes, Long ticketId, Object eventData) {
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            return;
+        }
+        List<WebhookEventType> normalizedEventTypes = normalizeEventTypes(eventTypes);
+        if (normalizedEventTypes.isEmpty()) {
+            return;
+        }
+
         List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
         if (configs == null || configs.isEmpty()) {
-            log.debug("Webhook分发跳过：无启用配置, eventType={}, ticketId={}", eventType.getCode(), ticketId);
-            saveSkippedDispatchLog(eventType, ticketId, "无启用Webhook配置");
+            WebhookEventType primaryEventType = resolvePrimaryEventType(normalizedEventTypes);
+            log.debug("Webhook分发跳过：无启用配置, eventTypes={}, ticketId={}",
+                    formatEventTypeCodes(normalizedEventTypes), ticketId);
+            saveSkippedDispatchLog(primaryEventType, ticketId, "无启用Webhook配置");
             return;
         }
-        List<WebhookConfigPO> subscribedConfigs = filterSubscribedConfigs(configs, eventType);
-        if (subscribedConfigs.isEmpty()) {
-            log.debug("Webhook分发跳过：无配置订阅该事件, eventType={}, ticketId={}", eventType.getCode(), ticketId);
-            saveSkippedDispatchLog(eventType, ticketId, "无配置订阅该事件");
+
+        Map<Long, WebhookConfigPO> subscribedConfigMap = new LinkedHashMap<>();
+        for (WebhookEventType eventType : normalizedEventTypes) {
+            for (WebhookConfigPO config : filterSubscribedConfigs(configs, eventType)) {
+                if (config != null && config.getId() != null) {
+                    subscribedConfigMap.putIfAbsent(config.getId(), config);
+                }
+            }
+        }
+        if (subscribedConfigMap.isEmpty()) {
+            WebhookEventType primaryEventType = resolvePrimaryEventType(normalizedEventTypes);
+            log.debug("Webhook分发跳过：无配置订阅这些事件, eventTypes={}, ticketId={}",
+                    formatEventTypeCodes(normalizedEventTypes), ticketId);
+            saveSkippedDispatchLog(primaryEventType, ticketId, "无配置订阅该事件");
             return;
         }
-        log.info("Webhook事件分发开始: eventType={}, ticketId={}, subscriberCount={}",
-                eventType.getCode(), ticketId, subscribedConfigs.size());
+
+        WebhookEventType primaryEventType = resolvePrimaryEventType(normalizedEventTypes);
+        log.info("Webhook事件分发开始: eventTypes={}, primaryEventType={}, ticketId={}, subscriberCount={}",
+                formatEventTypeCodes(normalizedEventTypes), primaryEventType.getCode(), ticketId,
+                subscribedConfigMap.size());
 
         TicketSnapshot snapshot = buildTicketSnapshot(ticketId);
-        WebhookPayload payload = buildPayload(eventType, ticketId, snapshot, eventData);
+        WebhookPayload payload = buildPayload(primaryEventType, ticketId, snapshot, eventData);
         String payloadJson = JSON.toJSONString(payload);
 
         Set<String> pushedWebhookUrls = new LinkedHashSet<>();
-        for (WebhookConfigPO config : subscribedConfigs) {
-            pushToWebhookWithDedup(config, eventType, ticketId, payloadJson, pushedWebhookUrls);
+        for (WebhookConfigPO config : subscribedConfigMap.values()) {
+            pushToWebhookWithDedup(config, primaryEventType, ticketId, payloadJson, pushedWebhookUrls);
         }
+    }
+
+    /**
+     * 是否存在已启用的企微机器人 Webhook 且订阅了给定事件中的任意一种。
+     * 用于群绑定推送与全局 Webhook 去重：已配置企微 Webhook 时由 Webhook 统一出口，避免同群重复消息。
+     */
+    public boolean hasActiveWecomSubscriberForAny(WebhookEventType... eventTypes) {
+        if (eventTypes == null || eventTypes.length == 0) {
+            return false;
+        }
+        List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
+        if (configs == null || configs.isEmpty()) {
+            return false;
+        }
+        for (WebhookEventType eventType : eventTypes) {
+            if (eventType == null) {
+                continue;
+            }
+            for (WebhookConfigPO config : filterSubscribedConfigs(configs, eventType)) {
+                if (config != null && isWecomRobotWebhook(config.getUrl())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private List<WebhookEventType> normalizeEventTypes(List<WebhookEventType> eventTypes) {
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<WebhookEventType> normalized = new LinkedHashSet<>();
+        for (WebhookEventType eventType : eventTypes) {
+            if (eventType != null) {
+                normalized.add(eventType);
+            }
+        }
+        return new ArrayList<>(normalized);
+    }
+
+    private WebhookEventType resolvePrimaryEventType(List<WebhookEventType> eventTypes) {
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            return WebhookEventType.TICKET_STATUS_CHANGED;
+        }
+        if (eventTypes.contains(WebhookEventType.TICKET_CLOSED)) {
+            return WebhookEventType.TICKET_CLOSED;
+        }
+        if (eventTypes.contains(WebhookEventType.TICKET_COMPLETED)) {
+            return WebhookEventType.TICKET_COMPLETED;
+        }
+        if (eventTypes.contains(WebhookEventType.TICKET_STATUS_CHANGED)) {
+            return WebhookEventType.TICKET_STATUS_CHANGED;
+        }
+        if (eventTypes.contains(WebhookEventType.TICKET_ASSIGNED)) {
+            return WebhookEventType.TICKET_ASSIGNED;
+        }
+        return eventTypes.get(0);
+    }
+
+    private String formatEventTypeCodes(List<WebhookEventType> eventTypes) {
+        if (eventTypes == null || eventTypes.isEmpty()) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i < eventTypes.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(eventTypes.get(i).getCode());
+        }
+        builder.append(']');
+        return builder.toString();
     }
 
     /**
