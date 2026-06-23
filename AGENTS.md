@@ -2,6 +2,28 @@
 
 ## Cursor Cloud specific instructions
 
+### Multi-repo workspace (myTapd + prd_agent)
+
+This environment is intended to run with two repositories:
+
+| Repository | Role | Typical path |
+|---|---|---|
+| `MiDouTech/myTapd` | Primary (this repo) | `/workspace` |
+| `inernoro/prd_agent` | Reference / cross-repo work | sibling directory under the agent workspace |
+
+**Dashboard setup (first time):**
+
+1. Open [Cursor Cloud Agents](https://cursor.com/dashboard?tab=cloud-agents) → **New environment**.
+2. Connect GitHub if prompted.
+3. Switch from **Select One** to **Select multiple** (top-right of the repo list).
+4. Check both `MiDouTech/myTapd` and `inernoro/prd_agent`.
+5. Set startup/install to `bash /workspace/scripts/cloud-agent-startup.sh`.
+6. Click **Start setup** and wait for the environment snapshot to finish.
+
+Repo-level config lives in `.cursor/environment.json` (`repositoryDependencies` declares `prd_agent` for token scope). After setup, run `ls /workspace/..` to confirm where `prd_agent` was cloned.
+
+Use `prd_agent` when referencing update-center patterns, skills, or shared PM workflows that myTapd adopted from that project.
+
 ### Project Overview
 
 This is **米多内部工单系统 (Miduo Internal Ticket Platform)** — a full-stack project with a Spring Boot backend and Vue 3 frontend. See `ticket-platform/README.md` and `miduo-frontend/README.md` for detailed documentation.
