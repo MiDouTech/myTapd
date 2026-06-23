@@ -17,6 +17,22 @@
 > 说明：脚本会在 `node_modules/.cloud-agent-lock.sha256` 写入 lock 校验值。  
 > 如果 `package-lock.json` 未变化，后续会话会跳过 `npm install`，可直接执行 `npm run build`。
 
+## 多仓库（prd_agent）自动克隆
+
+Dashboard 的 **Select multiple** 无法同时勾选 `MiDouTech/myTapd` 与 `inernoro/prd_agent` 时，启动脚本会自动克隆参考仓库：
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `PRD_AGENT_DIR` | `/opt/prd_agent` | prd_agent 克隆目标路径 |
+| `PRD_AGENT_REPO_URL` | `https://github.com/inernoro/prd_agent.git` | 仓库地址 |
+| `PRD_AGENT_BRANCH` | `main` | 分支 |
+
+验证：
+
+```bash
+ls /opt/prd_agent
+```
+
 ## 文件路径
 
 ```bash

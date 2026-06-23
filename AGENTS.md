@@ -4,23 +4,27 @@
 
 ### Multi-repo workspace (myTapd + prd_agent)
 
-This environment is intended to run with two repositories:
+Cursor Dashboard 的 **Select multiple** 目前无法同时勾选跨 GitHub 账号的仓库（`MiDouTech/myTapd` 与 `inernoro/prd_agent`）。改用启动脚本自动克隆参考仓库。
 
-| Repository | Role | Typical path |
+| Repository | Role | Path |
 |---|---|---|
 | `MiDouTech/myTapd` | Primary (this repo) | `/workspace` |
-| `inernoro/prd_agent` | Reference / cross-repo work | sibling directory under the agent workspace |
+| `inernoro/prd_agent` | Reference / cross-repo work | `/opt/prd_agent` |
 
-**Dashboard setup (first time):**
+**Dashboard setup（只需选一个仓库）：**
 
 1. Open [Cursor Cloud Agents](https://cursor.com/dashboard?tab=cloud-agents) → **New environment**.
-2. Connect GitHub if prompted.
-3. Switch from **Select One** to **Select multiple** (top-right of the repo list).
-4. Check both `MiDouTech/myTapd` and `inernoro/prd_agent`.
-5. Set startup/install to `bash /workspace/scripts/cloud-agent-startup.sh`.
-6. Click **Start setup** and wait for the environment snapshot to finish.
+2. 只勾选 **`MiDouTech/myTapd`**（不要切 Select multiple）。
+3. Install/startup 填：`bash /workspace/scripts/cloud-agent-startup.sh`
+4. 完成环境初始化并保存快照。
 
-Repo-level config lives in `.cursor/environment.json` (`repositoryDependencies` declares `prd_agent` for token scope). After setup, run `ls /workspace/..` to confirm where `prd_agent` was cloned.
+启动脚本会自动 `git clone` `inernoro/prd_agent` 到 `/opt/prd_agent`。验证：
+
+```bash
+ls /opt/prd_agent
+```
+
+`.cursor/environment.json` 中的 `repositoryDependencies` 保留，供 Cursor 扩展 GitHub token 范围（若后续 UI 多选恢复可用）。
 
 Use `prd_agent` when referencing update-center patterns, skills, or shared PM workflows that myTapd adopted from that project.
 
