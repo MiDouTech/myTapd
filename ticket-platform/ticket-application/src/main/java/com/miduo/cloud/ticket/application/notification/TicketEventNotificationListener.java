@@ -2,9 +2,11 @@ package com.miduo.cloud.ticket.application.notification;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
+import com.miduo.cloud.ticket.application.webhook.WebhookDispatchService;
 import com.miduo.cloud.ticket.common.enums.NotificationType;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
+import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.domain.common.event.TicketAssignedEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCommentMentionEvent;
 import com.miduo.cloud.ticket.domain.common.event.TicketCreatedAfterAutoDispatchEvent;
@@ -38,6 +40,7 @@ public class TicketEventNotificationListener {
 
     private final NotificationOrchestrator notificationOrchestrator;
     private final WecomGroupPushService wecomGroupPushService;
+    private final WebhookDispatchService webhookDispatchService;
     private final TicketMapper ticketMapper;
     private final TicketFollowerMapper ticketFollowerMapper;
     private final SysUserMapper sysUserMapper;
@@ -47,6 +50,7 @@ public class TicketEventNotificationListener {
 
     public TicketEventNotificationListener(NotificationOrchestrator notificationOrchestrator,
                                            WecomGroupPushService wecomGroupPushService,
+                                           WebhookDispatchService webhookDispatchService,
                                            TicketMapper ticketMapper,
                                            TicketFollowerMapper ticketFollowerMapper,
                                            SysUserMapper sysUserMapper,
@@ -55,6 +59,7 @@ public class TicketEventNotificationListener {
                                            TicketWecomCompactNotificationBuilder compactNotificationBuilder) {
         this.notificationOrchestrator = notificationOrchestrator;
         this.wecomGroupPushService = wecomGroupPushService;
+        this.webhookDispatchService = webhookDispatchService;
         this.ticketMapper = ticketMapper;
         this.ticketFollowerMapper = ticketFollowerMapper;
         this.sysUserMapper = sysUserMapper;
@@ -250,8 +255,32 @@ public class TicketEventNotificationListener {
         if (event.getPreviousAssigneeIdForGroupMention() != null) {
             mentionUserIds.add(event.getPreviousAssigneeIdForGroupMention());
         }
-        wecomGroupPushService.pushByTicketWithUserMentions(
-                ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);
+        if (!shouldSkipGroupPushForStatusChange(event)) {
+            wecomGroupPushService.pushByTicketWithUserMentions(
+                    ticket.getId(), compactNotificationBuilder.build(ticket), mentionUserIds);
+        }
+    }
+
+    /**
+     * 全局 Webhook 已配置企微机器人并订阅状态类事件时，由 Webhook 统一推送，避免与群绑定重复发同一条消息。
+     */
+    private boolean shouldSkipGroupPushForStatusChange(TicketStatusChangedEvent event) {
+        if (event == null) {
+            return false;
+        }
+        List<WebhookEventType> eventTypes = new ArrayList<>();
+        eventTypes.add(WebhookEventType.TICKET_STATUS_CHANGED);
+        if (event.getPreviousAssigneeIdForGroupMention() != null) {
+            eventTypes.add(WebhookEventType.TICKET_ASSIGNED);
+        }
+        TicketStatus newStatus = TicketStatus.fromCode(event.getNewStatus());
+        if (newStatus == TicketStatus.COMPLETED) {
+            eventTypes.add(WebhookEventType.TICKET_COMPLETED);
+        } else if (newStatus == TicketStatus.CLOSED) {
+            eventTypes.add(WebhookEventType.TICKET_CLOSED);
+        }
+        return webhookDispatchService.hasActiveWecomSubscriberForAny(
+                eventTypes.toArray(new WebhookEventType[0]));
     }
 
     private String resolveTicketDetailLink(TicketPO ticket) {

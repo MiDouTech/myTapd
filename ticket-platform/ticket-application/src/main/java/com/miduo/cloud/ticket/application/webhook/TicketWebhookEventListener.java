@@ -17,6 +17,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -92,6 +93,9 @@ public class TicketWebhookEventListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
+        if (event == null) {
+            return;
+        }
         try {
             log.info("接收工单状态变更事件并触发Webhook分发: eventId={}, ticketId={}, oldStatus={}, newStatus={}, operatorId={}",
                     event.getEventId(), event.getTicketId(), event.getOldStatus(), event.getNewStatus(), event.getOperatorId());
@@ -102,16 +106,21 @@ public class TicketWebhookEventListener {
             if (event.getPreviousAssigneeIdForGroupMention() != null) {
                 payload.setPreviousAssigneeId(event.getPreviousAssigneeIdForGroupMention());
             }
-            webhookDispatchService.dispatch(WebhookEventType.TICKET_STATUS_CHANGED, event.getTicketId(), payload);
 
+            List<WebhookEventType> eventTypes = new ArrayList<>();
+            eventTypes.add(WebhookEventType.TICKET_STATUS_CHANGED);
+            if (event.getPreviousAssigneeIdForGroupMention() != null) {
+                eventTypes.add(WebhookEventType.TICKET_ASSIGNED);
+            }
             TicketStatus newStatus = TicketStatus.fromCode(event.getNewStatus());
             if (newStatus == TicketStatus.COMPLETED) {
-                webhookDispatchService.dispatch(WebhookEventType.TICKET_COMPLETED, event.getTicketId(), payload);
+                eventTypes.add(WebhookEventType.TICKET_COMPLETED);
             } else if (newStatus == TicketStatus.CLOSED) {
-                webhookDispatchService.dispatch(WebhookEventType.TICKET_CLOSED, event.getTicketId(), payload);
+                eventTypes.add(WebhookEventType.TICKET_CLOSED);
             }
+            webhookDispatchService.dispatchUnion(eventTypes, event.getTicketId(), payload);
         } catch (Exception ex) {
-            log.error("处理工单状态变更Webhook事件失败: ticketId={}", event != null ? event.getTicketId() : null, ex);
+            log.error("处理工单状态变更Webhook事件失败: ticketId={}", event.getTicketId(), ex);
         }
     }
 
