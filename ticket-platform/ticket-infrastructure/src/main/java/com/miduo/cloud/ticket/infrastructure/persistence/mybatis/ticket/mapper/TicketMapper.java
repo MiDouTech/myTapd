@@ -71,4 +71,7 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                                @Param("statusList") List<String> statusList,
                                                @Param("businessTypeId") Long businessTypeId,
                                                @Param("businessTypeName") String businessTypeName);
+
+    TicketPO selectByIntegrationRef(@Param("integrationAppId") Long integrationAppId,
+                                    @Param("externalTicketRef") String externalTicketRef);
 }

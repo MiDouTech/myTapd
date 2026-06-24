@@ -8,6 +8,7 @@ import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { NotificationPreferenceOutput } from '@/types/notification'
 import AlertMappingPanel from '@/views/manage/AlertMappingView.vue'
+import IntegrationAppPanel from '@/views/manage/components/IntegrationAppPanel.vue'
 import WebhookConfigPanel from '@/views/manage/components/WebhookConfigPanel.vue'
 import WebhookDispatchLogPanel from '@/views/manage/components/WebhookDispatchLogPanel.vue'
 import WecomConfigPanel from '@/views/manage/components/WecomConfigPanel.vue'
@@ -20,7 +21,7 @@ const route = useRoute()
 const router = useRouter()
 
 const tabValues = ['basic', 'notification', 'integration', 'alertMapping'] as const
-const sectionValues = ['wecomConfig', 'webhook', 'webhookLog', 'wecom', 'nlpKeyword', 'nlpLog'] as const
+const sectionValues = ['wecomConfig', 'integrationApp', 'webhook', 'webhookLog', 'wecom', 'nlpKeyword', 'nlpLog'] as const
 
 type SettingsTab = (typeof tabValues)[number]
 type IntegrationSection = (typeof sectionValues)[number]
@@ -170,6 +171,10 @@ onMounted(async () => {
               @open-nlp-keyword="activeSection = 'nlpKeyword'"
               @open-nlp-log="activeSection = 'nlpLog'"
             />
+          </el-tab-pane>
+
+          <el-tab-pane label="接入应用" name="integrationApp">
+            <IntegrationAppPanel />
           </el-tab-pane>
 
           <el-tab-pane label="Webhook配置" name="webhook">

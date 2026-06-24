@@ -13,7 +13,8 @@ public enum TicketSource {
     WEB("web", "Web端"),
     WECOM_BOT("wecom_bot", "企微群机器人"),
     API("api", "API接口"),
-    ALERT("alert", "监控告警");
+    ALERT("alert", "监控告警"),
+    PLUGIN("plugin", "业务原生插件");
 
     private final String code;
     private final String label;

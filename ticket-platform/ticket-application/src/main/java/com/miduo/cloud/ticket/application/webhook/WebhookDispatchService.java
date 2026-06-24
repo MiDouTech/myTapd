@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
+import com.miduo.cloud.ticket.application.plugin.PluginIntegrationWebhookService;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
 import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.Priority;
@@ -69,17 +70,20 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final TicketMapper ticketMapper;
     private final SysUserMapper sysUserMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
+    private final PluginIntegrationWebhookService pluginIntegrationWebhookService;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper,
                                   SysUserMapper sysUserMapper,
-                                  TicketCategoryMapper ticketCategoryMapper) {
+                                  TicketCategoryMapper ticketCategoryMapper,
+                                  PluginIntegrationWebhookService pluginIntegrationWebhookService) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
+        this.pluginIntegrationWebhookService = pluginIntegrationWebhookService;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -101,7 +105,14 @@ public class WebhookDispatchService extends BaseApplicationService {
         if (normalizedEventTypes.isEmpty()) {
             return;
         }
+        try {
+            dispatchUnionInternal(normalizedEventTypes, ticketId, eventData);
+        } finally {
+            dispatchPluginWebhookSafely(normalizedEventTypes, ticketId, eventData);
+        }
+    }
 
+    private void dispatchUnionInternal(List<WebhookEventType> normalizedEventTypes, Long ticketId, Object eventData) {
         List<WebhookConfigPO> configs = webhookConfigMapper.selectAllActive();
         if (configs == null || configs.isEmpty()) {
             WebhookEventType primaryEventType = resolvePrimaryEventType(normalizedEventTypes);
@@ -139,6 +150,14 @@ public class WebhookDispatchService extends BaseApplicationService {
         Set<String> pushedWebhookUrls = new LinkedHashSet<>();
         for (WebhookConfigPO config : subscribedConfigMap.values()) {
             pushToWebhookWithDedup(config, primaryEventType, ticketId, payloadJson, pushedWebhookUrls);
+        }
+    }
+
+    private void dispatchPluginWebhookSafely(List<WebhookEventType> eventTypes, Long ticketId, Object eventData) {
+        try {
+            pluginIntegrationWebhookService.dispatchIfNeeded(eventTypes, ticketId, eventData);
+        } catch (Exception ex) {
+            log.warn("插件Webhook分发失败: ticketId={}, error={}", ticketId, ex.getMessage());
         }
     }
 

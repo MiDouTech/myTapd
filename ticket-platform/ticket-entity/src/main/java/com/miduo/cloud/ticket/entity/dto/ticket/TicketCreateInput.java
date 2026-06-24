@@ -34,4 +34,12 @@ public class TicketCreateInput implements Serializable {
     private String sourceChatId;
 
     private Map<String, String> customFields;
+
+    private Long integrationAppId;
+
+    private String externalUserId;
+
+    private String externalTicketRef;
+
+    private String pluginContext;
 }

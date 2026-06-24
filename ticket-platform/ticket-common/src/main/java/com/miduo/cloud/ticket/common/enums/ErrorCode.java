@@ -63,6 +63,12 @@ public enum ErrorCode {
     OPEN_API_TIMESTAMP_EXPIRED(8003, "开放接口时间戳已过期"),
     OPEN_API_REPLAY_REQUEST(8004, "开放接口请求已重复"),
     OPEN_API_RATE_LIMITED(8005, "开放接口调用过于频繁"),
+    OPEN_API_PERMISSION_DENIED(8006, "开放接口权限不足"),
+    PLUGIN_DISABLED(8101, "工单插件功能未启用"),
+    PLUGIN_LAUNCH_TOKEN_INVALID(8102, "LaunchToken无效或已过期"),
+    PLUGIN_LAUNCH_TOKEN_USED(8103, "LaunchToken已使用"),
+    PLUGIN_ORIGIN_DENIED(8104, "来源域名未授权"),
+    PLUGIN_APP_DISABLED(8105, "接入应用已禁用"),
 
     INTERNAL_ERROR(9999, "系统内部错误");
 
