@@ -65,6 +65,14 @@ public class TicketDetailOutput implements Serializable {
 
     private String sourceLabel;
 
+    private Long integrationAppId;
+
+    private String externalUserId;
+
+    private String externalTicketRef;
+
+    private Map<String, Object> pluginContext;
+
     private Date expectedTime;
 
     private Date resolvedAt;

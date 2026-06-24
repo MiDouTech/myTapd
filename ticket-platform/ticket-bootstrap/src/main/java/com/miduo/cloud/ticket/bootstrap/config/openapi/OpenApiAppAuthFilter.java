@@ -1,10 +1,13 @@
 package com.miduo.cloud.ticket.bootstrap.config.openapi;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.miduo.cloud.ticket.application.integration.IntegrationAppCredentialResolver;
+import com.miduo.cloud.ticket.application.integration.ResolvedIntegrationClient;
 import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.constants.RedisKeyConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.PluginPermission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,15 +39,20 @@ public class OpenApiAppAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(OpenApiAppAuthFilter.class);
     private static final String PATH_PREFIX = "/api/open/v1/";
+    private static final String PLUGIN_LAUNCH_TOKEN_PATH = "/api/open/v1/plugin/launch-token";
+    private static final String PLUGIN_CONFIG_PATH = "/api/open/v1/plugin/config";
 
     private final OpenApiSecurityProperties securityProperties;
+    private final IntegrationAppCredentialResolver integrationAppCredentialResolver;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
 
     public OpenApiAppAuthFilter(OpenApiSecurityProperties securityProperties,
+                                IntegrationAppCredentialResolver integrationAppCredentialResolver,
                                 StringRedisTemplate stringRedisTemplate,
                                 ObjectMapper objectMapper) {
         this.securityProperties = securityProperties;
+        this.integrationAppCredentialResolver = integrationAppCredentialResolver;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
     }
@@ -52,10 +60,16 @@ public class OpenApiAppAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        if (uri == null) {
+        if (uri == null || !uri.startsWith(PATH_PREFIX)) {
             return true;
         }
-        return !uri.startsWith(PATH_PREFIX);
+        if (uri.startsWith("/api/open/v1/plugin/")) {
+            if (PLUGIN_CONFIG_PATH.equals(uri) && "GET".equalsIgnoreCase(request.getMethod())) {
+                return true;
+            }
+            return !PLUGIN_LAUNCH_TOKEN_PATH.equals(uri);
+        }
+        return false;
     }
 
     @Override
@@ -95,10 +109,18 @@ public class OpenApiAppAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        OpenApiSecurityProperties.Client client = securityProperties.findEnabledClient(appKey);
-        if (client == null || !StringUtils.hasText(client.getAppSecret())) {
+        String appSecret = resolveAppSecret(appKey);
+        if (!StringUtils.hasText(appSecret)) {
             writeFail(response, ErrorCode.OPEN_API_APP_NOT_FOUND, "AppKey 不存在或已禁用");
             return;
+        }
+
+        if (PLUGIN_LAUNCH_TOKEN_PATH.equals(request.getRequestURI())) {
+            ResolvedIntegrationClient dbClient = integrationAppCredentialResolver.resolve(appKey);
+            if (dbClient == null || !integrationAppCredentialResolver.hasPermission(dbClient, PluginPermission.LAUNCH_TOKEN)) {
+                writeFail(response, ErrorCode.OPEN_API_PERMISSION_DENIED, "当前应用无 LaunchToken 签发权限");
+                return;
+            }
         }
 
         String nonceKey = RedisKeyConstants.OPEN_API_NONCE_PREFIX + appKey + ":" + nonce;
@@ -120,13 +142,25 @@ public class OpenApiAppAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        String expectedSignature = buildSignature(request, appKey, timestamp, nonce, client.getAppSecret());
+        String expectedSignature = buildSignature(request, appKey, timestamp, nonce, appSecret);
         if (!signature.equalsIgnoreCase(expectedSignature)) {
             log.warn("开放接口签名不通过: appKey={}, uri={}", appKey, request.getRequestURI());
             writeFail(response, ErrorCode.OPEN_API_SIGNATURE_INVALID, "签名校验失败");
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    private String resolveAppSecret(String appKey) {
+        ResolvedIntegrationClient dbClient = integrationAppCredentialResolver.resolve(appKey);
+        if (dbClient != null && StringUtils.hasText(dbClient.getAppSecret())) {
+            return dbClient.getAppSecret();
+        }
+        OpenApiSecurityProperties.Client yamlClient = securityProperties.findEnabledClient(appKey);
+        if (yamlClient == null || !StringUtils.hasText(yamlClient.getAppSecret())) {
+            return null;
+        }
+        return yamlClient.getAppSecret();
     }
 
     private String buildSignature(HttpServletRequest request,

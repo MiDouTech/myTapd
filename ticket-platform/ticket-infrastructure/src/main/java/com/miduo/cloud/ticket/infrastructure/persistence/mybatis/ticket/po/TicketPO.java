@@ -47,6 +47,18 @@ public class TicketPO extends BaseEntity {
     @TableField("source")
     private String source;
 
+    @TableField("integration_app_id")
+    private Long integrationAppId;
+
+    @TableField("external_user_id")
+    private String externalUserId;
+
+    @TableField("external_ticket_ref")
+    private String externalTicketRef;
+
+    @TableField("plugin_context")
+    private String pluginContext;
+
     @TableField("source_chat_id")
     private String sourceChatId;
 

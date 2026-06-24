@@ -72,3 +72,7 @@ open-api:
       app-secret: ${OPEN_API_APP_SECRET:}
       app-name: ${OPEN_API_APP_NAME:external-partner}
       enabled: ${OPEN_API_APP_ENABLED:false}
+
+plugin:
+  enabled: true
+  launch-token-expire-seconds: 300

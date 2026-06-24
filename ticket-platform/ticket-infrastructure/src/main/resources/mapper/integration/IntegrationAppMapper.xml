@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.mapper.IntegrationAppMapper">
+
+    <select id="selectByAppKey" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO">
+        SELECT *
+        FROM integration_app
+        WHERE app_key = #{appKey}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectBySystemCode" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO">
+        SELECT *
+        FROM integration_app
+        WHERE system_code = #{systemCode}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+</mapper>

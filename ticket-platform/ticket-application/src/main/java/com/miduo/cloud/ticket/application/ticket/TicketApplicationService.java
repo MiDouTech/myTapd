@@ -164,6 +164,10 @@ public class TicketApplicationService {
         ticket.setAssigneeId(input.getAssigneeId());
         ticket.setSource(input.getSource() != null ? input.getSource() : TicketSource.WEB.getCode());
         ticket.setSourceChatId(input.getSourceChatId());
+        ticket.setIntegrationAppId(input.getIntegrationAppId());
+        ticket.setExternalUserId(input.getExternalUserId());
+        ticket.setExternalTicketRef(input.getExternalTicketRef());
+        ticket.setPluginContext(input.getPluginContext());
         ticket.setExpectedTime(input.getExpectedTime());
 
         if (input.getCustomFields() != null && !input.getCustomFields().isEmpty()) {
@@ -1217,6 +1221,18 @@ public class TicketApplicationService {
         output.setCreatorId(ticket.getCreatorId());
         output.setAssigneeId(ticket.getAssigneeId());
         output.setSource(ticket.getSource());
+        output.setIntegrationAppId(ticket.getIntegrationAppId());
+        output.setExternalUserId(ticket.getExternalUserId());
+        output.setExternalTicketRef(ticket.getExternalTicketRef());
+        if (ticket.getPluginContext() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> pluginContext = JSON.parseObject(ticket.getPluginContext(), Map.class);
+                output.setPluginContext(pluginContext);
+            } catch (Exception e) {
+                log.warn("解析插件上下文失败: ticketId={}", ticket.getId(), e);
+            }
+        }
         output.setExpectedTime(ticket.getExpectedTime());
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());

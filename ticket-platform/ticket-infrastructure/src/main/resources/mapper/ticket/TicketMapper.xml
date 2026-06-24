@@ -287,4 +287,13 @@
         ORDER BY t.create_time DESC, t.id DESC
     </select>
 
+    <select id="selectByIntegrationRef" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO">
+        SELECT *
+        FROM ticket
+        WHERE integration_app_id = #{integrationAppId}
+          AND external_ticket_ref = #{externalTicketRef}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
 </mapper>

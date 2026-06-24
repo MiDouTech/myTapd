@@ -162,4 +162,30 @@ public class JwtTokenProvider {
     public long getAccessTokenExpireSeconds() {
         return jwtProperties.getAccessTokenExpire();
     }
+
+    /**
+     * 生成插件 LaunchToken
+     */
+    public String createLaunchToken(Long integrationAppId,
+                                    String appKey,
+                                    String externalUserId,
+                                    Long userId,
+                                    String jti,
+                                    long expireSeconds) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + expireSeconds * 1000L);
+        return Jwts.builder()
+                .setId(jti)
+                .setSubject(String.valueOf(userId))
+                .claim(CLAIM_USER_ID, userId)
+                .claim(CLAIM_TYPE, "launch")
+                .claim("integrationAppId", integrationAppId)
+                .claim("appKey", appKey)
+                .claim("externalUserId", externalUserId)
+                .claim("jti", jti)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
 }

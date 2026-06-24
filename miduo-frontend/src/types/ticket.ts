@@ -268,6 +268,10 @@ export interface TicketDetailOutput {
   urgeCount?: number
   source?: string
   sourceLabel?: string
+  integrationAppId?: number
+  externalUserId?: string
+  externalTicketRef?: string
+  pluginContext?: Record<string, unknown>
   expectedTime?: string
   resolvedAt?: string
   closedAt?: string

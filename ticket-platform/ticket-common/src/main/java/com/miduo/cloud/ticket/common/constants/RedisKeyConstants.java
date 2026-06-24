@@ -25,6 +25,7 @@ public final class RedisKeyConstants {
     public static final String TRACK_READ_PREFIX = "track:read:";
     public static final String OPEN_API_NONCE_PREFIX = "openapi:nonce:";
     public static final String OPEN_API_RATE_LIMIT_PREFIX = "openapi:rate:";
+    public static final String PLUGIN_LAUNCH_JTI_PREFIX = "plugin:launch:jti:";
 
     public static final String WS_USER_SESSION_PREFIX = "ws:user:session:";
     public static final String SLA_CHECK_LOCK = "sla:check:lock";

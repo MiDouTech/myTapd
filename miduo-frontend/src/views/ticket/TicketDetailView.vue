@@ -68,6 +68,7 @@ import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticket-
 import BugChangeHistory from './components/bug/BugChangeHistory.vue'
 import BugDetailInfoPanel from './components/bug/BugDetailInfoPanel.vue'
 import BugStatusBadge from './components/bug/BugStatusBadge.vue'
+import PluginContextPanel from './components/PluginContextPanel.vue'
 import TicketTimeTrackPanel from './components/TicketTimeTrackPanel.vue'
 
 const route = useRoute()
@@ -1772,6 +1773,14 @@ watch(
         </div>
       </div>
     </el-card>
+
+    <PluginContextPanel
+      v-if="detail?.source === 'plugin'"
+      :plugin-context="detail.pluginContext"
+      :integration-app-id="detail.integrationAppId"
+      :external-user-id="detail.externalUserId"
+      :external-ticket-ref="detail.externalTicketRef"
+    />
 
     <!-- 自定义字段 -->
     <el-card v-if="customFieldEntries.length > 0" shadow="never" class="section-card">
