@@ -3985,3 +3985,63 @@ GET /api/update-center/github-logs
 | 版本 | 变更内容 |
 |---|---|
 | `v1.6.0-update-center` | 参考 prd_agent 更新中心核心逻辑，新增工单系统管理端更新中心、4个只读接口、更新日志文件规范 |
+
+---
+
+## 80. 业务原生工单插件方案（设计稿）
+
+### 80.1 功能用途
+
+- **用途**：让业务系统（星球、BDE 等）通过轻量 JS SDK 嵌入工单入口，用户 **3 步提工单、全程不跳页**，处理人员 **上下文全带、直接定位**。
+- **类比理解**：像外卖 App 里的「联系客服」按钮——不用跳出 App 去找客服电话，点一下弹窗，地址和订单号已经帮你填好了，你只需要说问题。
+
+### 80.2 三视角速览
+
+| 视角 | 体验目标 |
+|------|---------|
+| 终端用户 | 点按钮 → 写描述 → 提交（≤30 秒），账号/页面/单据/环境信息自动携带 |
+| 接入方 | 引入 SDK + init + setContext，半天接入，AppSecret 不出前端 |
+| 处理人 | 打开工单即见用户/系统/业务/环境上下文，无需反复追问 |
+
+### 80.3 SDK 快速接入示例
+
+```html
+<script src="https://ticket.miduo.com/sdk/v1/ticket-sdk.min.js"></script>
+<script>
+  TicketSDK.init({
+    appKey: 'ak_xxxxxxxx',
+    system: 'xingqiu',
+    launchToken: '由业务后端签发',  // AppSecret 只在服务端使用
+    user: { id: '10086', name: '张三', dept: '渠道部' },
+    mode: 'modal',
+    entry: '#submit-ticket-btn'
+  });
+
+  // 在具体业务页面设置上下文
+  TicketSDK.setContext({
+    module: '渠道管理',
+    bizId: 'Q20260624001',
+    bizType: 'channel'
+  });
+</script>
+```
+
+### 80.4 核心 API（待开发，API000527–536）
+
+| 接口 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 签发 LaunchToken | POST | `/api/open/v1/plugin/launch-token` | 业务后端用 AppKey+签名调用 |
+| 插件建单 | POST | `/api/open/v1/plugin/tickets` | SDK 带 LaunchToken 提交 |
+| 我的工单 | GET | `/api/open/v1/plugin/tickets/mine` | SDK 内嵌列表 |
+| 插件配置 | GET | `/api/open/v1/plugin/config` | SDK 拉取 UI 配置 |
+
+### 80.5 详细设计文档
+
+- 完整方案：[miduo-md/workflow/工单系统/业务原生工单插件方案.md](miduo-md/workflow/工单系统/业务原生工单插件方案.md)
+- 实施 Task：[miduo-md/workflow/工单系统/task031-业务原生工单插件.md](miduo-md/workflow/工单系统/task031-业务原生工单插件.md)
+
+### 80.6 版本历史（新增）
+
+| 版本 | 变更内容 |
+|---|---|
+| `v1.7.0-ticket-plugin-design` | 输出业务原生工单插件完整设计方案（SDK + 开放网关 + LaunchToken 鉴权 + 按应用 Webhook） |
