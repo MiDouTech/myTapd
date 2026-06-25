@@ -1,5 +1,39 @@
 # 更新日志
 
+## [production-2026-06-25-sha-c802711] - 2026-06-25
+
+### 2026-06-24
+
+| 类型 | 模块 | 描述 |
+|---|---|---|
+| feat | 工单系统 | 管理端新增接入应用配置面板（分页、新建/编辑、密钥轮换） |
+| feat | 工单系统 | 工单详情页插件来源工单展示插件上下文只读面板 |
+
+### 2026-06-24
+
+| 类型 | 模块 | 描述 |
+|---|---|---|
+| docs | 工单系统 | 输出业务原生工单插件完整方案：三视角体验设计、ticket-sdk、插件开放网关、LaunchToken 鉴权、按应用 Webhook、10 个新 API（API000527–536） |
+| docs | 工单系统 | 新增 Task031 实施拆解（P0–P3 四阶段，预估 15 人天） |
+| docs | 工单系统 | 明确 SDK 分发策略：CDN / npm 为主，暂不做管理后台离线包下载 |
+
+### 2026-06-24
+
+| 类型 | 模块 | 描述 |
+|---|---|---|
+| feat | 工单插件 | 新增接入应用管理（API000527-530）、LaunchToken 签发（API531）、插件建单/查单/配置（API532-534/536） |
+| feat | 工单插件 | 新增 ticket-sdk（modal/float），构建产物发布至 `/sdk/v1/ticket-sdk.min.js` |
+| feat | 工单插件 | 管理端「接入应用」配置页、工单详情插件上下文面板 |
+| feat | 工单插件 | 按应用 Webhook 回调推送（integration_app.callback_url） |
+| chore | 数据库 | Flyway V62：integration_app 表 + ticket 插件上下文字段 |
+
+### 2026-06-24
+
+| 类型 | 模块 | 描述 |
+|---|---|---|
+| feat | 工单插件 SDK | 新增 autoReport：自动捕获 403/500/502/503，预填描述并弹窗由用户确认提交 |
+| feat | 工单插件 SDK | 新增 reportHttpError、createAxiosInterceptor，支持 axios 手动接入 |
+
 ## [production-2026-06-24-sha-834bc60] - 2026-06-24
 
 ### 2026-06-24
