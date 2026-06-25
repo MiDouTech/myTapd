@@ -1,3 +1,15 @@
+import {
+  AutoReportOptions,
+  HttpAutoReporter,
+  HttpErrorCapture,
+  buildHttpErrorDescription,
+  createAxiosErrorInterceptor,
+  normalizeAutoReportOptions,
+} from './auto-report'
+
+export type { AutoReportOptions, HttpErrorCapture }
+export { createAxiosErrorInterceptor }
+
 export interface TicketSdkUser {
   id: string
   name: string
@@ -25,6 +37,7 @@ export interface TicketSdkInitOptions {
   user: TicketSdkUser
   mode?: 'modal' | 'sidebar' | 'float'
   entry?: string
+  autoReport?: AutoReportOptions
 }
 
 export interface TicketSdkConfig {
@@ -60,11 +73,13 @@ class TicketSdkImpl {
   private floatEl: HTMLElement | null = null
   private overlayEl: HTMLElement | null = null
   private handlers = new Map<TicketSdkEvent, Set<EventHandler>>()
+  private autoReporter = new HttpAutoReporter()
 
   async init(options: TicketSdkInitOptions): Promise<void> {
     this.options = { ...options, mode: options.mode ?? 'float' }
     this.config = await this.fetchConfig()
     this.mountEntry()
+    this.setupAutoReport(options.autoReport)
   }
 
   setContext(context: TicketSdkContext): void {
@@ -77,12 +92,17 @@ class TicketSdkImpl {
     }
   }
 
-  open(): void {
-    this.openModal()
+  open(prefillDescription?: string): void {
+    this.openModal(false, prefillDescription)
   }
 
   openMyTickets(): void {
     this.openModal(true)
+  }
+
+  /** 手动上报 HTTP 错误（供 axios 拦截器或业务代码调用） */
+  reportHttpError(error: HttpErrorCapture): void {
+    this.handleHttpErrorCapture(error)
   }
 
   on(event: TicketSdkEvent, handler: EventHandler): void {
@@ -93,6 +113,7 @@ class TicketSdkImpl {
   }
 
   destroy(): void {
+    this.autoReporter.stop()
     this.floatEl?.remove()
     this.overlayEl?.remove()
     this.floatEl = null
@@ -156,7 +177,7 @@ class TicketSdkImpl {
     this.floatEl = button
   }
 
-  private openModal(myTickets = false): void {
+  private openModal(myTickets = false, prefillDescription?: string, autoCaptured = false): void {
     if (!this.options) return
     this.overlayEl?.remove()
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
@@ -176,6 +197,7 @@ class TicketSdkImpl {
            <strong style="font-size:16px;">提交工单</strong>
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
+         ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
          <textarea data-role="description" rows="6" placeholder="请描述遇到的问题" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;"></textarea>
          <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
            <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
@@ -193,6 +215,12 @@ class TicketSdkImpl {
     if (myTickets) {
       void this.renderMyTickets(panel)
     } else {
+      if (prefillDescription) {
+        const textarea = panel.querySelector('[data-role="description"]') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = prefillDescription
+        }
+      }
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel)
       })
@@ -302,6 +330,47 @@ class TicketSdkImpl {
   private emit(event: TicketSdkEvent, payload: TicketUpdatedEvent): void {
     this.handlers.get(event)?.forEach((handler) => handler(payload))
   }
+
+  private setupAutoReport(options?: AutoReportOptions): void {
+    const runtime = normalizeAutoReportOptions(options)
+    if (!runtime) {
+      this.autoReporter.stop()
+      return
+    }
+    const apiBase = this.apiBase
+    runtime.shouldIgnoreUrl = (url: string) => {
+      return url.includes('/api/open/v1/plugin/') || (!!apiBase && url.startsWith(apiBase) && url.includes('/plugin/'))
+    }
+    runtime.onCapture = (error) => this.handleHttpErrorCapture(error)
+    this.autoReporter.start(runtime)
+  }
+
+  private handleHttpErrorCapture(error: HttpErrorCapture): void {
+    if (!this.options) {
+      return
+    }
+    this.setContext({
+      extra: {
+        ...(this.context.extra ?? {}),
+        errorType: 'http',
+        statusCode: error.statusCode,
+        url: error.url,
+        method: error.method,
+        responseMessage: error.responseMessage,
+        autoCaptured: true,
+      },
+    })
+    const description = buildHttpErrorDescription(error)
+    if (this.overlayEl) {
+      this.closeModal()
+    }
+    this.openModal(false, description, true)
+  }
+
+  /** 创建 axios 响应错误拦截器，内部调用 reportHttpError */
+  createAxiosInterceptor(options?: Pick<AutoReportOptions, 'httpStatus' | 'apiPatterns'>) {
+    return createAxiosErrorInterceptor((error) => this.reportHttpError(error), options)
+  }
 }
 
 function collectEnv(): EnvInfo {
@@ -345,8 +414,11 @@ export const TicketSDK = {
   init: (options: TicketSdkInitOptions) => ticketSdk.init(options),
   setContext: (context: TicketSdkContext) => ticketSdk.setContext(context),
   setUser: (user: TicketSdkUser) => ticketSdk.setUser(user),
-  open: () => ticketSdk.open(),
+  open: (prefillDescription?: string) => ticketSdk.open(prefillDescription),
   openMyTickets: () => ticketSdk.openMyTickets(),
+  reportHttpError: (error: HttpErrorCapture) => ticketSdk.reportHttpError(error),
+  createAxiosInterceptor: (options?: Pick<AutoReportOptions, 'httpStatus' | 'apiPatterns'>) =>
+    ticketSdk.createAxiosInterceptor(options),
   on: (event: TicketSdkEvent, handler: EventHandler) => ticketSdk.on(event, handler),
   destroy: () => ticketSdk.destroy(),
 }

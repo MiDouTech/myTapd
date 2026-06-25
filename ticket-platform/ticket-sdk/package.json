@@ -1,6 +1,6 @@
 {
   "name": "@miduo/ticket-sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "米多业务原生工单插件 SDK",
   "type": "module",
   "main": "dist/ticket-sdk.umd.js",
