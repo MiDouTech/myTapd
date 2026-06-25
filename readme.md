@@ -4026,6 +4026,33 @@ GET /api/update-center/github-logs
 </script>
 ```
 
+### 80.3.1 HTTP 错误自动捕获（v1.1.0+）
+
+当业务接口返回 403/5xx 时，SDK 可自动预填工单描述并弹窗，由用户确认后再提交（**不会静默建单**）。
+
+```javascript
+TicketSDK.init({
+  // ...同上
+  autoReport: {
+    enabled: true,
+    httpStatus: [403, 500, 502, 503],
+    confirmBeforeSubmit: true,
+    debounceMs: 300000,
+    apiPatterns: ['/api/'],  // 可选，只监控自家 API
+  },
+});
+
+// axios 项目也可手动挂载
+axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
+```
+
+| 配置项 | 默认 | 说明 |
+|--------|------|------|
+| `enabled` | `false` | 关闭时不影响现有接入 |
+| `httpStatus` | `[403,500,502,503]` | 触发捕获的状态码 |
+| `confirmBeforeSubmit` | `true` | 仅预填并弹窗 |
+| `debounceMs` | `300000` | 同 URL+状态码 5 分钟内只提示一次 |
+
 ### 80.4 核心 API（待开发，API000527–536）
 
 | 接口 | 方法 | 路径 | 说明 |
@@ -4044,4 +4071,5 @@ GET /api/update-center/github-logs
 
 | 版本 | 变更内容 |
 |---|---|
+| `v1.1.0-ticket-sdk-auto-report` | SDK 新增 autoReport：自动捕获 403/5xx，预填描述弹窗由用户确认提交 |
 | `v1.7.0-ticket-plugin-design` | 输出业务原生工单插件完整设计方案（SDK + 开放网关 + LaunchToken 鉴权 + 按应用 Webhook） |
