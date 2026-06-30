@@ -11,12 +11,15 @@ import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCreateOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketMinePageInput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketSummaryOutput;
+import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
+import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
@@ -24,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -40,15 +44,18 @@ public class PluginTicketApplicationService {
     private final TicketApplicationService ticketApplicationService;
     private final TicketMapper ticketMapper;
     private final IntegrationAppCredentialResolver credentialResolver;
+    private final QiniuUploadService qiniuUploadService;
     private final String publicTicketBaseUrl;
 
     public PluginTicketApplicationService(TicketApplicationService ticketApplicationService,
                                           TicketMapper ticketMapper,
                                           IntegrationAppCredentialResolver credentialResolver,
+                                          QiniuUploadService qiniuUploadService,
                                           @Value("${ticket.public-base-url:}") String publicTicketBaseUrl) {
         this.ticketApplicationService = ticketApplicationService;
         this.ticketMapper = ticketMapper;
         this.credentialResolver = credentialResolver;
+        this.qiniuUploadService = qiniuUploadService;
         this.publicTicketBaseUrl = publicTicketBaseUrl;
     }
 
@@ -120,6 +127,24 @@ public class PluginTicketApplicationService {
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "工单不存在");
         }
         return toSummaryOutput(ticket);
+    }
+
+    /**
+     * 插件上传图片并返回可访问 URL
+     */
+    public ImageUploadOutput uploadImage(PluginLaunchTokenClaims claims, MultipartFile file) {
+        IntegrationAppPO app = credentialResolver.requireEnabledApp(claims.getIntegrationAppId());
+        if (app == null) {
+            throw BusinessException.of(ErrorCode.PLUGIN_APP_DISABLED, "接入应用已禁用");
+        }
+
+        String fileUrl = qiniuUploadService.uploadForTicket(file, TicketUploadPurpose.SCREENSHOT);
+        ImageUploadOutput output = new ImageUploadOutput();
+        output.setUrl(fileUrl);
+        output.setFileName(file.getOriginalFilename());
+        output.setFileSize(file.getSize());
+        output.setFileType(file.getContentType());
+        return output;
     }
 
     private Long resolveCategoryId(IntegrationAppPO app, Map<String, Object> pluginContext) {
