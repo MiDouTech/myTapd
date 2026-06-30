@@ -4074,3 +4074,13 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 |---|---|
 | `v1.1.0-ticket-sdk-auto-report` | SDK 新增 autoReport：自动捕获 403/5xx，预填描述弹窗由用户确认提交 |
 | `v1.7.0-ticket-plugin-design` | 输出业务原生工单插件完整设计方案（SDK + 开放网关 + LaunchToken 鉴权 + 按应用 Webhook） |
+| `v1.1.14-ticket-sdk-richtext-public-asset-refresh` | 同步更新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 为富文本版本，修复“业务系统仍显示旧 textarea” |
+
+### 80.7 常见问题（新增）
+#### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
+- **检测**：先打开 SDK URL（`/sdk/v1/ticket-sdk.min.js`）搜索 `contenteditable`，如果搜不到就是还在用旧静态文件。  
+- **记录（错误类型）**：静态资源未刷新（旧产物或浏览器/CDN 缓存）。  
+- **恢复建议**：
+  1. 确认部署包包含新版 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`；
+  2. 发布后强刷页面（`Ctrl+F5`）；
+  3. 如有 CDN，执行该文件刷新/预热。
