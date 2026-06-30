@@ -198,7 +198,15 @@ class TicketSdkImpl {
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
          ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-         <textarea data-role="description" rows="6" placeholder="请描述遇到的问题" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;"></textarea>
+         <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;"></div>
+         <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片后随工单提交。</div>
+         <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+           <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传图片</div>
+           <div style="display:flex;align-items:center;gap:8px;">
+             <input data-role="image-input" type="file" accept="image/*" multiple style="display:none;" />
+             <button type="button" data-action="pick-image" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片</button>
+           </div>
+         </div>
          <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
            <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
            <button type="button" data-action="submit" style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:pointer;background:${primary};">提交</button>
@@ -215,14 +223,33 @@ class TicketSdkImpl {
     if (myTickets) {
       void this.renderMyTickets(panel)
     } else {
+      const uploadedAttachments: string[] = []
+      const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
+      if (descriptionEl) {
+        descriptionEl.innerHTML = '<p><br/></p>'
+      }
       if (prefillDescription) {
-        const textarea = panel.querySelector('[data-role="description"]') as HTMLTextAreaElement
-        if (textarea) {
-          textarea.value = prefillDescription
+        const content = escapeHtml(prefillDescription).replace(/\n/g, '<br/>')
+        if (descriptionEl) {
+          descriptionEl.innerHTML = content
         }
       }
+      const imageInput = panel.querySelector('[data-role="image-input"]') as HTMLInputElement
+      panel.querySelector('[data-action="pick-image"]')?.addEventListener('click', () => {
+        imageInput?.click()
+      })
+      imageInput?.addEventListener('change', async () => {
+        const files = Array.from(imageInput.files ?? [])
+        if (!files.length) {
+          return
+        }
+        for (const file of files) {
+          await this.uploadImageAndAttach(panel, descriptionEl, uploadedAttachments, file)
+        }
+        imageInput.value = ''
+      })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
-        void this.submitTicket(panel)
+        void this.submitTicket(panel, uploadedAttachments)
       })
     }
     document.body.appendChild(overlay)
@@ -234,18 +261,21 @@ class TicketSdkImpl {
     this.overlayEl = null
   }
 
-  private async submitTicket(panel: HTMLElement): Promise<void> {
-    const description = (panel.querySelector('[data-role="description"]') as HTMLTextAreaElement)?.value?.trim()
+  private async submitTicket(panel: HTMLElement, attachments: string[]): Promise<void> {
+    const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
+    const descriptionHtml = (descriptionEl?.innerHTML ?? '').trim()
+    const descriptionText = (descriptionEl?.innerText ?? '').replace(/\s+/g, ' ').trim()
     const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
-    if (!description) {
+    if (!descriptionText && attachments.length === 0) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '请先填写问题描述'
+      messageEl.textContent = '请先填写问题描述或上传图片'
       return
     }
+    const description = descriptionText ? descriptionHtml : '<p>用户上传了问题图片，请结合附件排查。</p>'
     messageEl.style.color = '#909399'
     messageEl.textContent = '提交中...'
     try {
-      const output = await this.createTicket(description)
+      const output = await this.createTicket(description, attachments)
       messageEl.style.color = '#67c23a'
       messageEl.textContent = `提交成功：${output.ticketNo}`
       this.emit('ticket:updated', { ticketNo: output.ticketNo, status: output.status })
@@ -296,7 +326,75 @@ class TicketSdkImpl {
     }
   }
 
-  private async createTicket(description: string): Promise<{ ticketNo: string; status: string }> {
+  private async uploadImageAndAttach(
+    panel: HTMLElement,
+    descriptionEl: HTMLDivElement,
+    attachments: string[],
+    file: File,
+  ): Promise<void> {
+    const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    messageEl.style.color = '#909399'
+    messageEl.textContent = `上传中：${file.name}`
+    try {
+      const output = await this.uploadPluginImage(file)
+      if (output.url) {
+        attachments.push(output.url)
+        this.renderAttachmentList(panel, attachments)
+        this.insertImageToEditor(descriptionEl, output.url)
+      }
+      messageEl.style.color = '#67c23a'
+      messageEl.textContent = `上传成功：${output.fileName || file.name}`
+    } catch (error) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = error instanceof Error ? error.message : '图片上传失败'
+    }
+  }
+
+  private renderAttachmentList(panel: HTMLElement, attachments: string[]): void {
+    const listEl = panel.querySelector('[data-role="attachment-list"]') as HTMLElement
+    if (!listEl) {
+      return
+    }
+    if (!attachments.length) {
+      listEl.textContent = '未上传图片'
+      return
+    }
+    listEl.innerHTML = attachments
+      .map((url, index) => `<div style="margin-bottom:4px;">图片${index + 1}：<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">查看</a></div>`)
+      .join('')
+  }
+
+  private insertImageToEditor(editor: HTMLDivElement, imageUrl: string): void {
+    if (!editor || !imageUrl) {
+      return
+    }
+    editor.focus()
+    const html = `<p><img src="${escapeHtml(imageUrl)}" alt="问题截图" style="max-width:100%;height:auto;border-radius:4px;" /></p>`
+    try {
+      document.execCommand('insertHTML', false, html)
+    } catch (error) {
+      editor.innerHTML += html
+    }
+  }
+
+  private async uploadPluginImage(file: File): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/attachments/image`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.options!.launchToken}`,
+      },
+      body: formData,
+    })
+    const result = await response.json()
+    if (!response.ok || result.code !== 200 || !result.data?.url) {
+      throw new Error(result.message || '图片上传失败')
+    }
+    return result.data
+  }
+
+  private async createTicket(description: string, attachments: string[]): Promise<{ ticketNo: string; status: string }> {
     const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets`, {
       method: 'POST',
       headers: {
@@ -307,6 +405,7 @@ class TicketSdkImpl {
         description,
         priority: this.config?.defaultPriority ?? 'medium',
         pluginContext: this.buildPluginContext(),
+        attachments,
       }),
     })
     const result = await response.json()

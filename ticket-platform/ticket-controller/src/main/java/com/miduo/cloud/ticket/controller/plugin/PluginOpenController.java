@@ -8,10 +8,13 @@ import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.*;
+import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -61,6 +64,18 @@ public class PluginOpenController {
     }
 
     /**
+     * 插件富文本图片上传
+     * 接口编号：API000535
+     */
+    @Operation(summary = "插件富文本图片上传", description = "接口编号：API000535")
+    @PostMapping(value = "/attachments/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResult<ImageUploadOutput> uploadAttachmentImage(@RequestHeader("Authorization") String authorization,
+                                                              @RequestParam("file") MultipartFile file) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        return ApiResult.success(pluginTicketApplicationService.uploadImage(claims, file));
+    }
+
+    /**
      * 插件我的工单列表
      * 接口编号：API000533
      */
@@ -88,9 +103,9 @@ public class PluginOpenController {
 
     /**
      * 插件初始化配置
-     * 接口编号：API000536
+     * 接口编号：API000537
      */
-    @Operation(summary = "插件初始化配置", description = "接口编号：API000536")
+    @Operation(summary = "插件初始化配置", description = "接口编号：API000537")
     @GetMapping("/config")
     public ApiResult<PluginConfigOutput> getConfig(@RequestParam String appKey, HttpServletRequest request) {
         String origin = resolveOrigin(request);

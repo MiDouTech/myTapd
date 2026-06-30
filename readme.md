@@ -4053,12 +4053,13 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `confirmBeforeSubmit` | `true` | 仅预填并弹窗 |
 | `debounceMs` | `300000` | 同 URL+状态码 5 分钟内只提示一次 |
 
-### 80.4 核心 API（待开发，API000527–536）
+### 80.4 核心 API（API000527–537）
 
 | 接口 | 方法 | 路径 | 说明 |
 |------|------|------|------|
 | 签发 LaunchToken | POST | `/api/open/v1/plugin/launch-token` | 业务后端用 AppKey+签名调用 |
 | 插件建单 | POST | `/api/open/v1/plugin/tickets` | SDK 带 LaunchToken 提交 |
+| 插件富文本图片上传 | POST | `/api/open/v1/plugin/attachments/image` | SDK 上传图片并在提交时带附件URL |
 | 我的工单 | GET | `/api/open/v1/plugin/tickets/mine` | SDK 内嵌列表 |
 | 插件配置 | GET | `/api/open/v1/plugin/config` | SDK 拉取 UI 配置 |
 

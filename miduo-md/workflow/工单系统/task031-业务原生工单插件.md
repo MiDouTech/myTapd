@@ -44,8 +44,8 @@
 | 3 | LaunchToken 签发（API000531） | ticket-application | P0 |
 | 4 | 插件建单 API（API000532） | ticket-controller | P0 |
 | 5 | 插件查单 API（API000533–534） | ticket-controller | P1 |
-| 6 | 附件上传凭证（API000535） | ticket-controller | P1 |
-| 7 | 插件配置拉取（API000536） | ticket-controller | P1 |
+| 6 | 富文本图片上传（API000535） | ticket-controller | P1 |
+| 7 | 插件配置拉取（API000537） | ticket-controller | P1 |
 | 8 | 按应用 Webhook 扩展 | ticket-application | P2 |
 | 9 | 工单详情「插件上下文」面板 | miduo-frontend | P2 |
 | 10 | 管理端「接入应用」配置页 | miduo-frontend | P1 |
@@ -111,10 +111,10 @@
 
 #### 4.2.2 插件配置与查单 API
 
-- [ ] API000536 插件配置拉取
+- [ ] API000537 插件配置拉取
 - [ ] API000533 我的工单列表
 - [ ] API000534 工单详情摘要
-- [ ] API000535 附件上传凭证（复用七牛逻辑）
+- [ ] API000535 富文本图片上传（复用七牛逻辑）
 
 #### 4.2.3 管理端
 
@@ -172,8 +172,8 @@
 | API000532 | 插件创建工单 | POST | `/api/open/v1/plugin/tickets` |
 | API000533 | 插件我的工单列表 | GET | `/api/open/v1/plugin/tickets/mine` |
 | API000534 | 插件工单详情摘要 | GET | `/api/open/v1/plugin/tickets/{ticketNo}` |
-| API000535 | 插件附件上传凭证 | POST | `/api/open/v1/plugin/attachment/token` |
-| API000536 | 插件初始化配置 | GET | `/api/open/v1/plugin/config` |
+| API000535 | 插件富文本图片上传 | POST | `/api/open/v1/plugin/attachments/image` |
+| API000537 | 插件初始化配置 | GET | `/api/open/v1/plugin/config` |
 
 ## 6. 测试计划
 

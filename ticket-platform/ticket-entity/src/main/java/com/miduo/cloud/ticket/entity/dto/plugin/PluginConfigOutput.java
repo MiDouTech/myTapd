@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * 插件 SDK 初始化配置
- * 接口编号：API000536
+ * 接口编号：API000537
  */
 @Data
 public class PluginConfigOutput implements Serializable {
