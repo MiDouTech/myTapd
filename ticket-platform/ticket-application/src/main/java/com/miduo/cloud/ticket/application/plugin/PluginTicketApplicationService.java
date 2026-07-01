@@ -27,12 +27,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +42,10 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PluginTicketApplicationService {
+    private static final Pattern HTML_IMG_TAG_PATTERN = Pattern.compile("(?is)<img\\b[^>]*>");
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+    private static final Pattern DATA_URL_PATTERN = Pattern.compile("(?is)data:image/[^\\s\"']+");
+    private static final String IMAGE_ONLY_TITLE_FALLBACK = "图片问题反馈";
 
     private final TicketApplicationService ticketApplicationService;
     private final TicketMapper ticketMapper;
@@ -184,12 +190,27 @@ public class PluginTicketApplicationService {
             module = String.valueOf(pluginContext.get("module"));
         }
         String prefix = "[" + systemCode + (StringUtils.hasText(module) ? "/" + module : "") + "] ";
-        String content = description == null ? "" : description.trim().replaceAll("\\s+", " ");
+        String content = extractTitleText(description);
+        if (!StringUtils.hasText(content)) {
+            content = IMAGE_ONLY_TITLE_FALLBACK;
+        }
         if (content.length() > 50) {
             content = content.substring(0, 50);
         }
         String title = prefix + content;
         return title.length() > 300 ? title.substring(0, 300) : title;
+    }
+
+    private String extractTitleText(String description) {
+        if (!StringUtils.hasText(description)) {
+            return "";
+        }
+        // 为什么这里先去掉图片标签：富文本里可能带 base64 图片，直接截断会把“图片编码”塞进标题。
+        String text = HTML_IMG_TAG_PATTERN.matcher(description).replaceAll(" ");
+        text = HTML_TAG_PATTERN.matcher(text).replaceAll(" ");
+        text = HtmlUtils.htmlUnescape(text);
+        text = DATA_URL_PATTERN.matcher(text).replaceAll(" ");
+        return text.replaceAll("\\s+", " ").trim();
     }
 
     private Map<String, String> mergeCustomFields(Map<String, String> customFields,

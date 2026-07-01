@@ -4075,6 +4075,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.0-ticket-sdk-auto-report` | SDK 新增 autoReport：自动捕获 403/5xx，预填描述弹窗由用户确认提交 |
 | `v1.7.0-ticket-plugin-design` | 输出业务原生工单插件完整设计方案（SDK + 开放网关 + LaunchToken 鉴权 + 按应用 Webhook） |
 | `v1.1.14-ticket-sdk-richtext-public-asset-refresh` | 同步更新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 为富文本版本，修复“业务系统仍显示旧 textarea” |
+| `v1.1.15-plugin-title-text-only` | 插件建单标题改为“仅纯文字摘要”，自动移除富文本中的图片标签、HTML 标签和 `data:image` 编码，避免标题出现图片信息 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4084,3 +4085,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 确认部署包包含新版 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`；
   2. 发布后强刷页面（`Ctrl+F5`）；
   3. 如有 CDN，执行该文件刷新/预热。
+
+#### Q91：为什么工单标题里会出现 `<img src="data:image...">`？
+- **检测**：检查建单描述是否来自富文本，并包含图片节点或 dataURL。  
+- **记录（错误类型）**：标题生成直接截取原始富文本，导致把图片编码当文字展示。  
+- **恢复建议**：
+  1. 标题生成只取纯文字（已在 `v1.1.15` 修复）；
+  2. 线上发布后新建工单即可看到标题恢复为文字摘要；
+  3. 历史工单标题不会自动回写，可按需人工修改。
