@@ -148,8 +148,8 @@ public class KanbanApplicationService extends BaseApplicationService {
         String code = safeStatus(status).toLowerCase(Locale.ROOT);
         if ("pending".equals(code) || "pending_assign".equals(code) || "pending_accept".equals(code)
                 || "pending_dispatch".equals(code) || "pending_test".equals(code)
-                || "pending_dev".equals(code) || "pending_test_accept".equals(code)
-                || "pending_dev_accept".equals(code)
+                || "pending_dev".equals(code) || "pending_cs_accept".equals(code)
+                || "pending_test_accept".equals(code) || "pending_dev_accept".equals(code)
                 || "alert_triggered".equals(code)) {
             return 1;
         }

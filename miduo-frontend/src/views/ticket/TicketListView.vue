@@ -95,6 +95,7 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   pending_verify: '待验收',
   completed: '已完成',
   closed: '已关闭',
+  pending_cs_accept: '待客服受理',
   pending_test_accept: '待测试受理',
   testing: '测试复现中',
   investigating: '排查中',
@@ -562,6 +563,7 @@ function getStatusType(status?: string): 'success' | 'warning' | 'danger' | 'inf
     [
       'pending_assign',
       'pending_accept',
+      'pending_cs_accept',
       'pending_test_accept',
       'pending_dev_accept',
       'pending_verify',
@@ -759,6 +761,7 @@ onUnmounted(() => {
             <el-option label="已完成" value="completed" />
             <el-option label="已关闭" value="closed" />
             <!-- 缺陷工单专属状态 -->
+            <el-option label="待客服受理" value="pending_cs_accept" />
             <el-option label="待测试受理" value="pending_test_accept" />
             <el-option label="测试复现中" value="testing" />
             <el-option label="待开发受理" value="pending_dev_accept" />

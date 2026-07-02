@@ -22,6 +22,7 @@ public enum TicketStatus {
     CLOSED("closed", "已关闭"),
 
     // ---- 缺陷工单专属状态 ----
+    PENDING_CS_ACCEPT("pending_cs_accept", "待客服受理"),
     PENDING_TEST_ACCEPT("pending_test_accept", "待测试受理"),
     /** 缺陷流程中展示为「测试复现中」，状态码保持 testing 以兼容历史数据 */
     TESTING("testing", "测试复现中"),
@@ -69,6 +70,7 @@ public enum TicketStatus {
     public boolean isPendingAcceptanceLike() {
         return this == PENDING_ASSIGN
                 || this == PENDING_ACCEPT
+                || this == PENDING_CS_ACCEPT
                 || this == PENDING_TEST_ACCEPT
                 || this == PENDING_DEV_ACCEPT
                 || this == ALERT_TRIGGERED;
