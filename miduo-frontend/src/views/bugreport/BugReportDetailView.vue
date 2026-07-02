@@ -29,6 +29,7 @@ import {
   getBugReportStatusLabel,
   getBugReportStatusTagType,
   isBugReportEditable,
+  showBugReportReviewResult,
 } from '@/utils/bugreport'
 
 const route = useRoute()
@@ -112,6 +113,9 @@ const isTempResolutionTrack = computed(() => {
 
 /** 展示临时/彻底日期行：仅走临时时有意义 */
 const hasTempResolutionDateRows = computed(() => isTempResolutionTrack.value)
+
+/** 已退回/已归档才展示审核完成时间与审核意见 */
+const showReviewResult = computed(() => showBugReportReviewResult(detail.value?.status))
 
 /** 影响范围旁「解决方案」：非临时显示 solution；走临时时该处固定无值，仅展示为「-」 */
 const displaySolutionText = computed(() => {
@@ -524,7 +528,7 @@ watch(
             <span class="mobile-detail-label">提交时间</span>
             <span class="mobile-detail-value">{{ formatDateTime(detail?.submittedAt) }}</span>
           </div>
-          <div class="mobile-detail-row">
+          <div v-if="showReviewResult" class="mobile-detail-row">
             <span class="mobile-detail-label">审核完成时间</span>
             <span class="mobile-detail-value">{{ formatDateTime(detail?.reviewedAt) }}</span>
           </div>
@@ -538,7 +542,7 @@ watch(
             <span class="mobile-detail-label">归因明细</span>
             <span class="mobile-detail-value pre-wrap">{{ detail?.logicCauseDetail || '-' }}</span>
           </div>
-          <div class="mobile-detail-row">
+          <div v-if="showReviewResult" class="mobile-detail-row">
             <span class="mobile-detail-label">审核意见</span>
             <span class="mobile-detail-value pre-wrap">{{ detail?.reviewComment || '-' }}</span>
           </div>
@@ -611,10 +615,10 @@ watch(
           <el-descriptions-item label="归因明细">
             {{ detail?.logicCauseDetail || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="审核完成时间">
+          <el-descriptions-item v-if="showReviewResult" label="审核完成时间">
             {{ formatDateTime(detail?.reviewedAt) }}
           </el-descriptions-item>
-          <el-descriptions-item label="审核意见">
+          <el-descriptions-item v-if="showReviewResult" label="审核意见">
             {{ detail?.reviewComment || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="问题描述" :span="2">

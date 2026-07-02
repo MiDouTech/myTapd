@@ -77,6 +77,8 @@ export interface BugReportUpdateInput {
   clearResolveTime?: boolean
   /** 为 true 时后端清空临时/彻底解决四个字段 */
   clearThoroughAndTempResolution?: boolean
+  /** 为 true 时不写入「编辑」状态日志（保存后立即提交审核时使用） */
+  skipStatusLog?: boolean
 }
 
 export interface BugReportSubmitInput {

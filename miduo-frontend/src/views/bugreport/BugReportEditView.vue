@@ -920,7 +920,7 @@ async function handleSaveAndSubmit(): Promise<void> {
     const payload = buildPayload()
     let targetId = reportId.value
     if (targetId) {
-      await updateBugReport(targetId, payload as BugReportUpdateInput)
+      await updateBugReport(targetId, { ...(payload as BugReportUpdateInput), skipStatusLog: true })
     } else {
       targetId = await createBugReport(payload as BugReportCreateInput)
     }
