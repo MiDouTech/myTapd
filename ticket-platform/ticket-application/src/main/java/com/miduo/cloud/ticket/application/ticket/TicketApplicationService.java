@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
+import com.miduo.cloud.ticket.application.workflow.WorkflowAppService;
 import com.miduo.cloud.ticket.common.constants.AppConstants;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.*;
@@ -115,6 +116,9 @@ public class TicketApplicationService {
 
     @Resource
     private TicketWorkflowAppService ticketWorkflowAppService;
+
+    @Resource
+    private WorkflowAppService workflowAppService;
 
     @Resource
     private com.miduo.cloud.ticket.application.sla.SlaTimerService slaTimerService;
@@ -1216,6 +1220,14 @@ public class TicketApplicationService {
         output.setCategoryId(ticket.getCategoryId());
         output.setTemplateId(ticket.getTemplateId());
         output.setWorkflowId(ticket.getWorkflowId());
+        if (ticket.getWorkflowId() != null) {
+            com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.WorkflowPO workflow =
+                    workflowAppService.getWorkflowById(ticket.getWorkflowId());
+            output.setAllowCompletedRollbackWithoutBugReport(
+                    workflowAppService.allowsCompletedTerminalRollbackWithoutBugReport(workflow));
+        } else {
+            output.setAllowCompletedRollbackWithoutBugReport(Boolean.FALSE);
+        }
         output.setPriority(ticket.getPriority());
         output.setStatus(ticket.getStatus());
         output.setCreatorId(ticket.getCreatorId());

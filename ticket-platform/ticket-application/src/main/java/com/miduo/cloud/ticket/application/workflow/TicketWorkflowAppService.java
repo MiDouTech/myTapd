@@ -490,7 +490,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             targetStatus = returnTransition.getTo();
         } else {
             // 2) 终态误操作兜底：已关闭，或已完成且存在未归档简报，允许回退“上一步状态 + 上一步处理人”
-            ensureTerminalRollbackAllowed(ticket);
+            ensureTerminalRollbackAllowed(ticket, workflow);
             TicketFlowRecordPO latestEntry = flowRecordMapper.selectLatestStatusTransitionToStatus(
                     ticketId, currentStatus);
             if (latestEntry == null || !StringUtils.hasText(latestEntry.getFromStatus())) {
@@ -523,13 +523,16 @@ public class TicketWorkflowAppService extends BaseApplicationService {
                 new TicketStatusChangedEvent(ticketId, oldStatus, targetStatus, operatorId));
     }
 
-    private void ensureTerminalRollbackAllowed(TicketPO ticket) {
+    private void ensureTerminalRollbackAllowed(TicketPO ticket, WorkflowPO workflow) {
         TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
         if (status == TicketStatus.CLOSED) {
             return;
         }
         if (status == TicketStatus.COMPLETED) {
             if (hasUnarchivedBugReport(ticket.getId())) {
+                return;
+            }
+            if (workflowAppService.allowsCompletedTerminalRollbackWithoutBugReport(workflow)) {
                 return;
             }
             throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID,

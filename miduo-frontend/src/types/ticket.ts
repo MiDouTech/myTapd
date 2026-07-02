@@ -251,6 +251,8 @@ export interface TicketDetailOutput {
   templateId?: number
   templateName?: string
   workflowId?: number
+  /** 已完成时是否允许在无未归档简报情况下回退上一步（含客服受理缺陷工作流） */
+  allowCompletedRollbackWithoutBugReport?: boolean
   priority?: string
   priorityLabel?: string
   status?: string

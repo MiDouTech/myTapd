@@ -552,6 +552,9 @@ const canShowRollbackLastStep = computed(() => {
   if (currentStatus.value !== 'completed') {
     return false
   }
+  if (detail.value.allowCompletedRollbackWithoutBugReport) {
+    return true
+  }
   // 已完成仅在存在未归档简报时允许回退（与后端兜底校验保持一致）
   const reports = detail.value.bugReports ?? []
   return reports.some((report) => (report.status || '').trim().toUpperCase() !== 'ARCHIVED')

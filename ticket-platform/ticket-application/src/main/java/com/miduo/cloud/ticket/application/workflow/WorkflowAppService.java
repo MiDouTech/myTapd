@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.UserRole;
 import com.miduo.cloud.ticket.common.enums.WorkflowMode;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -25,6 +26,7 @@ import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.mapper
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.workflow.po.WorkflowPO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -513,6 +515,18 @@ public class WorkflowAppService extends BaseApplicationService {
      */
     public WorkflowPO getWorkflowById(Long id) {
         return requireWorkflow(id);
+    }
+
+    /**
+     * 含「待客服受理」节点的缺陷工作流：已完成终态允许在无未归档简报时回退上一步。
+     */
+    public boolean allowsCompletedTerminalRollbackWithoutBugReport(WorkflowPO workflow) {
+        if (workflow == null || !StringUtils.hasText(workflow.getStates())) {
+            return false;
+        }
+        String marker = TicketStatus.PENDING_CS_ACCEPT.getCode();
+        return workflowEngine.parseStates(workflow.getStates()).stream()
+                .anyMatch(state -> state.getCode() != null && marker.equalsIgnoreCase(state.getCode()));
     }
 
     private WorkflowPO requireWorkflow(Long id) {

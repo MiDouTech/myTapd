@@ -30,6 +30,11 @@ public class TicketDetailOutput implements Serializable {
 
     private Long workflowId;
 
+    /**
+     * 已完成终态是否允许在无未归档 Bug 简报时回退上一步（含客服受理缺陷工作流）
+     */
+    private Boolean allowCompletedRollbackWithoutBugReport;
+
     private String priority;
 
     private String priorityLabel;
