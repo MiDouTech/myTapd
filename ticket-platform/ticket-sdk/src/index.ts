@@ -204,8 +204,8 @@ class TicketSdkImpl {
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
          ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-         <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;"></div>
-         <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片后随工单提交。</div>
+        <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;"></div>
+        <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片或直接粘贴图片，图片会随工单附件一起提交。</div>
          <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
            <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传图片</div>
            <div style="display:flex;align-items:center;gap:8px;">
@@ -240,6 +240,7 @@ class TicketSdkImpl {
           descriptionEl.innerHTML = content
         }
       }
+      this.bindDescriptionEditorEvents(panel, descriptionEl, uploadedAttachments)
       const imageInput = panel.querySelector('[data-role="image-input"]') as HTMLInputElement
       panel.querySelector('[data-action="pick-image"]')?.addEventListener('click', () => {
         imageInput?.click()
@@ -275,7 +276,7 @@ class TicketSdkImpl {
     const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
     if (sanitizedDescription.removedInlineImageCount > 0 && attachments.length === 0) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '检测到直接粘贴图片，请先点击“上传图片”按钮上传后再提交'
+      messageEl.textContent = '检测到未上传成功的内联图片，请重新粘贴或点击“上传图片”后再提交'
       return
     }
     if (!descriptionText && attachments.length === 0) {
@@ -327,6 +328,65 @@ class TicketSdkImpl {
     const html = root.innerHTML.trim()
     const plainText = (root.textContent ?? '').replace(/\s+/g, ' ').trim()
     return { html, plainText, removedInlineImageCount }
+  }
+
+  private bindDescriptionEditorEvents(
+    panel: HTMLElement,
+    descriptionEl: HTMLDivElement,
+    attachments: string[],
+  ): void {
+    if (!descriptionEl) {
+      return
+    }
+    this.normalizeEditorImages(descriptionEl)
+    descriptionEl.addEventListener('input', () => {
+      this.normalizeEditorImages(descriptionEl)
+    })
+    descriptionEl.addEventListener('paste', (event: ClipboardEvent) => {
+      const imageFiles = this.extractClipboardImageFiles(event)
+      if (!imageFiles.length) {
+        window.setTimeout(() => this.normalizeEditorImages(descriptionEl), 0)
+        return
+      }
+      event.preventDefault()
+      void (async () => {
+        for (const imageFile of imageFiles) {
+          // 为什么直接上传粘贴图片：避免 dataURL 直接进描述字段，导致内容过长或显示异常。
+          await this.uploadImageAndAttach(panel, descriptionEl, attachments, imageFile)
+        }
+      })()
+    })
+  }
+
+  private extractClipboardImageFiles(event: ClipboardEvent): File[] {
+    const clipboard = event.clipboardData
+    if (!clipboard || !clipboard.items || !clipboard.items.length) {
+      return []
+    }
+    const imageFiles: File[] = []
+    Array.from(clipboard.items).forEach((item) => {
+      if (item.kind !== 'file' || !item.type || !item.type.startsWith('image/')) {
+        return
+      }
+      const file = item.getAsFile()
+      if (file) {
+        imageFiles.push(file)
+      }
+    })
+    return imageFiles
+  }
+
+  private normalizeEditorImages(editor: HTMLDivElement): void {
+    if (!editor) {
+      return
+    }
+    editor.querySelectorAll('img').forEach((imageNode) => {
+      const image = imageNode as HTMLImageElement
+      image.style.maxWidth = '100%'
+      image.style.height = 'auto'
+      image.style.display = 'block'
+      image.style.borderRadius = '4px'
+    })
   }
 
   private async renderMyTickets(panel: HTMLElement): Promise<void> {
