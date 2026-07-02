@@ -2,6 +2,32 @@
 
 ## Cursor Cloud specific instructions
 
+### Multi-repo workspace (myTapd + prd_agent)
+
+Cursor Dashboard 的 **Select multiple** 目前无法同时勾选跨 GitHub 账号的仓库（`MiDouTech/myTapd` 与 `inernoro/prd_agent`）。改用启动脚本自动克隆参考仓库。
+
+| Repository | Role | Path |
+|---|---|---|
+| `MiDouTech/myTapd` | Primary (this repo) | `/workspace` |
+| `inernoro/prd_agent` | Reference / cross-repo work | `/opt/prd_agent` |
+
+**Dashboard setup（只需选一个仓库）：**
+
+1. Open [Cursor Cloud Agents](https://cursor.com/dashboard?tab=cloud-agents) → **New environment**.
+2. 只勾选 **`MiDouTech/myTapd`**（不要切 Select multiple）。
+3. Install/startup 填：`bash /workspace/scripts/cloud-agent-startup.sh`
+4. 完成环境初始化并保存快照。
+
+启动脚本会自动 `git clone` `inernoro/prd_agent` 到 `/opt/prd_agent`。验证：
+
+```bash
+ls /opt/prd_agent
+```
+
+`.cursor/environment.json` 中的 `repositoryDependencies` 保留，供 Cursor 扩展 GitHub token 范围（若后续 UI 多选恢复可用）。
+
+Use `prd_agent` when referencing update-center patterns, skills, or shared PM workflows that myTapd adopted from that project.
+
 ### Project Overview
 
 This is **米多内部工单系统 (Miduo Internal Ticket Platform)** — a full-stack project with a Spring Boot backend and Vue 3 frontend. See `ticket-platform/README.md` and `miduo-frontend/README.md` for detailed documentation.

@@ -15,6 +15,9 @@ JDK8_HOME="/opt/jdk8"
 JDK8_PROFILE_PATH="/etc/profile.d/jdk8.sh"
 
 FRONTEND_DIR="${FRONTEND_DIR:-/workspace/miduo-frontend}"
+PRD_AGENT_DIR="${PRD_AGENT_DIR:-/opt/prd_agent}"
+PRD_AGENT_REPO_URL="${PRD_AGENT_REPO_URL:-https://github.com/inernoro/prd_agent.git}"
+PRD_AGENT_BRANCH="${PRD_AGENT_BRANCH:-main}"
 NPM_INSTALL_ARGS="${NPM_INSTALL_ARGS:---no-audit --no-fund}"
 
 log() {
@@ -126,6 +129,25 @@ install_jdk8() {
   log "JDK8 安装完成：$(java -version 2>&1 | awk 'NR==1 { print; exit }')"
 }
 
+ensure_prd_agent_repo() {
+  if [ -d "${PRD_AGENT_DIR}/.git" ]; then
+    log "prd_agent 已存在，拉取最新代码：${PRD_AGENT_DIR}"
+    git -C "${PRD_AGENT_DIR}" fetch --depth 1 origin "${PRD_AGENT_BRANCH}"
+    git -C "${PRD_AGENT_DIR}" checkout "${PRD_AGENT_BRANCH}"
+    git -C "${PRD_AGENT_DIR}" reset --hard "origin/${PRD_AGENT_BRANCH}"
+    return
+  fi
+
+  log "克隆 prd_agent 到 ${PRD_AGENT_DIR}（绕过 Dashboard 多仓库勾选限制）"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  git clone --depth 1 --branch "${PRD_AGENT_BRANCH}" "${PRD_AGENT_REPO_URL}" "${tmp_dir}/prd_agent"
+  run_as_root mkdir -p "$(dirname "${PRD_AGENT_DIR}")"
+  run_as_root rm -rf "${PRD_AGENT_DIR}"
+  run_as_root mv "${tmp_dir}/prd_agent" "${PRD_AGENT_DIR}"
+  rm -rf "${tmp_dir}"
+}
+
 install_frontend_dependencies() {
   if [ ! -d "${FRONTEND_DIR}" ]; then
     log "前端目录不存在，跳过 npm install：${FRONTEND_DIR}"
@@ -177,6 +199,7 @@ print_summary() {
 main() {
   install_maven
   install_jdk8
+  ensure_prd_agent_repo
   install_frontend_dependencies
   print_summary
 }
