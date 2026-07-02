@@ -4077,6 +4077,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.14-ticket-sdk-richtext-public-asset-refresh` | 同步更新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 为富文本版本，修复“业务系统仍显示旧 textarea” |
 | `v1.1.15-plugin-title-text-only` | 插件建单标题改为“仅纯文字摘要”，自动移除富文本中的图片标签、HTML 标签和 `data:image` 编码，避免标题出现图片信息 |
 | `v1.1.16-plugin-description-base64-guard` | 修复插件建单 `description` 含 `data:image;base64` 导致入库失败：SDK 提交前移除内联 base64 图片，后端兜底清洗并限长，避免 `Data too long for column 'description'` |
+| `v1.1.17-plugin-paste-image-auto-upload` | SDK 支持“直接粘贴图片自动上传”：粘贴截图会走附件上传接口并插入 URL 图片；同时统一图片样式 `max-width:100%`，保证图片不撑破输入框 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4099,6 +4100,14 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 - **检测**：查看请求体 `description` 是否包含 `data:image;base64,...` 的超长字符串。  
 - **记录（错误类型）**：富文本直接粘贴图片（dataURL）被原样入库，触发字段长度溢出。  
 - **恢复建议**：
-  1. 使用“上传图片”按钮上传（生成 URL）而不是直接粘贴 base64；
-  2. 升级到 `v1.1.16`（SDK + 后端双重防护已生效）；
+  1. 升级到 `v1.1.17`（支持直接粘贴图片自动上传）；
+  2. 或使用“上传图片”按钮上传（同样生成 URL，不会写入 base64）；
   3. 若仍失败，抓包确认 `description` 中不再出现 `data:image`。
+
+#### Q93：为什么粘贴图片后会把输入框撑宽？
+- **检测**：检查富文本区内的 `<img>` 是否缺少 `max-width:100%` 样式。  
+- **记录（错误类型）**：图片按原始尺寸渲染，超过编辑区宽度导致布局被撑开。  
+- **恢复建议**：
+  1. 升级到 `v1.1.17`（SDK 已在粘贴/输入阶段自动规范图片样式）；
+  2. 强刷页面（`Ctrl+F5`）确保加载到新版 `ticket-sdk.min.js`；
+  3. 若仍异常，控制台检查图片节点样式是否包含 `max-width: 100%`、`height: auto`。
