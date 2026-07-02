@@ -207,6 +207,9 @@ public class TicketEventNotificationListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
+        if (event == null || event.isSuppressNotification()) {
+            return;
+        }
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null) {
             return;

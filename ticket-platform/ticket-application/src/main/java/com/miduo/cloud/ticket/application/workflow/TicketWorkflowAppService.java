@@ -307,10 +307,14 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         boolean assigneeChangedInTransit = willApplyAssignees
                 && assigneeUserSetChanged(beforeAssigneeSnapshot, nextAssigneeIds);
 
+        boolean suppressStatusNotification = isSystemOperation
+                && isPendingDispatchPoolStatusCode(oldStatus, ticket.getWorkflowId());
+
         // 发布领域事件（同次流转若改处理人：群通知合并到状态变更，分派事件 suppressGroupNotification）
         eventPublisher.publishEvent(new TicketStatusChangedEvent(
                 ticketId, oldStatus, targetStatus, safeOperatorId,
-                assigneeChangedInTransit ? oldAssigneeId : null));
+                assigneeChangedInTransit ? oldAssigneeId : null,
+                suppressStatusNotification));
 
         if (targetState != null && targetState.isTerminal()) {
             eventPublisher.publishEvent(
@@ -632,12 +636,23 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         if (ticket == null) {
             return false;
         }
-        TicketStatus st = TicketStatus.fromCode(ticket.getStatus());
+        return isPendingDispatchPoolStatusCode(ticket.getStatus(), ticket.getWorkflowId());
+    }
+
+    private boolean isPendingDispatchPoolStatusCode(String statusCode, Long workflowId) {
+        if (!StringUtils.hasText(statusCode)) {
+            return false;
+        }
+        String normalized = statusCode.trim().toLowerCase();
+        if ("pending_dispatch".equals(normalized)) {
+            return true;
+        }
+        TicketStatus st = TicketStatus.fromCode(normalized);
         if (st == TicketStatus.PENDING_ASSIGN) {
             return true;
         }
-        return ticket.getWorkflowId() != null && ticket.getWorkflowId() == ALERT_WORKFLOW_ID
-                && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(ticket.getStatus());
+        return workflowId != null && workflowId == ALERT_WORKFLOW_ID
+                && TicketStatus.ALERT_TRIGGERED.getCode().equalsIgnoreCase(normalized);
     }
 
     /**

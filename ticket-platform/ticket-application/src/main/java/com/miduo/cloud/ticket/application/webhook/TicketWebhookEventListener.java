@@ -17,7 +17,6 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -94,6 +93,11 @@ public class TicketWebhookEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
         if (event == null) {
+            return;
+        }
+        if (event.isSuppressNotification()) {
+            log.debug("状态变更 Webhook 已合并到创建后自动分派通知，跳过: ticketId={}, newStatus={}",
+                    event.getTicketId(), event.getNewStatus());
             return;
         }
         try {
