@@ -4076,6 +4076,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.7.0-ticket-plugin-design` | 输出业务原生工单插件完整设计方案（SDK + 开放网关 + LaunchToken 鉴权 + 按应用 Webhook） |
 | `v1.1.14-ticket-sdk-richtext-public-asset-refresh` | 同步更新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 为富文本版本，修复“业务系统仍显示旧 textarea” |
 | `v1.1.15-plugin-title-text-only` | 插件建单标题改为“仅纯文字摘要”，自动移除富文本中的图片标签、HTML 标签和 `data:image` 编码，避免标题出现图片信息 |
+| `v1.1.16-plugin-description-base64-guard` | 修复插件建单 `description` 含 `data:image;base64` 导致入库失败：SDK 提交前移除内联 base64 图片，后端兜底清洗并限长，避免 `Data too long for column 'description'` |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4093,3 +4094,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 标题生成只取纯文字（已在 `v1.1.15` 修复）；
   2. 线上发布后新建工单即可看到标题恢复为文字摘要；
   3. 历史工单标题不会自动回写，可按需人工修改。
+
+#### Q92：为什么提交工单报 `Data too long for column 'description'`？
+- **检测**：查看请求体 `description` 是否包含 `data:image;base64,...` 的超长字符串。  
+- **记录（错误类型）**：富文本直接粘贴图片（dataURL）被原样入库，触发字段长度溢出。  
+- **恢复建议**：
+  1. 使用“上传图片”按钮上传（生成 URL）而不是直接粘贴 base64；
+  2. 升级到 `v1.1.16`（SDK + 后端双重防护已生效）；
+  3. 若仍失败，抓包确认 `description` 中不再出现 `data:image`。

@@ -56,6 +56,12 @@ export interface TicketUpdatedEvent {
 type TicketSdkEvent = 'ticket:updated'
 type EventHandler = (payload: TicketUpdatedEvent) => void
 
+interface SanitizedDescriptionResult {
+  html: string
+  plainText: string
+  removedInlineImageCount: number
+}
+
 interface EnvInfo {
   browser: string
   os: string
@@ -264,14 +270,22 @@ class TicketSdkImpl {
   private async submitTicket(panel: HTMLElement, attachments: string[]): Promise<void> {
     const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
     const descriptionHtml = (descriptionEl?.innerHTML ?? '').trim()
-    const descriptionText = (descriptionEl?.innerText ?? '').replace(/\s+/g, ' ').trim()
+    const sanitizedDescription = this.sanitizeDescriptionHtml(descriptionHtml)
+    const descriptionText = sanitizedDescription.plainText
     const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    if (sanitizedDescription.removedInlineImageCount > 0 && attachments.length === 0) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '检测到直接粘贴图片，请先点击“上传图片”按钮上传后再提交'
+      return
+    }
     if (!descriptionText && attachments.length === 0) {
       messageEl.style.color = '#f56c6c'
       messageEl.textContent = '请先填写问题描述或上传图片'
       return
     }
-    const description = descriptionText ? descriptionHtml : '<p>用户上传了问题图片，请结合附件排查。</p>'
+    const description = descriptionText
+      ? sanitizedDescription.html
+      : '<p>用户上传了问题图片，请结合附件排查。</p>'
     messageEl.style.color = '#909399'
     messageEl.textContent = '提交中...'
     try {
@@ -284,6 +298,35 @@ class TicketSdkImpl {
       messageEl.style.color = '#f56c6c'
       messageEl.textContent = error instanceof Error ? error.message : '提交失败'
     }
+  }
+
+  private sanitizeDescriptionHtml(descriptionHtml: string): SanitizedDescriptionResult {
+    const trimmed = descriptionHtml.trim()
+    if (!trimmed) {
+      return { html: '', plainText: '', removedInlineImageCount: 0 }
+    }
+
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(`<div data-role="root">${trimmed}</div>`, 'text/html')
+    const root = doc.querySelector('[data-role="root"]') as HTMLDivElement | null
+    if (!root) {
+      return { html: '', plainText: '', removedInlineImageCount: 0 }
+    }
+
+    let removedInlineImageCount = 0
+    root.querySelectorAll('img').forEach((img) => {
+      const src = (img.getAttribute('src') ?? '').trim().toLowerCase()
+      // 为什么这里主动移除：dataURL 图片会把超长 base64 带进 description，导致后端入库失败。
+      if (src.startsWith('data:image/')) {
+        img.remove()
+        removedInlineImageCount += 1
+      }
+    })
+
+    root.querySelectorAll('script,style').forEach((node) => node.remove())
+    const html = root.innerHTML.trim()
+    const plainText = (root.textContent ?? '').replace(/\s+/g, ' ').trim()
+    return { html, plainText, removedInlineImageCount }
   }
 
   private async renderMyTickets(panel: HTMLElement): Promise<void> {

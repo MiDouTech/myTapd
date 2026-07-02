@@ -45,7 +45,10 @@ public class PluginTicketApplicationService {
     private static final Pattern HTML_IMG_TAG_PATTERN = Pattern.compile("(?is)<img\\b[^>]*>");
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
     private static final Pattern DATA_URL_PATTERN = Pattern.compile("(?is)data:image/[^\\s\"']+");
+    private static final Pattern INLINE_DATA_IMAGE_TAG_PATTERN =
+            Pattern.compile("(?is)<img\\b[^>]*\\bsrc\\s*=\\s*['\"]data:image/[^'\"]+['\"][^>]*>");
     private static final String IMAGE_ONLY_TITLE_FALLBACK = "图片问题反馈";
+    private static final int MAX_PLUGIN_DESCRIPTION_LENGTH = 4000;
 
     private final TicketApplicationService ticketApplicationService;
     private final TicketMapper ticketMapper;
@@ -80,12 +83,13 @@ public class PluginTicketApplicationService {
         }
         Long categoryId = resolveCategoryId(app, input.getPluginContext());
         String priority = normalizePriority(input.getPriority());
-        String title = buildTitle(app.getSystemCode(), input.getPluginContext(), input.getDescription());
+        String sanitizedDescription = sanitizePluginDescription(input.getDescription(), input.getAttachments());
+        String title = buildTitle(app.getSystemCode(), input.getPluginContext(), sanitizedDescription);
         Map<String, String> customFields = mergeCustomFields(input.getCustomFields(), input.getPluginContext(), input.getAttachments());
 
         TicketCreateInput createInput = new TicketCreateInput();
         createInput.setTitle(title);
-        createInput.setDescription(input.getDescription().trim());
+        createInput.setDescription(sanitizedDescription);
         createInput.setCategoryId(categoryId);
         createInput.setPriority(priority);
         createInput.setSource(TicketSource.PLUGIN.getCode());
@@ -213,6 +217,30 @@ public class PluginTicketApplicationService {
         return text.replaceAll("\\s+", " ").trim();
     }
 
+    private String sanitizePluginDescription(String description, List<String> attachments) {
+        String raw = StringUtils.hasText(description) ? description.trim() : "";
+        if (!StringUtils.hasText(raw)) {
+            return "<p>用户反馈了问题，请协助排查。</p>";
+        }
+
+        String sanitized = INLINE_DATA_IMAGE_TAG_PATTERN.matcher(raw).replaceAll("");
+        sanitized = DATA_URL_PATTERN.matcher(sanitized).replaceAll("");
+        sanitized = sanitized.trim();
+
+        String plainText = extractTitleText(sanitized);
+        boolean hasAttachment = attachments != null && !attachments.isEmpty();
+        if (!StringUtils.hasText(plainText) && !hasAttachment) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "检测到粘贴图片，请先使用“上传图片”按钮上传后再提交");
+        }
+        if (!StringUtils.hasText(plainText) && hasAttachment) {
+            sanitized = "<p>用户上传了问题图片，请结合附件排查。</p>";
+        }
+        // 为什么这里限制长度：兼容历史环境中 description 列定义偏小，避免再次触发 Data too long。
+        if (sanitized.length() > MAX_PLUGIN_DESCRIPTION_LENGTH) {
+            sanitized = sanitized.substring(0, MAX_PLUGIN_DESCRIPTION_LENGTH);
+        }
+        return sanitized;
+    }
     private Map<String, String> mergeCustomFields(Map<String, String> customFields,
                                                     Map<String, Object> pluginContext,
                                                     List<String> attachments) {
