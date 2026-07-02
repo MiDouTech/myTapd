@@ -241,7 +241,6 @@ public class PluginTicketApplicationService {
         }
         return sanitized;
     }
-
     private Map<String, String> mergeCustomFields(Map<String, String> customFields,
                                                     Map<String, Object> pluginContext,
                                                     List<String> attachments) {

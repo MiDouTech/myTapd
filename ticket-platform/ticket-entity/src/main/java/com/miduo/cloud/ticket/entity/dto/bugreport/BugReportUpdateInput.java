@@ -69,4 +69,9 @@ public class BugReportUpdateInput implements Serializable {
      * 为 true 时清空临时/彻底解决相关四个字段，用于关联工单已处理完成且只保留解决时间
      */
     private Boolean clearThoroughAndTempResolution;
+
+    /**
+     * 为 true 时不写入「编辑」状态日志（用于保存后立即提交审核，避免与「提交审核」日志重复）
+     */
+    private Boolean skipStatusLog;
 }

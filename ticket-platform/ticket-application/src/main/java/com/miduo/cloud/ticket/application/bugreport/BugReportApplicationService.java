@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.bugreport;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.notification.NotificationOrchestrator;
@@ -208,6 +209,7 @@ public class BugReportApplicationService extends BaseApplicationService {
                 new LambdaQueryWrapper<BugReportLogPO>()
                         .eq(BugReportLogPO::getReportId, id)
                         .orderByDesc(BugReportLogPO::getCreateTime)
+                        .orderByDesc(BugReportLogPO::getId)
         );
         List<BugReportAttachmentPO> attachmentList = bugReportAttachmentMapper.selectList(
                 new LambdaQueryWrapper<BugReportAttachmentPO>()
@@ -359,7 +361,9 @@ public class BugReportApplicationService extends BaseApplicationService {
         if (input.getResponsibleUserIds() != null) {
             syncResponsibleUsers(id, distinctIds(input.getResponsibleUserIds()));
         }
-        recordLog(id, currentUserId, "EDIT", report.getStatus(), report.getStatus(), "编辑Bug简报");
+        if (!Boolean.TRUE.equals(input.getSkipStatusLog())) {
+            recordLog(id, currentUserId, "EDIT", report.getStatus(), report.getStatus(), "编辑Bug简报");
+        }
     }
 
     /**
@@ -388,7 +392,21 @@ public class BugReportApplicationService extends BaseApplicationService {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR, "P0/P1/P2级别简报提交前请指定审核人");
             }
             report.setStatus(BugReportStatus.PENDING_REVIEW.getCode());
-            bugReportMapper.updateById(report);
+            if (BugReportStatus.REJECTED.getCode().equals(oldStatus)) {
+                // 重新提交时显式清空上次驳回结果（updateById 默认跳过 null 字段）
+                LambdaUpdateWrapper<BugReportPO> updateWrapper = new LambdaUpdateWrapper<BugReportPO>()
+                        .eq(BugReportPO::getId, id)
+                        .set(BugReportPO::getStatus, report.getStatus())
+                        .set(BugReportPO::getSubmittedAt, report.getSubmittedAt())
+                        .set(BugReportPO::getReviewedAt, null)
+                        .set(BugReportPO::getReviewComment, null);
+                if (report.getReviewerId() != null) {
+                    updateWrapper.set(BugReportPO::getReviewerId, report.getReviewerId());
+                }
+                bugReportMapper.update(null, updateWrapper);
+            } else {
+                bugReportMapper.updateById(report);
+            }
             recordLog(id, currentUserId, "SUBMIT", oldStatus, report.getStatus(), remark);
 
             String title = String.format("Bug简报待审核 - %s", report.getReportNo());

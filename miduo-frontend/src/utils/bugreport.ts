@@ -51,3 +51,8 @@ export function canReviewBugReport(status?: string): boolean {
 export function canVoidBugReport(status?: string): boolean {
   return Boolean(status && status !== 'ARCHIVED' && status !== 'VOIDED')
 }
+
+/** 是否展示审核完成时间、审核意见（已退回/已归档才有审核结果） */
+export function showBugReportReviewResult(status?: string): boolean {
+  return status === 'REJECTED' || status === 'ARCHIVED'
+}
