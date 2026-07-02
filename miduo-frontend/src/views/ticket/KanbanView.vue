@@ -94,6 +94,7 @@ function getColumnStatusClass(status?: string): string {
     [
       'pending_assign',
       'pending_accept',
+      'pending_cs_accept',
       'pending_test_accept',
       'pending_dev_accept',
       'pending_verify',

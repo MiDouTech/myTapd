@@ -16,6 +16,7 @@ const TICKET_STATUS_LABEL_MAP: Record<string, string> = {
   pending_verify: '待验收',
   completed: '已完成',
   closed: '已关闭',
+  pending_cs_accept: '待客服受理',
   pending_test_accept: '待测试受理',
   testing: '测试复现中',
   investigating: '排查中',

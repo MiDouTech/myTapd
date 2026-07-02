@@ -147,6 +147,7 @@ const statusColorMap: Record<string, string> = {
   PENDING_ASSIGN: '#909399',
   PENDING_DISPATCH: '#909399',
   PENDING_ACCEPT: '#1675d1',
+  PENDING_CS_ACCEPT: '#f59e0b',
   PENDING_TEST_ACCEPT: '#e6a23c',
   TESTING: '#e6a23c',
   INVESTIGATING: '#3b82f6',
