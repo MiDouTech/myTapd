@@ -4079,6 +4079,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.16-plugin-description-base64-guard` | 修复插件建单 `description` 含 `data:image;base64` 导致入库失败：SDK 提交前移除内联 base64 图片，后端兜底清洗并限长，避免 `Data too long for column 'description'` |
 | `v1.1.17-plugin-paste-image-auto-upload` | SDK 支持“直接粘贴图片自动上传”：粘贴截图会走附件上传接口并插入 URL 图片；同时统一图片样式 `max-width:100%`，保证图片不撑破输入框 |
 | `v1.1.18-plugin-modal-my-tickets-entry` | SDK 提交工单弹窗新增“我的工单”按钮，用户可在同一弹窗直接切换到工单列表，无需控制台调用 |
+| `v1.1.19-plugin-modal-scroll-and-ticket-link` | 优化弹窗可用性：提交/我的工单弹窗改为固定视口高度 + 内部滚动，避免内容撑高导致按钮不可点；我的工单列表支持点击工单跳转公开详情页 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4120,3 +4121,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.18`（提交弹窗已内置“我的工单”按钮）；
   2. 强刷页面（`Ctrl+F5`）或刷新 CDN 缓存；
   3. 若仍无入口，检查 `/sdk/v1/ticket-sdk.min.js` 是否包含 `data-action=\"open-my-tickets\"`。
+
+#### Q95：为什么弹窗内容太长后点不到“关闭/提交”，或我的工单点击不跳详情？
+- **检测**：查看弹窗是否随内容无限拉长，以及“我的工单”列表项是否可点击。  
+- **记录（错误类型）**：弹窗未限制最大高度且缺少内部滚动；工单列表项未绑定公开详情跳转。  
+- **恢复建议**：
+  1. 升级到 `v1.1.19`（弹窗固定视口高度并内滚动，列表项已支持跳转）；
+  2. 强刷页面（`Ctrl+F5`）或刷新 CDN 缓存；
+  3. 若仍异常，检查 SDK 是否包含 `data-action=\"open-ticket-item\"` 与 `max-height:92vh`。

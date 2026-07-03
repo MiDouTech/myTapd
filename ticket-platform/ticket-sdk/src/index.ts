@@ -192,35 +192,39 @@ class TicketSdkImpl {
       'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;'
     const panel = document.createElement('div')
     panel.style.cssText =
-      'width:420px;max-width:92vw;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
+      'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
     panel.innerHTML = myTickets
-      ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
-         <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+         <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
+           <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
+         </div>`
+      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">提交工单</strong>
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
-         ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-        <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;"></div>
-        <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片或直接粘贴图片，图片会随工单附件一起提交。</div>
-         <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-           <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传图片</div>
-           <div style="display:flex;align-items:center;gap:8px;">
-             <input data-role="image-input" type="file" accept="image/*" multiple style="display:none;" />
-             <button type="button" data-action="pick-image" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片</button>
+         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
+           ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
+           <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;"></div>
+           <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片或直接粘贴图片，图片会随工单附件一起提交。</div>
+           <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+             <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传图片</div>
+             <div style="display:flex;align-items:center;gap:8px;">
+               <input data-role="image-input" type="file" accept="image/*" multiple style="display:none;" />
+               <button type="button" data-action="pick-image" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片</button>
+             </div>
            </div>
          </div>
-         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
            <button type="button" data-action="open-my-tickets" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;">我的工单</button>
            <div style="display:flex;align-items:center;gap:8px;">
              <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
              <button type="button" data-action="submit" style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:pointer;background:${primary};">提交</button>
            </div>
          </div>
-         <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>`
+         <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;flex:0 0 auto;"></div>`
 
     overlay.appendChild(panel)
     overlay.addEventListener('click', (event) => {
@@ -406,16 +410,38 @@ class TicketSdkImpl {
       }
       listEl.innerHTML = page.records
         .map(
-          (item) => `<div style="padding:10px 0;border-bottom:1px solid #ebeef5;">
+          (item) => `<div data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo || '')}" style="padding:10px 0;border-bottom:1px solid #ebeef5;cursor:pointer;">
             <div style="font-weight:500;">${escapeHtml(item.title)}</div>
             <div style="font-size:12px;color:#909399;margin-top:4px;">${escapeHtml(item.ticketNo)} · ${escapeHtml(item.statusLabel || item.status)}</div>
           </div>`,
         )
         .join('')
+      listEl.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const ticketNo = (node as HTMLElement).getAttribute('data-ticket-no') ?? ''
+          this.openPublicTicket(ticketNo)
+        })
+      })
     } catch (error) {
       listEl.style.color = '#f56c6c'
       listEl.textContent = error instanceof Error ? error.message : '加载失败'
     }
+  }
+
+  private openPublicTicket(ticketNo: string): void {
+    const normalizedTicketNo = (ticketNo || '').trim()
+    if (!normalizedTicketNo) {
+      return
+    }
+    window.open(this.buildPublicTicketUrl(normalizedTicketNo), '_blank', 'noopener')
+  }
+
+  private buildPublicTicketUrl(ticketNo: string): string {
+    const normalizedTicketNo = encodeURIComponent((ticketNo || '').trim())
+    if (!normalizedTicketNo) {
+      return `${this.apiBase}/open/ticket/`
+    }
+    return `${this.apiBase}/open/ticket/${normalizedTicketNo}`
   }
 
   private buildPluginContext(): Record<string, unknown> {
