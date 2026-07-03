@@ -213,9 +213,12 @@ class TicketSdkImpl {
              <button type="button" data-action="pick-image" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片</button>
            </div>
          </div>
-         <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
-           <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
-           <button type="button" data-action="submit" style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:pointer;background:${primary};">提交</button>
+         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+           <button type="button" data-action="open-my-tickets" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;">我的工单</button>
+           <div style="display:flex;align-items:center;gap:8px;">
+             <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
+             <button type="button" data-action="submit" style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:pointer;background:${primary};">提交</button>
+           </div>
          </div>
          <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>`
 
@@ -257,6 +260,10 @@ class TicketSdkImpl {
       })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel, uploadedAttachments)
+      })
+      panel.querySelector('[data-action="open-my-tickets"]')?.addEventListener('click', () => {
+        // 为什么从提交页直接跳我的工单：用户提交后常需要立刻查看状态，减少额外点击路径。
+        this.openModal(true)
       })
     }
     document.body.appendChild(overlay)

@@ -4078,6 +4078,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.15-plugin-title-text-only` | 插件建单标题改为“仅纯文字摘要”，自动移除富文本中的图片标签、HTML 标签和 `data:image` 编码，避免标题出现图片信息 |
 | `v1.1.16-plugin-description-base64-guard` | 修复插件建单 `description` 含 `data:image;base64` 导致入库失败：SDK 提交前移除内联 base64 图片，后端兜底清洗并限长，避免 `Data too long for column 'description'` |
 | `v1.1.17-plugin-paste-image-auto-upload` | SDK 支持“直接粘贴图片自动上传”：粘贴截图会走附件上传接口并插入 URL 图片；同时统一图片样式 `max-width:100%`，保证图片不撑破输入框 |
+| `v1.1.18-plugin-modal-my-tickets-entry` | SDK 提交工单弹窗新增“我的工单”按钮，用户可在同一弹窗直接切换到工单列表，无需控制台调用 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4111,3 +4112,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.17`（SDK 已在粘贴/输入阶段自动规范图片样式）；
   2. 强刷页面（`Ctrl+F5`）确保加载到新版 `ticket-sdk.min.js`；
   3. 若仍异常，控制台检查图片节点样式是否包含 `max-width: 100%`、`height: auto`。
+
+#### Q94：为什么我看不到“我的工单”入口？
+- **检测**：在提交工单弹窗底部检查是否有“我的工单”按钮。  
+- **记录（错误类型）**：业务系统仍加载旧版 SDK 静态文件，导致新增按钮未生效。  
+- **恢复建议**：
+  1. 升级到 `v1.1.18`（提交弹窗已内置“我的工单”按钮）；
+  2. 强刷页面（`Ctrl+F5`）或刷新 CDN 缓存；
+  3. 若仍无入口，检查 `/sdk/v1/ticket-sdk.min.js` 是否包含 `data-action=\"open-my-tickets\"`。
