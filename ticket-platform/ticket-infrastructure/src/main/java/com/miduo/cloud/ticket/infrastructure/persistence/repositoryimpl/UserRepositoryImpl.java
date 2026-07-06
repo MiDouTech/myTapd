@@ -4,11 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.miduo.cloud.ticket.domain.user.model.User;
 import com.miduo.cloud.ticket.domain.user.repository.UserRepository;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.SysUserQueryPriority;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserRoleMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.model.UserRoleCodePair;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserRolePO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -23,6 +26,8 @@ import java.util.stream.Collectors;
  */
 @Repository
 public class UserRepositoryImpl implements UserRepository {
+
+    private static final Logger log = LoggerFactory.getLogger(UserRepositoryImpl.class);
 
     private final SysUserMapper sysUserMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
@@ -53,13 +58,7 @@ public class UserRepositoryImpl implements UserRepository {
         }
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getWecomUserid, wecomUserid);
-        SysUserPO po = sysUserMapper.selectOne(wrapper);
-        if (po == null) {
-            return null;
-        }
-        User user = convertToModel(po);
-        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
-        return user;
+        return toUserWithRoles(selectPreferredUser(wrapper, "wecomUserid", wecomUserid));
     }
 
     @Override
@@ -69,13 +68,7 @@ public class UserRepositoryImpl implements UserRepository {
         }
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getPhone, phone);
-        SysUserPO po = sysUserMapper.selectOne(wrapper);
-        if (po == null) {
-            return null;
-        }
-        User user = convertToModel(po);
-        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
-        return user;
+        return toUserWithRoles(selectPreferredUser(wrapper, "phone", phone));
     }
 
     @Override
@@ -85,13 +78,7 @@ public class UserRepositoryImpl implements UserRepository {
         }
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getEmployeeNo, employeeNo);
-        SysUserPO po = sysUserMapper.selectOne(wrapper);
-        if (po == null) {
-            return null;
-        }
-        User user = convertToModel(po);
-        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
-        return user;
+        return toUserWithRoles(selectPreferredUser(wrapper, "employeeNo", employeeNo));
     }
 
     @Override
@@ -101,13 +88,7 @@ public class UserRepositoryImpl implements UserRepository {
         }
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getEmail, email);
-        SysUserPO po = sysUserMapper.selectOne(wrapper);
-        if (po == null) {
-            return null;
-        }
-        User user = convertToModel(po);
-        user.setRoleCodes(sysUserMapper.selectRoleCodesByUserId(po.getId()));
-        return user;
+        return toUserWithRoles(selectPreferredUser(wrapper, "email", email));
     }
 
     @Override
@@ -117,7 +98,24 @@ public class UserRepositoryImpl implements UserRepository {
         }
         LambdaQueryWrapper<SysUserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserPO::getName, name);
-        SysUserPO po = sysUserMapper.selectOne(wrapper);
+        return toUserWithRoles(selectPreferredUser(wrapper, "name", name));
+    }
+
+    private SysUserPO selectPreferredUser(LambdaQueryWrapper<SysUserPO> wrapper, String field, String value) {
+        List<SysUserPO> candidates = sysUserMapper.selectList(wrapper);
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        if (candidates.size() > 1) {
+            SysUserPO preferred = SysUserQueryPriority.pickPreferred(candidates);
+            log.warn("用户查询命中多条记录，已按企微账号优先选择: field={}, value={}, chosenUserId={}",
+                    field, value, preferred == null ? null : preferred.getId());
+            return preferred;
+        }
+        return candidates.get(0);
+    }
+
+    private User toUserWithRoles(SysUserPO po) {
         if (po == null) {
             return null;
         }
