@@ -74,7 +74,10 @@ public class PluginUserMappingService {
         if (preferredUser != null) {
             saveMapping(normalizedSystemCode, normalizedExternalUserId, preferredUser.getId());
             updateUserProfile(preferredUser, userName, dept, mobile);
-            assignGuestRole(preferredUser.getId());
+            // 已绑定企微的内部员工不应被插件映射打上 GUEST，否则管理菜单会被误隐藏
+            if (!hasWecomUserid(preferredUser)) {
+                assignGuestRole(preferredUser.getId());
+            }
             log.info("插件用户绑定已有本地账号: systemCode={}, externalUserId={}, userId={}",
                     normalizedSystemCode, normalizedExternalUserId, preferredUser.getId());
             return preferredUser.getId();
@@ -205,6 +208,10 @@ public class PluginUserMappingService {
     }
 
     private void assignGuestRole(Long userId) {
+        SysUserPO user = sysUserMapper.selectById(userId);
+        if (user == null || hasWecomUserid(user)) {
+            return;
+        }
         SysRolePO guestRole = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRolePO>()
                 .eq(SysRolePO::getRoleCode, UserRole.GUEST.getCode())
                 .last("LIMIT 1"));
