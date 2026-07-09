@@ -4081,6 +4081,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.18-plugin-modal-my-tickets-entry` | SDK 提交工单弹窗新增“我的工单”按钮，用户可在同一弹窗直接切换到工单列表，无需控制台调用 |
 | `v1.1.19-plugin-modal-scroll-and-ticket-link` | 优化弹窗可用性：提交/我的工单弹窗改为固定视口高度 + 内部滚动，避免内容撑高导致按钮不可点；我的工单列表支持点击工单跳转公开详情页 |
 | `v1.1.20-plugin-bug-customer-auto-fill` | 插件建单自动回填缺陷客服信息：问题描述自动写入“问题描述”，附件 URL 自动写入“问题截图”，并从上下文/LaunchToken 自动填充商户编号、公司名称、商户账号、场景码等字段 |
+| `v1.1.21-ticket-detail-description-hide-images` | 工单详情页“描述”区域展示优化：渲染时自动过滤富文本中的 `<img>`，避免上传截图在描述区重复展示（截图保留在附件/问题截图字段） |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4138,3 +4139,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.20`（后端会自动把描述/截图/商户信息回填到 `ticket_bug_info`）；
   2. 业务系统通过 SDK `setContext` 传入 `merchantNo/companyName/merchantAccount/sceneCode/expectedResult` 可提升回填完整度；
   3. 若仍有字段为空，检查 LaunchToken 签发入参里的 `externalUserId/dept` 是否有值（回填兜底依赖这两个字段）。
+
+#### Q97：为什么工单详情“描述”区域会显示上传截图，页面显得很长？
+- **检测**：查看工单详情顶部“描述”区是否渲染了 `<img>` 内容。  
+- **记录（错误类型）**：描述富文本与附件信息重复展示，导致阅读区被大图占用。  
+- **恢复建议**：
+  1. 升级到 `v1.1.21`（详情描述区渲染时自动隐藏内联图片）；
+  2. 截图查看统一走“附件”或“客服信息 -> 问题截图”；
+  3. 若仍看到旧样式，强刷页面（`Ctrl+F5`）清理前端缓存。
