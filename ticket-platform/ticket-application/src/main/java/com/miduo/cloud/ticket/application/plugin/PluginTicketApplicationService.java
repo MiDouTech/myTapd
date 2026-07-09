@@ -312,8 +312,7 @@ public class PluginTicketApplicationService {
                 readString(customFields, "companyName", "company_name", "merchantName", "brandName", "orgName", "公司名称"),
                 readObjectMapString(pluginContext, "companyName", "merchantName", "brandName", "orgName"),
                 readObjectMapString(extra, "companyName", "merchantName", "brandName", "orgName"),
-                readObjectMapString(contextUser, "companyName", "dept", "name"),
-                claims == null ? null : claims.getDept()
+                readObjectMapString(contextUser, "companyName", "dept", "name")
         );
 
         String merchantAccount = firstNonBlank(
