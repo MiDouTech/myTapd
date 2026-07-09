@@ -79,7 +79,9 @@ const loading = ref(false)
 const detail = ref<TicketDetailOutput>()
 const users = ref<UserListOutput[]>([])
 
-const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
+const descriptionDisplayHtml = computed(() =>
+  formatTicketDescriptionForDisplay(detail.value?.description, { hideInlineImages: true }),
+)
 
 const activeBugTab = ref('customer')
 const timeTrackItems = ref<TicketTimeTrackItem[]>([])

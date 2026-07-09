@@ -13,6 +13,10 @@ const WECOM_FIELD_LABEL_PATTERN =
 const ROBOT_PREFIX_PATTERN =
   /^机器人\s+(?=(?:商户编号|公司名称|商户账号|场景码|问题描述|预期结果)\s*[:：])/
 
+export interface TicketDescriptionDisplayOptions {
+  hideInlineImages?: boolean
+}
+
 function looksLikeRichTicketDescription(raw: string): boolean {
   const t = raw.trim()
   if (!t.includes('<')) {
@@ -69,16 +73,31 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function sanitizeRichDescriptionForDisplay(html: string, options?: TicketDescriptionDisplayOptions): string {
+  if (!options?.hideInlineImages) {
+    return html
+  }
+  if (typeof DOMParser === 'undefined') {
+    return html.replace(/<img\b[^>]*>/gi, '').trim()
+  }
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  doc.body?.querySelectorAll('img').forEach((node) => node.remove())
+  return (doc.body?.innerHTML ?? '').trim()
+}
+
 /**
  * 将接口返回的工单描述格式化为可安全 v-html 的片段（换行可见）。
  */
-export function formatTicketDescriptionForDisplay(raw: string | null | undefined): string {
+export function formatTicketDescriptionForDisplay(
+  raw: string | null | undefined,
+  options?: TicketDescriptionDisplayOptions,
+): string {
   if (raw == null || raw.trim() === '') {
     return ''
   }
   const trimmed = raw.trim()
   if (looksLikeRichTicketDescription(trimmed)) {
-    return trimmed
+    return sanitizeRichDescriptionForDisplay(trimmed, options)
   }
   const plain = insertWecomFieldLineBreaks(stripHtmlToPlain(trimmed).replace(/\r\n/g, '\n')).trim()
   if (!plain) {
