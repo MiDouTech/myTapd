@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.TypeReference;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.integration.IntegrationAppCredentialResolver;
+import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
@@ -18,11 +19,13 @@ import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCreateOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketMinePageInput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketSummaryOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
+import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +33,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,28 +43,35 @@ import java.util.stream.Collectors;
 /**
  * 插件工单服务
  */
+@Slf4j
 @Service
 public class PluginTicketApplicationService {
     private static final Pattern HTML_IMG_TAG_PATTERN = Pattern.compile("(?is)<img\\b[^>]*>");
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+    private static final Pattern HTML_BR_PATTERN = Pattern.compile("(?is)<br\\s*/?>");
+    private static final Pattern HTML_P_END_PATTERN = Pattern.compile("(?is)</p\\s*>");
     private static final Pattern DATA_URL_PATTERN = Pattern.compile("(?is)data:image/[^\\s\"']+");
     private static final Pattern INLINE_DATA_IMAGE_TAG_PATTERN =
             Pattern.compile("(?is)<img\\b[^>]*\\bsrc\\s*=\\s*['\"]data:image/[^'\"]+['\"][^>]*>");
     private static final String IMAGE_ONLY_TITLE_FALLBACK = "图片问题反馈";
     private static final int MAX_PLUGIN_DESCRIPTION_LENGTH = 4000;
+    private static final int MAX_PROBLEM_SCREENSHOT_LENGTH = 1000;
 
     private final TicketApplicationService ticketApplicationService;
+    private final TicketBugApplicationService ticketBugApplicationService;
     private final TicketMapper ticketMapper;
     private final IntegrationAppCredentialResolver credentialResolver;
     private final QiniuUploadService qiniuUploadService;
     private final String publicTicketBaseUrl;
 
     public PluginTicketApplicationService(TicketApplicationService ticketApplicationService,
+                                          TicketBugApplicationService ticketBugApplicationService,
                                           TicketMapper ticketMapper,
                                           IntegrationAppCredentialResolver credentialResolver,
                                           QiniuUploadService qiniuUploadService,
                                           @Value("${ticket.public-base-url:}") String publicTicketBaseUrl) {
         this.ticketApplicationService = ticketApplicationService;
+        this.ticketBugApplicationService = ticketBugApplicationService;
         this.ticketMapper = ticketMapper;
         this.credentialResolver = credentialResolver;
         this.qiniuUploadService = qiniuUploadService;
@@ -102,6 +112,7 @@ public class PluginTicketApplicationService {
         createInput.setCustomFields(customFields);
 
         Long ticketId = ticketApplicationService.createTicket(createInput, claims.getUserId());
+        initPluginBugCustomerInfo(ticketId, claims, input, sanitizedDescription);
         TicketPO ticket = ticketMapper.selectById(ticketId);
         if (ticket == null) {
             throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "工单创建失败");
@@ -241,6 +252,7 @@ public class PluginTicketApplicationService {
         }
         return sanitized;
     }
+
     private Map<String, String> mergeCustomFields(Map<String, String> customFields,
                                                     Map<String, Object> pluginContext,
                                                     List<String> attachments) {
@@ -262,6 +274,181 @@ public class PluginTicketApplicationService {
             merged.put("pluginAttachments", JSON.toJSONString(attachments));
         }
         return merged.isEmpty() ? null : merged;
+    }
+
+    private void initPluginBugCustomerInfo(Long ticketId,
+                                           PluginLaunchTokenClaims claims,
+                                           PluginTicketCreateInput input,
+                                           String sanitizedDescription) {
+        TicketBugCustomerInfoInput bugCustomerInfo = buildBugCustomerInfo(claims, input, sanitizedDescription);
+        if (isBugCustomerInfoEmpty(bugCustomerInfo)) {
+            return;
+        }
+        try {
+            ticketBugApplicationService.initCustomerInfoFromBot(ticketId, bugCustomerInfo);
+        } catch (Exception ex) {
+            // 为什么吞掉异常：客服字段回填是增强能力，不能反向影响主链路建单成功。
+            log.warn("插件工单客服字段自动回填失败，ticketId={}", ticketId, ex);
+        }
+    }
+
+    private TicketBugCustomerInfoInput buildBugCustomerInfo(PluginLaunchTokenClaims claims,
+                                                            PluginTicketCreateInput input,
+                                                            String sanitizedDescription) {
+        Map<String, String> customFields = input.getCustomFields() == null ? Collections.emptyMap() : input.getCustomFields();
+        Map<String, Object> pluginContext = input.getPluginContext() == null ? Collections.emptyMap() : input.getPluginContext();
+        Map<String, Object> extra = asObjectMap(pluginContext.get("extra"));
+        Map<String, Object> contextUser = asObjectMap(pluginContext.get("user"));
+
+        String merchantNo = firstNonBlank(
+                readString(customFields, "merchantNo", "merchant_no", "memberLogin", "memberlogin", "商户编号"),
+                readObjectMapString(pluginContext, "merchantNo", "merchant_no", "memberLogin", "memberlogin", "bizNo", "bizId"),
+                readObjectMapString(extra, "merchantNo", "merchant_no", "memberLogin", "memberlogin"),
+                readObjectMapString(contextUser, "merchantNo", "memberLogin", "memberlogin", "id", "externalUserId"),
+                claims == null ? null : claims.getExternalUserId()
+        );
+
+        String companyName = firstNonBlank(
+                readString(customFields, "companyName", "company_name", "merchantName", "brandName", "orgName", "公司名称"),
+                readObjectMapString(pluginContext, "companyName", "merchantName", "brandName", "orgName"),
+                readObjectMapString(extra, "companyName", "merchantName", "brandName", "orgName"),
+                readObjectMapString(contextUser, "companyName", "dept", "name")
+        );
+
+        String merchantAccount = firstNonBlank(
+                readString(customFields, "merchantAccount", "merchant_account", "account", "accountName",
+                        "loginName", "userName", "memberLogin", "memberlogin", "商户账号"),
+                readObjectMapString(pluginContext, "merchantAccount", "merchant_account", "account", "accountName",
+                        "loginName", "userName", "memberLogin", "memberlogin"),
+                readObjectMapString(extra, "merchantAccount", "merchant_account", "account", "accountName",
+                        "loginName", "userName", "memberLogin", "memberlogin"),
+                readObjectMapString(contextUser, "merchantAccount", "account", "accountName", "loginName",
+                        "userName", "memberLogin", "memberlogin", "id"),
+                merchantNo
+        );
+
+        String expectedResult = firstNonBlank(
+                readString(customFields, "expectedResult", "expected_result", "预期结果"),
+                readObjectMapString(pluginContext, "expectedResult", "expected_result"),
+                readObjectMapString(extra, "expectedResult", "expected_result")
+        );
+
+        String sceneCode = firstNonBlank(
+                readString(customFields, "sceneCode", "scene_code", "场景码"),
+                readObjectMapString(pluginContext, "sceneCode", "scene_code", "module", "bizType", "page"),
+                readObjectMapString(extra, "sceneCode", "scene_code", "module", "bizType", "page")
+        );
+
+        TicketBugCustomerInfoInput output = new TicketBugCustomerInfoInput();
+        output.setMerchantNo(merchantNo);
+        output.setCompanyName(companyName);
+        output.setMerchantAccount(merchantAccount);
+        output.setProblemDesc(toBugProblemDesc(sanitizedDescription));
+        output.setExpectedResult(expectedResult);
+        output.setSceneCode(sceneCode);
+        output.setProblemScreenshot(joinProblemScreenshotUrls(input.getAttachments()));
+        return output;
+    }
+
+    private Map<String, Object> asObjectMap(Object value) {
+        if (!(value instanceof Map)) {
+            return Collections.emptyMap();
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> map = (Map<String, Object>) value;
+        return map;
+    }
+
+    private String readString(Map<String, String> source, String... keys) {
+        if (source == null || source.isEmpty() || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            String value = source.get(key);
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String readObjectMapString(Map<String, Object> source, String... keys) {
+        if (source == null || source.isEmpty() || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                return String.valueOf(value).trim();
+            }
+        }
+        return null;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String toBugProblemDesc(String sanitizedDescription) {
+        if (!StringUtils.hasText(sanitizedDescription)) {
+            return null;
+        }
+        String text = HTML_BR_PATTERN.matcher(sanitizedDescription).replaceAll("\n");
+        text = HTML_P_END_PATTERN.matcher(text).replaceAll("\n");
+        text = HTML_TAG_PATTERN.matcher(text).replaceAll(" ");
+        text = HtmlUtils.htmlUnescape(text);
+        text = text.replace("\r", "");
+        text = text.replaceAll("[\\t\\x0B\\f]+", " ");
+        text = text.replaceAll("\\n{3,}", "\n\n");
+        text = text.replaceAll(" {2,}", " ");
+        text = text.trim();
+        return StringUtils.hasText(text) ? text : null;
+    }
+
+    private String joinProblemScreenshotUrls(List<String> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return null;
+        }
+        StringBuilder joined = new StringBuilder();
+        for (String item : attachments) {
+            if (!StringUtils.hasText(item)) {
+                continue;
+            }
+            String url = item.trim();
+            if (url.isEmpty()) {
+                continue;
+            }
+            int appendLength = url.length() + (joined.length() > 0 ? 1 : 0);
+            if (joined.length() + appendLength > MAX_PROBLEM_SCREENSHOT_LENGTH) {
+                break;
+            }
+            if (joined.length() > 0) {
+                joined.append(',');
+            }
+            joined.append(url);
+        }
+        return joined.length() == 0 ? null : joined.toString();
+    }
+
+    private boolean isBugCustomerInfoEmpty(TicketBugCustomerInfoInput input) {
+        if (input == null) {
+            return true;
+        }
+        return !StringUtils.hasText(input.getMerchantNo())
+                && !StringUtils.hasText(input.getCompanyName())
+                && !StringUtils.hasText(input.getMerchantAccount())
+                && !StringUtils.hasText(input.getProblemDesc())
+                && !StringUtils.hasText(input.getExpectedResult())
+                && !StringUtils.hasText(input.getSceneCode())
+                && !StringUtils.hasText(input.getProblemScreenshot());
     }
 
     private PluginTicketCreateOutput toCreateOutput(TicketPO ticket) {

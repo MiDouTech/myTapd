@@ -4080,6 +4080,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.17-plugin-paste-image-auto-upload` | SDK 支持“直接粘贴图片自动上传”：粘贴截图会走附件上传接口并插入 URL 图片；同时统一图片样式 `max-width:100%`，保证图片不撑破输入框 |
 | `v1.1.18-plugin-modal-my-tickets-entry` | SDK 提交工单弹窗新增“我的工单”按钮，用户可在同一弹窗直接切换到工单列表，无需控制台调用 |
 | `v1.1.19-plugin-modal-scroll-and-ticket-link` | 优化弹窗可用性：提交/我的工单弹窗改为固定视口高度 + 内部滚动，避免内容撑高导致按钮不可点；我的工单列表支持点击工单跳转公开详情页 |
+| `v1.1.20-plugin-bug-customer-auto-fill` | 插件建单自动回填缺陷客服信息：问题描述自动写入“问题描述”，附件 URL 自动写入“问题截图”，并从上下文/LaunchToken 自动填充商户编号、公司名称、商户账号、场景码等字段 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4129,3 +4130,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.19`（弹窗固定视口高度并内滚动，列表项已支持跳转）；
   2. 强刷页面（`Ctrl+F5`）或刷新 CDN 缓存；
   3. 若仍异常，检查 SDK 是否包含 `data-action=\"open-ticket-item\"` 与 `max-height:92vh`。
+
+#### Q96：为什么插件提单后，右侧“商户编号/问题描述/问题截图”还是空的？
+- **检测**：在工单详情接口返回里检查 `bugCustomerInfo` 是否为空；同时抓包看插件建单请求是否带了 `attachments`、`pluginContext`。  
+- **记录（错误类型）**：插件建单只写了主工单表，未把字段同步到缺陷客服信息表（`ticket_bug_info`）。  
+- **恢复建议**：
+  1. 升级到 `v1.1.20`（后端会自动把描述/截图/商户信息回填到 `ticket_bug_info`）；
+  2. 业务系统通过 SDK `setContext` 传入 `merchantNo/companyName/merchantAccount/sceneCode/expectedResult` 可提升回填完整度；
+  3. 若仍有字段为空，检查 LaunchToken 签发入参里的 `externalUserId/dept` 是否有值（回填兜底依赖这两个字段）。

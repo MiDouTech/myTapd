@@ -26,6 +26,11 @@ export interface TicketSdkContext {
   bizId?: string
   bizType?: string
   bizNo?: string
+  merchantNo?: string
+  companyName?: string
+  merchantAccount?: string
+  sceneCode?: string
+  expectedResult?: string
   extra?: Record<string, unknown>
 }
 
@@ -455,6 +460,11 @@ class TicketSdkImpl {
       bizId: this.context.bizId,
       bizType: this.context.bizType,
       bizNo: this.context.bizNo,
+      merchantNo: this.context.merchantNo,
+      companyName: this.context.companyName,
+      merchantAccount: this.context.merchantAccount,
+      sceneCode: this.context.sceneCode,
+      expectedResult: this.context.expectedResult,
       user: this.options?.user,
       env,
       extra: this.context.extra,
