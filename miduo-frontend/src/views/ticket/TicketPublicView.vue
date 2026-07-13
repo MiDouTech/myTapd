@@ -14,7 +14,9 @@ const detail = ref<TicketPublicDetailOutput>()
 const nowTick = ref(Date.now())
 let countdownTimerId: number | undefined
 
-const descriptionDisplayHtml = computed(() => formatTicketDescriptionForDisplay(detail.value?.description))
+const descriptionDisplayHtml = computed(() =>
+  formatTicketDescriptionForDisplay(detail.value?.description, { hideInlineImages: true }),
+)
 const archivedBugReport = computed(() => detail.value?.archivedBugReport)
 
 /** 与系统内工单详情同域，便于企微里一键打开处理页（需登录） */
