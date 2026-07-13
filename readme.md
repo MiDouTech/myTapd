@@ -4082,6 +4082,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.19-plugin-modal-scroll-and-ticket-link` | 优化弹窗可用性：提交/我的工单弹窗改为固定视口高度 + 内部滚动，避免内容撑高导致按钮不可点；我的工单列表支持点击工单跳转公开详情页 |
 | `v1.1.20-plugin-bug-customer-auto-fill` | 插件建单自动回填缺陷客服信息：问题描述自动写入“问题描述”，附件 URL 自动写入“问题截图”，并从上下文/LaunchToken 自动填充商户编号、公司名称、商户账号、场景码等字段 |
 | `v1.1.21-ticket-detail-description-hide-images` | 工单详情页“描述”区域展示优化：渲染时自动过滤富文本中的 `<img>`，避免上传截图在描述区重复展示（截图保留在附件/问题截图字段） |
+| `v1.1.22-ticket-description-hide-images-all-views` | 补齐其它页面：公开详情页（`/open/ticket/*`）与工单列表右侧预览抽屉的“描述”区域也统一隐藏内联图片，避免插件上传截图在描述区重复出现 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4147,3 +4148,11 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.21`（详情描述区渲染时自动隐藏内联图片）；
   2. 截图查看统一走“附件”或“客服信息 -> 问题截图”；
   3. 若仍看到旧样式，强刷页面（`Ctrl+F5`）清理前端缓存。
+
+#### Q98：为什么公开详情页或分类工单右侧预览里，描述区还在显示截图？
+- **检测**：在 `/open/ticket/*` 或 `/ticket/category/*` 右侧预览中，查看“工单描述”是否仍出现图片。  
+- **记录（错误类型）**：历史修复仅覆盖了工单详情页，公开页和列表预览未同步开启图片过滤。  
+- **恢复建议**：
+  1. 升级到 `v1.1.22`（已统一覆盖详情页 + 公开页 + 列表预览）；
+  2. 强刷页面（`Ctrl+F5`）并确认资源 hash 已更新；
+  3. 若仍异常，检查控制台 `document.querySelectorAll('.desc-content img,.preview-html img,.description-content img').length` 是否为 `0`。

@@ -55,7 +55,7 @@ const previewDetail = ref<TicketDetailOutput | null>(null)
 const previewTicketId = ref<number | null>(null)
 
 const previewDescriptionHtml = computed(() =>
-  formatTicketDescriptionForDisplay(previewDetail.value?.description),
+  formatTicketDescriptionForDisplay(previewDetail.value?.description, { hideInlineImages: true }),
 )
 
 const previewTimeTrackItems = ref<TicketTimeTrackItem[]>([])
