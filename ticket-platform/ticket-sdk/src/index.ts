@@ -232,9 +232,12 @@ class TicketSdkImpl {
          <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;flex:0 0 auto;"></div>`
 
     overlay.appendChild(panel)
-    overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) this.closeModal()
-    })
+    if (myTickets) {
+      // 为什么仅“我的工单”支持点遮罩关闭：提交工单弹窗里通常有未提交内容，误触外层会造成输入丢失。
+      overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) this.closeModal()
+      })
+    }
     panel.querySelectorAll('[data-action="close"]').forEach((node) => {
       node.addEventListener('click', () => this.closeModal())
     })
