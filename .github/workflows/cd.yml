@@ -602,7 +602,7 @@ jobs:
             echo "提交时间: $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> ${BACKEND_VERSION_FILE}
 
             if [[ "${is_prod_branch}" == "true" ]]; then
-              sed -i "/- name: 生产发布-后端/,/提交时间: / {
+              sed -i "/- name: 生产发布-后端/,/permissions: / {
                 s|author.*|author: ${AUTHOR}|
                 s|description: \"生产后端发布.*|description: \"生产后端发布-${AUTHOR}：${MSG_CLEAN}\"|
                 s|message.*|message: \"${MSG_CLEAN}\"|
@@ -624,7 +624,7 @@ jobs:
 
 
              if [[ "${is_prod_branch}" == "true" ]]; then
-              sed -i "/- name: 生产发布-前端/,/提交时间: / {
+              sed -i "/- name: 生产发布-前端/,/permissions: / {
                 s|author.*|author: ${AUTHOR}|
                 s|description: \"生产前端发布.*|description: \"生产前端发布-${AUTHOR}：${MSG_CLEAN}\"|
                 s|message.*|message: \"${MSG_CLEAN}\"|
