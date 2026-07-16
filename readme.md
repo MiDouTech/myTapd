@@ -4087,6 +4087,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.24-plugin-modal-close-confirm` | 进一步降低误操作风险：提交弹窗点击 `×/取消` 或切换“我的工单”时，若存在未提交内容则先二次确认，防止编辑内容被误清空 |
 | `v1.1.25-plugin-modal-overlay-no-close` | 根据用户反馈收紧规则：所有插件弹窗点击外部遮罩均不自动关闭；并同步刷新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`，避免线上继续命中旧逻辑 |
 | `v1.1.26-plugin-image-upload-filename-guard` | 修复粘贴图片上传 500：后端图片校验对“无扩展名文件名”增加容错（仅在存在后缀时校验扩展名），避免 `substring(-1)` 触发系统异常 |
+| `v1.1.27-plugin-image-upload-double-guard` | 二次加固粘贴图片上传：SDK 上传时强制补齐图片文件名后缀；后端补充 MIME 规范化、大小配置空值兜底、Multipart 解析异常友好返回，避免再次出现 500 + `Failed to fetch` |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4153,6 +4154,13 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   2. 若仍报错，检查返回体中的业务错误信息（如七牛配置、文件大小、MIME 类型限制）；
   3. 部署后强刷页面并确认网关/跨域配置未拦截错误响应。
 
+#### Q102：升级 `v1.1.26` 后，为什么粘贴上传偶发还是 `Failed to fetch`？
+- **检测**：观察失败请求是否仍是 `POST /api/open/v1/plugin/attachments/image`，并确认 `Request Payload` 的 `filename` 是否无后缀（如 `blob`/`image`）。  
+- **记录（错误类型）**：前端上传阶段仍可能发送无后缀文件名，叠加环境配置空值或 multipart 解析异常时，服务端会抛系统异常并在跨域场景显示 `Failed to fetch`。  
+- **恢复建议**：
+  1. 升级到 `v1.1.27`（SDK 已强制补齐后缀，后端增加 MIME/大小配置兜底和 multipart 友好错误）；
+  2. 同步发布 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 并清理 CDN/浏览器缓存；
+  3. 若仍失败，按返回文案排查：`文件大小超过限制` / `仅支持上传图片文件` / `上传文件解析失败`。
 #### Q95：为什么弹窗内容太长后点不到“关闭/提交”，或我的工单点击不跳详情？
 - **检测**：查看弹窗是否随内容无限拉长，以及“我的工单”列表项是否可点击。  
 - **记录（错误类型）**：弹窗未限制最大高度且缺少内部滚动；工单列表项未绑定公开详情跳转。  

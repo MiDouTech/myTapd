@@ -14,6 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.stream.Collectors;
@@ -58,6 +60,12 @@ public class GlobalExceptionHandler {
     public ApiResult<Void> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.warn("参数异常: {}", ex.getMessage());
         return ApiResult.fail(ErrorCode.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
+    public ApiResult<Void> handleMultipartException(Exception ex) {
+        log.warn("上传参数异常: {}", ex.getMessage());
+        return ApiResult.fail(ErrorCode.PARAM_INVALID, "上传文件解析失败，请重新粘贴或选择图片后重试");
     }
 
     @ExceptionHandler(Exception.class)

@@ -158,14 +158,22 @@ public class PluginTicketApplicationService {
         if (app == null) {
             throw BusinessException.of(ErrorCode.PLUGIN_APP_DISABLED, "接入应用已禁用");
         }
-
-        String fileUrl = qiniuUploadService.uploadForTicket(file, TicketUploadPurpose.SCREENSHOT);
-        ImageUploadOutput output = new ImageUploadOutput();
-        output.setUrl(fileUrl);
-        output.setFileName(file.getOriginalFilename());
-        output.setFileSize(file.getSize());
-        output.setFileType(file.getContentType());
-        return output;
+        try {
+            String fileUrl = qiniuUploadService.uploadForTicket(file, TicketUploadPurpose.SCREENSHOT);
+            ImageUploadOutput output = new ImageUploadOutput();
+            output.setUrl(fileUrl);
+            output.setFileName(file.getOriginalFilename());
+            output.setFileSize(file.getSize());
+            output.setFileType(file.getContentType());
+            return output;
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("插件上传图片异常: appId={}, userId={}, fileName={}",
+                    claims.getIntegrationAppId(), claims.getUserId(),
+                    file == null ? null : file.getOriginalFilename(), ex);
+            throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "图片上传失败，请稍后重试");
+        }
     }
 
     private Long resolveCategoryId(IntegrationAppPO app, Map<String, Object> pluginContext) {

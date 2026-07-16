@@ -131,9 +131,10 @@ public class QiniuUploadService {
             log.warn("图片字节数组为空，跳过上传");
             return null;
         }
-        long maxBytes = qiniuProperties.getMaxFileSizeMb() * 1024 * 1024;
+        long maxFileSizeMb = resolveMaxImageFileSizeMb();
+        long maxBytes = maxFileSizeMb * 1024 * 1024;
         if (imageBytes.length > maxBytes) {
-            log.warn("图片字节超过大小限制 {}MB，跳过上传", qiniuProperties.getMaxFileSizeMb());
+            log.warn("图片字节超过大小限制 {}MB，跳过上传", maxFileSizeMb);
             return null;
         }
         String key = buildObjectKey(originalName, qiniuProperties.getImagePathPrefix());
@@ -247,13 +248,14 @@ public class QiniuUploadService {
             throw BusinessException.of(ErrorCode.PARAM_INVALID, "上传文件不能为空");
         }
 
-        long maxBytes = qiniuProperties.getMaxFileSizeMb() * 1024 * 1024;
+        long maxFileSizeMb = resolveMaxImageFileSizeMb();
+        long maxBytes = maxFileSizeMb * 1024 * 1024;
         if (file.getSize() > maxBytes) {
             throw BusinessException.of(ErrorCode.PARAM_INVALID,
-                    "文件大小超过限制，最大允许 " + qiniuProperties.getMaxFileSizeMb() + "MB");
+                    "文件大小超过限制，最大允许 " + maxFileSizeMb + "MB");
         }
 
-        String contentType = file.getContentType();
+        String contentType = normalizeContentType(file.getContentType());
         if (!ALLOWED_IMAGE_TYPES.contains(contentType)) {
             throw BusinessException.of(ErrorCode.PARAM_INVALID,
                     "仅支持上传图片文件（JPG/PNG/GIF/WEBP/BMP）");
@@ -300,6 +302,24 @@ public class QiniuUploadService {
         }
         throw BusinessException.of(ErrorCode.PARAM_INVALID,
                 "不支持的附件格式，允许：图片、Excel(xls/xlsx)、文本(txt/csv)、PDF、Word、常见视频(mp4/mov 等)、zip/rar/7z");
+    }
+
+    private long resolveMaxImageFileSizeMb() {
+        Long configured = qiniuProperties.getMaxFileSizeMb();
+        if (configured == null || configured <= 0) {
+            // 为什么这里给兜底默认值：线上配置中心若传了空值/非法值，不能直接触发空指针导致 500。
+            return 10L;
+        }
+        return configured;
+    }
+
+    private String normalizeContentType(String contentType) {
+        if (!StringUtils.hasText(contentType)) {
+            return "";
+        }
+        int separatorIndex = contentType.indexOf(';');
+        String normalized = separatorIndex >= 0 ? contentType.substring(0, separatorIndex) : contentType;
+        return normalized.trim().toLowerCase();
     }
 
     private String buildObjectKey(String originalFilename, String prefix) {
