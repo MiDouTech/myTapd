@@ -231,6 +231,28 @@ class TicketSdkImpl {
          </div>
          <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;flex:0 0 auto;"></div>`
 
+    const uploadedAttachments: string[] = []
+    const hasUnsavedDraft = (): boolean => {
+      if (myTickets) {
+        return false
+      }
+      const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement | null
+      const descriptionHtml = (descriptionEl?.innerHTML ?? '').trim()
+      const sanitized = this.sanitizeDescriptionHtml(descriptionHtml)
+      const hasInlineImage = /<img[\s>]/i.test(descriptionHtml)
+      return !!sanitized.plainText || hasInlineImage || uploadedAttachments.length > 0
+    }
+    const tryCloseModal = (): void => {
+      if (!hasUnsavedDraft()) {
+        this.closeModal()
+        return
+      }
+      const message = '当前内容尚未提交，确认关闭后将丢失已填写内容，是否继续关闭？'
+      if (typeof window.confirm !== 'function' || window.confirm(message)) {
+        this.closeModal()
+      }
+    }
+
     overlay.appendChild(panel)
     if (myTickets) {
       // 为什么仅“我的工单”支持点遮罩关闭：提交工单弹窗里通常有未提交内容，误触外层会造成输入丢失。
@@ -239,12 +261,11 @@ class TicketSdkImpl {
       })
     }
     panel.querySelectorAll('[data-action="close"]').forEach((node) => {
-      node.addEventListener('click', () => this.closeModal())
+      node.addEventListener('click', () => tryCloseModal())
     })
     if (myTickets) {
       void this.renderMyTickets(panel)
     } else {
-      const uploadedAttachments: string[] = []
       const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
       if (descriptionEl) {
         descriptionEl.innerHTML = '<p><br/></p>'
@@ -274,6 +295,12 @@ class TicketSdkImpl {
         void this.submitTicket(panel, uploadedAttachments)
       })
       panel.querySelector('[data-action="open-my-tickets"]')?.addEventListener('click', () => {
+        if (hasUnsavedDraft()) {
+          const switchMessage = '当前内容尚未提交，切换到“我的工单”后将丢失已填写内容，是否继续？'
+          if (typeof window.confirm === 'function' && !window.confirm(switchMessage)) {
+            return
+          }
+        }
         // 为什么从提交页直接跳我的工单：用户提交后常需要立刻查看状态，减少额外点击路径。
         this.openModal(true)
       })
