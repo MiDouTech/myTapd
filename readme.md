@@ -4161,7 +4161,6 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.27`（SDK 已强制补齐后缀，后端增加 MIME/大小配置兜底和 multipart 友好错误）；
   2. 同步发布 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 并清理 CDN/浏览器缓存；
   3. 若仍失败，按返回文案排查：`文件大小超过限制` / `仅支持上传图片文件` / `上传文件解析失败`。
-
 #### Q95：为什么弹窗内容太长后点不到“关闭/提交”，或我的工单点击不跳详情？
 - **检测**：查看弹窗是否随内容无限拉长，以及“我的工单”列表项是否可点击。  
 - **记录（错误类型）**：弹窗未限制最大高度且缺少内部滚动；工单列表项未绑定公开详情跳转。  
