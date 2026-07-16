@@ -72,7 +72,7 @@ const menuItems: MenuItem[] = [
   { index: '/ticket/mine', title: '我的工单', icon: Tickets },
   {
     index: 'ticketCategoryGroups',
-    title: '分类工单',
+    title: '工单分类',
     icon: Files,
     children: categoryGroupMenuItems.value,
   },
