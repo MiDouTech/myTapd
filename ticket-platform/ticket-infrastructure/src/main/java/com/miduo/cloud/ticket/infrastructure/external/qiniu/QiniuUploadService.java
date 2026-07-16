@@ -261,10 +261,14 @@ public class QiniuUploadService {
 
         String originalFilename = file.getOriginalFilename();
         if (StringUtils.hasText(originalFilename)) {
-            String ext = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
-            if (!ALLOWED_IMAGE_EXTENSIONS.contains(ext)) {
-                throw BusinessException.of(ErrorCode.PARAM_INVALID,
-                        "仅支持上传图片文件（jpg/jpeg/png/gif/webp/bmp）");
+            int dotIndex = originalFilename.lastIndexOf('.');
+            // 为什么这里要容错：剪贴板粘贴图片在部分浏览器下文件名可能没有扩展名（如 image），不能再按后缀强校验导致 500。
+            if (dotIndex >= 0) {
+                String ext = originalFilename.substring(dotIndex).toLowerCase();
+                if (!ALLOWED_IMAGE_EXTENSIONS.contains(ext)) {
+                    throw BusinessException.of(ErrorCode.PARAM_INVALID,
+                            "仅支持上传图片文件（jpg/jpeg/png/gif/webp/bmp）");
+                }
             }
         }
     }

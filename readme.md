@@ -4086,6 +4086,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.23-plugin-modal-outside-click-guard` | 修复提交工单弹窗误触关闭：提交页点击弹窗外遮罩不再自动关闭，避免未提交内容丢失；“我的工单”弹窗仍保留点遮罩关闭能力 |
 | `v1.1.24-plugin-modal-close-confirm` | 进一步降低误操作风险：提交弹窗点击 `×/取消` 或切换“我的工单”时，若存在未提交内容则先二次确认，防止编辑内容被误清空 |
 | `v1.1.25-plugin-modal-overlay-no-close` | 根据用户反馈收紧规则：所有插件弹窗点击外部遮罩均不自动关闭；并同步刷新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`，避免线上继续命中旧逻辑 |
+| `v1.1.26-plugin-image-upload-filename-guard` | 修复粘贴图片上传 500：后端图片校验对“无扩展名文件名”增加容错（仅在存在后缀时校验扩展名），避免 `substring(-1)` 触发系统异常 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4143,6 +4144,14 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 若需要继续编辑，点击“取消”留在当前弹窗；
   2. 若确认放弃内容，点击“确定”关闭或切换；
   3. 如需关闭确认能力，可评估后续做成可配置开关（默认建议开启）。
+
+#### Q101：为什么粘贴截图上传时接口 `/api/open/v1/plugin/attachments/image` 返回 500，并提示 `Failed to fetch`？
+- **检测**：网络面板看到该接口返回 500；前端消息显示 `Failed to fetch`。  
+- **记录（错误类型）**：部分浏览器粘贴图片时上传文件名可能无后缀（如 `image`），后端旧逻辑按后缀截取时触发运行时异常。  
+- **恢复建议**：
+  1. 升级到 `v1.1.26`（后端已对无后缀文件名做容错）；
+  2. 若仍报错，检查返回体中的业务错误信息（如七牛配置、文件大小、MIME 类型限制）；
+  3. 部署后强刷页面并确认网关/跨域配置未拦截错误响应。
 
 #### Q95：为什么弹窗内容太长后点不到“关闭/提交”，或我的工单点击不跳详情？
 - **检测**：查看弹窗是否随内容无限拉长，以及“我的工单”列表项是否可点击。  
