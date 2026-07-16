@@ -548,9 +548,37 @@ class TicketSdkImpl {
     }
   }
 
+  private resolveUploadFileName(file: File): string {
+    const originalName = (file?.name ?? '').trim()
+    if (/\.[A-Za-z0-9]+$/.test(originalName)) {
+      return originalName
+    }
+    const ext = this.resolveImageExtension(file?.type)
+    // 为什么这里补后缀：部分浏览器粘贴截图会传无扩展名文件名（如 image/blob），旧后端按后缀处理时容易报错。
+    return `pasted-image-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`
+  }
+
+  private resolveImageExtension(contentType?: string): string {
+    const normalized = (contentType ?? '').split(';')[0].trim().toLowerCase()
+    switch (normalized) {
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg'
+      case 'image/gif':
+        return 'gif'
+      case 'image/webp':
+        return 'webp'
+      case 'image/bmp':
+        return 'bmp'
+      case 'image/png':
+      default:
+        return 'png'
+    }
+  }
+
   private async uploadPluginImage(file: File): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', file, this.resolveUploadFileName(file))
     const response = await fetch(`${this.apiBase}/api/open/v1/plugin/attachments/image`, {
       method: 'POST',
       headers: {
