@@ -4085,6 +4085,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.22-ticket-description-hide-images-all-views` | 补齐其它页面：公开详情页（`/open/ticket/*`）与工单列表右侧预览抽屉的“描述”区域也统一隐藏内联图片，避免插件上传截图在描述区重复出现 |
 | `v1.1.23-plugin-modal-outside-click-guard` | 修复提交工单弹窗误触关闭：提交页点击弹窗外遮罩不再自动关闭，避免未提交内容丢失；“我的工单”弹窗仍保留点遮罩关闭能力 |
 | `v1.1.24-plugin-modal-close-confirm` | 进一步降低误操作风险：提交弹窗点击 `×/取消` 或切换“我的工单”时，若存在未提交内容则先二次确认，防止编辑内容被误清空 |
+| `v1.1.25-plugin-modal-overlay-no-close` | 根据用户反馈收紧规则：所有插件弹窗点击外部遮罩均不自动关闭；并同步刷新对外静态文件 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`，避免线上继续命中旧逻辑 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4128,12 +4129,12 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   3. 若仍无入口，检查 `/sdk/v1/ticket-sdk.min.js` 是否包含 `data-action=\"open-my-tickets\"`。
 
 #### Q99：为什么我在填写工单时点了弹窗外部，内容会消失？
-- **检测**：在“提交工单”弹窗输入内容后，点击遮罩区域，弹窗被关闭且内容丢失。  
-- **记录（错误类型）**：交互误触导致的输入丢失（提交弹窗支持遮罩点击关闭）。  
+- **检测**：在插件弹窗输入内容后，点击遮罩区域，弹窗被关闭且内容丢失。  
+- **记录（错误类型）**：线上静态 SDK 仍包含“遮罩点击关闭”旧逻辑。  
 - **恢复建议**：
-  1. 升级到 `v1.1.23`（提交弹窗已禁用“点遮罩关闭”）；
-  2. 关闭弹窗请使用“取消”或右上角 `×`；
-  3. 若仍会关闭，检查实际加载的 SDK 是否为最新版本（强刷/CDN 刷新）。
+  1. 升级到 `v1.1.25`（所有弹窗都禁用“点遮罩关闭”）；
+  2. 部署时同步更新 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js`；
+  3. 强刷页面并刷新 CDN 缓存，确认加载到新文件。
 
 #### Q100：为什么我点了“取消 / × / 我的工单”会弹确认框？
 - **检测**：提交弹窗里输入文本或上传图片后，点击关闭或切换入口时出现“内容将丢失”确认。  
