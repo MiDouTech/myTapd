@@ -4162,7 +4162,6 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.27`（SDK 已强制补齐后缀，后端增加 MIME/大小配置兜底和 multipart 友好错误）；
   2. 同步发布 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 并清理 CDN/浏览器缓存；
   3. 若仍失败，按返回文案排查：`文件大小超过限制` / `仅支持上传图片文件` / `上传文件解析失败`。
-
 #### Q103：为什么响应头里已经看到 500，但控制台仍只提示 `Failed to fetch`？
 - **检测**：Network 里请求状态为 500，且服务端返回头中缺少 `Access-Control-Allow-Origin`。  
 - **记录（错误类型）**：跨域错误响应未带 CORS 头，浏览器会屏蔽响应体，前端只能收到统一的 `TypeError: Failed to fetch`。  
