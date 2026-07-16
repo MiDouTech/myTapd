@@ -7,10 +7,13 @@ import com.miduo.cloud.ticket.application.plugin.PluginTicketApplicationService;
 import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
+import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.plugin.*;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +28,7 @@ import javax.validation.Valid;
 @Tag(name = "工单插件", description = "业务原生工单插件开放接口")
 @RestController
 @RequestMapping("/api/open/v1/plugin")
+@Slf4j
 public class PluginOpenController {
 
     private final PluginLaunchTokenApplicationService pluginLaunchTokenApplicationService;
@@ -71,8 +75,15 @@ public class PluginOpenController {
     @PostMapping(value = "/attachments/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<ImageUploadOutput> uploadAttachmentImage(@RequestHeader("Authorization") String authorization,
                                                               @RequestParam("file") MultipartFile file) {
-        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
-        return ApiResult.success(pluginTicketApplicationService.uploadImage(claims, file));
+        try {
+            PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+            return ApiResult.success(pluginTicketApplicationService.uploadImage(claims, file));
+        } catch (BusinessException ex) {
+            return ApiResult.fail(ex.getCode(), ex.getMessage());
+        } catch (Exception ex) {
+            log.error("插件图片上传接口异常: fileName={}", file == null ? null : file.getOriginalFilename(), ex);
+            return ApiResult.fail(ErrorCode.UPLOAD_FAILED, "图片上传失败，请稍后重试");
+        }
     }
 
     /**
