@@ -65,7 +65,7 @@ export const routes: RouteRecordRaw[] = [
         name: 'ticketCategoryGroup',
         component: () => import('@/views/ticket/TicketListView.vue'),
         meta: {
-          title: '分类工单',
+          title: '工单分类',
         },
       },
       {
