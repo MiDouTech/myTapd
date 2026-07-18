@@ -1,5 +1,6 @@
 package com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.common.BaseEntity;
@@ -28,10 +29,10 @@ public class WebhookConfigPO extends BaseEntity {
     @TableField("event_types")
     private String eventTypes;
 
-    @TableField("category_ids")
+    @TableField(value = "category_ids", updateStrategy = FieldStrategy.IGNORED)
     private String categoryIds;
 
-    @TableField("include_descendants")
+    @TableField(value = "include_descendants", updateStrategy = FieldStrategy.IGNORED)
     private Integer includeDescendants;
 
     @TableField("is_active")
