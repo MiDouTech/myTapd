@@ -3971,7 +3971,7 @@ scripts/archive-changelogs.sh
 | 绕过 CD 直接手动发布旧制品 | 需手动归档或重新触发生产分支 CD |
 | 没有 `changelogs/*.md` | 跳过 |
 
-> 注意：自动归档只在生产分支（`.deploy/config.env` 的 `PROD_BRANCHES`，当前为 `main master`）构建成功、CNB 版本记录仓库更新成功后执行；归档提交带 `[skip ci]`，避免再次触发构建循环。若绕过 CD 直接在 CNB 手动发布旧制品，需要手动运行 `scripts/archive-changelogs.sh` 或重新触发生产分支 CD。
+> 注意：自动归档只在生产分支（`.deploy/config.env` 的 `PROD_BRANCHES`，当前为 `main master`）推送时执行。因 `main` 受分支保护，归档结果通过 **自动创建的 PR** 合入（不再直接 push）；Docker 镜像构建阶段会**本地执行** `scripts/archive-changelogs.sh`，确保更新中心数据完整且不阻塞发布。归档 PR 提交带 `[skip ci]`。若绕过 CD 直接在 CNB 手动发布旧制品，需要手动运行 `scripts/archive-changelogs.sh` 或重新触发生产分支 CD。
 
 ### 79.6 示例截图（终端运行效果）
 ```text
