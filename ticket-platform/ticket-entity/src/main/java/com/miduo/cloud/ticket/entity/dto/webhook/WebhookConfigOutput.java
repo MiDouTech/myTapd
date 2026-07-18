@@ -22,6 +22,12 @@ public class WebhookConfigOutput implements Serializable {
 
     private List<String> eventTypes;
 
+    private List<Long> categoryIds;
+
+    private List<String> categoryNames;
+
+    private Integer includeDescendants;
+
     private Integer isActive;
 
     private Integer timeoutMs;

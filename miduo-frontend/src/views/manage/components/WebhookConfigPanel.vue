@@ -9,9 +9,11 @@ import {
   getWebhookConfigPage,
   updateWebhookConfig,
 } from '@/api/webhook'
+import { getCategoryTree } from '@/api/category'
 import BasePagination from '@/components/common/BasePagination.vue'
 import BaseTable from '@/components/common/BaseTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import type { CategoryTreeOutput } from '@/types/category'
 import type { WebhookConfigCreateInput, WebhookConfigOutput, WebhookConfigPageInput } from '@/types/webhook'
 import { confirmAction, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -27,6 +29,11 @@ const WEBHOOK_EVENT_OPTIONS = [
   { label: '工单关闭', value: 'TICKET_CLOSED' },
   { label: '评论@提醒', value: 'TICKET_COMMENT_MENTION' },
 ] as const
+
+interface CategoryOption {
+  label: string
+  value: number
+}
 
 const tableLoading = ref(false)
 const dialogVisible = ref(false)
@@ -57,12 +64,15 @@ const sortState = reactive<{
 
 const tableData = ref<WebhookConfigOutput[]>([])
 const total = ref(0)
+const categoryOptions = ref<CategoryOption[]>([])
 
 const form = reactive<WebhookConfigCreateInput>({
   name: '',
   url: '',
   secret: '',
   eventTypes: [],
+  categoryIds: [],
+  includeDescendants: 0,
   isActive: 1,
   timeoutMs: 5000,
   maxRetryTimes: 3,
@@ -164,11 +174,43 @@ function resetForm(): void {
   form.url = ''
   form.secret = ''
   form.eventTypes = []
+  form.categoryIds = []
+  form.includeDescendants = 0
   form.isActive = 1
   form.timeoutMs = 5000
   form.maxRetryTimes = 3
   form.description = ''
   editingId.value = undefined
+}
+
+function flattenCategoryOptions(nodes: CategoryTreeOutput[], parentPath = ''): CategoryOption[] {
+  const result: CategoryOption[] = []
+  for (const node of nodes) {
+    const label = parentPath ? `${parentPath} / ${node.name}` : node.name
+    result.push({ label, value: node.id })
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenCategoryOptions(node.children, label))
+    }
+  }
+  return result
+}
+
+async function loadCategoryOptions(): Promise<void> {
+  try {
+    const categoryTree = await getCategoryTree()
+    categoryOptions.value = flattenCategoryOptions(categoryTree)
+  } catch {
+    categoryOptions.value = []
+  }
+}
+
+function formatCategoryScope(row: WebhookConfigOutput): string {
+  if (!row.categoryIds || row.categoryIds.length === 0) {
+    return '全部分类'
+  }
+  const names = row.categoryNames && row.categoryNames.length > 0 ? row.categoryNames : row.categoryIds.map(String)
+  const suffix = row.includeDescendants === 1 ? '（含子分类）' : ''
+  return `${names.join('、')}${suffix}`
 }
 
 function getEventTypeLabel(eventType: string): string {
@@ -247,6 +289,8 @@ async function openEditDialog(row: WebhookConfigOutput): Promise<void> {
     form.url = detail.url
     form.secret = detail.secret || ''
     form.eventTypes = [...detail.eventTypes]
+    form.categoryIds = detail.categoryIds ? [...detail.categoryIds] : []
+    form.includeDescendants = detail.includeDescendants ?? 0
     form.isActive = detail.isActive
     form.timeoutMs = detail.timeoutMs
     form.maxRetryTimes = detail.maxRetryTimes
@@ -293,6 +337,8 @@ async function handleSubmit(): Promise<void> {
       url: form.url.trim(),
       secret: form.secret?.trim() || undefined,
       eventTypes: [...form.eventTypes],
+      categoryIds: form.categoryIds && form.categoryIds.length > 0 ? [...form.categoryIds] : undefined,
+      includeDescendants: form.categoryIds && form.categoryIds.length > 0 ? form.includeDescendants ?? 0 : 0,
       isActive: form.isActive,
       timeoutMs: form.timeoutMs,
       maxRetryTimes: form.maxRetryTimes,
@@ -319,7 +365,7 @@ async function handleSubmit(): Promise<void> {
 }
 
 onMounted(async () => {
-  await loadWebhookConfigs()
+  await Promise.all([loadCategoryOptions(), loadWebhookConfigs()])
 })
 </script>
 
@@ -405,6 +451,11 @@ onMounted(async () => {
               </div>
             </template>
           </el-table-column>
+          <el-table-column label="适用分类" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatCategoryScope(row) }}
+            </template>
+          </el-table-column>
           <el-table-column label="超时/重试" width="100" align="center">
             <template #default="{ row }">
               {{ row.timeoutMs }}ms / {{ row.maxRetryTimes }}次
@@ -477,6 +528,29 @@ onMounted(async () => {
             >
           </el-checkbox-group>
         </el-form-item>
+        <el-form-item label="适用分类">
+          <el-select
+            v-model="form.categoryIds"
+            multiple
+            filterable
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="不选表示全部分类"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="option in categoryOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.categoryIds && form.categoryIds.length > 0" label="包含子分类">
+          <el-switch v-model="form.includeDescendants" :active-value="1" :inactive-value="0" />
+          <span class="include-descendants-tip">开启后，所选分类下的子分类工单也会推送</span>
+        </el-form-item>
         <el-form-item label="超时时间(ms)" prop="timeoutMs" required>
           <el-input-number v-model="form.timeoutMs" :min="1000" :max="60000" controls-position="right" />
         </el-form-item>
@@ -537,6 +611,12 @@ onMounted(async () => {
   justify-content: center;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.include-descendants-tip {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .fail-reason {

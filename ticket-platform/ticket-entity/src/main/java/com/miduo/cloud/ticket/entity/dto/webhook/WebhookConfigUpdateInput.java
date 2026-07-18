@@ -27,6 +27,18 @@ public class WebhookConfigUpdateInput implements Serializable {
     @NotEmpty(message = "事件类型不能为空")
     private List<String> eventTypes;
 
+    /**
+     * 适用分类ID；空或省略表示全部分类
+     */
+    private List<Long> categoryIds;
+
+    /**
+     * 是否包含子分类（0:否 1:是）
+     */
+    @Min(value = 0, message = "包含子分类标志只能为0或1")
+    @Max(value = 1, message = "包含子分类标志只能为0或1")
+    private Integer includeDescendants;
+
     @NotNull(message = "启用状态不能为空")
     @Min(value = 0, message = "启用状态只能为0或1")
     @Max(value = 1, message = "启用状态只能为0或1")

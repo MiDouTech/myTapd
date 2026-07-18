@@ -71,19 +71,22 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final SysUserMapper sysUserMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
     private final PluginIntegrationWebhookService pluginIntegrationWebhookService;
+    private final WebhookCategoryScopeMatcher webhookCategoryScopeMatcher;
 
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper,
                                   SysUserMapper sysUserMapper,
                                   TicketCategoryMapper ticketCategoryMapper,
-                                  PluginIntegrationWebhookService pluginIntegrationWebhookService) {
+                                  PluginIntegrationWebhookService pluginIntegrationWebhookService,
+                                  WebhookCategoryScopeMatcher webhookCategoryScopeMatcher) {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
         this.sysUserMapper = sysUserMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.pluginIntegrationWebhookService = pluginIntegrationWebhookService;
+        this.webhookCategoryScopeMatcher = webhookCategoryScopeMatcher;
     }
 
     public void dispatch(WebhookEventType eventType, Long ticketId, Object eventData) {
@@ -122,19 +125,21 @@ public class WebhookDispatchService extends BaseApplicationService {
             return;
         }
 
+        Long ticketCategoryId = resolveTicketCategoryId(ticketId);
         Map<Long, WebhookConfigPO> subscribedConfigMap = new LinkedHashMap<>();
         for (WebhookEventType eventType : normalizedEventTypes) {
             for (WebhookConfigPO config : filterSubscribedConfigs(configs, eventType)) {
-                if (config != null && config.getId() != null) {
+                if (config != null && config.getId() != null
+                        && webhookCategoryScopeMatcher.matches(config, ticketCategoryId)) {
                     subscribedConfigMap.putIfAbsent(config.getId(), config);
                 }
             }
         }
         if (subscribedConfigMap.isEmpty()) {
             WebhookEventType primaryEventType = resolvePrimaryEventType(normalizedEventTypes);
-            log.debug("Webhook分发跳过：无配置订阅这些事件, eventTypes={}, ticketId={}",
-                    formatEventTypeCodes(normalizedEventTypes), ticketId);
-            saveSkippedDispatchLog(primaryEventType, ticketId, "无配置订阅该事件");
+            log.debug("Webhook分发跳过：无配置订阅这些事件或分类不匹配, eventTypes={}, ticketId={}, categoryId={}",
+                    formatEventTypeCodes(normalizedEventTypes), ticketId, ticketCategoryId);
+            saveSkippedDispatchLog(primaryEventType, ticketId, "无配置订阅该事件或分类不匹配");
             return;
         }
 
@@ -166,6 +171,13 @@ public class WebhookDispatchService extends BaseApplicationService {
      * 用于群绑定推送与全局 Webhook 去重：已配置企微 Webhook 时由 Webhook 统一出口，避免同群重复消息。
      */
     public boolean hasActiveWecomSubscriberForAny(WebhookEventType... eventTypes) {
+        return hasActiveWecomSubscriberForAny(null, eventTypes);
+    }
+
+    /**
+     * 按工单分类判断是否存在会接收该事件的企微机器人 Webhook 配置。
+     */
+    public boolean hasActiveWecomSubscriberForAny(Long ticketCategoryId, WebhookEventType... eventTypes) {
         if (eventTypes == null || eventTypes.length == 0) {
             return false;
         }
@@ -178,12 +190,24 @@ public class WebhookDispatchService extends BaseApplicationService {
                 continue;
             }
             for (WebhookConfigPO config : filterSubscribedConfigs(configs, eventType)) {
-                if (config != null && isWecomRobotWebhook(config.getUrl())) {
+                if (config != null && isWecomRobotWebhook(config.getUrl())
+                        && webhookCategoryScopeMatcher.matches(config, ticketCategoryId)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private Long resolveTicketCategoryId(Long ticketId) {
+        if (ticketId == null) {
+            return null;
+        }
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null) {
+            return null;
+        }
+        return ticket.getCategoryId();
     }
 
     private List<WebhookEventType> normalizeEventTypes(List<WebhookEventType> eventTypes) {

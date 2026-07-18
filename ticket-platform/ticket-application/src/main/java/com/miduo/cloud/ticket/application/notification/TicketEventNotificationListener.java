@@ -282,8 +282,13 @@ public class TicketEventNotificationListener {
         } else if (newStatus == TicketStatus.CLOSED) {
             eventTypes.add(WebhookEventType.TICKET_CLOSED);
         }
+        Long categoryId = null;
+        TicketPO ticket = ticketMapper.selectById(event.getTicketId());
+        if (ticket != null) {
+            categoryId = ticket.getCategoryId();
+        }
         return webhookDispatchService.hasActiveWecomSubscriberForAny(
-                eventTypes.toArray(new WebhookEventType[0]));
+                categoryId, eventTypes.toArray(new WebhookEventType[0]));
     }
 
     private String resolveTicketDetailLink(TicketPO ticket) {
