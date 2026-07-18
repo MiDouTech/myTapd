@@ -204,6 +204,29 @@ async function loadCategoryOptions(): Promise<void> {
   }
 }
 
+function normalizeCategoryIds(values?: number[]): number[] {
+  if (!Array.isArray(values)) {
+    return []
+  }
+  return values.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+}
+
+function buildSubmitPayload(): WebhookConfigCreateInput {
+  const categoryIds = normalizeCategoryIds(form.categoryIds)
+  return {
+    name: form.name.trim(),
+    url: form.url.trim(),
+    secret: form.secret?.trim() || undefined,
+    eventTypes: [...form.eventTypes],
+    categoryIds,
+    includeDescendants: categoryIds.length > 0 ? form.includeDescendants ?? 0 : 0,
+    isActive: form.isActive,
+    timeoutMs: form.timeoutMs,
+    maxRetryTimes: form.maxRetryTimes,
+    description: form.description?.trim() || undefined,
+  }
+}
+
 function formatCategoryScope(row: WebhookConfigOutput): string {
   if (!row.categoryIds || row.categoryIds.length === 0) {
     return '全部分类'
@@ -289,7 +312,7 @@ async function openEditDialog(row: WebhookConfigOutput): Promise<void> {
     form.url = detail.url
     form.secret = detail.secret || ''
     form.eventTypes = [...detail.eventTypes]
-    form.categoryIds = detail.categoryIds ? [...detail.categoryIds] : []
+    form.categoryIds = normalizeCategoryIds(detail.categoryIds)
     form.includeDescendants = detail.includeDescendants ?? 0
     form.isActive = detail.isActive
     form.timeoutMs = detail.timeoutMs
@@ -332,18 +355,7 @@ async function handleSubmit(): Promise<void> {
 
   submitLoading.value = true
   try {
-    const payload: WebhookConfigCreateInput = {
-      name: form.name.trim(),
-      url: form.url.trim(),
-      secret: form.secret?.trim() || undefined,
-      eventTypes: [...form.eventTypes],
-      categoryIds: form.categoryIds && form.categoryIds.length > 0 ? [...form.categoryIds] : undefined,
-      includeDescendants: form.categoryIds && form.categoryIds.length > 0 ? form.includeDescendants ?? 0 : 0,
-      isActive: form.isActive,
-      timeoutMs: form.timeoutMs,
-      maxRetryTimes: form.maxRetryTimes,
-      description: form.description?.trim() || undefined,
-    }
+    const payload = buildSubmitPayload()
 
     if (dialogMode.value === 'create') {
       const id = await createWebhookConfig(payload)

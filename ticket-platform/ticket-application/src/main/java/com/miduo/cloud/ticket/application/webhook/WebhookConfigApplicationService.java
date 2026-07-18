@@ -1,6 +1,7 @@
 package com.miduo.cloud.ticket.application.webhook;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
@@ -76,7 +77,20 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
         fillForCreateOrUpdate(existing, input.getName(), input.getUrl(), input.getSecret(), input.getEventTypes(),
                 input.getCategoryIds(), input.getIncludeDescendants(),
                 input.getIsActive(), input.getTimeoutMs(), input.getMaxRetryTimes(), input.getDescription());
-        webhookConfigMapper.updateById(existing);
+        // updateById 默认跳过 null 字段，category_ids 需显式写入（含清空为全部分类）
+        LambdaUpdateWrapper<WebhookConfigPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(WebhookConfigPO::getId, id)
+                .set(WebhookConfigPO::getName, existing.getName())
+                .set(WebhookConfigPO::getUrl, existing.getUrl())
+                .set(WebhookConfigPO::getSecret, existing.getSecret())
+                .set(WebhookConfigPO::getEventTypes, existing.getEventTypes())
+                .set(WebhookConfigPO::getCategoryIds, existing.getCategoryIds())
+                .set(WebhookConfigPO::getIncludeDescendants, existing.getIncludeDescendants())
+                .set(WebhookConfigPO::getIsActive, existing.getIsActive())
+                .set(WebhookConfigPO::getTimeoutMs, existing.getTimeoutMs())
+                .set(WebhookConfigPO::getMaxRetryTimes, existing.getMaxRetryTimes())
+                .set(WebhookConfigPO::getDescription, existing.getDescription());
+        webhookConfigMapper.update(null, wrapper);
     }
 
     @Transactional(rollbackFor = Exception.class)

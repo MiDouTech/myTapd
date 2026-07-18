@@ -14,9 +14,17 @@ interface WebhookConfigRawOutput extends Omit<WebhookConfigOutput, 'eventTypes'>
 }
 
 function normalizeWebhookConfig(item: WebhookConfigRawOutput): WebhookConfigOutput {
+  const categoryIds = Array.isArray(item.categoryIds)
+    ? item.categoryIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id))
+    : []
   return {
     ...item,
     eventTypes: item.eventTypes || [],
+    categoryIds,
+    categoryNames: item.categoryNames || [],
+    includeDescendants: item.includeDescendants ?? 0,
   }
 }
 
