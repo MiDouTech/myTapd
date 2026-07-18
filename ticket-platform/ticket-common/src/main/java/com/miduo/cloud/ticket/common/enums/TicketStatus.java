@@ -50,7 +50,15 @@ public enum TicketStatus {
     /** 已解决待复盘/可选关闭（对应 Resolved） */
     ALERT_RESOLVED("alert_resolved", "已解决"),
     /** 抑制/静默期内，不重复打扰（对应 Suppressed / silenced） */
-    ALERT_SUPPRESSED("alert_suppressed", "已抑制");
+    ALERT_SUPPRESSED("alert_suppressed", "已抑制"),
+
+    // ---- 米多星球需求工作流专属状态 ----
+    PENDING_REVIEW("pending_review", "待评审"),
+    PENDING_PLANNING("pending_planning", "待规划"),
+    PENDING_RESEARCH("pending_research", "待调研"),
+    IN_DESIGN("in_design", "方案中"),
+    NO_ACTION("no_action", "无需处理"),
+    INVALID("invalid", "无效");
 
     private final String code;
     private final String label;
@@ -60,7 +68,8 @@ public enum TicketStatus {
      */
     public boolean isTerminal() {
         return this == COMPLETED || this == CLOSED || this == REJECTED
-                || this == ALERT_RESOLVED || this == ALERT_SUPPRESSED;
+                || this == ALERT_RESOLVED || this == ALERT_SUPPRESSED
+                || this == NO_ACTION || this == INVALID;
     }
 
     /**
