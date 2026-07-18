@@ -19,6 +19,9 @@ export interface WebhookConfigOutput {
   url: string
   secret?: string
   eventTypes: string[]
+  categoryIds?: number[]
+  categoryNames?: string[]
+  includeDescendants?: number
   isActive: number
   timeoutMs: number
   maxRetryTimes: number
@@ -37,6 +40,8 @@ export interface WebhookConfigCreateInput {
   url: string
   secret?: string
   eventTypes: string[]
+  categoryIds?: number[]
+  includeDescendants?: number
   isActive: number
   timeoutMs: number
   maxRetryTimes: number

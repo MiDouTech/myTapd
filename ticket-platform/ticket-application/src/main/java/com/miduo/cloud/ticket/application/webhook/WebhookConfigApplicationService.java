@@ -11,6 +11,8 @@ import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigCreateInput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigOutput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigPageInput;
 import com.miduo.cloud.ticket.entity.dto.webhook.WebhookConfigUpdateInput;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.mapper.WebhookConfigMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.webhook.po.WebhookConfigPO;
 import org.springframework.stereotype.Service;
@@ -26,9 +28,12 @@ import java.util.stream.Collectors;
 public class WebhookConfigApplicationService extends BaseApplicationService {
 
     private final WebhookConfigMapper webhookConfigMapper;
+    private final TicketCategoryMapper ticketCategoryMapper;
 
-    public WebhookConfigApplicationService(WebhookConfigMapper webhookConfigMapper) {
+    public WebhookConfigApplicationService(WebhookConfigMapper webhookConfigMapper,
+                                           TicketCategoryMapper ticketCategoryMapper) {
         this.webhookConfigMapper = webhookConfigMapper;
+        this.ticketCategoryMapper = ticketCategoryMapper;
     }
 
     public PageOutput<WebhookConfigOutput> page(WebhookConfigPageInput input) {
@@ -56,6 +61,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
     public Long create(WebhookConfigCreateInput input) {
         WebhookConfigPO po = new WebhookConfigPO();
         fillForCreateOrUpdate(po, input.getName(), input.getUrl(), input.getSecret(), input.getEventTypes(),
+                input.getCategoryIds(), input.getIncludeDescendants(),
                 input.getIsActive(), input.getTimeoutMs(), input.getMaxRetryTimes(), input.getDescription());
         webhookConfigMapper.insert(po);
         return po.getId();
@@ -68,6 +74,7 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
             throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "Webhook配置不存在");
         }
         fillForCreateOrUpdate(existing, input.getName(), input.getUrl(), input.getSecret(), input.getEventTypes(),
+                input.getCategoryIds(), input.getIncludeDescendants(),
                 input.getIsActive(), input.getTimeoutMs(), input.getMaxRetryTimes(), input.getDescription());
         webhookConfigMapper.updateById(existing);
     }
@@ -99,6 +106,8 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
                                        String url,
                                        String secret,
                                        List<String> eventTypes,
+                                       List<Long> categoryIds,
+                                       Integer includeDescendants,
                                        Integer isActive,
                                        Integer timeoutMs,
                                        Integer maxRetryTimes,
@@ -107,10 +116,90 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
         po.setUrl(url);
         po.setSecret(secret);
         po.setEventTypes(joinEventTypes(eventTypes));
+        po.setCategoryIds(joinCategoryIds(categoryIds));
+        po.setIncludeDescendants(normalizeIncludeDescendants(includeDescendants, categoryIds));
         po.setIsActive(isActive);
         po.setTimeoutMs(timeoutMs);
         po.setMaxRetryTimes(maxRetryTimes);
         po.setDescription(description);
+    }
+
+    private Integer normalizeIncludeDescendants(Integer includeDescendants, List<Long> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return 0;
+        }
+        if (includeDescendants == null) {
+            return 0;
+        }
+        return includeDescendants == 1 ? 1 : 0;
+    }
+
+    private String joinCategoryIds(List<Long> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return null;
+        }
+        LinkedHashSet<Long> idSet = new LinkedHashSet<>();
+        for (Long categoryId : categoryIds) {
+            if (categoryId == null) {
+                continue;
+            }
+            TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
+            if (category == null) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "分类不存在: " + categoryId);
+            }
+            idSet.add(categoryId);
+        }
+        if (idSet.isEmpty()) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Long id : idSet) {
+            if (builder.length() > 0) {
+                builder.append(',');
+            }
+            builder.append(id);
+        }
+        return builder.toString();
+    }
+
+    private List<Long> splitCategoryIds(String categoryIds) {
+        if (categoryIds == null || categoryIds.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        String[] array = categoryIds.split(",");
+        List<Long> result = new ArrayList<>();
+        for (String item : array) {
+            if (item == null || item.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                result.add(Long.parseLong(item.trim()));
+            } catch (NumberFormatException ex) {
+                // 历史脏数据忽略
+            }
+        }
+        return result;
+    }
+
+    private List<String> resolveCategoryNames(List<Long> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<TicketCategoryPO> categories = ticketCategoryMapper.selectBatchIds(categoryIds);
+        if (categories == null || categories.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, String> nameMap = categories.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(TicketCategoryPO::getId, TicketCategoryPO::getName, (left, right) -> left));
+        List<String> names = new ArrayList<>();
+        for (Long categoryId : categoryIds) {
+            String name = nameMap.get(categoryId);
+            if (name != null && !name.trim().isEmpty()) {
+                names.add(name.trim());
+            }
+        }
+        return names;
     }
 
     private String joinEventTypes(List<String> eventTypes) {
@@ -155,6 +244,10 @@ public class WebhookConfigApplicationService extends BaseApplicationService {
         output.setUrl(po.getUrl());
         output.setSecret(po.getSecret());
         output.setEventTypes(splitEventTypes(po.getEventTypes()));
+        List<Long> categoryIds = splitCategoryIds(po.getCategoryIds());
+        output.setCategoryIds(categoryIds);
+        output.setCategoryNames(resolveCategoryNames(categoryIds));
+        output.setIncludeDescendants(po.getIncludeDescendants() != null ? po.getIncludeDescendants() : 0);
         output.setIsActive(po.getIsActive());
         output.setTimeoutMs(po.getTimeoutMs());
         output.setMaxRetryTimes(po.getMaxRetryTimes());

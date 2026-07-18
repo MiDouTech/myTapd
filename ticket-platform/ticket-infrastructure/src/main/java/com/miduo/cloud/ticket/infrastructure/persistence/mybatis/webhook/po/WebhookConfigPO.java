@@ -28,6 +28,12 @@ public class WebhookConfigPO extends BaseEntity {
     @TableField("event_types")
     private String eventTypes;
 
+    @TableField("category_ids")
+    private String categoryIds;
+
+    @TableField("include_descendants")
+    private Integer includeDescendants;
+
     @TableField("is_active")
     private Integer isActive;
 
