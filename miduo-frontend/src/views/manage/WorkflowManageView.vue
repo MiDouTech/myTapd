@@ -229,6 +229,12 @@ const WORKFLOW_STATE_LABEL_MAP: Record<string, string> = {
   dept_approval: '部门审批',
   executing: '执行中',
   rejected: '已驳回',
+  pending_review: '待评审',
+  pending_planning: '待规划',
+  pending_research: '待调研',
+  in_design: '方案中',
+  no_action: '无需处理',
+  invalid: '无效',
 }
 
 const STATE_TYPE_OPTIONS = [

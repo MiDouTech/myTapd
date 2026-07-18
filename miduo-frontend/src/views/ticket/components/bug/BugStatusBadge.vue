@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getTicketStatusLabel } from '@/utils/ticket-status'
 
 const props = defineProps<{
   status: string
@@ -13,6 +14,10 @@ const props = defineProps<{
 const STATUS_COLOR_MAP: Record<string, string> = {
   pending_assign: '#909399',
   pending_accept: '#909399',
+  pending_review: '#E6A23C',
+  pending_planning: '#909399',
+  pending_research: '#8B5CF6',
+  in_design: '#1675d1',
   alert_triggered: '#E6A23C',
   alert_acknowledged: '#1675d1',
   alert_stable: '#8B5CF6',
@@ -31,35 +36,14 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   completed: '#67C23A',
   closed: '#67C23A',
   suspended: '#F56C6C',
-}
-
-const STATUS_LABEL_MAP: Record<string, string> = {
-  pending_assign: '待分派',
-  pending_accept: '待受理',
-  alert_triggered: '待认领',
-  alert_acknowledged: '处置中',
-  alert_stable: '待确认',
-  alert_resolved: '已解决',
-  alert_suppressed: '已抑制',
-  processing: '处理中',
-  pending_cs_accept: '待客服受理',
-  pending_test_accept: '待测试受理',
-  testing: '测试复现中',
-  investigating: '排查中',
-  pending_dev_accept: '待开发受理',
-  developing: '开发解决中',
-  temp_resolved: '临时解决',
-  pending_cs_confirm: '待客服确认',
-  pending_verify: '待验收',
-  completed: '已完成',
-  closed: '已关闭',
-  suspended: '已挂起',
+  no_action: '#909399',
+  invalid: '#F56C6C',
 }
 
 const color = computed(() => STATUS_COLOR_MAP[props.status?.toLowerCase()] ?? '#909399')
 
 const label = computed(
-  () => props.statusLabel || STATUS_LABEL_MAP[props.status?.toLowerCase()] || props.status,
+  () => props.statusLabel || getTicketStatusLabel(props.status),
 )
 
 const badgeStyle = computed(() => ({
