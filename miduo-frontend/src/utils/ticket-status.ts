@@ -14,6 +14,8 @@ const TICKET_STATUS_LABEL_MAP: Record<string, string> = {
   processing: '处理中',
   suspended: '已挂起',
   pending_verify: '待验收',
+  new_created: '新建',
+  fixed: '已修复',
   completed: '已完成',
   closed: '已关闭',
   pending_cs_accept: '待客服受理',

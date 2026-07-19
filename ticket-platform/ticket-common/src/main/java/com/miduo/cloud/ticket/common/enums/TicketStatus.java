@@ -21,6 +21,10 @@ public enum TicketStatus {
     COMPLETED("completed", "已完成"),
     CLOSED("closed", "已关闭"),
 
+    // ---- TAPD 缺陷工作流专属状态 ----
+    NEW_CREATED("new_created", "新建"),
+    FIXED("fixed", "已修复"),
+
     // ---- 缺陷工单专属状态 ----
     PENDING_CS_ACCEPT("pending_cs_accept", "待客服受理"),
     PENDING_TEST_ACCEPT("pending_test_accept", "待测试受理"),
