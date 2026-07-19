@@ -1,0 +1,7 @@
+{
+  "name": "myTapd + prd_agent",
+  "install": "bash /workspace/scripts/cloud-agent-startup.sh",
+  "repositoryDependencies": [
+    "github.com/inernoro/prd_agent"
+  ]
+}
