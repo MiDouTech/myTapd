@@ -7,6 +7,7 @@ import com.miduo.cloud.ticket.common.enums.DefectSeverityResolveSlaRule;
 import com.miduo.cloud.ticket.common.enums.SlaLevel;
 import com.miduo.cloud.ticket.common.enums.SlaTimerStatus;
 import com.miduo.cloud.ticket.common.enums.SlaTimerType;
+import com.miduo.cloud.ticket.application.system.BusinessTimezoneResolver;
 import com.miduo.cloud.ticket.domain.common.event.SlaBreachedEvent;
 import com.miduo.cloud.ticket.domain.common.event.SlaWarningEvent;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaPolicyMapper;
@@ -18,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 
@@ -32,15 +32,18 @@ public class SlaTimerService extends BaseApplicationService {
     private final SlaTimerMapper slaTimerMapper;
     private final SlaPolicyMapper slaPolicyMapper;
     private final WorkingTimeCalculator workingTimeCalculator;
+    private final BusinessTimezoneResolver businessTimezoneResolver;
     private final ApplicationEventPublisher eventPublisher;
 
     public SlaTimerService(SlaTimerMapper slaTimerMapper,
                            SlaPolicyMapper slaPolicyMapper,
                            WorkingTimeCalculator workingTimeCalculator,
+                           BusinessTimezoneResolver businessTimezoneResolver,
                            ApplicationEventPublisher eventPublisher) {
         this.slaTimerMapper = slaTimerMapper;
         this.slaPolicyMapper = slaPolicyMapper;
         this.workingTimeCalculator = workingTimeCalculator;
+        this.businessTimezoneResolver = businessTimezoneResolver;
         this.eventPublisher = eventPublisher;
     }
 
@@ -55,7 +58,7 @@ public class SlaTimerService extends BaseApplicationService {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = businessTimezoneResolver.nowLocalDateTime();
 
         SlaTimerPO responseTimer = buildTimer(ticketId, slaPolicyId,
                 SlaTimerType.RESPONSE.getCode(), policy.getResponseTime(), now);
@@ -75,7 +78,7 @@ public class SlaTimerService extends BaseApplicationService {
     public void pauseTimers(Long ticketId) {
         List<SlaTimerPO> runningTimers = getRunningTimersByTicketId(ticketId);
         Date now = new Date();
-        LocalDateTime nowLdt = LocalDateTime.now();
+        LocalDateTime nowLdt = businessTimezoneResolver.nowLocalDateTime();
         for (SlaTimerPO timer : runningTimers) {
             LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
             int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : 0;
@@ -103,7 +106,7 @@ public class SlaTimerService extends BaseApplicationService {
             int remainingMinutes = timer.getThresholdMinutes() - timer.getElapsedMinutes();
             if (remainingMinutes > 0) {
                 LocalDateTime deadline = workingTimeCalculator.calculateDeadline(
-                        LocalDateTime.now(), remainingMinutes);
+                        businessTimezoneResolver.nowLocalDateTime(), remainingMinutes);
                 timer.setDeadline(toDate(deadline));
             }
             slaTimerMapper.updateById(timer);
@@ -171,7 +174,7 @@ public class SlaTimerService extends BaseApplicationService {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = businessTimezoneResolver.nowLocalDateTime();
         int elapsed = calculateCurrentElapsed(timer, now);
         int threshold = rule.getResolveMinutes();
         boolean wasBreached = SlaTimerStatus.BREACHED.getCode().equals(timer.getStatus())
@@ -228,7 +231,7 @@ public class SlaTimerService extends BaseApplicationService {
 
     private void checkSingleTimer(SlaTimerPO timer) {
         LocalDateTime startAt = toLocalDateTime(timer.getStartAt());
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = businessTimezoneResolver.nowLocalDateTime();
         int baseElapsed = timer.getBaseElapsedMinutes() != null ? timer.getBaseElapsedMinutes() : 0;
         int elapsed = baseElapsed + workingTimeCalculator.calculateWorkingMinutes(startAt, now);
         timer.setElapsedMinutes(elapsed);
@@ -250,6 +253,9 @@ public class SlaTimerService extends BaseApplicationService {
                     timer.getTicketId(), timer.getTimerType(), elapsed, threshold);
             return;
         }
+
+        LocalDateTime deadline = workingTimeCalculator.calculateDeadline(now, remaining);
+        timer.setDeadline(toDate(deadline));
 
         SlaPolicyPO policy = slaPolicyMapper.selectById(timer.getSlaPolicyId());
         int warningPct = (policy != null) ? policy.getWarningPct() : 75;
@@ -319,16 +325,10 @@ public class SlaTimerService extends BaseApplicationService {
     }
 
     private LocalDateTime toLocalDateTime(Date date) {
-        if (date == null) {
-            return LocalDateTime.now();
-        }
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        return businessTimezoneResolver.toLocalDateTime(date);
     }
 
     private Date toDate(LocalDateTime localDateTime) {
-        if (localDateTime == null) {
-            return null;
-        }
-        return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+        return businessTimezoneResolver.toDate(localDateTime);
     }
 }
