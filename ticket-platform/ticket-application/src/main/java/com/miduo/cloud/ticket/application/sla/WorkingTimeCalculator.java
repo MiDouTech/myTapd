@@ -1,6 +1,6 @@
 package com.miduo.cloud.ticket.application.sla;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.miduo.cloud.ticket.application.system.BusinessTimezoneResolver;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.mapper.SystemConfigMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.system.po.SystemConfigPO;
 import org.slf4j.Logger;
@@ -28,9 +28,12 @@ public class WorkingTimeCalculator {
     private static final Logger log = LoggerFactory.getLogger(WorkingTimeCalculator.class);
 
     private final SystemConfigMapper systemConfigMapper;
+    private final BusinessTimezoneResolver businessTimezoneResolver;
 
-    public WorkingTimeCalculator(SystemConfigMapper systemConfigMapper) {
+    public WorkingTimeCalculator(SystemConfigMapper systemConfigMapper,
+                                 BusinessTimezoneResolver businessTimezoneResolver) {
         this.systemConfigMapper = systemConfigMapper;
+        this.businessTimezoneResolver = businessTimezoneResolver;
     }
 
     /**
@@ -40,7 +43,7 @@ public class WorkingTimeCalculator {
      * @return 工作分钟数
      */
     public int calculateElapsedWorkingMinutes(LocalDateTime startTime) {
-        return calculateWorkingMinutes(startTime, LocalDateTime.now());
+        return calculateWorkingMinutes(startTime, businessTimezoneResolver.nowLocalDateTime());
     }
 
     /**
@@ -138,7 +141,7 @@ public class WorkingTimeCalculator {
      */
     public boolean isCurrentlyWorkingTime() {
         WorkingTimeConfig config = loadWorkingTimeConfig();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = businessTimezoneResolver.nowLocalDateTime();
         if (!isWorkingDay(now.toLocalDate(), config)) {
             return false;
         }
