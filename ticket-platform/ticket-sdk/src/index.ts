@@ -85,6 +85,7 @@ class TicketSdkImpl {
   private overlayEl: HTMLElement | null = null
   private handlers = new Map<TicketSdkEvent, Set<EventHandler>>()
   private autoReporter = new HttpAutoReporter()
+  private launchTokenWatchTimer: number | null = null
 
   async init(options: TicketSdkInitOptions): Promise<void> {
     this.options = { ...options, mode: options.mode ?? 'float' }
@@ -100,6 +101,22 @@ class TicketSdkImpl {
   setUser(user: TicketSdkUser): void {
     if (this.options) {
       this.options.user = user
+    }
+  }
+
+  refreshLaunchToken(launchToken: string): void {
+    const normalized = (launchToken ?? '').trim()
+    if (!this.options || !normalized) {
+      return
+    }
+    this.options.launchToken = normalized
+    if (this.overlayEl) {
+      const panel = this.overlayEl.firstElementChild as HTMLElement | null
+      if (panel) {
+        this.clearLaunchTokenWatch()
+        this.hideLaunchTokenHint(panel)
+        this.scheduleLaunchTokenWatch(panel)
+      }
     }
   }
 
@@ -124,6 +141,7 @@ class TicketSdkImpl {
   }
 
   destroy(): void {
+    this.clearLaunchTokenWatch()
     this.autoReporter.stop()
     this.floatEl?.remove()
     this.overlayEl?.remove()
@@ -302,9 +320,103 @@ class TicketSdkImpl {
     }
     document.body.appendChild(overlay)
     this.overlayEl = overlay
+    this.scheduleLaunchTokenWatch(panel)
+  }
+
+  private parseLaunchTokenExpiryMs(token?: string): number | null {
+    const normalized = (token ?? '').trim()
+    if (!normalized) {
+      return null
+    }
+    try {
+      const payloadPart = normalized.split('.')[1]
+      if (!payloadPart) {
+        return null
+      }
+      const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/')
+      const payload = JSON.parse(atob(base64)) as { exp?: number }
+      return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+    } catch {
+      return null
+    }
+  }
+
+  private clearLaunchTokenWatch(): void {
+    if (this.launchTokenWatchTimer != null) {
+      window.clearTimeout(this.launchTokenWatchTimer)
+      this.launchTokenWatchTimer = null
+    }
+  }
+
+  private scheduleLaunchTokenWatch(panel: HTMLElement): void {
+    this.clearLaunchTokenWatch()
+    const expMs = this.parseLaunchTokenExpiryMs(this.options?.launchToken)
+    if (!expMs) {
+      return
+    }
+    const check = (): void => {
+      if (!this.overlayEl || this.overlayEl.firstElementChild !== panel) {
+        this.clearLaunchTokenWatch()
+        return
+      }
+      const remainingMs = expMs - Date.now()
+      if (remainingMs <= 0) {
+        this.showLaunchTokenHint(
+          panel,
+          '登录凭证已过期，弹窗不会自动关闭。请刷新页面或联系管理员重新获取凭证后再提交。',
+          '#fef0f0',
+          '#f56c6c',
+        )
+        return
+      }
+      if (remainingMs <= 2 * 60 * 1000) {
+        const minutes = Math.max(1, Math.ceil(remainingMs / 60000))
+        this.showLaunchTokenHint(
+          panel,
+          `登录凭证将在约 ${minutes} 分钟后过期，建议尽快提交；也可由业务系统调用 TicketSDK.refreshLaunchToken() 续期。`,
+          '#fdf6ec',
+          '#e6a23c',
+        )
+      } else {
+        this.hideLaunchTokenHint(panel)
+      }
+      const nextCheckMs = Math.min(remainingMs, 30 * 1000)
+      this.launchTokenWatchTimer = window.setTimeout(check, nextCheckMs)
+    }
+    check()
+  }
+
+  private showLaunchTokenHint(
+    panel: HTMLElement,
+    message: string,
+    backgroundColor: string,
+    borderColor: string,
+  ): void {
+    let hintEl = panel.querySelector('[data-role="launch-token-hint"]') as HTMLElement | null
+    if (!hintEl) {
+      hintEl = document.createElement('div')
+      hintEl.setAttribute('data-role', 'launch-token-hint')
+      hintEl.style.cssText =
+        'margin-bottom:10px;padding:8px 10px;border-radius:4px;font-size:13px;line-height:1.5;flex:0 0 auto;'
+      const header = panel.firstElementChild
+      if (header?.nextElementSibling) {
+        panel.insertBefore(hintEl, header.nextElementSibling)
+      } else {
+        panel.appendChild(hintEl)
+      }
+    }
+    hintEl.style.background = backgroundColor
+    hintEl.style.border = `1px solid ${borderColor}`
+    hintEl.style.color = borderColor
+    hintEl.textContent = message
+  }
+
+  private hideLaunchTokenHint(panel: HTMLElement): void {
+    panel.querySelector('[data-role="launch-token-hint"]')?.remove()
   }
 
   private closeModal(): void {
+    this.clearLaunchTokenWatch()
     this.overlayEl?.remove()
     this.overlayEl = null
   }
@@ -576,6 +688,13 @@ class TicketSdkImpl {
     }
   }
 
+  private resolvePluginApiErrorMessage(result: { code?: number; message?: string }, fallback: string): string {
+    if (result.code === 8102 || result.code === 8103) {
+      return '登录凭证已过期或失效，弹窗不会自动关闭。请刷新页面后重试，或联系管理员重新获取凭证。'
+    }
+    return result.message || fallback
+  }
+
   private async uploadPluginImage(file: File): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
     const formData = new FormData()
     formData.append('file', file, this.resolveUploadFileName(file))
@@ -588,7 +707,7 @@ class TicketSdkImpl {
     })
     const result = await response.json()
     if (!response.ok || result.code !== 200 || !result.data?.url) {
-      throw new Error(result.message || '图片上传失败')
+      throw new Error(this.resolvePluginApiErrorMessage(result, '图片上传失败'))
     }
     return result.data
   }
@@ -609,7 +728,7 @@ class TicketSdkImpl {
     })
     const result = await response.json()
     if (!response.ok || result.code !== 200) {
-      throw new Error(result.message || '创建工单失败')
+      throw new Error(this.resolvePluginApiErrorMessage(result, '创建工单失败'))
     }
     return result.data
   }
@@ -620,7 +739,7 @@ class TicketSdkImpl {
     })
     const result = await response.json()
     if (!response.ok || result.code !== 200) {
-      throw new Error(result.message || '加载工单失败')
+      throw new Error(this.resolvePluginApiErrorMessage(result, '加载工单失败'))
     }
     return result.data
   }
@@ -712,6 +831,7 @@ export const TicketSDK = {
   init: (options: TicketSdkInitOptions) => ticketSdk.init(options),
   setContext: (context: TicketSdkContext) => ticketSdk.setContext(context),
   setUser: (user: TicketSdkUser) => ticketSdk.setUser(user),
+  refreshLaunchToken: (launchToken: string) => ticketSdk.refreshLaunchToken(launchToken),
   open: (prefillDescription?: string) => ticketSdk.open(prefillDescription),
   openMyTickets: () => ticketSdk.openMyTickets(),
   reportHttpError: (error: HttpErrorCapture) => ticketSdk.reportHttpError(error),

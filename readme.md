@@ -4089,6 +4089,7 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
 | `v1.1.26-plugin-image-upload-filename-guard` | 修复粘贴图片上传 500：后端图片校验对“无扩展名文件名”增加容错（仅在存在后缀时校验扩展名），避免 `substring(-1)` 触发系统异常 |
 | `v1.1.27-plugin-image-upload-double-guard` | 二次加固粘贴图片上传：SDK 上传时强制补齐图片文件名后缀；后端补充 MIME 规范化、大小配置空值兜底、Multipart 解析异常友好返回，避免再次出现 500 + `Failed to fetch` |
 | `v1.1.28-plugin-upload-cors-error-guard` | 上传链路再加固：插件开放接口统一补跨域响应头（含异常场景）并对上传入口做控制层兜底，避免浏览器只看到 `Failed to fetch` 无法读取错误详情 |
+| `v1.1.29-plugin-modal-session-keepalive` | 修复插件弹窗约 4~5 分钟后自动退出：LaunchToken 默认有效期延长至 2 小时；弹窗不因凭证到期自动关闭；新增 `TicketSDK.refreshLaunchToken()` 供业务侧静默续期 |
 
 ### 80.7 常见问题（新增）
 #### Q90：代码已经改了，为什么业务系统弹窗还是旧文本框？
@@ -4169,6 +4170,13 @@ axios.interceptors.response.use(null, TicketSDK.createAxiosInterceptor());
   1. 升级到 `v1.1.28`（插件开放接口已增加跨域响应头兜底过滤器，异常响应也可读）；
   2. 同步检查网关（openresty/nginx）是否在 4xx/5xx 返回时也保留 CORS 响应头；
   3. 发布后用粘贴上传重试，并在 Network 中确认失败响应已包含 `Access-Control-Allow-Origin`。
+#### Q104：为什么插件弹窗维持约 4~5 分钟后会自动退出？
+- **检测**：查看业务系统是否在 `expireSeconds` 到期后执行 `destroy()` 或重建 SDK；同时确认 LaunchToken 默认有效期是否仍为 300 秒。  
+- **记录（错误类型）**：LaunchToken 默认 5 分钟过期，部分业务侧按过期时间自动销毁弹窗，表现为“自动退出”。  
+- **恢复建议**：
+  1. 升级到 `v1.1.29`（LaunchToken 默认 2 小时，弹窗不因凭证到期自动关闭）；
+  2. 业务侧改为在 Token 将过期时调用 `TicketSDK.refreshLaunchToken(newToken)`，不要自动关闭弹窗；
+  3. 同步发布 `miduo-frontend/public/sdk/v1/ticket-sdk.min.js` 并强刷页面。
 #### Q95：为什么弹窗内容太长后点不到“关闭/提交”，或我的工单点击不跳详情？
 - **检测**：查看弹窗是否随内容无限拉长，以及“我的工单”列表项是否可点击。  
 - **记录（错误类型）**：弹窗未限制最大高度且缺少内部滚动；工单列表项未绑定公开详情跳转。  

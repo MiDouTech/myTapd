@@ -75,4 +75,4 @@ open-api:
 
 plugin:
   enabled: true
-  launch-token-expire-seconds: 300
+  launch-token-expire-seconds: 7200

@@ -31,7 +31,7 @@ public class PluginLaunchTokenPortImpl implements PluginLaunchTokenPort {
 
     public PluginLaunchTokenPortImpl(JwtTokenProvider jwtTokenProvider,
                                      StringRedisTemplate stringRedisTemplate,
-                                     @Value("${plugin.launch-token-expire-seconds:300}") long launchTokenExpireSeconds) {
+                                     @Value("${plugin.launch-token-expire-seconds:7200}") long launchTokenExpireSeconds) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.stringRedisTemplate = stringRedisTemplate;
         this.launchTokenExpireSeconds = launchTokenExpireSeconds;
