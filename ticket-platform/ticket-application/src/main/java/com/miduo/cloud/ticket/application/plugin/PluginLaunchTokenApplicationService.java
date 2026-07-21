@@ -26,7 +26,7 @@ public class PluginLaunchTokenApplicationService {
     public PluginLaunchTokenApplicationService(IntegrationAppCredentialResolver credentialResolver,
                                                PluginUserMappingService pluginUserMappingService,
                                                PluginLaunchTokenPort pluginLaunchTokenPort,
-                                               @Value("${plugin.launch-token-expire-seconds:300}") long launchTokenExpireSeconds) {
+                                               @Value("${plugin.launch-token-expire-seconds:7200}") long launchTokenExpireSeconds) {
         this.credentialResolver = credentialResolver;
         this.pluginUserMappingService = pluginUserMappingService;
         this.pluginLaunchTokenPort = pluginLaunchTokenPort;
