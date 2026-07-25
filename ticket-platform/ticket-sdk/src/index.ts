@@ -187,15 +187,15 @@ class TicketSdkImpl {
     const style = document.createElement('style')
     style.dataset.miduoTicketFloatStyle = 'true'
     style.textContent = `
-      .miduo-ticket-float{position:fixed;right:24px;bottom:24px;z-index:99998;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;box-shadow:0 4px 12px color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;isolation:isolate}
+      .miduo-ticket-float{position:fixed;right:24px;bottom:24px;z-index:99998;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;box-shadow:0 4px 12px rgba(22,117,209,.35);box-shadow:0 4px 12px color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;isolation:isolate}
       .miduo-ticket-float:hover{transform:scale(1.08);box-shadow:0 6px 20px color-mix(in srgb,var(--miduo-ticket-primary) 50%,transparent)}
       .miduo-ticket-float:active{transform:scale(.96)}
       .miduo-ticket-float:focus-visible{outline:3px solid color-mix(in srgb,var(--miduo-ticket-primary) 38%,white);outline-offset:4px}
       .miduo-ticket-float__glow,.miduo-ticket-float__ring,.miduo-ticket-float__ring-inner,.miduo-ticket-float__core{position:absolute;border-radius:50%;pointer-events:none}
-      .miduo-ticket-float__glow{inset:-8px;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--miduo-ticket-primary) 45%,transparent) 0%,color-mix(in srgb,var(--miduo-ticket-primary) 20%,transparent) 40%,transparent 70%);filter:blur(6px);animation:miduo-ticket-breathe 3s ease-in-out infinite}
-      .miduo-ticket-float__ring{inset:0;background:conic-gradient(from 0deg,transparent 0deg,color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent) 35deg,color-mix(in srgb,var(--miduo-ticket-primary) 75%,white) 95deg,color-mix(in srgb,var(--miduo-ticket-primary) 95%,black) 155deg,color-mix(in srgb,var(--miduo-ticket-primary) 70%,white) 215deg,color-mix(in srgb,var(--miduo-ticket-primary) 40%,transparent) 275deg,transparent 325deg);-webkit-mask:radial-gradient(circle,transparent 25%,#000 28%);mask:radial-gradient(circle,transparent 25%,#000 28%);animation:miduo-ticket-spin 10s linear infinite}
-      .miduo-ticket-float__ring-inner{inset:6px;background:conic-gradient(from 180deg,transparent 0deg,color-mix(in srgb,var(--miduo-ticket-primary) 40%,white) 55deg,color-mix(in srgb,var(--miduo-ticket-primary) 80%,white) 145deg,color-mix(in srgb,var(--miduo-ticket-primary) 75%,black) 235deg,transparent 305deg);-webkit-mask:radial-gradient(circle,transparent 35%,#000 38%);mask:radial-gradient(circle,transparent 35%,#000 38%);animation:miduo-ticket-spin-reverse 6s linear infinite}
-      .miduo-ticket-float__core{inset:13px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,color-mix(in srgb,var(--miduo-ticket-primary) 72%,black) 0%,var(--miduo-ticket-primary) 55%,color-mix(in srgb,var(--miduo-ticket-primary) 72%,white) 100%);box-shadow:inset 0 0 12px rgba(0,50,100,.3),0 0 10px color-mix(in srgb,var(--miduo-ticket-primary) 40%,transparent)}
+      .miduo-ticket-float__glow{inset:-8px;z-index:-1;background:radial-gradient(circle,rgba(64,158,255,.45) 0%,rgba(96,165,250,.2) 40%,transparent 70%);filter:blur(6px);animation:miduo-ticket-breathe 3s ease-in-out infinite}
+      .miduo-ticket-float__ring{inset:0;background:conic-gradient(from 0deg,transparent 0deg,rgba(102,177,255,.35) 35deg,rgba(64,158,255,.75) 95deg,rgba(37,99,168,.95) 155deg,rgba(64,158,255,.7) 215deg,rgba(102,177,255,.4) 275deg,transparent 325deg);-webkit-mask:radial-gradient(circle,transparent 25%,#000 28%);mask:radial-gradient(circle,transparent 25%,#000 28%);animation:miduo-ticket-spin 10s linear infinite}
+      .miduo-ticket-float__ring-inner{inset:6px;background:conic-gradient(from 180deg,transparent 0deg,rgba(155,200,255,.4) 55deg,rgba(64,158,255,.8) 145deg,rgba(37,99,168,.75) 235deg,transparent 305deg);-webkit-mask:radial-gradient(circle,transparent 35%,#000 38%);mask:radial-gradient(circle,transparent 35%,#000 38%);animation:miduo-ticket-spin-reverse 6s linear infinite}
+      .miduo-ticket-float__core{inset:13px;display:flex;align-items:center;justify-content:center;background:var(--miduo-ticket-primary);background:radial-gradient(circle,#2563a8 0%,var(--miduo-ticket-primary) 55%,#66b1ff 100%);box-shadow:inset 0 0 12px rgba(0,50,100,.3),0 0 10px rgba(59,130,246,.4)}
       .miduo-ticket-float__label{position:relative;z-index:1;color:#fff;font-size:13px;font-weight:600;letter-spacing:1px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
       .miduo-ticket-float:hover .miduo-ticket-float__glow{filter:blur(8px);animation-duration:1.5s}.miduo-ticket-float:hover .miduo-ticket-float__ring{animation-duration:3s}.miduo-ticket-float:hover .miduo-ticket-float__ring-inner{animation-duration:2s}
       @keyframes miduo-ticket-breathe{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}@keyframes miduo-ticket-spin{to{transform:rotate(360deg)}}@keyframes miduo-ticket-spin-reverse{from{transform:rotate(360deg)}to{transform:rotate(0)}}
@@ -208,6 +208,7 @@ class TicketSdkImpl {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'miduo-ticket-float'
+    button.dataset.sdkFloatVersion = 'vortex-v1'
     button.setAttribute('aria-label', '提交工单')
     button.title = '提交工单'
     button.style.setProperty('--miduo-ticket-primary', primary)
