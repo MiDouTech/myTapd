@@ -146,6 +146,7 @@ class TicketSdkImpl {
     this.autoReporter.stop()
     this.floatObserver?.disconnect()
     this.floatEl?.remove()
+    this.floatStyleEl?.remove()
     this.overlayEl?.remove()
     this.floatEl = null
     this.floatObserver = null
