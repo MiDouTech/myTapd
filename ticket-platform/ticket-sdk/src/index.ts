@@ -82,6 +82,7 @@ class TicketSdkImpl {
   private config: TicketSdkConfig | null = null
   private context: TicketSdkContext = {}
   private floatEl: HTMLElement | null = null
+  private floatStyleEl: HTMLStyleElement | null = null
   private overlayEl: HTMLElement | null = null
   private handlers = new Map<TicketSdkEvent, Set<EventHandler>>()
   private autoReporter = new HttpAutoReporter()
@@ -144,8 +145,10 @@ class TicketSdkImpl {
     this.clearLaunchTokenWatch()
     this.autoReporter.stop()
     this.floatEl?.remove()
+    this.floatStyleEl?.remove()
     this.overlayEl?.remove()
     this.floatEl = null
+    this.floatStyleEl = null
     this.overlayEl = null
     this.handlers.clear()
   }
@@ -181,26 +184,39 @@ class TicketSdkImpl {
 
   private mountFloatButton(): void {
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
+    const style = document.createElement('style')
+    style.dataset.miduoTicketFloatStyle = 'true'
+    style.textContent = `
+      .miduo-ticket-float{position:fixed;right:24px;bottom:24px;z-index:99998;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;box-shadow:0 4px 12px color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;isolation:isolate}
+      .miduo-ticket-float:hover{transform:scale(1.08);box-shadow:0 6px 20px color-mix(in srgb,var(--miduo-ticket-primary) 50%,transparent)}
+      .miduo-ticket-float:active{transform:scale(.96)}
+      .miduo-ticket-float:focus-visible{outline:3px solid color-mix(in srgb,var(--miduo-ticket-primary) 38%,white);outline-offset:4px}
+      .miduo-ticket-float__glow,.miduo-ticket-float__ring,.miduo-ticket-float__ring-inner,.miduo-ticket-float__core{position:absolute;border-radius:50%;pointer-events:none}
+      .miduo-ticket-float__glow{inset:-8px;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--miduo-ticket-primary) 45%,transparent) 0%,color-mix(in srgb,var(--miduo-ticket-primary) 20%,transparent) 40%,transparent 70%);filter:blur(6px);animation:miduo-ticket-breathe 3s ease-in-out infinite}
+      .miduo-ticket-float__ring{inset:0;background:conic-gradient(from 0deg,transparent 0deg,color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent) 35deg,color-mix(in srgb,var(--miduo-ticket-primary) 75%,white) 95deg,color-mix(in srgb,var(--miduo-ticket-primary) 95%,black) 155deg,color-mix(in srgb,var(--miduo-ticket-primary) 70%,white) 215deg,color-mix(in srgb,var(--miduo-ticket-primary) 40%,transparent) 275deg,transparent 325deg);-webkit-mask:radial-gradient(circle,transparent 25%,#000 28%);mask:radial-gradient(circle,transparent 25%,#000 28%);animation:miduo-ticket-spin 10s linear infinite}
+      .miduo-ticket-float__ring-inner{inset:6px;background:conic-gradient(from 180deg,transparent 0deg,color-mix(in srgb,var(--miduo-ticket-primary) 40%,white) 55deg,color-mix(in srgb,var(--miduo-ticket-primary) 80%,white) 145deg,color-mix(in srgb,var(--miduo-ticket-primary) 75%,black) 235deg,transparent 305deg);-webkit-mask:radial-gradient(circle,transparent 35%,#000 38%);mask:radial-gradient(circle,transparent 35%,#000 38%);animation:miduo-ticket-spin-reverse 6s linear infinite}
+      .miduo-ticket-float__core{inset:13px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,color-mix(in srgb,var(--miduo-ticket-primary) 72%,black) 0%,var(--miduo-ticket-primary) 55%,color-mix(in srgb,var(--miduo-ticket-primary) 72%,white) 100%);box-shadow:inset 0 0 12px rgba(0,50,100,.3),0 0 10px color-mix(in srgb,var(--miduo-ticket-primary) 40%,transparent)}
+      .miduo-ticket-float__label{position:relative;z-index:1;color:#fff;font-size:13px;font-weight:600;letter-spacing:1px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+      .miduo-ticket-float:hover .miduo-ticket-float__glow{filter:blur(8px);animation-duration:1.5s}.miduo-ticket-float:hover .miduo-ticket-float__ring{animation-duration:3s}.miduo-ticket-float:hover .miduo-ticket-float__ring-inner{animation-duration:2s}
+      @keyframes miduo-ticket-breathe{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}@keyframes miduo-ticket-spin{to{transform:rotate(360deg)}}@keyframes miduo-ticket-spin-reverse{from{transform:rotate(360deg)}to{transform:rotate(0)}}
+      @media(max-width:640px){.miduo-ticket-float{right:16px;bottom:16px;width:56px;height:56px}.miduo-ticket-float__core{inset:11px}.miduo-ticket-float__label{font-size:12px}}
+      @media(prefers-reduced-motion:reduce){.miduo-ticket-float,.miduo-ticket-float__glow,.miduo-ticket-float__ring,.miduo-ticket-float__ring-inner{animation:none;transition:none}}
+    `
+    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
+    document.head.appendChild(style)
+    this.floatStyleEl = style
     const button = document.createElement('button')
     button.type = 'button'
-    button.textContent = '工单'
+    button.className = 'miduo-ticket-float'
+    button.setAttribute('aria-label', '提交工单')
     button.title = '提交工单'
-    button.style.cssText = [
-      'position:fixed',
-      'right:24px',
-      'bottom:24px',
-      'z-index:99998',
-      'width:52px',
-      'height:52px',
-      'border:none',
-      'border-radius:50%',
-      'color:#fff',
-      `background:${primary}`,
-      'box-shadow:0 4px 12px rgba(0,0,0,.15)',
-      'cursor:pointer',
-      'font-size:14px',
-      'font-weight:500',
-    ].join(';')
+    button.style.setProperty('--miduo-ticket-primary', primary)
+    button.innerHTML = `
+      <span class="miduo-ticket-float__glow" aria-hidden="true"></span>
+      <span class="miduo-ticket-float__ring" aria-hidden="true"></span>
+      <span class="miduo-ticket-float__ring-inner" aria-hidden="true"></span>
+      <span class="miduo-ticket-float__core" aria-hidden="true"><span class="miduo-ticket-float__label">工单</span></span>
+    `
     button.addEventListener('click', () => this.openModal())
     document.body.appendChild(button)
     this.floatEl = button
