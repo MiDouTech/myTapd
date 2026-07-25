@@ -184,10 +184,13 @@ class TicketSdkImpl {
 
   private mountFloatButton(): void {
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
+    const host = document.createElement('div')
+    host.dataset.miduoTicketLauncher = 'vortex-v2'
+    const shadow = host.attachShadow({ mode: 'open' })
     const style = document.createElement('style')
-    style.dataset.miduoTicketFloatStyle = 'true'
     style.textContent = `
-      .miduo-ticket-float{position:fixed;right:24px;bottom:24px;z-index:99998;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;box-shadow:0 4px 12px rgba(22,117,209,.35);box-shadow:0 4px 12px color-mix(in srgb,var(--miduo-ticket-primary) 35%,transparent);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;isolation:isolate}
+      :host{all:initial!important;position:fixed!important;right:24px!important;bottom:24px!important;z-index:99998!important;width:64px!important;height:64px!important;display:block!important}
+      .miduo-ticket-float{position:relative;display:block;box-sizing:border-box;width:64px;height:64px;padding:0;border:0;border-radius:50%;appearance:none;background:transparent;cursor:pointer;box-shadow:0 4px 12px rgba(22,117,209,.35);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;isolation:isolate}
       .miduo-ticket-float:hover{transform:scale(1.08);box-shadow:0 6px 20px color-mix(in srgb,var(--miduo-ticket-primary) 50%,transparent)}
       .miduo-ticket-float:active{transform:scale(.96)}
       .miduo-ticket-float:focus-visible{outline:3px solid color-mix(in srgb,var(--miduo-ticket-primary) 38%,white);outline-offset:4px}
@@ -199,16 +202,13 @@ class TicketSdkImpl {
       .miduo-ticket-float__label{position:relative;z-index:1;color:#fff;font-size:13px;font-weight:600;letter-spacing:1px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
       .miduo-ticket-float:hover .miduo-ticket-float__glow{filter:blur(8px);animation-duration:1.5s}.miduo-ticket-float:hover .miduo-ticket-float__ring{animation-duration:3s}.miduo-ticket-float:hover .miduo-ticket-float__ring-inner{animation-duration:2s}
       @keyframes miduo-ticket-breathe{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}@keyframes miduo-ticket-spin{to{transform:rotate(360deg)}}@keyframes miduo-ticket-spin-reverse{from{transform:rotate(360deg)}to{transform:rotate(0)}}
-      @media(max-width:640px){.miduo-ticket-float{right:16px;bottom:16px;width:56px;height:56px}.miduo-ticket-float__core{inset:11px}.miduo-ticket-float__label{font-size:12px}}
+      @media(max-width:640px){:host{right:16px!important;bottom:16px!important;width:56px!important;height:56px!important}.miduo-ticket-float{width:56px;height:56px}.miduo-ticket-float__core{inset:11px}.miduo-ticket-float__label{font-size:12px}}
       @media(prefers-reduced-motion:reduce){.miduo-ticket-float,.miduo-ticket-float__glow,.miduo-ticket-float__ring,.miduo-ticket-float__ring-inner{animation:none;transition:none}}
     `
-    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
-    document.head.appendChild(style)
-    this.floatStyleEl = style
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'miduo-ticket-float'
-    button.dataset.sdkFloatVersion = 'vortex-v1'
+    button.dataset.sdkFloatVersion = 'vortex-v2'
     button.setAttribute('aria-label', '提交工单')
     button.title = '提交工单'
     button.style.setProperty('--miduo-ticket-primary', primary)
@@ -219,8 +219,9 @@ class TicketSdkImpl {
       <span class="miduo-ticket-float__core" aria-hidden="true"><span class="miduo-ticket-float__label">工单</span></span>
     `
     button.addEventListener('click', () => this.openModal())
-    document.body.appendChild(button)
-    this.floatEl = button
+    shadow.append(style, button)
+    document.body.appendChild(host)
+    this.floatEl = host
   }
 
   private openModal(myTickets = false, prefillDescription?: string, autoCaptured = false): void {
