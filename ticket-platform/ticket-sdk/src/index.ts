@@ -190,6 +190,19 @@ class TicketSdkImpl {
     document
       .querySelectorAll('[data-miduo-ticket-launcher], body > .miduo-ticket-float')
       .forEach((element) => element.remove())
+    // The earliest SDK release rendered an unclassified, inline-styled <button>.
+    // It is not matched by the launcher data attribute (so a count of one can
+    // still coexist with that old button). Match its full legacy signature to
+    // avoid deleting a host application's own "提交工单" entry button.
+    document.querySelectorAll<HTMLButtonElement>('body > button[title="提交工单"]').forEach((button) => {
+      const isLegacyFloat =
+        button.style.position === 'fixed' &&
+        button.style.zIndex === '99998' &&
+        button.textContent?.trim() === '工单'
+      if (isLegacyFloat) {
+        button.remove()
+      }
+    })
     document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
 
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
