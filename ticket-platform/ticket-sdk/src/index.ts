@@ -82,7 +82,7 @@ class TicketSdkImpl {
   private config: TicketSdkConfig | null = null
   private context: TicketSdkContext = {}
   private floatEl: HTMLElement | null = null
-  private floatStyleEl: HTMLStyleElement | null = null
+  private floatObserver: MutationObserver | null = null
   private overlayEl: HTMLElement | null = null
   private handlers = new Map<TicketSdkEvent, Set<EventHandler>>()
   private autoReporter = new HttpAutoReporter()
@@ -144,11 +144,12 @@ class TicketSdkImpl {
   destroy(): void {
     this.clearLaunchTokenWatch()
     this.autoReporter.stop()
+    this.floatObserver?.disconnect()
     this.floatEl?.remove()
     this.floatStyleEl?.remove()
     this.overlayEl?.remove()
     this.floatEl = null
-    this.floatStyleEl = null
+    this.floatObserver = null
     this.overlayEl = null
     this.handlers.clear()
   }
@@ -186,24 +187,9 @@ class TicketSdkImpl {
     // init() may run again during SPA navigation or after a hot SDK replacement.
     // Remove both the current Shadow DOM host and the previous light-DOM launcher
     // before mounting, otherwise the old and new launchers remain visible together.
+    this.floatObserver?.disconnect()
     this.floatEl?.remove()
-    document
-      .querySelectorAll('[data-miduo-ticket-launcher], body > .miduo-ticket-float')
-      .forEach((element) => element.remove())
-    // The earliest SDK release rendered an unclassified, inline-styled <button>.
-    // It is not matched by the launcher data attribute (so a count of one can
-    // still coexist with that old button). Match its full legacy signature to
-    // avoid deleting a host application's own "提交工单" entry button.
-    document.querySelectorAll<HTMLButtonElement>('body > button[title="提交工单"]').forEach((button) => {
-      const isLegacyFloat =
-        button.style.position === 'fixed' &&
-        button.style.zIndex === '99998' &&
-        button.textContent?.trim() === '工单'
-      if (isLegacyFloat) {
-        button.remove()
-      }
-    })
-    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
+    this.removeOtherFloatLaunchers()
 
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
     const host = document.createElement('div')
@@ -244,6 +230,36 @@ class TicketSdkImpl {
     shadow.append(style, button)
     document.body.appendChild(host)
     this.floatEl = host
+
+    // A legacy SDK can finish its async init after this SDK has mounted and add
+    // its button back. Keep enforcing a single launcher for the lifetime of the
+    // current host instead of only cleaning once during mount.
+    const observer = new MutationObserver(() => {
+      if (!host.isConnected) {
+        observer.disconnect()
+        return
+      }
+      this.removeOtherFloatLaunchers(host)
+    })
+    observer.observe(document.body, { childList: true })
+    this.floatObserver = observer
+  }
+
+  private removeOtherFloatLaunchers(currentHost?: HTMLElement): void {
+    document.querySelectorAll<HTMLElement>('[data-miduo-ticket-launcher]').forEach((element) => {
+      if (element !== currentHost) element.remove()
+    })
+    document.querySelectorAll('body > .miduo-ticket-float').forEach((element) => element.remove())
+
+    // The earliest SDK release rendered an unclassified, inline-styled <button>.
+    document.querySelectorAll<HTMLButtonElement>('body > button[title="提交工单"]').forEach((button) => {
+      const isLegacyFloat =
+        button.style.position === 'fixed' &&
+        button.style.zIndex === '99998' &&
+        button.textContent?.trim() === '工单'
+      if (isLegacyFloat) button.remove()
+    })
+    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
   }
 
   private openModal(myTickets = false, prefillDescription?: string, autoCaptured = false): void {
