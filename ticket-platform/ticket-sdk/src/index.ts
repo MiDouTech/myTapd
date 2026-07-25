@@ -183,6 +183,15 @@ class TicketSdkImpl {
   }
 
   private mountFloatButton(): void {
+    // init() may run again during SPA navigation or after a hot SDK replacement.
+    // Remove both the current Shadow DOM host and the previous light-DOM launcher
+    // before mounting, otherwise the old and new launchers remain visible together.
+    this.floatEl?.remove()
+    document
+      .querySelectorAll('[data-miduo-ticket-launcher], body > .miduo-ticket-float')
+      .forEach((element) => element.remove())
+    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
+
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
     const host = document.createElement('div')
     host.dataset.miduoTicketLauncher = 'vortex-v2'
