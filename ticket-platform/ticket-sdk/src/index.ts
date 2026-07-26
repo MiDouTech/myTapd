@@ -82,6 +82,7 @@ class TicketSdkImpl {
   private config: TicketSdkConfig | null = null
   private context: TicketSdkContext = {}
   private floatEl: HTMLElement | null = null
+  private floatObserver: MutationObserver | null = null
   private overlayEl: HTMLElement | null = null
   private handlers = new Map<TicketSdkEvent, Set<EventHandler>>()
   private autoReporter = new HttpAutoReporter()
@@ -146,9 +147,12 @@ class TicketSdkImpl {
   destroy(): void {
     this.clearLaunchTokenWatch()
     this.autoReporter.stop()
+    this.floatObserver?.disconnect()
     this.floatEl?.remove()
+    this.floatStyleEl?.remove()
     this.overlayEl?.remove()
     this.floatEl = null
+    this.floatObserver = null
     this.overlayEl = null
     this.handlers.clear()
   }
