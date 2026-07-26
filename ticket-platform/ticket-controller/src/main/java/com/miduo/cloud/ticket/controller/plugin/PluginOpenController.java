@@ -113,6 +113,47 @@ public class PluginOpenController {
     }
 
     /**
+     * 插件内工单详情
+     * 接口编号：API000538
+     */
+    @Operation(summary = "插件内工单详情", description = "接口编号：API000538")
+    @GetMapping("/tickets/{ticketNo}/detail")
+    public ApiResult<PluginTicketDetailOutput> getTicketDetail(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        return ApiResult.success(pluginTicketApplicationService.getTicketDetail(claims, ticketNo));
+    }
+
+    /**
+     * 插件用户补充工单信息
+     * 接口编号：API000539
+     */
+    @Operation(summary = "插件用户补充工单信息", description = "接口编号：API000539")
+    @PostMapping("/tickets/{ticketNo}/messages")
+    public ApiResult<Long> addTicketMessage(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo,
+            @Valid @RequestBody PluginTicketMessageInput input) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        return ApiResult.success(pluginTicketApplicationService.addMessage(claims, ticketNo, input));
+    }
+
+    /**
+     * 插件用户催办自己的工单
+     * 接口编号：API000540
+     */
+    @Operation(summary = "插件用户催办自己的工单", description = "接口编号：API000540")
+    @PostMapping("/tickets/{ticketNo}/urge")
+    public ApiResult<Void> urgeTicket(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        pluginTicketApplicationService.urgeTicket(claims, ticketNo);
+        return ApiResult.success();
+    }
+
+    /**
      * 插件初始化配置
      * 接口编号：API000537
      */
