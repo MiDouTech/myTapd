@@ -98,6 +98,12 @@ interface PluginTicketDetail {
   messages: PluginTicketMessage[]
 }
 
+interface SupplementUpload {
+  url: string
+  name: string
+  type: 'image' | 'video'
+}
+
 const DEFAULT_API_BASE = ''
 
 class TicketSdkImpl {
@@ -640,6 +646,7 @@ class TicketSdkImpl {
     try {
       const detail = await this.fetchTicketDetail(ticketNo)
       const messages = (detail.messages ?? []).slice(-5)
+      const supplementUploads: SupplementUpload[] = []
       container.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:14px;">
           <button type="button" data-action="back-to-tickets" style="align-self:flex-start;border:none;background:transparent;color:#606266;cursor:pointer;padding:0;">← 返回我的工单</button>
@@ -653,8 +660,13 @@ class TicketSdkImpl {
             <div data-role="ticket-messages">${this.renderTicketMessages(messages)}</div>
           </div>
           <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
-            <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等" style="width:100%;box-sizing:border-box;min-height:90px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
-            <input data-role="supplement-files" type="file" accept="image/*" multiple style="margin-top:8px;max-width:100%;" />
+            <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等（可直接粘贴截图）" style="width:100%;box-sizing:border-box;min-height:110px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+              <button type="button" data-action="pick-supplement-file" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片/视频</button>
+              <span style="font-size:12px;color:#909399;">支持粘贴图片；最多9张图片、3个视频</span>
+            </div>
+            <input data-role="supplement-files" type="file" accept="image/*,video/*" multiple style="display:none;" />
+            <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;color:#606266;"></div>
             <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
               <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
@@ -682,8 +694,22 @@ class TicketSdkImpl {
         ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'none'
         ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'flex'
       })
+      const supplementContentEl = container.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
+      const supplementFilesEl = container.querySelector('[data-role="supplement-files"]') as HTMLInputElement
+      container.querySelector('[data-action="pick-supplement-file"]')?.addEventListener('click', () => supplementFilesEl.click())
+      supplementFilesEl.addEventListener('change', () => {
+        const files = Array.from(supplementFilesEl.files ?? [])
+        if (files.length) void this.uploadSupplementFiles(panel, files, supplementUploads)
+        supplementFilesEl.value = ''
+      })
+      supplementContentEl.addEventListener('paste', (event) => {
+        const imageFiles = this.extractClipboardImageFiles(event)
+        if (!imageFiles.length) return
+        event.preventDefault()
+        void this.uploadSupplementFiles(panel, imageFiles, supplementUploads)
+      })
       container.querySelector('[data-action="submit-supplement"]')?.addEventListener('click', () => {
-        void this.submitTicketSupplement(panel, detail.ticketNo)
+        void this.submitTicketSupplement(panel, detail.ticketNo, supplementUploads)
       })
       container.querySelector('[data-action="urge-ticket"]')?.addEventListener('click', () => {
         void this.submitTicketUrge(panel, detail.ticketNo)
@@ -703,28 +729,72 @@ class TicketSdkImpl {
     </div>`).join('')
   }
 
-  private async submitTicketSupplement(panel: HTMLElement, ticketNo: string): Promise<void> {
-    const contentEl = panel.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
-    const filesEl = panel.querySelector('[data-role="supplement-files"]') as HTMLInputElement
+  private async uploadSupplementFiles(
+    panel: HTMLElement,
+    files: File[],
+    uploads: SupplementUpload[],
+  ): Promise<void> {
     const messageEl = panel.querySelector('[data-role="supplement-message"]') as HTMLElement
-    const content = contentEl.value.trim()
-    if (!content) {
+    const imageCount = uploads.filter((item) => item.type === 'image').length + files.filter((file) => file.type.startsWith('image/')).length
+    const videoCount = uploads.filter((item) => item.type === 'video').length + files.filter((file) => file.type.startsWith('video/')).length
+    if (imageCount > 9 || videoCount > 3 || files.some((file) => !file.type.startsWith('image/') && !file.type.startsWith('video/'))) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '请输入补充内容'
+      messageEl.textContent = '仅支持图片和视频，最多9张图片、3个视频'
       return
     }
-    const files = Array.from(filesEl.files ?? [])
-    if (files.length > 9) {
+    try {
+      for (const file of files) {
+        messageEl.style.color = '#909399'
+        messageEl.textContent = `正在上传：${file.name}`
+        const output = await this.uploadPluginFile(file, 'attachment')
+        uploads.push({
+          url: output.url,
+          name: output.fileName || file.name,
+          type: file.type.startsWith('video/') ? 'video' : 'image',
+        })
+        this.renderSupplementUploads(panel, uploads)
+      }
+      messageEl.style.color = '#67c23a'
+      messageEl.textContent = '文件上传成功'
+    } catch (error) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '最多上传9张图片'
+      messageEl.textContent = error instanceof Error ? error.message : '文件上传失败'
+    }
+  }
+
+  private renderSupplementUploads(panel: HTMLElement, uploads: SupplementUpload[]): void {
+    const listEl = panel.querySelector('[data-role="supplement-upload-list"]') as HTMLElement
+    listEl.innerHTML = uploads.map((item, index) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;">
+      <span>${item.type === 'video' ? '🎬' : '🖼️'} ${escapeHtml(item.name)}</span>
+      <button type="button" data-remove-supplement-upload="${index}" style="border:none;background:transparent;color:#f56c6c;cursor:pointer;">删除</button>
+    </div>`).join('')
+    listEl.querySelectorAll('[data-remove-supplement-upload]').forEach((node) => {
+      node.addEventListener('click', () => {
+        const index = Number((node as HTMLElement).getAttribute('data-remove-supplement-upload'))
+        if (Number.isInteger(index)) uploads.splice(index, 1)
+        this.renderSupplementUploads(panel, uploads)
+      })
+    })
+  }
+
+  private async submitTicketSupplement(panel: HTMLElement, ticketNo: string, uploads: SupplementUpload[]): Promise<void> {
+    const contentEl = panel.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
+    const messageEl = panel.querySelector('[data-role="supplement-message"]') as HTMLElement
+    const content = contentEl.value.trim()
+    if (!content && !uploads.length) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '请输入补充内容或上传图片/视频'
       return
     }
     try {
       messageEl.style.color = '#909399'
-      messageEl.textContent = files.length ? '正在上传图片...' : '正在提交...'
-      const attachments: string[] = []
-      for (const file of files) attachments.push((await this.uploadPluginImage(file)).url)
-      await this.addTicketMessage(ticketNo, content, attachments)
+      messageEl.textContent = '正在提交...'
+      await this.addTicketMessage(
+        ticketNo,
+        content,
+        uploads.filter((item) => item.type === 'image').map((item) => item.url),
+        uploads.filter((item) => item.type === 'video').map((item) => item.url),
+      )
       await this.renderTicketDetail(panel, ticketNo)
     } catch (error) {
       messageEl.style.color = '#f56c6c'
@@ -872,8 +942,16 @@ class TicketSdkImpl {
   }
 
   private async uploadPluginImage(file: File): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
+    return this.uploadPluginFile(file, 'screenshot')
+  }
+
+  private async uploadPluginFile(
+    file: File,
+    uploadPurpose: 'screenshot' | 'attachment',
+  ): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
     const formData = new FormData()
     formData.append('file', file, this.resolveUploadFileName(file))
+    formData.append('uploadPurpose', uploadPurpose)
     const response = await fetch(`${this.apiBase}/api/open/v1/plugin/attachments/image`, {
       method: 'POST',
       headers: {
@@ -931,14 +1009,19 @@ class TicketSdkImpl {
     return result.data
   }
 
-  private async addTicketMessage(ticketNo: string, content: string, attachments: string[]): Promise<void> {
+  private async addTicketMessage(
+    ticketNo: string,
+    content: string,
+    attachments: string[],
+    videos: string[],
+  ): Promise<void> {
     const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/${encodeURIComponent(ticketNo)}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.options!.launchToken}`,
       },
-      body: JSON.stringify({ content, attachments }),
+      body: JSON.stringify({ content, attachments, videos }),
     })
     const result = await response.json()
     if (!response.ok || result.code !== 200) {

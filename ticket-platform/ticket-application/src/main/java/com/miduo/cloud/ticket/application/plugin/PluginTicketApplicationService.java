@@ -12,6 +12,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketUrgeApplicationService;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.Priority;
+import com.miduo.cloud.ticket.common.enums.TicketAction;
 import com.miduo.cloud.ticket.common.enums.TicketSource;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
 import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
@@ -29,7 +30,9 @@ import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketPublicDetailOutput;
 import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +43,9 @@ import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,12 +68,15 @@ public class PluginTicketApplicationService {
     private static final String IMAGE_ONLY_TITLE_FALLBACK = "图片问题反馈";
     private static final int MAX_PLUGIN_DESCRIPTION_LENGTH = 4000;
     private static final int MAX_PROBLEM_SCREENSHOT_LENGTH = 1000;
+    private static final int PLUGIN_URGE_COOLDOWN_MINUTES = 30;
+    private static final int PLUGIN_URGE_DAILY_LIMIT = 2;
 
     private final TicketApplicationService ticketApplicationService;
     private final TicketAssigneeSyncService ticketAssigneeSyncService;
     private final TicketBugApplicationService ticketBugApplicationService;
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
     private final TicketMapper ticketMapper;
+    private final TicketLogMapper ticketLogMapper;
     private final IntegrationAppCredentialResolver credentialResolver;
     private final QiniuUploadService qiniuUploadService;
     private final String publicTicketBaseUrl;
@@ -78,6 +86,7 @@ public class PluginTicketApplicationService {
                                           TicketBugApplicationService ticketBugApplicationService,
                                           TicketUrgeApplicationService ticketUrgeApplicationService,
                                           TicketMapper ticketMapper,
+                                          TicketLogMapper ticketLogMapper,
                                           IntegrationAppCredentialResolver credentialResolver,
                                           QiniuUploadService qiniuUploadService,
                                           @Value("${ticket.public-base-url:}") String publicTicketBaseUrl) {
@@ -86,6 +95,7 @@ public class PluginTicketApplicationService {
         this.ticketBugApplicationService = ticketBugApplicationService;
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
         this.ticketMapper = ticketMapper;
+        this.ticketLogMapper = ticketLogMapper;
         this.credentialResolver = credentialResolver;
         this.qiniuUploadService = qiniuUploadService;
         this.publicTicketBaseUrl = publicTicketBaseUrl;
@@ -170,7 +180,7 @@ public class PluginTicketApplicationService {
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());
         output.setUrgeCount(ticket.getUrgeCount() == null ? 0 : ticket.getUrgeCount());
-        String urgeDisabledReason = resolveUrgeDisabledReason(ticket, status);
+        String urgeDisabledReason = resolveUrgeDisabledReason(ticket, status, claims.getUserId());
         output.setCanUrge(urgeDisabledReason == null);
         output.setUrgeDisabledReason(urgeDisabledReason);
         List<PluginTicketDetailOutput.Message> messages = new ArrayList<>();
@@ -215,6 +225,11 @@ public class PluginTicketApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public void urgeTicket(PluginLaunchTokenClaims claims, String ticketNo) {
         TicketPO ticket = requireOwnedTicket(claims, ticketNo);
+        String disabledReason = resolveUrgeDisabledReason(
+                ticket, TicketStatus.fromCode(ticket.getStatus()), claims.getUserId());
+        if (disabledReason != null) {
+            throw BusinessException.of(ErrorCode.TICKET_STATUS_INVALID, disabledReason);
+        }
         ticketUrgeApplicationService.urgeByTicketId(ticket.getId(), claims.getUserId(), null);
         TicketCommentInput timelineRecord = new TicketCommentInput();
         timelineRecord.setContent("<p><strong>客户催单：</strong>客户通过工单插件发起催办。</p>");
@@ -237,9 +252,17 @@ public class PluginTicketApplicationService {
     }
 
     private String buildCustomerSupplementHtml(PluginTicketMessageInput input) {
-        String escaped = HtmlUtils.htmlEscape(input.getContent().trim()).replace("\n", "<br>");
-        StringBuilder html = new StringBuilder("<p><strong>客户补充：</strong></p><p>")
-                .append(escaped).append("</p>");
+        boolean hasContent = StringUtils.hasText(input.getContent());
+        boolean hasImages = input.getAttachments() != null && !input.getAttachments().isEmpty();
+        boolean hasVideos = input.getVideos() != null && !input.getVideos().isEmpty();
+        if (!hasContent && !hasImages && !hasVideos) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "请填写补充内容或上传图片/视频");
+        }
+        StringBuilder html = new StringBuilder("<p><strong>客户补充：</strong></p>");
+        if (hasContent) {
+            String escaped = HtmlUtils.htmlEscape(input.getContent().trim()).replace("\n", "<br>");
+            html.append("<p>").append(escaped).append("</p>");
+        }
         if (input.getAttachments() != null) {
             for (String attachment : input.getAttachments()) {
                 if (!StringUtils.hasText(attachment)
@@ -252,10 +275,26 @@ public class PluginTicketApplicationService {
                         .append("\" alt=\"客户补充图片\"></p>");
             }
         }
+        if (input.getVideos() != null) {
+            for (String video : input.getVideos()) {
+                validateSupplementUrl(video, "补充视频地址不合法");
+                html.append("<p><video controls preload=\"metadata\" src=\"")
+                        .append(HtmlUtils.htmlEscape(video.trim()))
+                        .append("\">您的浏览器不支持视频播放</video></p>");
+            }
+        }
         return html.toString();
     }
 
-    private String resolveUrgeDisabledReason(TicketPO ticket, TicketStatus status) {
+    private void validateSupplementUrl(String url, String errorMessage) {
+        if (!StringUtils.hasText(url)
+                || url.length() > 1000
+                || !(url.startsWith("https://") || url.startsWith("http://"))) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, errorMessage);
+        }
+    }
+
+    private String resolveUrgeDisabledReason(TicketPO ticket, TicketStatus status, Long userId) {
         if (status == null || status.isTerminal()) {
             return "当前工单状态不可催办";
         }
@@ -265,19 +304,56 @@ public class PluginTicketApplicationService {
         if (ticket.getAssigneeId() == null) {
             return "工单暂无处理人";
         }
+        Date dayStart = startOfToday();
+        Long todayCount = ticketLogMapper.selectCount(new LambdaQueryWrapper<TicketLogPO>()
+                .eq(TicketLogPO::getTicketId, ticket.getId())
+                .eq(TicketLogPO::getUserId, userId)
+                .eq(TicketLogPO::getAction, TicketAction.URGE.getCode())
+                .ge(TicketLogPO::getCreateTime, dayStart));
+        if (todayCount != null && todayCount >= PLUGIN_URGE_DAILY_LIMIT) {
+            return "今日催单次数已达上限（每天最多2次）";
+        }
+        TicketLogPO latest = ticketLogMapper.selectOne(new LambdaQueryWrapper<TicketLogPO>()
+                .eq(TicketLogPO::getTicketId, ticket.getId())
+                .eq(TicketLogPO::getUserId, userId)
+                .eq(TicketLogPO::getAction, TicketAction.URGE.getCode())
+                .orderByDesc(TicketLogPO::getCreateTime)
+                .last("LIMIT 1"));
+        if (latest != null && latest.getCreateTime() != null) {
+            long nextAllowedAt = latest.getCreateTime().getTime() + PLUGIN_URGE_COOLDOWN_MINUTES * 60_000L;
+            long remainingMillis = nextAllowedAt - System.currentTimeMillis();
+            if (remainingMillis > 0) {
+                long remainingMinutes = Math.max(1L, (remainingMillis + 59_999L) / 60_000L);
+                return "催单过于频繁，请" + remainingMinutes + "分钟后再试";
+            }
+        }
         return null;
+    }
+
+    private Date startOfToday() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        return calendar.getTime();
     }
 
     /**
      * 插件上传图片并返回可访问 URL
      */
     public ImageUploadOutput uploadImage(PluginLaunchTokenClaims claims, MultipartFile file) {
+        return uploadFile(claims, file, TicketUploadPurpose.SCREENSHOT);
+    }
+
+    public ImageUploadOutput uploadFile(PluginLaunchTokenClaims claims, MultipartFile file,
+                                        TicketUploadPurpose purpose) {
         IntegrationAppPO app = credentialResolver.requireEnabledApp(claims.getIntegrationAppId());
         if (app == null) {
             throw BusinessException.of(ErrorCode.PLUGIN_APP_DISABLED, "接入应用已禁用");
         }
         try {
-            String fileUrl = qiniuUploadService.uploadForTicket(file, TicketUploadPurpose.SCREENSHOT);
+            String fileUrl = qiniuUploadService.uploadForTicket(file, purpose);
             ImageUploadOutput output = new ImageUploadOutput();
             output.setUrl(fileUrl);
             output.setFileName(file.getOriginalFilename());
@@ -287,10 +363,10 @@ public class PluginTicketApplicationService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("插件上传图片异常: appId={}, userId={}, fileName={}",
+            log.error("插件上传文件异常: appId={}, userId={}, fileName={}, purpose={}",
                     claims.getIntegrationAppId(), claims.getUserId(),
-                    file == null ? null : file.getOriginalFilename(), ex);
-            throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "图片上传失败，请稍后重试");
+                    file == null ? null : file.getOriginalFilename(), purpose, ex);
+            throw BusinessException.of(ErrorCode.UPLOAD_FAILED, "文件上传失败，请稍后重试");
         }
     }
 

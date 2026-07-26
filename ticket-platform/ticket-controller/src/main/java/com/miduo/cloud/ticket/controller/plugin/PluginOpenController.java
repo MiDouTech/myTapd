@@ -8,6 +8,7 @@ import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.plugin.*;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
@@ -74,15 +75,18 @@ public class PluginOpenController {
     @Operation(summary = "插件富文本图片上传", description = "接口编号：API000535")
     @PostMapping(value = "/attachments/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<ImageUploadOutput> uploadAttachmentImage(@RequestHeader("Authorization") String authorization,
-                                                              @RequestParam("file") MultipartFile file) {
+                                                              @RequestParam("file") MultipartFile file,
+                                                              @RequestParam(value = "uploadPurpose", required = false)
+                                                              String uploadPurpose) {
         try {
             PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
-            return ApiResult.success(pluginTicketApplicationService.uploadImage(claims, file));
+            TicketUploadPurpose purpose = TicketUploadPurpose.fromRequestParam(uploadPurpose);
+            return ApiResult.success(pluginTicketApplicationService.uploadFile(claims, file, purpose));
         } catch (BusinessException ex) {
             return ApiResult.fail(ex.getCode(), ex.getMessage());
         } catch (Exception ex) {
             log.error("插件图片上传接口异常: fileName={}", file == null ? null : file.getOriginalFilename(), ex);
-            return ApiResult.fail(ErrorCode.UPLOAD_FAILED, "图片上传失败，请稍后重试");
+            return ApiResult.fail(ErrorCode.UPLOAD_FAILED, "文件上传失败，请稍后重试");
         }
     }
 
