@@ -8,6 +8,7 @@ import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
 import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
+import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.entity.dto.plugin.*;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
@@ -74,15 +75,18 @@ public class PluginOpenController {
     @Operation(summary = "插件富文本图片上传", description = "接口编号：API000535")
     @PostMapping(value = "/attachments/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<ImageUploadOutput> uploadAttachmentImage(@RequestHeader("Authorization") String authorization,
-                                                              @RequestParam("file") MultipartFile file) {
+                                                              @RequestParam("file") MultipartFile file,
+                                                              @RequestParam(value = "uploadPurpose", required = false)
+                                                              String uploadPurpose) {
         try {
             PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
-            return ApiResult.success(pluginTicketApplicationService.uploadImage(claims, file));
+            TicketUploadPurpose purpose = TicketUploadPurpose.fromRequestParam(uploadPurpose);
+            return ApiResult.success(pluginTicketApplicationService.uploadFile(claims, file, purpose));
         } catch (BusinessException ex) {
             return ApiResult.fail(ex.getCode(), ex.getMessage());
         } catch (Exception ex) {
             log.error("插件图片上传接口异常: fileName={}", file == null ? null : file.getOriginalFilename(), ex);
-            return ApiResult.fail(ErrorCode.UPLOAD_FAILED, "图片上传失败，请稍后重试");
+            return ApiResult.fail(ErrorCode.UPLOAD_FAILED, "文件上传失败，请稍后重试");
         }
     }
 
@@ -110,6 +114,47 @@ public class PluginOpenController {
             @PathVariable String ticketNo) {
         PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
         return ApiResult.success(pluginTicketApplicationService.getTicketSummary(claims, ticketNo));
+    }
+
+    /**
+     * 插件内工单详情
+     * 接口编号：API000538
+     */
+    @Operation(summary = "插件内工单详情", description = "接口编号：API000538")
+    @GetMapping("/tickets/{ticketNo}/detail")
+    public ApiResult<PluginTicketDetailOutput> getTicketDetail(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        return ApiResult.success(pluginTicketApplicationService.getTicketDetail(claims, ticketNo));
+    }
+
+    /**
+     * 插件用户补充工单信息
+     * 接口编号：API000539
+     */
+    @Operation(summary = "插件用户补充工单信息", description = "接口编号：API000539")
+    @PostMapping("/tickets/{ticketNo}/messages")
+    public ApiResult<Long> addTicketMessage(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo,
+            @Valid @RequestBody PluginTicketMessageInput input) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        return ApiResult.success(pluginTicketApplicationService.addMessage(claims, ticketNo, input));
+    }
+
+    /**
+     * 插件用户催办自己的工单
+     * 接口编号：API000540
+     */
+    @Operation(summary = "插件用户催办自己的工单", description = "接口编号：API000540")
+    @PostMapping("/tickets/{ticketNo}/urge")
+    public ApiResult<Void> urgeTicket(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String ticketNo) {
+        PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
+        pluginTicketApplicationService.urgeTicket(claims, ticketNo);
+        return ApiResult.success();
     }
 
     /**
