@@ -90,8 +90,11 @@ class TicketSdkImpl {
 
   async init(options: TicketSdkInitOptions): Promise<void> {
     this.options = { ...options, mode: options.mode ?? 'float' }
-    this.config = await this.fetchConfig()
+    // Mount the entry before the first await so host-side compatibility checks
+    // performed immediately after TicketSDK.init() can discover it reliably.
     this.mountEntry()
+    this.config = await this.fetchConfig()
+    this.applyFloatTheme()
     this.setupAutoReport(options.autoReport)
   }
 
@@ -184,16 +187,23 @@ class TicketSdkImpl {
   }
 
   private mountFloatButton(): void {
-    // init() may run again during SPA navigation or after a hot SDK replacement.
-    // Remove both the current Shadow DOM host and the previous light-DOM launcher
-    // before mounting, otherwise the old and new launchers remain visible together.
-    this.floatObserver?.disconnect()
     this.floatEl?.remove()
-    this.removeOtherFloatLaunchers()
+    // Only remove roots that are explicitly owned by TicketSDK. Never inspect,
+    // hide, or remove a host application's fallback controls.
+    document
+      .querySelectorAll(
+        '[data-ticket-sdk-entry="float"][data-ticket-sdk-owner="TicketSDK"], [data-miduo-ticket-launcher]',
+      )
+      .forEach((element) => element.remove())
 
     const primary = this.config?.theme?.primaryColor ?? '#1675d1'
     const host = document.createElement('div')
+    host.className = 'ticket-sdk-float miduo-ticket-launcher'
+    host.setAttribute('data-ticket-sdk-entry', 'float')
+    host.setAttribute('data-ticket-sdk-owner', 'TicketSDK')
     host.dataset.miduoTicketLauncher = 'vortex-v2'
+    host.style.cssText =
+      'position:fixed;right:24px;bottom:24px;z-index:99998;width:64px;height:64px;display:block;'
     const shadow = host.attachShadow({ mode: 'open' })
     const style = document.createElement('style')
     style.textContent = `
@@ -230,36 +240,11 @@ class TicketSdkImpl {
     shadow.append(style, button)
     document.body.appendChild(host)
     this.floatEl = host
-
-    // A legacy SDK can finish its async init after this SDK has mounted and add
-    // its button back. Keep enforcing a single launcher for the lifetime of the
-    // current host instead of only cleaning once during mount.
-    const observer = new MutationObserver(() => {
-      if (!host.isConnected) {
-        observer.disconnect()
-        return
-      }
-      this.removeOtherFloatLaunchers(host)
-    })
-    observer.observe(document.body, { childList: true })
-    this.floatObserver = observer
   }
 
-  private removeOtherFloatLaunchers(currentHost?: HTMLElement): void {
-    document.querySelectorAll<HTMLElement>('[data-miduo-ticket-launcher]').forEach((element) => {
-      if (element !== currentHost) element.remove()
-    })
-    document.querySelectorAll('body > .miduo-ticket-float').forEach((element) => element.remove())
-
-    // The earliest SDK release rendered an unclassified, inline-styled <button>.
-    document.querySelectorAll<HTMLButtonElement>('body > button[title="提交工单"]').forEach((button) => {
-      const isLegacyFloat =
-        button.style.position === 'fixed' &&
-        button.style.zIndex === '99998' &&
-        button.textContent?.trim() === '工单'
-      if (isLegacyFloat) button.remove()
-    })
-    document.querySelector('style[data-miduo-ticket-float-style]')?.remove()
+  private applyFloatTheme(): void {
+    const button = this.floatEl?.shadowRoot?.querySelector<HTMLElement>('.miduo-ticket-float')
+    button?.style.setProperty('--miduo-ticket-primary', this.config?.theme?.primaryColor ?? '#1675d1')
   }
 
   private openModal(myTickets = false, prefillDescription?: string, autoCaptured = false): void {
