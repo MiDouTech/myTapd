@@ -75,6 +75,29 @@ interface EnvInfo {
   network: string
 }
 
+interface PluginTicketMessage {
+  id: number
+  userName?: string
+  content: string
+  type: string
+  createTime: string
+}
+
+interface PluginTicketDetail {
+  ticketId: number
+  ticketNo: string
+  title: string
+  description: string
+  status: string
+  statusLabel?: string
+  createTime: string
+  updateTime: string
+  urgeCount: number
+  canUrge: boolean
+  urgeDisabledReason?: string
+  messages: PluginTicketMessage[]
+}
+
 const DEFAULT_API_BASE = ''
 
 class TicketSdkImpl {
@@ -602,12 +625,124 @@ class TicketSdkImpl {
       listEl.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => {
         node.addEventListener('click', () => {
           const ticketNo = (node as HTMLElement).getAttribute('data-ticket-no') ?? ''
-          this.openPublicTicket(ticketNo)
+          void this.renderTicketDetail(panel, ticketNo)
         })
       })
     } catch (error) {
       listEl.style.color = '#f56c6c'
       listEl.textContent = error instanceof Error ? error.message : '加载失败'
+    }
+  }
+
+  private async renderTicketDetail(panel: HTMLElement, ticketNo: string): Promise<void> {
+    const container = panel.querySelector('[data-role="list-container"]') as HTMLElement
+    container.innerHTML = '<div style="padding:20px 0;color:#909399;text-align:center;">加载中...</div>'
+    try {
+      const detail = await this.fetchTicketDetail(ticketNo)
+      const messages = (detail.messages ?? []).slice(-5)
+      container.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <button type="button" data-action="back-to-tickets" style="align-self:flex-start;border:none;background:transparent;color:#606266;cursor:pointer;padding:0;">← 返回我的工单</button>
+          <div>
+            <div style="font-size:16px;font-weight:600;color:#303133;">${escapeHtml(detail.title)}</div>
+            <div style="font-size:12px;color:#909399;margin-top:5px;">${escapeHtml(detail.ticketNo)} · ${escapeHtml(detail.statusLabel || detail.status)}</div>
+          </div>
+          <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
+          <div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
+            <div data-role="ticket-messages">${this.renderTicketMessages(messages)}</div>
+          </div>
+          <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
+            <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等" style="width:100%;box-sizing:border-box;min-height:90px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
+            <input data-role="supplement-files" type="file" accept="image/*" multiple style="margin-top:8px;max-width:100%;" />
+            <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+              <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
+              <button type="button" data-action="submit-supplement" style="padding:7px 12px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">提交补充</button>
+            </div>
+          </div>
+          <div data-role="ticket-actions" style="display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #ebeef5;padding-top:12px;">
+            <button type="button" data-action="show-supplement" style="padding:8px 14px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">补充信息</button>
+            <button type="button" data-action="urge-ticket" ${detail.canUrge ? '' : 'disabled'} title="${escapeHtml(detail.urgeDisabledReason || '')}" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:${detail.canUrge ? 'pointer' : 'not-allowed'};color:${detail.canUrge ? '#606266' : '#c0c4cc'};">催单${detail.urgeCount ? `（${detail.urgeCount}）` : ''}</button>
+            <button type="button" data-action="open-public-detail" style="padding:8px 14px;border:none;background:transparent;color:#1675d1;cursor:pointer;">查看完整详情</button>
+          </div>
+          <div data-role="detail-message" style="font-size:13px;color:#67c23a;"></div>
+        </div>`
+
+      container.querySelector('[data-action="back-to-tickets"]')?.addEventListener('click', () => {
+        container.innerHTML = '<div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>'
+        void this.renderMyTickets(panel)
+      })
+      container.querySelector('[data-action="open-public-detail"]')?.addEventListener('click', () => this.openPublicTicket(detail.ticketNo))
+      container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => {
+        ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'block'
+        ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'none'
+      })
+      container.querySelector('[data-action="cancel-supplement"]')?.addEventListener('click', () => {
+        ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'none'
+        ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'flex'
+      })
+      container.querySelector('[data-action="submit-supplement"]')?.addEventListener('click', () => {
+        void this.submitTicketSupplement(panel, detail.ticketNo)
+      })
+      container.querySelector('[data-action="urge-ticket"]')?.addEventListener('click', () => {
+        void this.submitTicketUrge(panel, detail.ticketNo)
+      })
+    } catch (error) {
+      container.innerHTML = `<div style="color:#f56c6c;">${escapeHtml(error instanceof Error ? error.message : '加载失败')}</div>`
+    }
+  }
+
+  private renderTicketMessages(messages: PluginTicketMessage[]): string {
+    if (!messages.length) return '<div style="font-size:13px;color:#909399;">暂无沟通记录</div>'
+    return messages.map((message) => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#909399;">
+        <span>${escapeHtml(message.userName || '系统')}</span><span>${escapeHtml(formatSdkDate(message.createTime))}</span>
+      </div>
+      <div style="font-size:13px;line-height:1.6;color:#606266;margin-top:4px;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(message.content))}</div>
+    </div>`).join('')
+  }
+
+  private async submitTicketSupplement(panel: HTMLElement, ticketNo: string): Promise<void> {
+    const contentEl = panel.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
+    const filesEl = panel.querySelector('[data-role="supplement-files"]') as HTMLInputElement
+    const messageEl = panel.querySelector('[data-role="supplement-message"]') as HTMLElement
+    const content = contentEl.value.trim()
+    if (!content) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '请输入补充内容'
+      return
+    }
+    const files = Array.from(filesEl.files ?? [])
+    if (files.length > 9) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '最多上传9张图片'
+      return
+    }
+    try {
+      messageEl.style.color = '#909399'
+      messageEl.textContent = files.length ? '正在上传图片...' : '正在提交...'
+      const attachments: string[] = []
+      for (const file of files) attachments.push((await this.uploadPluginImage(file)).url)
+      await this.addTicketMessage(ticketNo, content, attachments)
+      await this.renderTicketDetail(panel, ticketNo)
+    } catch (error) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = error instanceof Error ? error.message : '提交失败'
+    }
+  }
+
+  private async submitTicketUrge(panel: HTMLElement, ticketNo: string): Promise<void> {
+    if (typeof window.confirm === 'function' && !window.confirm('确认催办此工单？催办后将通知当前处理人。')) return
+    const messageEl = panel.querySelector('[data-role="detail-message"]') as HTMLElement
+    try {
+      messageEl.style.color = '#909399'
+      messageEl.textContent = '正在催办...'
+      await this.urgePluginTicket(ticketNo)
+      await this.renderTicketDetail(panel, ticketNo)
+    } catch (error) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = error instanceof Error ? error.message : '催办失败'
     }
   }
 
@@ -785,6 +920,43 @@ class TicketSdkImpl {
     return result.data
   }
 
+  private async fetchTicketDetail(ticketNo: string): Promise<PluginTicketDetail> {
+    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/${encodeURIComponent(ticketNo)}/detail`, {
+      headers: { Authorization: `Bearer ${this.options!.launchToken}` },
+    })
+    const result = await response.json()
+    if (!response.ok || result.code !== 200) {
+      throw new Error(this.resolvePluginApiErrorMessage(result, '加载工单详情失败'))
+    }
+    return result.data
+  }
+
+  private async addTicketMessage(ticketNo: string, content: string, attachments: string[]): Promise<void> {
+    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/${encodeURIComponent(ticketNo)}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.options!.launchToken}`,
+      },
+      body: JSON.stringify({ content, attachments }),
+    })
+    const result = await response.json()
+    if (!response.ok || result.code !== 200) {
+      throw new Error(this.resolvePluginApiErrorMessage(result, '补充信息失败'))
+    }
+  }
+
+  private async urgePluginTicket(ticketNo: string): Promise<void> {
+    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/${encodeURIComponent(ticketNo)}/urge`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.options!.launchToken}` },
+    })
+    const result = await response.json()
+    if (!response.ok || result.code !== 200) {
+      throw new Error(this.resolvePluginApiErrorMessage(result, '催办失败'))
+    }
+  }
+
   private emit(event: TicketSdkEvent, payload: TicketUpdatedEvent): void {
     this.handlers.get(event)?.forEach((handler) => handler(payload))
   }
@@ -864,6 +1036,20 @@ function escapeHtml(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function htmlToPlainText(value?: string): string {
+  if (!value) return ''
+  const element = document.createElement('div')
+  element.innerHTML = value
+  return (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function formatSdkDate(value?: string): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 const ticketSdk = new TicketSdkImpl()
