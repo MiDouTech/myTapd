@@ -9,6 +9,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "vite build",
+    "publish:frontend": "npm run build && node scripts/publish-frontend.mjs",
     "dev": "vite"
   },
   "devDependencies": {
