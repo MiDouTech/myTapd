@@ -343,6 +343,7 @@ public class TicketApplicationService {
         }
 
         Map<Long, String> slaStatusByTicketId = resolveSlaStatusByTicketId(ticketIds);
+        Map<Long, Date> resolveDeadlineByTicketId = resolveSlaResolveDeadlineByTicketId(ticketIds);
 
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalCategoryNameMap = categoryNameMap;
@@ -350,7 +351,7 @@ public class TicketApplicationService {
         Map<Long, String> finalMultiAssigneeNameMap = multiAssigneeNameByTicketId;
         List<TicketListOutput> outputs = records.stream()
                 .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap,
-                        finalMultiAssigneeNameMap, slaStatusByTicketId))
+                        finalMultiAssigneeNameMap, slaStatusByTicketId, resolveDeadlineByTicketId))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -684,7 +685,7 @@ public class TicketApplicationService {
         output.setPriority(ticket.getPriority());
         output.setStatus(ticket.getStatus());
         output.setSource(ticket.getSource());
-        output.setExpectedTime(ticket.getExpectedTime());
+        output.setExpectedTime(resolveExpectedTime(ticket));
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());
         output.setCreateTime(ticket.getCreateTime());
@@ -1233,7 +1234,7 @@ public class TicketApplicationService {
                 log.warn("解析插件上下文失败: ticketId={}", ticket.getId(), e);
             }
         }
-        output.setExpectedTime(ticket.getExpectedTime());
+        output.setExpectedTime(resolveExpectedTime(ticket));
         output.setResolvedAt(ticket.getResolvedAt());
         output.setClosedAt(ticket.getClosedAt());
         output.setUrgeCount(ticket.getUrgeCount() != null ? ticket.getUrgeCount() : 0);
@@ -1526,7 +1527,8 @@ public class TicketApplicationService {
                                                   Map<Long, String> categoryNameMap,
                                                   Map<Long, String> companyNameByTicketId,
                                                   Map<Long, String> multiAssigneeNameByTicketId,
-                                                  Map<Long, String> slaStatusByTicketId) {
+                                                  Map<Long, String> slaStatusByTicketId,
+                                                  Map<Long, Date> resolveDeadlineByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
         output.setTicketNo(po.getTicketNo());
@@ -1549,7 +1551,11 @@ public class TicketApplicationService {
             output.setAssigneeName(userNameMap.get(po.getAssigneeId()));
         }
         output.setSource(po.getSource());
-        output.setExpectedTime(po.getExpectedTime());
+        Date expectedTime = po.getExpectedTime();
+        if (expectedTime == null && po.getId() != null && resolveDeadlineByTicketId != null) {
+            expectedTime = resolveDeadlineByTicketId.get(po.getId());
+        }
+        output.setExpectedTime(expectedTime);
         output.setCreateTime(po.getCreateTime());
         output.setUpdateTime(po.getUpdateTime());
         output.setResolvedAt(po.getResolvedAt());
@@ -1631,6 +1637,48 @@ public class TicketApplicationService {
             result.put(entry.getKey(), worst);
         }
         return result;
+    }
+
+    /**
+     * 批量获取每张工单最新的解决 SLA 截止时间，作为未填写 expectedTime 时的展示默认值。
+     */
+    private Map<Long, Date> resolveSlaResolveDeadlineByTicketId(List<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<SlaTimerPO> timers = slaTimerMapper.selectByTicketIds(ticketIds);
+        if (timers == null || timers.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, SlaTimerPO> latestTimerByTicketId = new HashMap<>();
+        for (SlaTimerPO timer : timers) {
+            if (timer == null || timer.getTicketId() == null || timer.getDeadline() == null
+                    || !SlaTimerType.RESOLVE.getCode().equals(timer.getTimerType())) {
+                continue;
+            }
+            SlaTimerPO current = latestTimerByTicketId.get(timer.getTicketId());
+            if (current == null || (timer.getId() != null
+                    && (current.getId() == null || timer.getId() > current.getId()))) {
+                latestTimerByTicketId.put(timer.getTicketId(), timer);
+            }
+        }
+        Map<Long, Date> result = new HashMap<>();
+        for (Map.Entry<Long, SlaTimerPO> entry : latestTimerByTicketId.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().getDeadline());
+        }
+        return result;
+    }
+
+    /**
+     * 人工填写的预计结束时间优先；未填写时回退到解决 SLA 的截止时间。
+     */
+    private Date resolveExpectedTime(TicketPO ticket) {
+        if (ticket == null || ticket.getExpectedTime() != null) {
+            return ticket != null ? ticket.getExpectedTime() : null;
+        }
+        Map<Long, Date> deadlineByTicketId = resolveSlaResolveDeadlineByTicketId(
+                Collections.singletonList(ticket.getId()));
+        return deadlineByTicketId.get(ticket.getId());
     }
 
     private List<Long> resolveAssigneeIdsFromAssignInput(TicketAssignInput input) {
