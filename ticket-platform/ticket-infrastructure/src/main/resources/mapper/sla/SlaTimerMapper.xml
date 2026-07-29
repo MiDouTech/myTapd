@@ -2,6 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.mapper.SlaTimerMapper">
 
+    <resultMap id="resolveDeadlineResultMap"
+               type="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO">
+        <id property="id" column="id" />
+        <result property="ticketId" column="ticket_id" />
+        <result property="timerType" column="timer_type" />
+        <result property="deadline" column="deadline" />
+    </resultMap>
+
     <select id="selectRunningTimers" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO">
         SELECT id, ticket_id, sla_policy_id, timer_type, status,
                threshold_minutes, elapsed_minutes, base_elapsed_minutes, start_at, pause_at,
@@ -37,6 +45,27 @@
           <foreach collection="ticketIds" item="tid" open="(" separator="," close=")">
               #{tid}
           </foreach>
+    </select>
+
+    <select id="selectLatestResolveDeadlines" resultMap="resolveDeadlineResultMap">
+        SELECT timer.id,
+               timer.ticket_id,
+               timer.timer_type,
+               timer.deadline
+        FROM sla_timer timer
+        INNER JOIN (
+            SELECT ticket_id, MAX(id) AS latest_id
+            FROM sla_timer
+            WHERE deleted = 0
+              AND UPPER(TRIM(timer_type)) = 'RESOLVE'
+              AND deadline IS NOT NULL
+              AND ticket_id IN
+              <foreach collection="ticketIds" item="tid" open="(" separator="," close=")">
+                  #{tid}
+              </foreach>
+            GROUP BY ticket_id
+        ) latest ON latest.latest_id = timer.id
+        WHERE timer.deleted = 0
     </select>
 
 </mapper>

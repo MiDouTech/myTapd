@@ -1646,14 +1646,13 @@ public class TicketApplicationService {
         if (ticketIds == null || ticketIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<SlaTimerPO> timers = slaTimerMapper.selectByTicketIds(ticketIds);
+        List<SlaTimerPO> timers = slaTimerMapper.selectLatestResolveDeadlines(ticketIds);
         if (timers == null || timers.isEmpty()) {
             return Collections.emptyMap();
         }
         Map<Long, SlaTimerPO> latestTimerByTicketId = new HashMap<>();
         for (SlaTimerPO timer : timers) {
-            if (timer == null || timer.getTicketId() == null || timer.getDeadline() == null
-                    || !SlaTimerType.RESOLVE.getCode().equals(timer.getTimerType())) {
+            if (timer == null || timer.getTicketId() == null || timer.getDeadline() == null) {
                 continue;
             }
             SlaTimerPO current = latestTimerByTicketId.get(timer.getTicketId());
