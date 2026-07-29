@@ -886,6 +886,11 @@ onUnmounted(() => {
               {{ formatDateTime(row.createTime) }}
             </template>
           </el-table-column>
+          <el-table-column prop="expectedTime" label="预计结束时间" width="180">
+            <template #default="{ row }">
+              {{ formatDateTime(row.expectedTime) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="updateTime" label="更新时间" width="180" sortable="custom">
             <template #default="{ row }">
               {{ formatDateTime(row.updateTime) }}
