@@ -691,7 +691,7 @@ class TicketSdkImpl {
     container.innerHTML = '<div style="padding:20px 0;color:#909399;text-align:center;">加载中...</div>'
     try {
       const detail = await this.fetchTicketDetail(ticketNo)
-      const messages = (detail.messages ?? []).slice(-5)
+      const recentMessages = Array.isArray(detail.messages) ? detail.messages.slice(-5) : []
       const supplementUploads: SupplementUpload[] = []
       container.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:14px;">
@@ -703,7 +703,7 @@ class TicketSdkImpl {
           <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
           <div>
             <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
-            <div data-role="ticket-messages">${this.renderTicketMessages(messages)}</div>
+            <div data-role="ticket-messages">${this.renderTicketMessages(recentMessages)}</div>
           </div>
           <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
             <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等（可直接粘贴截图）" style="width:100%;box-sizing:border-box;min-height:110px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
@@ -1168,25 +1168,26 @@ function detectOs(ua: string): string {
   return 'Unknown'
 }
 
-function escapeHtml(value: string): string {
-  return value
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
 
-function htmlToPlainText(value?: string): string {
+function htmlToPlainText(value?: unknown): string {
   if (!value) return ''
   const element = document.createElement('div')
-  element.innerHTML = value
+  element.innerHTML = String(value)
   return (element.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
-function formatSdkDate(value?: string): string {
+function formatSdkDate(value?: unknown): string {
   if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+  const normalizedValue = typeof value === 'number' || typeof value === 'string' ? value : String(value)
+  const date = new Date(normalizedValue)
+  if (Number.isNaN(date.getTime())) return String(value)
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
