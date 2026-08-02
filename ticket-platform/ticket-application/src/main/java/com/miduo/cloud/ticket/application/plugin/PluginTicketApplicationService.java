@@ -116,8 +116,11 @@ public class PluginTicketApplicationService {
         }
         Long categoryId = resolveCategoryId(app, input.getPluginContext());
         String priority = normalizePriority(input.getPriority());
-        String sanitizedDescription = sanitizePluginDescription(input.getDescription(), input.getAttachments());
-        String title = buildTitle(app.getSystemCode(), input.getPluginContext(), sanitizedDescription);
+        String submittedContent = StringUtils.hasText(input.getContent()) ? input.getContent() : input.getDescription();
+        String sanitizedDescription = sanitizePluginDescription(submittedContent, input.getAttachments());
+        String title = StringUtils.hasText(input.getTitle())
+                ? input.getTitle().trim()
+                : buildTitle(app.getSystemCode(), input.getPluginContext(), sanitizedDescription);
         Map<String, String> customFields = mergeCustomFields(input.getCustomFields(), input.getPluginContext(), input.getAttachments());
 
         TicketCreateInput createInput = new TicketCreateInput();
