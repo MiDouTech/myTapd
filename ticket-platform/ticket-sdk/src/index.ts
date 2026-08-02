@@ -104,6 +104,8 @@ interface SupplementUpload {
   type: 'image' | 'video'
 }
 
+type TicketAttachment = SupplementUpload
+
 const DEFAULT_API_BASE = ''
 
 class TicketSdkImpl {
@@ -284,8 +286,10 @@ class TicketSdkImpl {
     overlay.style.cssText =
       'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;'
     const panel = document.createElement('div')
-    panel.style.cssText =
-      'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+    panel.style.cssText = myTickets
+      ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+      : 'width:420px;max-width:92vw;max-height:92vh;box-sizing:border-box;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+    if (!myTickets) panel.setAttribute('data-ticket-submit-panel', '')
     panel.innerHTML = myTickets
       ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
@@ -294,32 +298,48 @@ class TicketSdkImpl {
          <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
          </div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
-           <strong style="font-size:16px;">提交工单</strong>
-           <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
+      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid #ebeef5;flex:0 0 auto;">
+           <strong style="font-size:16px;line-height:1.2;color:#303133;">提交工单</strong>
+           <div style="display:flex;align-items:center;gap:18px;">
+             <button type="button" data-action="open-my-tickets" style="padding:0;border:none;background:transparent;color:${primary};font-size:14px;line-height:1.5;cursor:pointer;">我的工单</button>
+             <button type="button" data-action="close" aria-label="关闭" style="padding:0;border:none;background:transparent;color:#909399;font-size:20px;line-height:1;cursor:pointer;">×</button>
+           </div>
          </div>
-         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
+         <style>
+           [data-ticket-submit-panel] [data-role="description"]:empty::before{content:attr(data-placeholder);white-space:pre-line;color:#a8abb2;pointer-events:none;}
+           [data-ticket-submit-panel] [data-role="description"]:focus,[data-ticket-submit-panel] [data-role="category"]:focus{border-color:${primary}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
+           [data-ticket-submit-panel] [data-action="pick-attachment"]:hover{border-color:${primary}!important;background:#f5faff!important;}
+           [data-ticket-submit-panel] [data-action="open-my-tickets"]:hover{color:#409eff!important;}
+           [data-ticket-submit-panel] [data-action="close"]:hover{color:#606266!important;border-color:#c6e2ff!important;}
+           [data-ticket-submit-panel] [data-action="submit"]:not(:disabled):hover{filter:brightness(.95);}
+           [data-ticket-submit-panel] [data-action="submit"]:focus-visible,[data-ticket-submit-panel] [data-action="close"]:focus-visible,[data-ticket-submit-panel] [data-action="open-my-tickets"]:focus-visible,[data-ticket-submit-panel] [data-action="pick-attachment"]:focus-visible{outline:2px solid ${primary};outline-offset:2px;}
+         </style>
+         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding:20px;">
            ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-           <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;"></div>
-           <div style="margin-top:6px;font-size:12px;color:#909399;">支持富文本输入，可上传图片或直接粘贴图片，图片会随工单附件一起提交。</div>
-           <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-             <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传图片</div>
-             <div style="display:flex;align-items:center;gap:8px;">
-               <input data-role="image-input" type="file" accept="image/*" multiple style="display:none;" />
-               <button type="button" data-action="pick-image" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片</button>
-             </div>
-           </div>
+           <label for="miduo-ticket-category" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题分类</label>
+           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:36px;box-sizing:border-box;margin-bottom:16px;padding:0 10px;border:1px solid #dcdfe6;border-radius:4px;background:#fff;color:#303133;outline:none;font-size:14px;">
+             <option value="">请选择问题分类</option>
+             <option value="功能异常/Bug">功能异常/Bug</option>
+             <option value="需求建议">需求建议</option>
+           </select>
+           <label for="miduo-ticket-description" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题描述</label>
+           <div id="miduo-ticket-description" data-role="description" contenteditable="true" aria-label="问题描述" data-placeholder="请详细描述您遇到的问题，包括：&#10;1. 问题出现的具体操作步骤&#10;2. 期望的正常结果是什么&#10;3. 实际出现的结果是什么&#10;4. 相关的截图或错误信息（可在下方上传）" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;font-size:14px;word-break:break-word;overflow-wrap:anywhere;"></div>
+           <div style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+           <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
+           <button type="button" data-action="pick-attachment" aria-label="上传附件" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;">
+             <span aria-hidden="true" style="font-size:28px;line-height:1;color:#606266;">📎</span>
+             <span style="font-size:14px;color:${primary};">上传附件</span>
+             <span style="font-size:12px;color:#909399;">支持选择或粘贴图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
+           </button>
+           <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
+           <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
          </div>
-         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
-           <button type="button" data-action="open-my-tickets" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;">我的工单</button>
-           <div style="display:flex;align-items:center;gap:8px;">
-             <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
-             <button type="button" data-action="submit" style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:pointer;background:${primary};">提交</button>
-           </div>
-         </div>
-         <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;flex:0 0 auto;"></div>`
+         <div style="padding:16px 20px;display:flex;align-items:center;justify-content:flex-end;gap:8px;border-top:1px solid #ebeef5;flex:0 0 auto;">
+           <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;font-size:14px;">取消</button>
+           <button type="button" data-action="submit" disabled style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:not-allowed;background:#a8d2fa;font-size:14px;">提交</button>
+         </div>`
 
-    const uploadedAttachments: string[] = []
+    const uploadedAttachments: TicketAttachment[] = []
     const hasUnsavedDraft = (): boolean => {
       if (myTickets) {
         return false
@@ -328,7 +348,8 @@ class TicketSdkImpl {
       const descriptionHtml = (descriptionEl?.innerHTML ?? '').trim()
       const sanitized = this.sanitizeDescriptionHtml(descriptionHtml)
       const hasInlineImage = /<img[\s>]/i.test(descriptionHtml)
-      return !!sanitized.plainText || hasInlineImage || uploadedAttachments.length > 0
+      const category = (panel.querySelector('[data-role="category"]') as HTMLSelectElement | null)?.value
+      return !!category || !!sanitized.plainText || hasInlineImage || uploadedAttachments.length > 0
     }
     const tryCloseModal = (): void => {
       if (!hasUnsavedDraft()) {
@@ -351,7 +372,7 @@ class TicketSdkImpl {
     } else {
       const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
       if (descriptionEl) {
-        descriptionEl.innerHTML = '<p><br/></p>'
+        descriptionEl.innerHTML = ''
       }
       if (prefillDescription) {
         const content = escapeHtml(prefillDescription).replace(/\n/g, '<br/>')
@@ -360,19 +381,43 @@ class TicketSdkImpl {
         }
       }
       this.bindDescriptionEditorEvents(panel, descriptionEl, uploadedAttachments)
-      const imageInput = panel.querySelector('[data-role="image-input"]') as HTMLInputElement
-      panel.querySelector('[data-action="pick-image"]')?.addEventListener('click', () => {
-        imageInput?.click()
+      const categoryEl = panel.querySelector('[data-role="category"]') as HTMLSelectElement
+      const attachmentInput = panel.querySelector('[data-role="attachment-input"]') as HTMLInputElement
+      const submitButton = panel.querySelector('[data-action="submit"]') as HTMLButtonElement
+      const updateSubmitState = (): void => {
+        const hasDescription = !!this.sanitizeDescriptionHtml(descriptionEl.innerHTML).plainText
+        const enabled = !!categoryEl.value && hasDescription
+        submitButton.disabled = !enabled
+        submitButton.style.background = enabled ? primary : '#a8d2fa'
+        submitButton.style.cursor = enabled ? 'pointer' : 'not-allowed'
+      }
+      categoryEl.addEventListener('change', updateSubmitState)
+      descriptionEl.addEventListener('input', updateSubmitState)
+      updateSubmitState()
+      panel.querySelector('[data-action="pick-attachment"]')?.addEventListener('click', () => {
+        attachmentInput?.click()
       })
-      imageInput?.addEventListener('change', async () => {
-        const files = Array.from(imageInput.files ?? [])
+      attachmentInput?.addEventListener('change', async () => {
+        const files = Array.from(attachmentInput.files ?? [])
         if (!files.length) {
           return
         }
         for (const file of files) {
-          await this.uploadImageAndAttach(panel, descriptionEl, uploadedAttachments, file)
+          await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
         }
-        imageInput.value = ''
+        attachmentInput.value = ''
+      })
+      panel.addEventListener('paste', (event: ClipboardEvent) => {
+        const target = event.target as Node | null
+        if (target && descriptionEl.contains(target)) return
+        const files = this.extractClipboardMediaFiles(event)
+        if (!files.length) return
+        event.preventDefault()
+        void (async () => {
+          for (const file of files) {
+            await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
+          }
+        })()
       })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel, uploadedAttachments)
@@ -491,29 +536,32 @@ class TicketSdkImpl {
     this.overlayEl = null
   }
 
-  private async submitTicket(panel: HTMLElement, attachments: string[]): Promise<void> {
+  private async submitTicket(panel: HTMLElement, attachments: TicketAttachment[]): Promise<void> {
+    const categoryEl = panel.querySelector('[data-role="category"]') as HTMLSelectElement
     const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
     const descriptionHtml = (descriptionEl?.innerHTML ?? '').trim()
     const sanitizedDescription = this.sanitizeDescriptionHtml(descriptionHtml)
     const descriptionText = sanitizedDescription.plainText
     const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    const category = categoryEl.value.trim()
+    if (!category || !descriptionText) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '请选择问题分类并填写问题描述'
+      return
+    }
     if (sanitizedDescription.removedInlineImageCount > 0 && attachments.length === 0) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '检测到未上传成功的内联图片，请重新粘贴或点击“上传图片”后再提交'
+      messageEl.textContent = '检测到未上传成功的内联图片，请重新粘贴或点击“上传附件”后再提交'
       return
     }
-    if (!descriptionText && attachments.length === 0) {
-      messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '请先填写问题描述或上传图片'
-      return
-    }
-    const description = descriptionText
-      ? sanitizedDescription.html
-      : '<p>用户上传了问题图片，请结合附件排查。</p>'
+    const characters = Array.from(descriptionText)
+    const title = `${characters.slice(0, 30).join('')}${characters.length > 30 ? '…' : ''}`
+    const content = `<p>【${escapeHtml(category)}】</p>${sanitizedDescription.html}`
+    console.log({ title, content })
     messageEl.style.color = '#909399'
     messageEl.textContent = '提交中...'
     try {
-      const output = await this.createTicket(description, attachments)
+      const output = await this.createTicket(title, content, attachments)
       messageEl.style.color = '#67c23a'
       messageEl.textContent = `提交成功：${output.ticketNo}`
       this.emit('ticket:updated', { ticketNo: output.ticketNo, status: output.status })
@@ -556,7 +604,7 @@ class TicketSdkImpl {
   private bindDescriptionEditorEvents(
     panel: HTMLElement,
     descriptionEl: HTMLDivElement,
-    attachments: string[],
+    attachments: TicketAttachment[],
   ): void {
     if (!descriptionEl) {
       return
@@ -564,39 +612,37 @@ class TicketSdkImpl {
     this.normalizeEditorImages(descriptionEl)
     descriptionEl.addEventListener('input', () => {
       this.normalizeEditorImages(descriptionEl)
+      if (!(descriptionEl.textContent ?? '').trim() && !descriptionEl.querySelector('img')) {
+        descriptionEl.innerHTML = ''
+      }
     })
     descriptionEl.addEventListener('paste', (event: ClipboardEvent) => {
-      const imageFiles = this.extractClipboardImageFiles(event)
-      if (!imageFiles.length) {
+      const mediaFiles = this.extractClipboardMediaFiles(event)
+      if (!mediaFiles.length) {
         window.setTimeout(() => this.normalizeEditorImages(descriptionEl), 0)
         return
       }
       event.preventDefault()
       void (async () => {
-        for (const imageFile of imageFiles) {
-          // 为什么直接上传粘贴图片：避免 dataURL 直接进描述字段，导致内容过长或显示异常。
-          await this.uploadImageAndAttach(panel, descriptionEl, attachments, imageFile)
+        for (const mediaFile of mediaFiles) {
+          // 为什么直接上传粘贴媒体：避免 dataURL 进入描述字段；视频只作为附件，不插入编辑器。
+          await this.uploadAttachment(panel, descriptionEl, attachments, mediaFile)
         }
       })()
     })
   }
 
-  private extractClipboardImageFiles(event: ClipboardEvent): File[] {
+  private extractClipboardMediaFiles(event: ClipboardEvent): File[] {
     const clipboard = event.clipboardData
-    if (!clipboard || !clipboard.items || !clipboard.items.length) {
-      return []
-    }
-    const imageFiles: File[] = []
-    Array.from(clipboard.items).forEach((item) => {
-      if (item.kind !== 'file' || !item.type || !item.type.startsWith('image/')) {
-        return
-      }
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
-      }
-    })
-    return imageFiles
+    if (!clipboard || !clipboard.items || !clipboard.items.length) return []
+    return Array.from(clipboard.items)
+      .filter((item) => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => !!file)
+  }
+
+  private extractClipboardImageFiles(event: ClipboardEvent): File[] {
+    return this.extractClipboardMediaFiles(event).filter((file) => file.type.startsWith('image/'))
   }
 
   private normalizeEditorImages(editor: HTMLDivElement): void {
@@ -645,7 +691,7 @@ class TicketSdkImpl {
     container.innerHTML = '<div style="padding:20px 0;color:#909399;text-align:center;">加载中...</div>'
     try {
       const detail = await this.fetchTicketDetail(ticketNo)
-      const messages = (detail.messages ?? []).slice(-5)
+      const recentMessages = Array.isArray(detail.messages) ? detail.messages.slice(-5) : []
       const supplementUploads: SupplementUpload[] = []
       container.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:14px;">
@@ -657,7 +703,7 @@ class TicketSdkImpl {
           <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
           <div>
             <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
-            <div data-role="ticket-messages">${this.renderTicketMessages(messages)}</div>
+            <div data-role="ticket-messages">${this.renderTicketMessages(recentMessages)}</div>
           </div>
           <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
             <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等（可直接粘贴截图）" style="width:100%;box-sizing:border-box;min-height:110px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
@@ -855,41 +901,52 @@ class TicketSdkImpl {
     }
   }
 
-  private async uploadImageAndAttach(
+  private async uploadAttachment(
     panel: HTMLElement,
     descriptionEl: HTMLDivElement,
-    attachments: string[],
+    attachments: TicketAttachment[],
     file: File,
   ): Promise<void> {
     const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    if (file.size > 50 * 1024 * 1024) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '单个附件不能超过 50MB'
+      return
+    }
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '仅支持上传图片或视频附件'
+      return
+    }
     messageEl.style.color = '#909399'
     messageEl.textContent = `上传中：${file.name}`
     try {
-      const output = await this.uploadPluginImage(file)
+      const output = await this.uploadPluginFile(file, file.type.startsWith('image/') ? 'screenshot' : 'attachment')
       if (output.url) {
-        attachments.push(output.url)
+        const type = file.type.startsWith('video/') ? 'video' : 'image'
+        attachments.push({ url: output.url, name: output.fileName || file.name, type })
         this.renderAttachmentList(panel, attachments)
-        this.insertImageToEditor(descriptionEl, output.url)
+        if (type === 'image') this.insertImageToEditor(descriptionEl, output.url)
       }
       messageEl.style.color = '#67c23a'
       messageEl.textContent = `上传成功：${output.fileName || file.name}`
     } catch (error) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = error instanceof Error ? error.message : '图片上传失败'
+      messageEl.textContent = error instanceof Error ? error.message : '附件上传失败'
     }
   }
 
-  private renderAttachmentList(panel: HTMLElement, attachments: string[]): void {
+  private renderAttachmentList(panel: HTMLElement, attachments: TicketAttachment[]): void {
     const listEl = panel.querySelector('[data-role="attachment-list"]') as HTMLElement
     if (!listEl) {
       return
     }
     if (!attachments.length) {
-      listEl.textContent = '未上传图片'
+      listEl.textContent = '未上传附件'
       return
     }
     listEl.innerHTML = attachments
-      .map((url, index) => `<div style="margin-bottom:4px;">图片${index + 1}：<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">查看</a></div>`)
+      .map((item, index) => `<div style="margin-bottom:4px;">${item.type === 'video' ? '视频' : '图片'}${index + 1}：<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">查看</a></div>`)
       .join('')
   }
 
@@ -941,10 +998,6 @@ class TicketSdkImpl {
     return result.message || fallback
   }
 
-  private async uploadPluginImage(file: File): Promise<{ url: string; fileName?: string; fileSize?: number; fileType?: string }> {
-    return this.uploadPluginFile(file, 'screenshot')
-  }
-
   private async uploadPluginFile(
     file: File,
     uploadPurpose: 'screenshot' | 'attachment',
@@ -966,7 +1019,7 @@ class TicketSdkImpl {
     return result.data
   }
 
-  private async createTicket(description: string, attachments: string[]): Promise<{ ticketNo: string; status: string }> {
+  private async createTicket(title: string, content: string, attachments: TicketAttachment[]): Promise<{ ticketNo: string; status: string }> {
     const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets`, {
       method: 'POST',
       headers: {
@@ -974,10 +1027,12 @@ class TicketSdkImpl {
         Authorization: `Bearer ${this.options!.launchToken}`,
       },
       body: JSON.stringify({
-        description,
+        title,
+        content,
+        description: content,
         priority: this.config?.defaultPriority ?? 'medium',
         pluginContext: this.buildPluginContext(),
-        attachments,
+        attachments: attachments.map((item) => item.url),
       }),
     })
     const result = await response.json()
@@ -1113,25 +1168,26 @@ function detectOs(ua: string): string {
   return 'Unknown'
 }
 
-function escapeHtml(value: string): string {
-  return value
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
 
-function htmlToPlainText(value?: string): string {
+function htmlToPlainText(value?: unknown): string {
   if (!value) return ''
   const element = document.createElement('div')
-  element.innerHTML = value
+  element.innerHTML = String(value)
   return (element.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
-function formatSdkDate(value?: string): string {
+function formatSdkDate(value?: unknown): string {
   if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+  const normalizedValue = typeof value === 'number' || typeof value === 'string' ? value : String(value)
+  const date = new Date(normalizedValue)
+  if (Number.isNaN(date.getTime())) return String(value)
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
