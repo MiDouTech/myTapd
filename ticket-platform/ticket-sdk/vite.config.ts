@@ -14,7 +14,9 @@ export default defineConfig({
         exports: 'named',
       },
     },
-    minify: 'esbuild',
+    // 保留 SDK 公共产物中的函数名。该脚本会被多种宿主和 CDN 再处理，二次压缩曾导致
+    // 工单详情的局部短变量遮蔽格式化函数，最终只暴露 `d is not defined/function`。
+    minify: false,
     sourcemap: true,
   },
 })
