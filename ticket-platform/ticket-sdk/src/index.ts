@@ -303,28 +303,27 @@ class TicketSdkImpl {
          </div>
          <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
            ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-           <label for="miduo-ticket-category" style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题分类 <span style="color:#f56c6c;">*</span></label>
-           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:54px;box-sizing:border-box;margin-bottom:20px;padding:0 16px;border:1px solid #dcdfe6;border-radius:6px;background:#fff;color:#606266;outline:none;font-size:18px;">
+           <label for="miduo-ticket-category" style="display:block;margin-bottom:6px;font-size:14px;color:#606266;">问题分类 <span style="color:#f56c6c;">*</span></label>
+           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:36px;box-sizing:border-box;margin-bottom:12px;padding:0 10px;border:1px solid #dcdfe6;border-radius:4px;background:#fff;color:#606266;outline:none;font:inherit;">
              <option value="">请选择问题分类</option>
              <option value="功能异常/Bug">功能异常/Bug</option>
              <option value="需求建议">需求建议</option>
            </select>
-           <label style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题描述 <span style="color:#f56c6c;">*</span></label>
-           <div data-role="description" contenteditable="true" aria-label="问题描述" style="width:100%;min-height:208px;box-sizing:border-box;padding:14px;border:1px solid #dcdfe6;border-radius:6px;overflow:auto;outline:none;line-height:1.6;font-size:16px;word-break:break-word;overflow-wrap:anywhere;"></div>
-           <div style="margin-top:10px;font-size:14px;color:#909399;">支持 jpg/png/gif 等图片格式、mp4 等视频格式，可直接粘贴图片</div>
+           <div data-role="description" contenteditable="true" style="width:100%;min-height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;"></div>
+           <div style="margin-top:6px;font-size:12px;color:#909399;">支持 jpg/png/gif 等图片格式、mp4 等视频格式，可直接粘贴图片</div>
            <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-             <div data-role="attachment-list" style="font-size:16px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传附件</div>
+             <div data-role="attachment-list" style="font-size:12px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传附件</div>
              <div style="display:flex;align-items:center;gap:8px;">
                <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-               <button type="button" data-action="pick-attachment" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">上传附件</button>
+               <button type="button" data-action="pick-attachment" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传附件</button>
              </div>
            </div>
          </div>
          <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
            <button type="button" data-action="open-my-tickets" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;color:#606266;font-size:16px;">我的工单</button>
            <div style="display:flex;align-items:center;gap:8px;">
-             <button type="button" data-action="close" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">取消</button>
-             <button type="button" data-action="submit" disabled style="padding:10px 18px;border:none;color:#fff;border-radius:6px;cursor:not-allowed;background:#c0c4cc;font-size:16px;">提交</button>
+             <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
+             <button type="button" data-action="submit" disabled style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:not-allowed;background:#c0c4cc;">提交</button>
            </div>
          </div>
          <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;flex:0 0 auto;"></div>`
