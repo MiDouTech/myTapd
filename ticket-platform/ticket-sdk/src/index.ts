@@ -286,8 +286,9 @@ class TicketSdkImpl {
     overlay.style.cssText =
       'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;'
     const panel = document.createElement('div')
-    panel.style.cssText =
-      'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+    panel.style.cssText = myTickets
+      ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+      : 'width:620px;max-width:92vw;max-height:92vh;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:30px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
     panel.innerHTML = myTickets
       ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
@@ -296,8 +297,8 @@ class TicketSdkImpl {
          <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
          </div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
-           <strong style="font-size:16px;">提交工单</strong>
+      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex:0 0 auto;">
+           <strong style="font-size:24px;color:#606266;">提交工单</strong>
            <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
          <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
@@ -318,8 +319,8 @@ class TicketSdkImpl {
              </div>
            </div>
          </div>
-         <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
-           <button type="button" data-action="open-my-tickets" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;">我的工单</button>
+         <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
+           <button type="button" data-action="open-my-tickets" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;color:#606266;font-size:16px;">我的工单</button>
            <div style="display:flex;align-items:center;gap:8px;">
              <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
              <button type="button" data-action="submit" disabled style="padding:8px 14px;border:none;color:#fff;border-radius:4px;cursor:not-allowed;background:#c0c4cc;">提交</button>
