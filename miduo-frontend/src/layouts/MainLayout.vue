@@ -25,10 +25,13 @@ import {
   UserFilled,
 } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getCategoryTree } from '@/api/category'
 import EmptyState from '@/components/common/EmptyState.vue'
+import SidebarMenuItem from '@/components/layout/SidebarMenuItem.vue'
+import type { SidebarMenuItemModel } from '@/components/layout/SidebarMenuItem.vue'
 import NotificationContentBody from '@/components/notification/NotificationContentBody.vue'
 import {
   layoutTicketSearchKeyword,
@@ -43,10 +46,10 @@ import type { NotificationOutput } from '@/types/notification'
 import { formatDateTime } from '@/utils/formatter'
 import { createInertiaWheelScroll } from '@/utils/inertiaWheelScroll'
 
-interface MenuItem {
+interface MenuItem extends SidebarMenuItemModel {
   index: string
   title: string
-  icon: unknown
+  icon: Component
   children?: MenuItem[]
 }
 
@@ -258,13 +261,21 @@ async function loadCategoryGroupMenus(): Promise<void> {
     const tree = await getCategoryTree()
     categoryGroupMenuItems.value = (tree || [])
       .filter((item: CategoryTreeOutput) => item.isActive !== 0)
-      .map((item: CategoryTreeOutput) => ({
-        index: `/ticket/category/${item.id}`,
-        title: item.name,
-        icon: Files,
-      }))
+      .map(buildCategoryMenuItem)
   } catch {
     categoryGroupMenuItems.value = []
+  }
+}
+
+function buildCategoryMenuItem(category: CategoryTreeOutput): MenuItem {
+  const children = (category.children || [])
+    .filter((child) => child.isActive !== 0)
+    .map(buildCategoryMenuItem)
+  return {
+    index: `/ticket/category/${category.id}`,
+    title: category.name,
+    icon: Files,
+    children: children.length ? children : undefined,
   }
 }
 
@@ -413,22 +424,7 @@ watch(
         class="menu"
         @select="handleMenuSelect"
       >
-        <template v-for="item in visibleMenuItems" :key="item.index">
-          <el-sub-menu v-if="item.children?.length" :index="item.index">
-            <template #title>
-              <el-icon><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
-            </template>
-            <el-menu-item v-for="sub in item.children" :key="sub.index" :index="sub.index">
-              <el-icon><component :is="sub.icon" /></el-icon>
-              <span>{{ sub.title }}</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-menu-item v-else :index="item.index">
-            <el-icon><component :is="item.icon" /></el-icon>
-            <span>{{ item.title }}</span>
-          </el-menu-item>
-        </template>
+        <SidebarMenuItem v-for="item in visibleMenuItems" :key="item.index" :item="item" />
       </el-menu>
     </el-aside>
     <el-drawer
@@ -448,22 +444,7 @@ watch(
           class="menu"
           @select="handleMenuSelect"
         >
-          <template v-for="item in visibleMenuItems" :key="item.index">
-            <el-sub-menu v-if="item.children?.length" :index="item.index">
-              <template #title>
-                <el-icon><component :is="item.icon" /></el-icon>
-                <span>{{ item.title }}</span>
-              </template>
-              <el-menu-item v-for="sub in item.children" :key="sub.index" :index="sub.index">
-                <el-icon><component :is="sub.icon" /></el-icon>
-                <span>{{ sub.title }}</span>
-              </el-menu-item>
-            </el-sub-menu>
-            <el-menu-item v-else :index="item.index">
-              <el-icon><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
-            </el-menu-item>
-          </template>
+          <SidebarMenuItem v-for="item in visibleMenuItems" :key="item.index" :item="item" />
         </el-menu>
       </div>
     </el-drawer>
