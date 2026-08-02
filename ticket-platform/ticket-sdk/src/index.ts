@@ -329,7 +329,7 @@ class TicketSdkImpl {
            <button type="button" data-action="pick-attachment" aria-label="上传附件" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;">
              <span aria-hidden="true" style="font-size:28px;line-height:1;color:#606266;">📎</span>
              <span style="font-size:14px;color:${primary};">上传附件</span>
-             <span style="font-size:12px;color:#909399;">支持上传图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
+             <span style="font-size:12px;color:#909399;">支持选择或粘贴图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
            </button>
            <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
            <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
@@ -406,6 +406,18 @@ class TicketSdkImpl {
           await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
         }
         attachmentInput.value = ''
+      })
+      panel.addEventListener('paste', (event: ClipboardEvent) => {
+        const target = event.target as Node | null
+        if (target && descriptionEl.contains(target)) return
+        const files = this.extractClipboardMediaFiles(event)
+        if (!files.length) return
+        event.preventDefault()
+        void (async () => {
+          for (const file of files) {
+            await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
+          }
+        })()
       })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel, uploadedAttachments)
@@ -605,37 +617,32 @@ class TicketSdkImpl {
       }
     })
     descriptionEl.addEventListener('paste', (event: ClipboardEvent) => {
-      const imageFiles = this.extractClipboardImageFiles(event)
-      if (!imageFiles.length) {
+      const mediaFiles = this.extractClipboardMediaFiles(event)
+      if (!mediaFiles.length) {
         window.setTimeout(() => this.normalizeEditorImages(descriptionEl), 0)
         return
       }
       event.preventDefault()
       void (async () => {
-        for (const imageFile of imageFiles) {
-          // 为什么直接上传粘贴图片：避免 dataURL 直接进描述字段，导致内容过长或显示异常。
-          await this.uploadAttachment(panel, descriptionEl, attachments, imageFile)
+        for (const mediaFile of mediaFiles) {
+          // 为什么直接上传粘贴媒体：避免 dataURL 进入描述字段；视频只作为附件，不插入编辑器。
+          await this.uploadAttachment(panel, descriptionEl, attachments, mediaFile)
         }
       })()
     })
   }
 
-  private extractClipboardImageFiles(event: ClipboardEvent): File[] {
+  private extractClipboardMediaFiles(event: ClipboardEvent): File[] {
     const clipboard = event.clipboardData
-    if (!clipboard || !clipboard.items || !clipboard.items.length) {
-      return []
-    }
-    const imageFiles: File[] = []
-    Array.from(clipboard.items).forEach((item) => {
-      if (item.kind !== 'file' || !item.type || !item.type.startsWith('image/')) {
-        return
-      }
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
-      }
-    })
-    return imageFiles
+    if (!clipboard || !clipboard.items || !clipboard.items.length) return []
+    return Array.from(clipboard.items)
+      .filter((item) => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => !!file)
+  }
+
+  private extractClipboardImageFiles(event: ClipboardEvent): File[] {
+    return this.extractClipboardMediaFiles(event).filter((file) => file.type.startsWith('image/'))
   }
 
   private normalizeEditorImages(editor: HTMLDivElement): void {
