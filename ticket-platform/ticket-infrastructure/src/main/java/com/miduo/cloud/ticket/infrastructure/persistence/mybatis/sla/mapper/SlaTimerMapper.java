@@ -27,4 +27,9 @@ public interface SlaTimerMapper extends BaseMapper<SlaTimerPO> {
      * 批量查询指定工单的SLA计时器（用于列表SLA状态聚合）
      */
     List<SlaTimerPO> selectByTicketIds(@Param("ticketIds") List<Long> ticketIds);
+
+    /**
+     * 批量查询指定工单最新的解决 SLA 计时器截止时间。
+     */
+    List<SlaTimerPO> selectLatestResolveDeadlines(@Param("ticketIds") List<Long> ticketIds);
 }
