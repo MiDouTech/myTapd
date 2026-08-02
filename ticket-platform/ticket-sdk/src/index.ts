@@ -691,8 +691,6 @@ class TicketSdkImpl {
     container.innerHTML = '<div style="padding:20px 0;color:#909399;text-align:center;">加载中...</div>'
     try {
       const detail = await this.fetchTicketDetail(ticketNo)
-      const recentMessages = Array.isArray(detail.messages) ? detail.messages.slice(-5) : []
-      const supplementUploads: SupplementUpload[] = []
       container.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:14px;">
           <button type="button" data-action="back-to-tickets" style="align-self:flex-start;border:none;background:transparent;color:#606266;cursor:pointer;padding:0;">← 返回我的工单</button>
@@ -703,7 +701,9 @@ class TicketSdkImpl {
           <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
           <div>
             <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
-            <div data-role="ticket-messages">${this.renderTicketMessages(recentMessages)}</div>
+            <div data-role="ticket-messages">${this.renderTicketMessages(
+              Array.isArray(detail.messages) ? detail.messages.slice(-5) : [],
+            )}</div>
           </div>
           <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
             <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等（可直接粘贴截图）" style="width:100%;box-sizing:border-box;min-height:110px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
@@ -727,39 +727,42 @@ class TicketSdkImpl {
           <div data-role="detail-message" style="font-size:13px;color:#67c23a;"></div>
         </div>`
 
-      container.querySelector('[data-action="back-to-tickets"]')?.addEventListener('click', () => {
-        container.innerHTML = '<div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>'
-        void this.renderMyTickets(panel)
-      })
-      container.querySelector('[data-action="open-public-detail"]')?.addEventListener('click', () => this.openPublicTicket(detail.ticketNo))
-      container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => {
-        ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'block'
-        ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'none'
-      })
-      container.querySelector('[data-action="cancel-supplement"]')?.addEventListener('click', () => {
-        ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'none'
-        ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'flex'
-      })
-      const supplementContentEl = container.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
-      const supplementFilesEl = container.querySelector('[data-role="supplement-files"]') as HTMLInputElement
-      container.querySelector('[data-action="pick-supplement-file"]')?.addEventListener('click', () => supplementFilesEl.click())
-      supplementFilesEl.addEventListener('change', () => {
-        const files = Array.from(supplementFilesEl.files ?? [])
-        if (files.length) void this.uploadSupplementFiles(panel, files, supplementUploads)
-        supplementFilesEl.value = ''
-      })
-      supplementContentEl.addEventListener('paste', (event) => {
-        const imageFiles = this.extractClipboardImageFiles(event)
-        if (!imageFiles.length) return
-        event.preventDefault()
-        void this.uploadSupplementFiles(panel, imageFiles, supplementUploads)
-      })
-      container.querySelector('[data-action="submit-supplement"]')?.addEventListener('click', () => {
-        void this.submitTicketSupplement(panel, detail.ticketNo, supplementUploads)
-      })
-      container.querySelector('[data-action="urge-ticket"]')?.addEventListener('click', () => {
-        void this.submitTicketUrge(panel, detail.ticketNo)
-      })
+      {
+        const supplementUploads: SupplementUpload[] = []
+        container.querySelector('[data-action="back-to-tickets"]')?.addEventListener('click', () => {
+          container.innerHTML = '<div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>'
+          void this.renderMyTickets(panel)
+        })
+        container.querySelector('[data-action="open-public-detail"]')?.addEventListener('click', () => this.openPublicTicket(detail.ticketNo))
+        container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => {
+          ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'block'
+          ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'none'
+        })
+        container.querySelector('[data-action="cancel-supplement"]')?.addEventListener('click', () => {
+          ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'none'
+          ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'flex'
+        })
+        const supplementContentEl = container.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
+        const supplementFilesEl = container.querySelector('[data-role="supplement-files"]') as HTMLInputElement
+        container.querySelector('[data-action="pick-supplement-file"]')?.addEventListener('click', () => supplementFilesEl.click())
+        supplementFilesEl.addEventListener('change', () => {
+          const files = Array.from(supplementFilesEl.files ?? [])
+          if (files.length) void this.uploadSupplementFiles(panel, files, supplementUploads)
+          supplementFilesEl.value = ''
+        })
+        supplementContentEl.addEventListener('paste', (event) => {
+          const imageFiles = this.extractClipboardImageFiles(event)
+          if (!imageFiles.length) return
+          event.preventDefault()
+          void this.uploadSupplementFiles(panel, imageFiles, supplementUploads)
+        })
+        container.querySelector('[data-action="submit-supplement"]')?.addEventListener('click', () => {
+          void this.submitTicketSupplement(panel, detail.ticketNo, supplementUploads)
+        })
+        container.querySelector('[data-action="urge-ticket"]')?.addEventListener('click', () => {
+          void this.submitTicketUrge(panel, detail.ticketNo)
+        })
+      }
     } catch (error) {
       container.innerHTML = `<div style="color:#f56c6c;">${escapeHtml(error instanceof Error ? error.message : '加载失败')}</div>`
     }
