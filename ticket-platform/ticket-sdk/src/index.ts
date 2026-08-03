@@ -326,10 +326,10 @@ class TicketSdkImpl {
            <div id="miduo-ticket-description" data-role="description" contenteditable="true" aria-label="问题描述" data-placeholder="请详细描述您遇到的问题，包括：&#10;1. 问题出现的具体操作步骤&#10;2. 期望的正常结果是什么&#10;3. 实际出现的结果是什么&#10;4. 相关的截图或错误信息（可在下方上传）" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;font-size:14px;word-break:break-word;overflow-wrap:anywhere;"></div>
            <div style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
            <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-           <button type="button" data-action="pick-attachment" aria-label="上传附件" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;">
+           <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、粘贴或拖拽图片和视频" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;transition:border-color .2s,background .2s;">
              <span aria-hidden="true" style="font-size:28px;line-height:1;color:#606266;">📎</span>
              <span style="font-size:14px;color:${primary};">上传附件</span>
-             <span style="font-size:12px;color:#909399;">支持上传图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
+             <span style="font-size:12px;color:#909399;">支持点击、粘贴或拖拽图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
            </button>
            <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
            <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
@@ -394,18 +394,41 @@ class TicketSdkImpl {
       categoryEl.addEventListener('change', updateSubmitState)
       descriptionEl.addEventListener('input', updateSubmitState)
       updateSubmitState()
-      panel.querySelector('[data-action="pick-attachment"]')?.addEventListener('click', () => {
+      const attachmentDropzone = panel.querySelector('[data-action="pick-attachment"]') as HTMLButtonElement
+      attachmentDropzone?.addEventListener('click', () => {
         attachmentInput?.click()
       })
       attachmentInput?.addEventListener('change', async () => {
         const files = Array.from(attachmentInput.files ?? [])
-        if (!files.length) {
-          return
-        }
-        for (const file of files) {
-          await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
-        }
+        await this.uploadAttachmentFiles(panel, descriptionEl, uploadedAttachments, files)
         attachmentInput.value = ''
+      })
+      attachmentDropzone?.addEventListener('paste', (event: ClipboardEvent) => {
+        const files = this.extractClipboardMediaFiles(event)
+        if (!files.length) return
+        event.preventDefault()
+        void this.uploadAttachmentFiles(panel, descriptionEl, uploadedAttachments, files)
+      })
+      attachmentDropzone?.addEventListener('dragover', (event: DragEvent) => {
+        event.preventDefault()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+        attachmentDropzone.style.borderColor = primary
+        attachmentDropzone.style.background = '#f5faff'
+      })
+      attachmentDropzone?.addEventListener('dragleave', () => {
+        attachmentDropzone.style.borderColor = '#dcdfe6'
+        attachmentDropzone.style.background = '#fff'
+      })
+      attachmentDropzone?.addEventListener('drop', (event: DragEvent) => {
+        event.preventDefault()
+        attachmentDropzone.style.borderColor = '#dcdfe6'
+        attachmentDropzone.style.background = '#fff'
+        void this.uploadAttachmentFiles(
+          panel,
+          descriptionEl,
+          uploadedAttachments,
+          Array.from(event.dataTransfer?.files ?? []),
+        )
       })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel, uploadedAttachments)
@@ -930,6 +953,17 @@ class TicketSdkImpl {
     }
   }
 
+  private async uploadAttachmentFiles(
+    panel: HTMLElement,
+    descriptionEl: HTMLDivElement,
+    attachments: TicketAttachment[],
+    files: File[],
+  ): Promise<void> {
+    for (const file of files) {
+      await this.uploadAttachment(panel, descriptionEl, attachments, file)
+    }
+  }
+
   private renderAttachmentList(panel: HTMLElement, attachments: TicketAttachment[]): void {
     const listEl = panel.querySelector('[data-role="attachment-list"]') as HTMLElement
     if (!listEl) {
@@ -940,7 +974,18 @@ class TicketSdkImpl {
       return
     }
     listEl.innerHTML = attachments
-      .map((item, index) => `<div style="margin-bottom:4px;">${item.type === 'video' ? '视频' : '图片'}${index + 1}：<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">查看</a></div>`)
+      .map((item, index) => {
+        const url = escapeHtml(item.url)
+        const name = escapeHtml(item.name || `${item.type === 'video' ? '视频' : '图片'}${index + 1}`)
+        const preview =
+          item.type === 'video'
+            ? `<video src="${url}" controls preload="metadata" style="display:block;width:100%;max-height:180px;border-radius:6px;background:#000;"></video>`
+            : `<img src="${url}" alt="${name}" loading="lazy" style="display:block;width:100%;max-height:180px;object-fit:contain;border-radius:6px;background:#f5f7fa;" />`
+        return `<div style="margin-bottom:10px;padding:8px;border:1px solid #ebeef5;border-radius:6px;">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" style="display:block;margin-bottom:6px;color:#1675d1;word-break:break-all;">${name}</a>
+          ${preview}
+        </div>`
+      })
       .join('')
   }
 
