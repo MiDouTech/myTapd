@@ -288,7 +288,8 @@ class TicketSdkImpl {
     const panel = document.createElement('div')
     panel.style.cssText = myTickets
       ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
-      : 'width:620px;max-width:92vw;max-height:92vh;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:30px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+      : 'width:420px;max-width:92vw;max-height:92vh;box-sizing:border-box;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+    if (!myTickets) panel.setAttribute('data-ticket-submit-panel', '')
     panel.innerHTML = myTickets
       ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
@@ -297,35 +298,41 @@ class TicketSdkImpl {
          <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
          </div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex:0 0 auto;">
-           <strong style="font-size:24px;color:#606266;">提交工单</strong>
-           <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
+      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid #ebeef5;flex:0 0 auto;">
+           <strong style="font-size:16px;line-height:1.2;color:#303133;">提交工单</strong>
+           <div style="display:flex;align-items:center;gap:18px;">
+             <button type="button" data-action="open-my-tickets" style="padding:0;border:none;background:transparent;color:${primary};font-size:14px;line-height:1.5;cursor:pointer;">我的工单</button>
+             <button type="button" data-action="close" aria-label="关闭" style="padding:0;border:none;background:transparent;color:#909399;font-size:20px;line-height:1;cursor:pointer;">×</button>
+           </div>
          </div>
-         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
+         <style>
+           [data-ticket-submit-panel] [data-role="description"]:empty::before{content:attr(data-placeholder);white-space:pre-line;color:#a8abb2;pointer-events:none;}
+           [data-ticket-submit-panel] [data-role="description"]:focus,[data-ticket-submit-panel] [data-role="category"]:focus{border-color:${primary}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
+           [data-ticket-submit-panel] [data-action="pick-attachment"]:hover{border-color:${primary}!important;background:#f5faff!important;}
+           [data-ticket-submit-panel] [data-action="open-my-tickets"]:hover{color:#409eff!important;}
+           [data-ticket-submit-panel] [data-action="close"]:hover{color:#606266!important;border-color:#c6e2ff!important;}
+           [data-ticket-submit-panel] [data-action="submit"]:not(:disabled):hover{filter:brightness(.95);}
+           [data-ticket-submit-panel] [data-action="submit"]:focus-visible,[data-ticket-submit-panel] [data-action="close"]:focus-visible,[data-ticket-submit-panel] [data-action="open-my-tickets"]:focus-visible,[data-ticket-submit-panel] [data-action="pick-attachment"]:focus-visible{outline:2px solid ${primary};outline-offset:2px;}
+         </style>
+         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding:20px;">
            ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-           <label for="miduo-ticket-category" style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题分类 <span style="color:#f56c6c;">*</span></label>
-           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:54px;box-sizing:border-box;margin-bottom:20px;padding:0 16px;border:1px solid #dcdfe6;border-radius:6px;background:#fff;color:#606266;outline:none;font-size:18px;">
+           <label for="miduo-ticket-category" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题分类</label>
+           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:36px;box-sizing:border-box;margin-bottom:16px;padding:0 10px;border:1px solid #dcdfe6;border-radius:4px;background:#fff;color:#303133;outline:none;font-size:14px;">
              <option value="">请选择问题分类</option>
              <option value="功能异常/Bug">功能异常/Bug</option>
              <option value="需求建议">需求建议</option>
            </select>
-           <label style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题描述 <span style="color:#f56c6c;">*</span></label>
-           <div data-role="description" contenteditable="true" aria-label="问题描述" style="width:100%;min-height:208px;box-sizing:border-box;padding:14px;border:1px solid #dcdfe6;border-radius:6px;overflow:auto;outline:none;line-height:1.6;font-size:16px;word-break:break-word;overflow-wrap:anywhere;"></div>
-           <div style="margin-top:10px;font-size:14px;color:#909399;">支持 jpg/png/gif 等图片格式、mp4 等视频格式，可直接粘贴图片</div>
-           <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-             <div data-role="attachment-list" style="font-size:16px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传附件</div>
-             <div style="display:flex;align-items:center;gap:8px;">
-               <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-               <button type="button" data-action="pick-attachment" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">上传附件</button>
-             </div>
-           </div>
-         </div>
-         <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
-           <button type="button" data-action="open-my-tickets" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;color:#606266;font-size:16px;">我的工单</button>
-           <div style="display:flex;align-items:center;gap:8px;">
-             <button type="button" data-action="close" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">取消</button>
-             <button type="button" data-action="submit" disabled style="padding:10px 18px;border:none;color:#fff;border-radius:6px;cursor:not-allowed;background:#c0c4cc;font-size:16px;">提交</button>
-           </div>
+           <label for="miduo-ticket-description" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题描述</label>
+           <div id="miduo-ticket-description" data-role="description" contenteditable="true" aria-label="问题描述" data-placeholder="请详细描述您遇到的问题，包括：&#10;1. 问题出现的具体操作步骤&#10;2. 期望的正常结果是什么&#10;3. 实际出现的结果是什么&#10;4. 相关的截图或错误信息（可在下方上传）" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;font-size:14px;word-break:break-word;overflow-wrap:anywhere;"></div>
+           <div style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+           <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
+           <button type="button" data-action="pick-attachment" aria-label="上传附件" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;">
+             <span aria-hidden="true" style="font-size:28px;line-height:1;color:#606266;">📎</span>
+             <span style="font-size:14px;color:${primary};">上传附件</span>
+             <span style="font-size:12px;color:#909399;">支持上传图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
+           </button>
+           <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
+           <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
          </div>
          <div style="padding:16px 20px;display:flex;align-items:center;justify-content:flex-end;gap:8px;border-top:1px solid #ebeef5;flex:0 0 auto;">
            <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;font-size:14px;">取消</button>
@@ -381,7 +388,7 @@ class TicketSdkImpl {
         const hasDescription = !!this.sanitizeDescriptionHtml(descriptionEl.innerHTML).plainText
         const enabled = !!categoryEl.value && hasDescription
         submitButton.disabled = !enabled
-        submitButton.style.background = enabled ? primary : '#c0c4cc'
+        submitButton.style.background = enabled ? primary : '#a8d2fa'
         submitButton.style.cursor = enabled ? 'pointer' : 'not-allowed'
       }
       categoryEl.addEventListener('change', updateSubmitState)
