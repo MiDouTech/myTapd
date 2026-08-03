@@ -98,11 +98,11 @@
                 </if>
             )
         </if>
-        <!-- 待出简报：主处理人为当前用户；工单已完成，或存在关联简报为已退回(REJECTED)（工单未结单也需继续改简报）；排除已归档简报；排除存在「待审核」简报 -->
+        <!-- 待出简报：主处理人为当前用户；工单临时解决/已完成，或存在关联简报为已退回(REJECTED)（工单未结单也需继续改简报）；排除已归档简报；排除存在「待审核」简报 -->
         <if test="view == 'my_brief_todo'">
             AND t.assignee_id = #{currentUserId}
             AND (
-                LOWER(t.status) = 'completed'
+                LOWER(t.status) IN ('temp_resolved', 'completed')
                 OR EXISTS (
                     SELECT 1 FROM bug_report_ticket brt
                     INNER JOIN bug_report br ON br.id = brt.report_id AND br.deleted = 0
