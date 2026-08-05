@@ -308,7 +308,9 @@ class TicketSdkImpl {
          <style>
            [data-ticket-submit-panel] [data-role="description"]:empty::before{content:attr(data-placeholder);white-space:pre-line;color:#a8abb2;pointer-events:none;}
            [data-ticket-submit-panel] [data-role="description"]:focus,[data-ticket-submit-panel] [data-role="category"]:focus{border-color:${primary}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
-           [data-ticket-submit-panel] [data-action="pick-attachment"]:hover{border-color:${primary}!important;background:#f5faff!important;}
+           [data-ticket-submit-panel] [data-action="pick-attachment"]:hover,[data-ticket-submit-panel] [data-action="pick-attachment"].is-dragover{border-color:${primary}!important;background:#eef7ff!important;box-shadow:0 0 0 2px rgba(22,117,209,.10) inset;}
+           [data-ticket-submit-panel] [data-role="attachment-empty"]{display:flex;align-items:center;gap:8px;color:#909399;}
+           [data-ticket-submit-panel] [data-role="attachment-card"]:hover{border-color:#c6e2ff!important;box-shadow:0 4px 12px rgba(22,117,209,.08);}
            [data-ticket-submit-panel] [data-action="open-my-tickets"]:hover{color:#409eff!important;}
            [data-ticket-submit-panel] [data-action="close"]:hover{color:#606266!important;border-color:#c6e2ff!important;}
            [data-ticket-submit-panel] [data-action="submit"]:not(:disabled):hover{filter:brightness(.95);}
@@ -327,12 +329,14 @@ class TicketSdkImpl {
            <div data-role="attachment-zone" style="margin-top:16px;">
              <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
              <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-             <button type="button" data-action="pick-attachment" aria-label="上传附件，鼠标移入后可粘贴，也支持点击或拖拽图片和视频" style="width:100%;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;transition:border-color .2s,background .2s;">
-               <svg aria-hidden="true" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
-               <span style="font-size:14px;color:${primary};">点击或拖拽上传</span>
-               <span style="font-size:12px;color:#909399;">鼠标移入此区域可直接粘贴，支持 jpg/png/mp4 等格式，单文件不超过 50MB</span>
+             <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;height:80px;display:flex;align-items:center;justify-content:center;gap:12px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:left;transition:border-color .2s,background .2s,box-shadow .2s;">
+               <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+               <span style="display:flex;flex-direction:column;gap:4px;min-width:0;">
+                 <span style="font-size:14px;font-weight:600;color:${primary};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
+                 <span style="font-size:12px;color:#909399;line-height:1.4;">图片和视频会上传到附件区，不再插入问题描述；支持 jpg、png、mp4，单文件 ≤ 50MB</span>
+               </span>
              </button>
-             <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
+             <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="attachment-empty">暂无附件，上传后会在这里预览，可删除</span></div>
            </div>
            <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
          </div>
@@ -406,6 +410,7 @@ class TicketSdkImpl {
         attachmentInput.value = ''
       })
       let attachmentZoneHovered = false
+      let attachmentZoneFocused = false
       const attachmentZone = panel.querySelector('[data-role="attachment-zone"]') as HTMLElement
       attachmentZone?.addEventListener('mouseenter', () => {
         attachmentZoneHovered = true
@@ -413,8 +418,14 @@ class TicketSdkImpl {
       attachmentZone?.addEventListener('mouseleave', () => {
         attachmentZoneHovered = false
       })
+      attachmentDropzone?.addEventListener('focus', () => {
+        attachmentZoneFocused = true
+      })
+      attachmentDropzone?.addEventListener('blur', () => {
+        attachmentZoneFocused = false
+      })
       panel.addEventListener('paste', (event: ClipboardEvent) => {
-        if (!attachmentZoneHovered) return
+        if (!attachmentZoneHovered && !attachmentZoneFocused) return
         const files = this.extractClipboardMediaFiles(event)
         if (!files.length) return
         event.preventDefault()
@@ -424,17 +435,14 @@ class TicketSdkImpl {
       attachmentDropzone?.addEventListener('dragover', (event: DragEvent) => {
         event.preventDefault()
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-        attachmentDropzone.style.borderColor = primary
-        attachmentDropzone.style.background = '#f5faff'
+        attachmentDropzone.classList.add('is-dragover')
       })
       attachmentDropzone?.addEventListener('dragleave', () => {
-        attachmentDropzone.style.borderColor = '#dcdfe6'
-        attachmentDropzone.style.background = '#fff'
+        attachmentDropzone.classList.remove('is-dragover')
       })
       attachmentDropzone?.addEventListener('drop', (event: DragEvent) => {
         event.preventDefault()
-        attachmentDropzone.style.borderColor = '#dcdfe6'
-        attachmentDropzone.style.background = '#fff'
+        attachmentDropzone.classList.remove('is-dragover')
         void this.uploadAttachmentFiles(
           panel,
           uploadedAttachments,
@@ -975,7 +983,7 @@ class TicketSdkImpl {
       return
     }
     if (!attachments.length) {
-      listEl.textContent = '未上传附件'
+      listEl.innerHTML = '<span data-role="attachment-empty">暂无附件，上传后会在这里预览，可删除</span>'
       return
     }
     listEl.innerHTML = attachments
@@ -986,7 +994,7 @@ class TicketSdkImpl {
           item.type === 'video'
             ? `<video src="${url}" controls preload="metadata" style="display:block;width:100%;max-height:180px;border-radius:6px;background:#000;"></video>`
             : `<img src="${url}" alt="${name}" loading="lazy" style="display:block;width:100%;max-height:180px;object-fit:contain;border-radius:6px;background:#f5f7fa;" />`
-        return `<div style="margin-bottom:8px;padding:8px;border:1px solid #ebeef5;border-radius:6px;background:#fff;">
+        return `<div data-role="attachment-card" style="margin-bottom:8px;padding:8px;border:1px solid #ebeef5;border-radius:6px;background:#fff;transition:border-color .2s,box-shadow .2s;">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
             <a href="${url}" target="_blank" rel="noopener noreferrer" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1675d1;" title="${name}">${name}</a>
             <button type="button" data-action="remove-attachment" data-index="${index}" aria-label="删除附件 ${name}" style="flex:0 0 auto;padding:2px 8px;border:1px solid #fbc4c4;border-radius:4px;background:#fff;color:#f56c6c;cursor:pointer;font-size:12px;">删除</button>
