@@ -324,14 +324,16 @@ class TicketSdkImpl {
            </select>
            <label for="miduo-ticket-description" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题描述</label>
            <div id="miduo-ticket-description" data-role="description" contenteditable="true" aria-label="问题描述" data-placeholder="请详细描述您遇到的问题，包括：&#10;1. 问题出现的具体操作步骤&#10;2. 期望的正常结果是什么&#10;3. 实际出现的结果是什么&#10;4. 相关的截图或错误信息（可在下方上传）" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;font-size:14px;word-break:break-word;overflow-wrap:anywhere;"></div>
-           <div style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
-           <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-           <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、粘贴或拖拽图片和视频" style="width:100%;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;transition:border-color .2s,background .2s;">
-             <span aria-hidden="true" style="font-size:28px;line-height:1;color:#606266;">📎</span>
-             <span style="font-size:14px;color:${primary};">上传附件</span>
-             <span style="font-size:12px;color:#909399;">支持点击、粘贴或拖拽图片和视频（jpg/png/mp4 等格式），单个文件不超过 50MB</span>
-           </button>
-           <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
+           <div data-role="attachment-zone" style="margin-top:16px;">
+             <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+             <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
+             <button type="button" data-action="pick-attachment" aria-label="上传附件，鼠标移入后可粘贴，也支持点击或拖拽图片和视频" style="width:100%;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;box-sizing:border-box;border:1px dashed #dcdfe6;background:#fff;border-radius:8px;cursor:pointer;color:inherit;transition:border-color .2s,background .2s;">
+               <svg aria-hidden="true" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+               <span style="font-size:14px;color:${primary};">点击或拖拽上传</span>
+               <span style="font-size:12px;color:#909399;">鼠标移入此区域可直接粘贴，支持 jpg/png/mp4 等格式，单文件不超过 50MB</span>
+             </button>
+             <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;">未上传附件</div>
+           </div>
            <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
          </div>
          <div style="padding:16px 20px;display:flex;align-items:center;justify-content:flex-end;gap:8px;border-top:1px solid #ebeef5;flex:0 0 auto;">
@@ -400,15 +402,25 @@ class TicketSdkImpl {
       })
       attachmentInput?.addEventListener('change', async () => {
         const files = Array.from(attachmentInput.files ?? [])
-        await this.uploadAttachmentFiles(panel, descriptionEl, uploadedAttachments, files)
+        await this.uploadAttachmentFiles(panel, uploadedAttachments, files)
         attachmentInput.value = ''
       })
-      attachmentDropzone?.addEventListener('paste', (event: ClipboardEvent) => {
+      let attachmentZoneHovered = false
+      const attachmentZone = panel.querySelector('[data-role="attachment-zone"]') as HTMLElement
+      attachmentZone?.addEventListener('mouseenter', () => {
+        attachmentZoneHovered = true
+      })
+      attachmentZone?.addEventListener('mouseleave', () => {
+        attachmentZoneHovered = false
+      })
+      panel.addEventListener('paste', (event: ClipboardEvent) => {
+        if (!attachmentZoneHovered) return
         const files = this.extractClipboardMediaFiles(event)
         if (!files.length) return
         event.preventDefault()
-        void this.uploadAttachmentFiles(panel, descriptionEl, uploadedAttachments, files)
-      })
+        event.stopPropagation()
+        void this.uploadAttachmentFiles(panel, uploadedAttachments, files)
+      }, true)
       attachmentDropzone?.addEventListener('dragover', (event: DragEvent) => {
         event.preventDefault()
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
@@ -425,7 +437,6 @@ class TicketSdkImpl {
         attachmentDropzone.style.background = '#fff'
         void this.uploadAttachmentFiles(
           panel,
-          descriptionEl,
           uploadedAttachments,
           Array.from(event.dataTransfer?.files ?? []),
         )
@@ -637,7 +648,7 @@ class TicketSdkImpl {
       void (async () => {
         for (const imageFile of imageFiles) {
           // 为什么直接上传粘贴图片：避免 dataURL 直接进描述字段，导致内容过长或显示异常。
-          await this.uploadAttachment(panel, descriptionEl, attachments, imageFile)
+          await this.uploadAttachment(panel, attachments, imageFile)
         }
       })()
     })
@@ -917,7 +928,6 @@ class TicketSdkImpl {
 
   private async uploadAttachment(
     panel: HTMLElement,
-    descriptionEl: HTMLDivElement,
     attachments: TicketAttachment[],
     file: File,
   ): Promise<void> {
@@ -935,15 +945,11 @@ class TicketSdkImpl {
     messageEl.style.color = '#909399'
     messageEl.textContent = `上传中：${file.name}`
     try {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        throw new Error('仅支持上传图片或视频附件')
-      }
       const output = await this.uploadPluginFile(file, file.type.startsWith('image/') ? 'screenshot' : 'attachment')
       if (output.url) {
         const type = file.type.startsWith('video/') ? 'video' : 'image'
         attachments.push({ url: output.url, name: output.fileName || file.name, type })
         this.renderAttachmentList(panel, attachments)
-        if (type === 'image') this.insertImageToEditor(descriptionEl, output.url)
       }
       messageEl.style.color = '#67c23a'
       messageEl.textContent = `上传成功：${output.fileName || file.name}`
@@ -955,12 +961,11 @@ class TicketSdkImpl {
 
   private async uploadAttachmentFiles(
     panel: HTMLElement,
-    descriptionEl: HTMLDivElement,
     attachments: TicketAttachment[],
     files: File[],
   ): Promise<void> {
     for (const file of files) {
-      await this.uploadAttachment(panel, descriptionEl, attachments, file)
+      await this.uploadAttachment(panel, attachments, file)
     }
   }
 
@@ -981,25 +986,23 @@ class TicketSdkImpl {
           item.type === 'video'
             ? `<video src="${url}" controls preload="metadata" style="display:block;width:100%;max-height:180px;border-radius:6px;background:#000;"></video>`
             : `<img src="${url}" alt="${name}" loading="lazy" style="display:block;width:100%;max-height:180px;object-fit:contain;border-radius:6px;background:#f5f7fa;" />`
-        return `<div style="margin-bottom:10px;padding:8px;border:1px solid #ebeef5;border-radius:6px;">
-          <a href="${url}" target="_blank" rel="noopener noreferrer" style="display:block;margin-bottom:6px;color:#1675d1;word-break:break-all;">${name}</a>
+        return `<div style="margin-bottom:8px;padding:8px;border:1px solid #ebeef5;border-radius:6px;background:#fff;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <a href="${url}" target="_blank" rel="noopener noreferrer" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1675d1;" title="${name}">${name}</a>
+            <button type="button" data-action="remove-attachment" data-index="${index}" aria-label="删除附件 ${name}" style="flex:0 0 auto;padding:2px 8px;border:1px solid #fbc4c4;border-radius:4px;background:#fff;color:#f56c6c;cursor:pointer;font-size:12px;">删除</button>
+          </div>
           ${preview}
         </div>`
       })
       .join('')
-  }
-
-  private insertImageToEditor(editor: HTMLDivElement, imageUrl: string): void {
-    if (!editor || !imageUrl) {
-      return
-    }
-    editor.focus()
-    const html = `<p><img src="${escapeHtml(imageUrl)}" alt="问题截图" style="max-width:100%;height:auto;border-radius:4px;" /></p>`
-    try {
-      document.execCommand('insertHTML', false, html)
-    } catch (error) {
-      editor.innerHTML += html
-    }
+    listEl.querySelectorAll<HTMLButtonElement>('[data-action="remove-attachment"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.index)
+        if (!Number.isInteger(index) || index < 0 || index >= attachments.length) return
+        attachments.splice(index, 1)
+        this.renderAttachmentList(panel, attachments)
+      })
+    })
   }
 
   private resolveUploadFileName(file: File): string {
