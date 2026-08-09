@@ -1136,6 +1136,35 @@ public class TicketApplicationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public void updateTicketPriority(Long ticketId, TicketPriorityUpdateInput input, Long currentUserId) {
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+
+        String oldPriority = ticket.getPriority();
+        String newPriority = input.getPriority().toLowerCase(Locale.ROOT);
+        if (newPriority.equalsIgnoreCase(oldPriority)) {
+            return;
+        }
+
+        ticket.setPriority(newPriority);
+        ticketMapper.updateById(ticket);
+        recordLog(ticketId, currentUserId, TicketAction.UPDATE.getCode(), oldPriority, newPriority,
+                "变更优先级：" + priorityLabel(oldPriority) + " → " + priorityLabel(newPriority));
+        log.info("工单优先级变更: ticketId={}, oldPriority={}, newPriority={}, operatorId={}",
+                ticketId, oldPriority, newPriority, currentUserId);
+    }
+
+    private String priorityLabel(String priorityCode) {
+        if (priorityCode == null || priorityCode.trim().isEmpty()) {
+            return "-";
+        }
+        Priority priority = Priority.fromCode(priorityCode);
+        return priority.getLabel();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public void processTicket(Long ticketId, TicketProcessInput input, Long currentUserId) {
         // 委托给工作流应用服务执行，确保经过工作流引擎校验（含角色检查）
         TransitInput transitInput = new TransitInput();

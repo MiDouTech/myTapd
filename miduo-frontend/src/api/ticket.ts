@@ -16,6 +16,7 @@ import type {
   TicketNodeDurationOutput,
   TicketPageInput,
   TicketProcessInput,
+  TicketPriorityUpdateInput,
   TicketPublicDetailOutput,
   TicketTimeTrackOutput,
   TicketUrgeInput,
@@ -62,6 +63,11 @@ export function getTicketDetail(id: number): Promise<TicketDetailOutput> {
  */
 export function assignTicket(id: number, data: TicketAssignInput): Promise<void> {
   return request.put<void>(`/ticket/assign/${id}`, data)
+}
+
+/** 变更工单优先级 */
+export function updateTicketPriority(id: number, data: TicketPriorityUpdateInput): Promise<void> {
+  return request.put<void>(`/ticket/priority/${id}`, data)
 }
 
 /**

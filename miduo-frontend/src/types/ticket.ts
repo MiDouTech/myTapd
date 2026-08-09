@@ -85,6 +85,10 @@ export interface TicketAssignInput {
   mergeAssignees?: boolean
 }
 
+export interface TicketPriorityUpdateInput {
+  priority: 'urgent' | 'high' | 'medium' | 'low'
+}
+
 export interface TicketProcessInput {
   targetStatus: string
   targetUserId?: number

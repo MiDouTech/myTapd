@@ -104,6 +104,15 @@ public class TicketController {
         return ApiResult.success();
     }
 
+    @OperationLog(moduleName = "工单管理", operationItem = "变更工单优先级")
+    @PutMapping("/priority/{id}")
+    @Operation(summary = "变更工单优先级")
+    public ApiResult<Void> updateTicketPriority(@PathVariable Long id,
+                                                @Valid @RequestBody TicketPriorityUpdateInput input) {
+        ticketService.updateTicketPriority(id, input, getCurrentUserId());
+        return ApiResult.success();
+    }
+
     /**
      * 处理工单并流转
      * 接口编号：API000010

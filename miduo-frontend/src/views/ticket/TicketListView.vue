@@ -10,6 +10,7 @@ import {
   getTicketNodeDuration,
   getTicketPage,
   getTicketTimeTrack,
+  updateTicketPriority,
 } from '@/api/ticket'
 import { getFlowHistory } from '@/api/workflow'
 import BasePagination from '@/components/common/BasePagination.vue'
@@ -37,7 +38,7 @@ import {
 import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
 import { parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
-import { notifyWarning } from '@/utils/feedback'
+import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
 const route = useRoute()
 const router = useRouter()
 
@@ -48,6 +49,29 @@ const categoryTree = ref<CategoryTreeOutput[]>([])
 const tableData = ref<TicketListOutput[]>([])
 const total = ref(0)
 const selectedRows = ref<TicketListOutput[]>([])
+const priorityUpdatingId = ref<number | null>(null)
+const priorityOptions = [
+  { label: '紧急', value: 'urgent' },
+  { label: '高', value: 'high' },
+  { label: '中', value: 'medium' },
+  { label: '低', value: 'low' },
+] as const
+
+async function handlePriorityChange(row: TicketListOutput, priority: string): Promise<void> {
+  priorityUpdatingId.value = row.id
+  try {
+    await updateTicketPriority(row.id, {
+      priority: priority as 'urgent' | 'high' | 'medium' | 'low',
+    })
+    row.priorityLabel = priorityOptions.find((item) => item.value === priority)?.label || priority
+    notifySuccess('优先级变更成功')
+  } catch {
+    notifyError('优先级变更失败，已恢复原值')
+    await loadTickets()
+  } finally {
+    priorityUpdatingId.value = null
+  }
+}
 
 const previewDrawerVisible = ref(false)
 const previewLoading = ref(false)
@@ -857,9 +881,23 @@ onUnmounted(() => {
           <el-table-column prop="categoryName" label="分类" min-width="140" />
           <el-table-column label="优先级" width="100" sortable="custom" prop="priority">
             <template #default="{ row }">
-              <el-tag :type="getPriorityType(row.priority)">{{
-                row.priorityLabel || row.priority
-              }}</el-tag>
+              <el-select
+                v-model="row.priority"
+                size="small"
+                :loading="priorityUpdatingId === row.id"
+                :disabled="priorityUpdatingId !== null"
+                @click.stop
+                @change="handlePriorityChange(row, $event)"
+              >
+                <el-option
+                  v-for="option in priorityOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                >
+                  <el-tag :type="getPriorityType(option.value)" size="small">{{ option.label }}</el-tag>
+                </el-option>
+              </el-select>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="120">

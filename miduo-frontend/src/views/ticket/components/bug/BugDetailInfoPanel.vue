@@ -15,6 +15,27 @@
           </span>
         </div>
 
+        <!-- 优先级（下拉即时变更） -->
+        <div class="info-row">
+          <span class="info-label"><el-icon><Flag /></el-icon> 优先级</span>
+          <span class="info-value">
+            <el-select
+              v-model="prioritySelection"
+              size="small"
+              :loading="prioritySaving"
+              :disabled="prioritySaving"
+              @change="handlePriorityChange"
+            >
+              <el-option
+                v-for="option in PRIORITY_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </span>
+        </div>
+
         <!-- 处理人 -->
         <div class="info-row">
           <span class="info-label"><el-icon><Avatar /></el-icon> 处理人</span>
@@ -226,6 +247,7 @@ import {
   Close,
   Document,
   Edit,
+  Flag,
   Grid,
   Key,
   Star,
@@ -235,7 +257,7 @@ import {
 } from '@element-plus/icons-vue'
 import { computed, reactive, ref, watch } from 'vue'
 
-import { updateBugCustomerInfo } from '@/api/ticket'
+import { updateBugCustomerInfo, updateTicketPriority } from '@/api/ticket'
 import type { TicketDetailOutput } from '@/types/ticket'
 import { notifyError, notifySuccess } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
@@ -257,6 +279,13 @@ const IMPACT_SCOPE_LABEL_MAP: Record<string, string> = {
   ALL: '全部商户',
 }
 
+const PRIORITY_OPTIONS = [
+  { label: '紧急', value: 'urgent' },
+  { label: '高', value: 'high' },
+  { label: '中', value: 'medium' },
+  { label: '低', value: 'low' },
+] as const
+
 const props = defineProps<{
   detail: TicketDetailOutput
   ticketId: number
@@ -270,6 +299,8 @@ const editingField = ref<string | null>(null)
 const editValues = reactive<Record<string, string>>({})
 const validFeedbackSelection = ref('')
 const validFeedbackSaving = ref(false)
+const prioritySelection = ref('medium')
+const prioritySaving = ref(false)
 
 const canEditCustomerInfo = computed(() => true)
 const isClosedTicket = computed(() => {
@@ -338,6 +369,32 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => props.detail.priority,
+  (value) => {
+    if (!prioritySaving.value) {
+      prioritySelection.value = value?.toLowerCase() || 'medium'
+    }
+  },
+  { immediate: true },
+)
+
+async function handlePriorityChange(priority: string): Promise<void> {
+  prioritySaving.value = true
+  try {
+    await updateTicketPriority(props.ticketId, {
+      priority: priority as 'urgent' | 'high' | 'medium' | 'low',
+    })
+    notifySuccess('优先级变更成功')
+    emit('refresh')
+  } catch {
+    prioritySelection.value = props.detail.priority?.toLowerCase() || 'medium'
+    notifyError('优先级变更失败')
+  } finally {
+    prioritySaving.value = false
+  }
+}
 
 function normalizeSeverity(source?: string): string {
   if (!source) {
