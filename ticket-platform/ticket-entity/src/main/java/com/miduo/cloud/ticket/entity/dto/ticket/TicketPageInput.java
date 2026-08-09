@@ -39,6 +39,11 @@ public class TicketPageInput extends PageInput {
      */
     private List<String> statuses;
 
+    /**
+     * 是否反选状态。为 true 时排除 {@link #status} 与 {@link #statuses} 合并后的状态集合。
+     */
+    private Boolean excludeStatuses;
+
     private String priority;
 
     private Long creatorId;

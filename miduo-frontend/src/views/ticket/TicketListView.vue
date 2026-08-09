@@ -150,6 +150,7 @@ const query = reactive<TicketPageInput>({
   categoryId: undefined,
   categoryGroupId: undefined,
   statuses: [],
+  excludeStatuses: false,
   priority: '',
   creatorId: undefined,
   assigneeId: undefined,
@@ -288,6 +289,7 @@ async function loadTickets(): Promise<void> {
       if (query.categoryId) params.categoryId = query.categoryId
       if (query.statuses?.length) {
         params.statuses = query.statuses
+        params.excludeStatuses = query.excludeStatuses
       }
       if (query.priority) params.priority = query.priority
     }
@@ -350,6 +352,7 @@ function handleReset(): void {
   query.companyName = ''
   query.categoryId = undefined
   query.statuses = []
+  query.excludeStatuses = false
   query.priority = ''
   query.slaStatus = ''
   query.creatorId = undefined
@@ -660,6 +663,7 @@ watch(
         ? [rawStatusQ.trim()]
         : []
     const routeSlaStatus = typeof route.query.slaStatus === 'string' ? route.query.slaStatus : ''
+    query.excludeStatuses = false
     if (normalized === 'my_brief_todo') {
       // 待出简报页签固定后端口径，忽略分类/状态/优先级（含 URL 带入），避免误筛或误传参
       query.statuses = []
@@ -696,6 +700,13 @@ watch(
       layoutTicketSearchKeyword.value = next
       persistLayoutTicketSearch(next)
     }
+  },
+)
+
+watch(
+  () => query.statuses?.length || 0,
+  (count) => {
+    if (!count) query.excludeStatuses = false
   },
 )
 
@@ -768,16 +779,18 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item v-if="!isBriefTodoView" label="状态" class="query-form-item">
-          <el-select
-            v-model="query.statuses"
-            class="query-input"
-            placeholder="请选择内容"
-            clearable
-            multiple
-            collapse-tags
-            collapse-tags-tooltip
-          >
+          <div class="status-filter">
+            <el-select
+              v-model="query.statuses"
+              class="query-input"
+              placeholder="请选择内容"
+              clearable
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+            >
             <!-- 通用工单状态 -->
+            <el-option label="待处理" value="pending" />
             <el-option label="待分派" value="pending_assign" />
             <el-option label="待受理" value="pending_accept" />
             <el-option label="告警·待认领" value="alert_triggered" />
@@ -788,6 +801,8 @@ onUnmounted(() => {
             <el-option label="处理中" value="processing" />
             <el-option label="已挂起" value="suspended" />
             <el-option label="待验收" value="pending_verify" />
+            <el-option label="新建" value="new_created" />
+            <el-option label="已修复" value="fixed" />
             <el-option label="已完成" value="completed" />
             <el-option label="已关闭" value="closed" />
             <!-- 缺陷工单专属状态 -->
@@ -796,8 +811,26 @@ onUnmounted(() => {
             <el-option label="测试复现中" value="testing" />
             <el-option label="待开发受理" value="pending_dev_accept" />
             <el-option label="开发解决中" value="developing" />
+            <el-option label="临时解决" value="temp_resolved" />
             <el-option label="待客服确认" value="pending_cs_confirm" />
-          </el-select>
+            <!-- 审批及需求类工作流状态 -->
+            <el-option label="已提交" value="submitted" />
+            <el-option label="部门审批" value="dept_approval" />
+            <el-option label="执行中" value="executing" />
+            <el-option label="已驳回" value="rejected" />
+            <el-option label="待评审" value="pending_review" />
+            <el-option label="待规划" value="pending_planning" />
+            <el-option label="待调研" value="pending_research" />
+            <el-option label="方案中" value="in_design" />
+            <el-option label="无需处理" value="no_action" />
+            <el-option label="无效" value="invalid" />
+            </el-select>
+            <el-checkbox
+              v-model="query.excludeStatuses"
+              :disabled="!query.statuses?.length"
+              class="status-invert-checkbox"
+            >反选</el-checkbox>
+          </div>
         </el-form-item>
         <el-form-item v-if="!isBriefTodoView" label="优先级" class="query-form-item">
           <el-select v-model="query.priority" class="query-input" placeholder="请选择内容" clearable>
@@ -1427,6 +1460,17 @@ onUnmounted(() => {
 .query-input {
   width: 210px;
   max-width: 100%;
+}
+
+.status-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-invert-checkbox {
+  flex: none;
+  margin-right: 0;
 }
 
 .query-form-actions {
@@ -2063,6 +2107,10 @@ onUnmounted(() => {
   }
 
   .query-input {
+    width: 100%;
+  }
+
+  .status-filter {
     width: 100%;
   }
 
