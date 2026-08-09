@@ -143,10 +143,20 @@
             </choose>
         </if>
         <if test="statusList != null and statusList.size() &gt; 0">
-            AND t.status IN
-            <foreach collection="statusList" item="st" open="(" separator="," close=")">
-                #{st}
-            </foreach>
+            <choose>
+                <when test="excludeStatuses != null and excludeStatuses == true">
+                    AND t.status NOT IN
+                    <foreach collection="statusList" item="st" open="(" separator="," close=")">
+                        #{st}
+                    </foreach>
+                </when>
+                <otherwise>
+                    AND t.status IN
+                    <foreach collection="statusList" item="st" open="(" separator="," close=")">
+                        #{st}
+                    </foreach>
+                </otherwise>
+            </choose>
         </if>
         <if test="linkableForBugReport != null and linkableForBugReport == true">
             AND LOWER(t.status) IN ('temp_resolved', 'completed')

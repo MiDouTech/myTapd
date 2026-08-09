@@ -26,6 +26,8 @@ export interface TicketPageInput extends PageQuery {
   status?: string
   /** 多状态筛选（OR）；与 status 二选一或并存时由后端合并 */
   statuses?: string[]
+  /** 反选状态：为 true 时排除 statuses 中的状态 */
+  excludeStatuses?: boolean
   priority?: string
   creatorId?: number
   assigneeId?: number

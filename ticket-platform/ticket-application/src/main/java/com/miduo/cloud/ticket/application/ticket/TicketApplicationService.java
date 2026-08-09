@@ -262,6 +262,7 @@ public class TicketApplicationService {
                 input.getCategoryId(),
                 resolveCategoryGroupIds(input.getCategoryGroupId()),
                 statusFilterList,
+                input.getExcludeStatuses(),
                 input.getPriority(),
                 input.getCreatorId(),
                 input.getAssigneeId(),
