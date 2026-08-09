@@ -329,11 +329,11 @@ class TicketSdkImpl {
            <div data-role="attachment-zone" style="margin-top:16px;">
              <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
              <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-             <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;height:80px;display:flex;align-items:center;justify-content:center;gap:12px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:left;transition:border-color .2s,background .2s,box-shadow .2s;">
-               <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
-               <span style="display:flex;flex-direction:column;gap:4px;min-width:0;">
+             <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
+               <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+               <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
                  <span style="font-size:14px;font-weight:600;color:${primary};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
-                 <span style="font-size:12px;color:#909399;line-height:1.4;">图片和视频会上传到附件区，不再插入问题描述；支持 jpg、png、mp4，单文件 ≤ 50MB</span>
+                 <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
                </span>
              </button>
              <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="attachment-empty">暂无附件，上传后会在这里预览，可删除</span></div>
@@ -746,9 +746,9 @@ class TicketSdkImpl {
             <textarea id="miduo-ticket-supplement-content" data-role="supplement-content" maxlength="4000" placeholder="请详细补充问题说明、最新复现步骤或结果；相关截图和视频可在下方上传" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;outline:none;line-height:1.6;font:inherit;font-size:14px;"></textarea>
             <div data-role="supplement-attachment-zone" style="margin-top:16px;">
               <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
-              <button type="button" data-action="pick-supplement-file" aria-label="上传补充附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;height:80px;display:flex;align-items:center;justify-content:center;gap:12px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:left;transition:border-color .2s,background .2s,box-shadow .2s;">
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${this.config?.theme?.primaryColor ?? '#1675d1'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
-                <span style="display:flex;flex-direction:column;gap:4px;min-width:0;">
+              <button type="button" data-action="pick-supplement-file" aria-label="上传补充附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${this.config?.theme?.primaryColor ?? '#1675d1'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+                <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
                   <span style="font-size:14px;font-weight:600;color:${this.config?.theme?.primaryColor ?? '#1675d1'};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
                   <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
                 </span>
@@ -857,7 +857,7 @@ class TicketSdkImpl {
     const videoCount = uploads.filter((item) => item.type === 'video').length + files.filter((file) => file.type.startsWith('video/')).length
     if (imageCount > 9 || videoCount > 3 || files.some((file) => !file.type.startsWith('image/') && !file.type.startsWith('video/'))) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '仅支持图片和视频，最多9张图片、3个视频'
+      messageEl.textContent = '仅支持图片和视频；最多 9 张图片、3 个视频'
       return
     }
     try {
@@ -1003,6 +1003,13 @@ class TicketSdkImpl {
       messageEl.textContent = '仅支持上传图片或视频附件'
       return
     }
+    const imageCount = attachments.filter((item) => item.type === 'image').length
+    const videoCount = attachments.filter((item) => item.type === 'video').length
+    if ((file.type.startsWith('image/') && imageCount >= 9) || (file.type.startsWith('video/') && videoCount >= 3)) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '最多上传 9 张图片、3 个视频'
+      return
+    }
     messageEl.style.color = '#909399'
     messageEl.textContent = `上传中：${file.name}`
     try {
@@ -1025,6 +1032,16 @@ class TicketSdkImpl {
     attachments: TicketAttachment[],
     files: File[],
   ): Promise<void> {
+    const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    const pendingImageCount = files.filter((file) => file.type.startsWith('image/')).length
+    const pendingVideoCount = files.filter((file) => file.type.startsWith('video/')).length
+    const imageCount = attachments.filter((item) => item.type === 'image').length
+    const videoCount = attachments.filter((item) => item.type === 'video').length
+    if (imageCount + pendingImageCount > 9 || videoCount + pendingVideoCount > 3) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '最多上传 9 张图片、3 个视频，请减少后重试'
+      return
+    }
     for (const file of files) {
       await this.uploadAttachment(panel, attachments, file)
     }
