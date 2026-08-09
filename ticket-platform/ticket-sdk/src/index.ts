@@ -288,7 +288,8 @@ class TicketSdkImpl {
     const panel = document.createElement('div')
     panel.style.cssText = myTickets
       ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
-      : 'width:620px;max-width:92vw;max-height:92vh;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:30px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+      : 'width:420px;max-width:92vw;max-height:92vh;box-sizing:border-box;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+    if (!myTickets) panel.setAttribute('data-ticket-submit-panel', '')
     panel.innerHTML = myTickets
       ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
@@ -297,35 +298,47 @@ class TicketSdkImpl {
          <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
          </div>`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex:0 0 auto;">
-           <strong style="font-size:24px;color:#606266;">提交工单</strong>
-           <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
+      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid #ebeef5;flex:0 0 auto;">
+           <strong style="font-size:16px;line-height:1.2;color:#303133;">提交工单</strong>
+           <div style="display:flex;align-items:center;gap:18px;">
+             <button type="button" data-action="open-my-tickets" style="padding:0;border:none;background:transparent;color:${primary};font-size:14px;line-height:1.5;cursor:pointer;">我的工单</button>
+             <button type="button" data-action="close" aria-label="关闭" style="padding:0;border:none;background:transparent;color:#909399;font-size:20px;line-height:1;cursor:pointer;">×</button>
+           </div>
          </div>
-         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding-right:2px;">
+         <style>
+           [data-ticket-submit-panel] [data-role="description"]:empty::before{content:attr(data-placeholder);white-space:pre-line;color:#a8abb2;pointer-events:none;}
+           [data-ticket-submit-panel] [data-role="description"]:focus,[data-ticket-submit-panel] [data-role="category"]:focus{border-color:${primary}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
+           [data-ticket-submit-panel] [data-action="pick-attachment"]:hover,[data-ticket-submit-panel] [data-action="pick-attachment"].is-dragover{border-color:${primary}!important;background:#eef7ff!important;box-shadow:0 0 0 2px rgba(22,117,209,.10) inset;}
+           [data-ticket-submit-panel] [data-role="attachment-empty"]{display:flex;align-items:center;gap:8px;color:#909399;}
+           [data-ticket-submit-panel] [data-role="attachment-card"]:hover{border-color:#c6e2ff!important;box-shadow:0 4px 12px rgba(22,117,209,.08);}
+           [data-ticket-submit-panel] [data-action="open-my-tickets"]:hover{color:#409eff!important;}
+           [data-ticket-submit-panel] [data-action="close"]:hover{color:#606266!important;border-color:#c6e2ff!important;}
+           [data-ticket-submit-panel] [data-action="submit"]:not(:disabled):hover{filter:brightness(.95);}
+           [data-ticket-submit-panel] [data-action="submit"]:focus-visible,[data-ticket-submit-panel] [data-action="close"]:focus-visible,[data-ticket-submit-panel] [data-action="open-my-tickets"]:focus-visible,[data-ticket-submit-panel] [data-action="pick-attachment"]:focus-visible{outline:2px solid ${primary};outline-offset:2px;}
+         </style>
+         <div data-role="submit-scroll" style="flex:1 1 auto;min-height:0;overflow:auto;padding:20px;">
            ${autoCaptured ? '<div data-role="hint" style="margin-bottom:10px;padding:8px 10px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:4px;font-size:13px;color:#1675d1;">检测到接口异常，已自动填写问题描述，请确认后提交。</div>' : ''}
-           <label for="miduo-ticket-category" style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题分类 <span style="color:#f56c6c;">*</span></label>
-           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:54px;box-sizing:border-box;margin-bottom:20px;padding:0 16px;border:1px solid #dcdfe6;border-radius:6px;background:#fff;color:#606266;outline:none;font-size:18px;">
+           <label for="miduo-ticket-category" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题分类</label>
+           <select id="miduo-ticket-category" data-role="category" style="width:100%;height:36px;box-sizing:border-box;margin-bottom:16px;padding:0 10px;border:1px solid #dcdfe6;border-radius:4px;background:#fff;color:#303133;outline:none;font-size:14px;">
              <option value="">请选择问题分类</option>
              <option value="功能异常/Bug">功能异常/Bug</option>
              <option value="需求建议">需求建议</option>
            </select>
-           <label style="display:block;margin-bottom:8px;font-size:18px;color:#606266;">问题描述 <span style="color:#f56c6c;">*</span></label>
-           <div data-role="description" contenteditable="true" aria-label="问题描述" style="width:100%;min-height:208px;box-sizing:border-box;padding:14px;border:1px solid #dcdfe6;border-radius:6px;overflow:auto;outline:none;line-height:1.6;font-size:16px;word-break:break-word;overflow-wrap:anywhere;"></div>
-           <div style="margin-top:10px;font-size:14px;color:#909399;">支持 jpg/png/gif 等图片格式、mp4 等视频格式，可直接粘贴图片</div>
-           <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-             <div data-role="attachment-list" style="font-size:16px;color:#909399;word-break:break-all;flex:1 1 auto;">未上传附件</div>
-             <div style="display:flex;align-items:center;gap:8px;">
-               <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
-               <button type="button" data-action="pick-attachment" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">上传附件</button>
-             </div>
+           <label for="miduo-ticket-description" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 问题描述</label>
+           <div id="miduo-ticket-description" data-role="description" contenteditable="true" aria-label="问题描述" data-placeholder="请详细描述您遇到的问题，包括：&#10;1. 问题出现的具体操作步骤&#10;2. 期望的正常结果是什么&#10;3. 实际出现的结果是什么&#10;4. 相关的截图或错误信息（可在下方上传）" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;overflow:auto;outline:none;line-height:1.6;font-size:14px;word-break:break-word;overflow-wrap:anywhere;"></div>
+           <div data-role="attachment-zone" style="margin-top:16px;">
+             <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+             <input data-role="attachment-input" type="file" accept="image/*,video/*" multiple style="display:none;" />
+             <button type="button" data-action="pick-attachment" aria-label="上传附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
+               <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${primary}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+               <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+                 <span style="font-size:14px;font-weight:600;color:${primary};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
+                 <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
+               </span>
+             </button>
+             <div data-role="attachment-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="attachment-empty">暂无附件，上传后会在这里预览，可删除</span></div>
            </div>
-         </div>
-         <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;">
-           <button type="button" data-action="open-my-tickets" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;color:#606266;font-size:16px;">我的工单</button>
-           <div style="display:flex;align-items:center;gap:8px;">
-             <button type="button" data-action="close" style="padding:10px 18px;border:1px solid #dcdfe6;background:#fff;border-radius:6px;cursor:pointer;font-size:16px;">取消</button>
-             <button type="button" data-action="submit" disabled style="padding:10px 18px;border:none;color:#fff;border-radius:6px;cursor:not-allowed;background:#c0c4cc;font-size:16px;">提交</button>
-           </div>
+           <div data-role="message" style="margin-top:8px;font-size:13px;color:#67c23a;"></div>
          </div>
          <div style="padding:16px 20px;display:flex;align-items:center;justify-content:flex-end;gap:8px;border-top:1px solid #ebeef5;flex:0 0 auto;">
            <button type="button" data-action="close" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;color:#606266;font-size:14px;">取消</button>
@@ -381,24 +394,60 @@ class TicketSdkImpl {
         const hasDescription = !!this.sanitizeDescriptionHtml(descriptionEl.innerHTML).plainText
         const enabled = !!categoryEl.value && hasDescription
         submitButton.disabled = !enabled
-        submitButton.style.background = enabled ? primary : '#c0c4cc'
+        submitButton.style.background = enabled ? primary : '#a8d2fa'
         submitButton.style.cursor = enabled ? 'pointer' : 'not-allowed'
       }
       categoryEl.addEventListener('change', updateSubmitState)
       descriptionEl.addEventListener('input', updateSubmitState)
       updateSubmitState()
-      panel.querySelector('[data-action="pick-attachment"]')?.addEventListener('click', () => {
+      const attachmentDropzone = panel.querySelector('[data-action="pick-attachment"]') as HTMLButtonElement
+      attachmentDropzone?.addEventListener('click', () => {
         attachmentInput?.click()
       })
       attachmentInput?.addEventListener('change', async () => {
         const files = Array.from(attachmentInput.files ?? [])
-        if (!files.length) {
-          return
-        }
-        for (const file of files) {
-          await this.uploadAttachment(panel, descriptionEl, uploadedAttachments, file)
-        }
+        await this.uploadAttachmentFiles(panel, uploadedAttachments, files)
         attachmentInput.value = ''
+      })
+      let attachmentZoneHovered = false
+      let attachmentZoneFocused = false
+      const attachmentZone = panel.querySelector('[data-role="attachment-zone"]') as HTMLElement
+      attachmentZone?.addEventListener('mouseenter', () => {
+        attachmentZoneHovered = true
+      })
+      attachmentZone?.addEventListener('mouseleave', () => {
+        attachmentZoneHovered = false
+      })
+      attachmentDropzone?.addEventListener('focus', () => {
+        attachmentZoneFocused = true
+      })
+      attachmentDropzone?.addEventListener('blur', () => {
+        attachmentZoneFocused = false
+      })
+      panel.addEventListener('paste', (event: ClipboardEvent) => {
+        if (!attachmentZoneHovered && !attachmentZoneFocused) return
+        const files = this.extractClipboardMediaFiles(event)
+        if (!files.length) return
+        event.preventDefault()
+        event.stopPropagation()
+        void this.uploadAttachmentFiles(panel, uploadedAttachments, files)
+      }, true)
+      attachmentDropzone?.addEventListener('dragover', (event: DragEvent) => {
+        event.preventDefault()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+        attachmentDropzone.classList.add('is-dragover')
+      })
+      attachmentDropzone?.addEventListener('dragleave', () => {
+        attachmentDropzone.classList.remove('is-dragover')
+      })
+      attachmentDropzone?.addEventListener('drop', (event: DragEvent) => {
+        event.preventDefault()
+        attachmentDropzone.classList.remove('is-dragover')
+        void this.uploadAttachmentFiles(
+          panel,
+          uploadedAttachments,
+          Array.from(event.dataTransfer?.files ?? []),
+        )
       })
       panel.querySelector('[data-action="submit"]')?.addEventListener('click', () => {
         void this.submitTicket(panel, uploadedAttachments)
@@ -607,7 +656,7 @@ class TicketSdkImpl {
       void (async () => {
         for (const imageFile of imageFiles) {
           // 为什么直接上传粘贴图片：避免 dataURL 直接进描述字段，导致内容过长或显示异常。
-          await this.uploadAttachment(panel, descriptionEl, attachments, imageFile)
+          await this.uploadAttachment(panel, attachments, imageFile)
         }
       })()
     })
@@ -687,13 +736,26 @@ class TicketSdkImpl {
             )}</div>
           </div>
           <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
-            <textarea data-role="supplement-content" maxlength="4000" placeholder="补充问题说明、最新复现情况等（可直接粘贴截图）" style="width:100%;box-sizing:border-box;min-height:110px;padding:8px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;font:inherit;"></textarea>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-              <button type="button" data-action="pick-supplement-file" style="padding:6px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">上传图片/视频</button>
-              <span style="font-size:12px;color:#909399;">支持粘贴图片；最多9张图片、3个视频</span>
+            <style>
+              [data-role="supplement-content"]:focus{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
+              [data-action="pick-supplement-file"]:hover,[data-action="pick-supplement-file"].is-dragover{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;background:#eef7ff!important;box-shadow:0 0 0 2px rgba(22,117,209,.10) inset;}
+              [data-action="pick-supplement-file"]:focus-visible{outline:2px solid ${this.config?.theme?.primaryColor ?? '#1675d1'};outline-offset:2px;}
+              [data-role="supplement-upload-card"]:hover{border-color:#c6e2ff!important;box-shadow:0 4px 12px rgba(22,117,209,.08);}
+            </style>
+            <label for="miduo-ticket-supplement-content" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 补充说明</label>
+            <textarea id="miduo-ticket-supplement-content" data-role="supplement-content" maxlength="4000" placeholder="请详细补充问题说明、最新复现步骤或结果；相关截图和视频可在下方上传" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;outline:none;line-height:1.6;font:inherit;font-size:14px;"></textarea>
+            <div data-role="supplement-attachment-zone" style="margin-top:16px;">
+              <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+              <button type="button" data-action="pick-supplement-file" aria-label="上传补充附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${this.config?.theme?.primaryColor ?? '#1675d1'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+                <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+                  <span style="font-size:14px;font-weight:600;color:${this.config?.theme?.primaryColor ?? '#1675d1'};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
+                  <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
+                </span>
+              </button>
             </div>
             <input data-role="supplement-files" type="file" accept="image/*,video/*" multiple style="display:none;" />
-            <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;color:#606266;"></div>
+            <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="supplement-upload-empty">暂无附件，上传后会在这里预览，可删除</span></div>
             <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
               <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
@@ -725,17 +787,38 @@ class TicketSdkImpl {
         })
         const supplementContentEl = container.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
         const supplementFilesEl = container.querySelector('[data-role="supplement-files"]') as HTMLInputElement
-        container.querySelector('[data-action="pick-supplement-file"]')?.addEventListener('click', () => supplementFilesEl.click())
+        const supplementDropzone = container.querySelector('[data-action="pick-supplement-file"]') as HTMLButtonElement
+        const supplementZone = container.querySelector('[data-role="supplement-attachment-zone"]') as HTMLElement
+        supplementDropzone?.addEventListener('click', () => supplementFilesEl.click())
         supplementFilesEl.addEventListener('change', () => {
           const files = Array.from(supplementFilesEl.files ?? [])
           if (files.length) void this.uploadSupplementFiles(panel, files, supplementUploads)
           supplementFilesEl.value = ''
         })
-        supplementContentEl.addEventListener('paste', (event) => {
-          const imageFiles = this.extractClipboardImageFiles(event)
-          if (!imageFiles.length) return
+        let supplementZoneHovered = false
+        let supplementZoneFocused = false
+        supplementZone?.addEventListener('mouseenter', () => { supplementZoneHovered = true })
+        supplementZone?.addEventListener('mouseleave', () => { supplementZoneHovered = false })
+        supplementDropzone?.addEventListener('focus', () => { supplementZoneFocused = true })
+        supplementDropzone?.addEventListener('blur', () => { supplementZoneFocused = false })
+        container.addEventListener('paste', (event) => {
+          if (!supplementZoneHovered && !supplementZoneFocused) return
+          const mediaFiles = this.extractClipboardMediaFiles(event)
+          if (!mediaFiles.length) return
           event.preventDefault()
-          void this.uploadSupplementFiles(panel, imageFiles, supplementUploads)
+          event.stopPropagation()
+          void this.uploadSupplementFiles(panel, mediaFiles, supplementUploads)
+        }, true)
+        supplementDropzone?.addEventListener('dragover', (event) => {
+          event.preventDefault()
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+          supplementDropzone.classList.add('is-dragover')
+        })
+        supplementDropzone?.addEventListener('dragleave', () => supplementDropzone.classList.remove('is-dragover'))
+        supplementDropzone?.addEventListener('drop', (event) => {
+          event.preventDefault()
+          supplementDropzone.classList.remove('is-dragover')
+          void this.uploadSupplementFiles(panel, Array.from(event.dataTransfer?.files ?? []), supplementUploads)
         })
         container.querySelector('[data-action="submit-supplement"]')?.addEventListener('click', () => {
           void this.submitTicketSupplement(panel, detail.ticketNo, supplementUploads)
@@ -765,11 +848,16 @@ class TicketSdkImpl {
     uploads: SupplementUpload[],
   ): Promise<void> {
     const messageEl = panel.querySelector('[data-role="supplement-message"]') as HTMLElement
+    if (files.some((file) => file.size > 50 * 1024 * 1024)) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '单个附件不能超过 50MB'
+      return
+    }
     const imageCount = uploads.filter((item) => item.type === 'image').length + files.filter((file) => file.type.startsWith('image/')).length
     const videoCount = uploads.filter((item) => item.type === 'video').length + files.filter((file) => file.type.startsWith('video/')).length
     if (imageCount > 9 || videoCount > 3 || files.some((file) => !file.type.startsWith('image/') && !file.type.startsWith('video/'))) {
       messageEl.style.color = '#f56c6c'
-      messageEl.textContent = '仅支持图片和视频，最多9张图片、3个视频'
+      messageEl.textContent = '仅支持图片和视频；最多 9 张图片、3 个视频'
       return
     }
     try {
@@ -794,10 +882,24 @@ class TicketSdkImpl {
 
   private renderSupplementUploads(panel: HTMLElement, uploads: SupplementUpload[]): void {
     const listEl = panel.querySelector('[data-role="supplement-upload-list"]') as HTMLElement
-    listEl.innerHTML = uploads.map((item, index) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;">
-      <span>${item.type === 'video' ? '🎬' : '🖼️'} ${escapeHtml(item.name)}</span>
-      <button type="button" data-remove-supplement-upload="${index}" style="border:none;background:transparent;color:#f56c6c;cursor:pointer;">删除</button>
-    </div>`).join('')
+    if (!uploads.length) {
+      listEl.innerHTML = '<span data-role="supplement-upload-empty">暂无附件，上传后会在这里预览，可删除</span>'
+      return
+    }
+    listEl.innerHTML = uploads.map((item, index) => {
+      const url = escapeHtml(item.url)
+      const name = escapeHtml(item.name || `${item.type === 'video' ? '视频' : '图片'}${index + 1}`)
+      const preview = item.type === 'video'
+        ? `<video src="${url}" controls preload="metadata" style="display:block;width:100%;max-height:180px;border-radius:6px;background:#000;"></video>`
+        : `<img src="${url}" alt="${name}" loading="lazy" style="display:block;width:100%;max-height:180px;object-fit:contain;border-radius:6px;background:#f5f7fa;" />`
+      return `<div data-role="supplement-upload-card" style="margin-bottom:8px;padding:8px;border:1px solid #ebeef5;border-radius:6px;background:#fff;transition:border-color .2s,box-shadow .2s;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1675d1;" title="${name}">${name}</a>
+          <button type="button" data-remove-supplement-upload="${index}" aria-label="删除附件 ${name}" style="flex:0 0 auto;padding:2px 8px;border:1px solid #fbc4c4;border-radius:4px;background:#fff;color:#f56c6c;cursor:pointer;font-size:12px;">删除</button>
+        </div>
+        ${preview}
+      </div>`
+    }).join('')
     listEl.querySelectorAll('[data-remove-supplement-upload]').forEach((node) => {
       node.addEventListener('click', () => {
         const index = Number((node as HTMLElement).getAttribute('data-remove-supplement-upload'))
@@ -887,7 +989,6 @@ class TicketSdkImpl {
 
   private async uploadAttachment(
     panel: HTMLElement,
-    descriptionEl: HTMLDivElement,
     attachments: TicketAttachment[],
     file: File,
   ): Promise<void> {
@@ -902,18 +1003,21 @@ class TicketSdkImpl {
       messageEl.textContent = '仅支持上传图片或视频附件'
       return
     }
+    const imageCount = attachments.filter((item) => item.type === 'image').length
+    const videoCount = attachments.filter((item) => item.type === 'video').length
+    if ((file.type.startsWith('image/') && imageCount >= 9) || (file.type.startsWith('video/') && videoCount >= 3)) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '最多上传 9 张图片、3 个视频'
+      return
+    }
     messageEl.style.color = '#909399'
     messageEl.textContent = `上传中：${file.name}`
     try {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        throw new Error('仅支持上传图片或视频附件')
-      }
       const output = await this.uploadPluginFile(file, file.type.startsWith('image/') ? 'screenshot' : 'attachment')
       if (output.url) {
         const type = file.type.startsWith('video/') ? 'video' : 'image'
         attachments.push({ url: output.url, name: output.fileName || file.name, type })
         this.renderAttachmentList(panel, attachments)
-        if (type === 'image') this.insertImageToEditor(descriptionEl, output.url)
       }
       messageEl.style.color = '#67c23a'
       messageEl.textContent = `上传成功：${output.fileName || file.name}`
@@ -923,31 +1027,60 @@ class TicketSdkImpl {
     }
   }
 
+  private async uploadAttachmentFiles(
+    panel: HTMLElement,
+    attachments: TicketAttachment[],
+    files: File[],
+  ): Promise<void> {
+    const messageEl = panel.querySelector('[data-role="message"]') as HTMLElement
+    const pendingImageCount = files.filter((file) => file.type.startsWith('image/')).length
+    const pendingVideoCount = files.filter((file) => file.type.startsWith('video/')).length
+    const imageCount = attachments.filter((item) => item.type === 'image').length
+    const videoCount = attachments.filter((item) => item.type === 'video').length
+    if (imageCount + pendingImageCount > 9 || videoCount + pendingVideoCount > 3) {
+      messageEl.style.color = '#f56c6c'
+      messageEl.textContent = '最多上传 9 张图片、3 个视频，请减少后重试'
+      return
+    }
+    for (const file of files) {
+      await this.uploadAttachment(panel, attachments, file)
+    }
+  }
+
   private renderAttachmentList(panel: HTMLElement, attachments: TicketAttachment[]): void {
     const listEl = panel.querySelector('[data-role="attachment-list"]') as HTMLElement
     if (!listEl) {
       return
     }
     if (!attachments.length) {
-      listEl.textContent = '未上传附件'
+      listEl.innerHTML = '<span data-role="attachment-empty">暂无附件，上传后会在这里预览，可删除</span>'
       return
     }
     listEl.innerHTML = attachments
-      .map((item, index) => `<div style="margin-bottom:4px;">${item.type === 'video' ? '视频' : '图片'}${index + 1}：<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">查看</a></div>`)
+      .map((item, index) => {
+        const url = escapeHtml(item.url)
+        const name = escapeHtml(item.name || `${item.type === 'video' ? '视频' : '图片'}${index + 1}`)
+        const preview =
+          item.type === 'video'
+            ? `<video src="${url}" controls preload="metadata" style="display:block;width:100%;max-height:180px;border-radius:6px;background:#000;"></video>`
+            : `<img src="${url}" alt="${name}" loading="lazy" style="display:block;width:100%;max-height:180px;object-fit:contain;border-radius:6px;background:#f5f7fa;" />`
+        return `<div data-role="attachment-card" style="margin-bottom:8px;padding:8px;border:1px solid #ebeef5;border-radius:6px;background:#fff;transition:border-color .2s,box-shadow .2s;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <a href="${url}" target="_blank" rel="noopener noreferrer" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1675d1;" title="${name}">${name}</a>
+            <button type="button" data-action="remove-attachment" data-index="${index}" aria-label="删除附件 ${name}" style="flex:0 0 auto;padding:2px 8px;border:1px solid #fbc4c4;border-radius:4px;background:#fff;color:#f56c6c;cursor:pointer;font-size:12px;">删除</button>
+          </div>
+          ${preview}
+        </div>`
+      })
       .join('')
-  }
-
-  private insertImageToEditor(editor: HTMLDivElement, imageUrl: string): void {
-    if (!editor || !imageUrl) {
-      return
-    }
-    editor.focus()
-    const html = `<p><img src="${escapeHtml(imageUrl)}" alt="问题截图" style="max-width:100%;height:auto;border-radius:4px;" /></p>`
-    try {
-      document.execCommand('insertHTML', false, html)
-    } catch (error) {
-      editor.innerHTML += html
-    }
+    listEl.querySelectorAll<HTMLButtonElement>('[data-action="remove-attachment"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.index)
+        if (!Number.isInteger(index) || index < 0 || index >= attachments.length) return
+        attachments.splice(index, 1)
+        this.renderAttachmentList(panel, attachments)
+      })
+    })
   }
 
   private resolveUploadFileName(file: File): string {
