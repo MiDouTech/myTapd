@@ -13,13 +13,21 @@ import type { TemplateFieldConfigItem, TemplateListOutput } from '@/types/templa
 import type { TicketCreateInput } from '@/types/ticket'
 import type { UserListOutput } from '@/types/user'
 import { formatFileSize } from '@/utils/formatter'
-import { notifySuccess, notifyWarning } from '@/utils/feedback'
+import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { useAuthStore } from '@/stores/auth'
 
 interface PendingAttachmentItem {
   uid: string
   file: File
   previewUrl?: string
+}
+
+interface TicketDraft {
+  version: 1
+  savedAt: string
+  templateId?: number
+  form: typeof form
+  customFields: Record<string, string>
 }
 
 const ATTACHMENT_ACCEPT =
@@ -42,6 +50,8 @@ const dynamicFields = ref<TemplateFieldConfigItem[]>([])
 const customFields = reactive<Record<string, string>>({})
 const pendingAttachments = ref<PendingAttachmentItem[]>([])
 const attachmentUploadRef = ref()
+const draftCustomFields = ref<Record<string, string> | null>(null)
+const draftTemplateId = ref<number>()
 
 const form = reactive({
   title: '',
@@ -52,6 +62,10 @@ const form = reactive({
   assigneeId: undefined as number | undefined,
   source: 'web',
 })
+
+const draftStorageKey = computed(
+  () => `miduo:ticket-create-draft:${authStore.userInfo?.id ?? 'current'}`,
+)
 
 async function loadBaseData(): Promise<void> {
   loading.value = true
@@ -111,6 +125,10 @@ watch(
       return
     }
     templates.value = await getTemplateList(categoryId)
+    if (draftTemplateId.value) {
+      templateId.value = draftTemplateId.value
+      draftTemplateId.value = undefined
+    }
   },
 )
 
@@ -121,9 +139,60 @@ watch(templateId, (value) => {
   const currentTemplate = templates.value.find((item) => item.id === value)
   dynamicFields.value = parseTemplateFields(currentTemplate?.fieldsConfig)
   dynamicFields.value.forEach((field) => {
-    customFields[field.key] = ''
+    customFields[field.key] = draftCustomFields.value?.[field.key] ?? ''
   })
+  draftCustomFields.value = null
 })
+
+function getStoredDraft(): TicketDraft | null {
+  try {
+    const rawDraft = window.localStorage.getItem(draftStorageKey.value)
+    if (!rawDraft) {
+      return null
+    }
+    const draft = JSON.parse(rawDraft) as TicketDraft
+    return draft.version === 1 && draft.form ? draft : null
+  } catch {
+    window.localStorage.removeItem(draftStorageKey.value)
+    return null
+  }
+}
+
+function restoreDraft(): void {
+  const draft = getStoredDraft()
+  if (!draft) {
+    return
+  }
+  draftCustomFields.value = draft.customFields || {}
+  draftTemplateId.value = draft.templateId
+  Object.assign(form, draft.form)
+  notifySuccess('已恢复上次保存的工单草稿')
+}
+
+function saveDraft(): void {
+  const draft: TicketDraft = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    templateId: templateId.value,
+    form: { ...form },
+    customFields: { ...customFields },
+  }
+  window.localStorage.setItem(draftStorageKey.value, JSON.stringify(draft))
+  if (pendingAttachments.value.length) {
+    notifyWarning('草稿已保存；出于浏览器安全限制，附件需要下次重新选择')
+    return
+  }
+  notifySuccess('草稿保存成功')
+}
+
+async function handleCancel(): Promise<void> {
+  try {
+    await confirmAction('取消后，尚未保存的填写内容将会丢失，确定要取消吗？', '取消新建工单')
+    await router.push('/ticket/mine')
+  } catch {
+    // 用户选择继续填写。
+  }
+}
 
 function isImageFile(fileType?: string): boolean {
   if (!fileType) {
@@ -245,14 +314,16 @@ async function handleCreateTicket(): Promise<void> {
     } else {
       notifySuccess('工单创建成功')
     }
+    window.localStorage.removeItem(draftStorageKey.value)
     await router.push(`/ticket/detail/${ticketId}`)
   } finally {
     submitLoading.value = false
   }
 }
 
-onMounted(() => {
-  loadBaseData()
+onMounted(async () => {
+  restoreDraft()
+  await loadBaseData()
 })
 
 onBeforeUnmount(() => {
@@ -460,7 +531,8 @@ onBeforeUnmount(() => {
           <el-button type="primary" :loading="submitLoading" @click="handleCreateTicket"
             >提交工单</el-button
           >
-          <el-button @click="router.push('/ticket/mine')">取消</el-button>
+          <el-button :disabled="submitLoading" @click="saveDraft">保存草稿</el-button>
+          <el-button :disabled="submitLoading" @click="handleCancel">取消</el-button>
         </el-space>
       </el-form-item>
     </el-form>
