@@ -4,7 +4,11 @@ import { useRoute } from 'vue-router'
 
 import { getPublicTicketDetail } from '@/api/ticket'
 import type { TicketPublicDetailOutput, TicketPublicSlaTimerOutput } from '@/types/ticket'
-import { filterHttpImageUrls, parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
+import {
+  filterHttpImageUrls,
+  filterHttpVideoUrls,
+  parseProblemScreenshotUrls,
+} from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 
 const route = useRoute()
@@ -33,6 +37,13 @@ const problemScreenshotUrls = computed(() => {
   const raw = detail.value?.bugCustomerInfo?.problemScreenshot
   return filterHttpImageUrls(parseProblemScreenshotUrls(raw))
 })
+const problemVideoUrls = computed(() => {
+  const raw = detail.value?.bugCustomerInfo?.problemScreenshot
+  return filterHttpVideoUrls(parseProblemScreenshotUrls(raw))
+})
+const hasProblemMedia = computed(
+  () => problemScreenshotUrls.value.length > 0 || problemVideoUrls.value.length > 0,
+)
 
 const lightboxUrls = ref<string[]>([])
 const lightboxIndex = ref(0)
@@ -533,18 +544,32 @@ onUnmounted(() => {
             <div class="info-text-block">{{ detail.bugCustomerInfo.expectedResult }}</div>
           </div>
           <div class="info-block-full customer-problem-screenshots">
-            <span class="info-label">问题截图</span>
-            <div v-if="problemScreenshotUrls.length > 0" class="screenshot-thumb-row">
-              <button
-                v-for="(url, idx) in problemScreenshotUrls"
-                :key="idx"
-                type="button"
-                class="screenshot-thumb-btn"
-                :title="'点击查看第 ' + (idx + 1) + ' 张'"
-                @click="openLightboxGallery(problemScreenshotUrls, idx)"
+            <span class="info-label">{{ problemVideoUrls.length > 0 ? '问题附件' : '问题截图' }}</span>
+            <div v-if="hasProblemMedia" class="problem-media-list">
+              <div v-if="problemScreenshotUrls.length > 0" class="screenshot-thumb-row">
+                <button
+                  v-for="(url, idx) in problemScreenshotUrls"
+                  :key="idx"
+                  type="button"
+                  class="screenshot-thumb-btn"
+                  :title="'点击查看第 ' + (idx + 1) + ' 张'"
+                  @click="openLightboxGallery(problemScreenshotUrls, idx)"
+                >
+                  <img :src="url" class="screenshot-thumb" alt="问题截图缩略图" />
+                </button>
+              </div>
+              <video
+                v-for="(url, idx) in problemVideoUrls"
+                :key="url"
+                :src="url"
+                class="problem-video"
+                controls
+                playsinline
+                preload="metadata"
+                :aria-label="'问题视频 ' + (idx + 1)"
               >
-                <img :src="url" class="screenshot-thumb" alt="问题截图缩略图" />
-              </button>
+                当前浏览器不支持视频播放，请使用视频右键菜单下载查看。
+              </video>
             </div>
             <div v-else class="info-text-block info-text-muted">—</div>
           </div>
@@ -1022,6 +1047,25 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 6px;
+}
+
+.problem-media-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.problem-media-list .screenshot-thumb-row {
+  margin-top: 0;
+}
+
+.problem-video {
+  display: block;
+  width: min(100%, 480px);
+  max-height: 360px;
+  border-radius: 8px;
+  background: #000;
 }
 
 .screenshot-thumb-btn {
