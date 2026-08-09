@@ -289,11 +289,17 @@ class TicketSdkImpl {
     panel.style.cssText = myTickets
       ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
       : 'width:420px;max-width:92vw;max-height:92vh;box-sizing:border-box;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
-    if (!myTickets) panel.setAttribute('data-ticket-submit-panel', '')
+    panel.setAttribute(myTickets ? 'data-ticket-list-panel' : 'data-ticket-submit-panel', '')
     panel.innerHTML = myTickets
-      ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
+      ? `<style>
+           [data-ticket-list-panel] [data-action="open-ticket-item"]:hover{background:#f5f9ff!important;}
+           [data-ticket-list-panel] [data-action="open-ticket-item"]:hover [data-role="ticket-item-arrow"]{border-color:${primary}!important;background:${primary}!important;color:#fff!important;transform:translateX(2px);}
+           [data-ticket-list-panel] [data-action="open-ticket-item"]:focus-visible{outline:2px solid ${primary};outline-offset:-2px;background:#f5f9ff!important;}
+           [data-ticket-list-panel] [data-action="close"]:focus-visible{outline:2px solid ${primary};outline-offset:2px;}
+         </style>
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
            <strong style="font-size:16px;">我的工单</strong>
-           <button type="button" data-action="close" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
+           <button type="button" data-action="close" aria-label="关闭" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
          </div>
          <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
@@ -698,10 +704,13 @@ class TicketSdkImpl {
       }
       listEl.innerHTML = page.records
         .map(
-          (item) => `<div data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo || '')}" style="padding:10px 0;border-bottom:1px solid #ebeef5;cursor:pointer;">
-            <div style="font-weight:500;">${escapeHtml(item.title)}</div>
-            <div style="font-size:12px;color:#909399;margin-top:4px;">${escapeHtml(item.ticketNo)} · ${escapeHtml(item.statusLabel || item.status)}</div>
-          </div>`,
+          (item) => `<button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo || '')}" aria-label="查看工单：${escapeHtml(item.title)}" style="width:100%;padding:11px 8px;border:0;border-bottom:1px solid #ebeef5;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;text-align:left;transition:background .2s;">
+            <span style="min-width:0;flex:1;">
+              <span style="display:block;font-weight:500;color:#303133;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.title)}</span>
+              <span style="display:block;font-size:12px;color:#909399;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.ticketNo)} · ${escapeHtml(item.statusLabel || item.status)}</span>
+            </span>
+            <span data-role="ticket-item-arrow" aria-hidden="true" style="width:28px;height:28px;box-sizing:border-box;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border:1px solid #dcdfe6;border-radius:50%;color:#909399;font-size:20px;line-height:1;transition:all .2s;">›</span>
+          </button>`,
         )
         .join('')
       listEl.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => {
