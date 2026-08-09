@@ -20,5 +20,20 @@ export function parseProblemScreenshotUrls(raw?: string | null): string[] {
 
 /** 公开页等场景只展示可直链打开的图片地址 */
 export function filterHttpImageUrls(urls: string[]): string[] {
-  return urls.filter((u) => /^https?:\/\//i.test(u.trim()))
+  return urls.filter((url) => isHttpMediaUrl(url) && !isVideoUrl(url))
+}
+
+const VIDEO_FILE_EXTENSION = /\.(?:mp4|webm|ogg|ogv|mov|m4v)(?:$|[?#])/i
+
+export function isHttpMediaUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim())
+}
+
+/** 上传接口只回传 URL，因此通过去除签名参数后的文件扩展名识别视频。 */
+export function isVideoUrl(url: string): boolean {
+  return VIDEO_FILE_EXTENSION.test(url.trim())
+}
+
+export function filterHttpVideoUrls(urls: string[]): string[] {
+  return urls.filter((url) => isHttpMediaUrl(url) && isVideoUrl(url))
 }
