@@ -325,8 +325,9 @@ public class BugReportApplicationService extends BaseApplicationService {
     public void update(Long id, BugReportUpdateInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
         if (!isEditableStatus(report.getStatus())) {
-            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "仅待填写/已退回状态可编辑");
+            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "仅待填写/已退回/已作废状态可编辑");
         }
+        String oldStatus = report.getStatus();
 
         List<TicketPO> tickets = Collections.emptyList();
         List<Long> ticketIds = null;
@@ -340,6 +341,10 @@ public class BugReportApplicationService extends BaseApplicationService {
         }
 
         applyUpdateInput(report, input);
+        // 作废简报重新保存即视为恢复编辑，回到草稿态后才可再次提交审核。
+        if (BugReportStatus.VOIDED.getCode().equals(oldStatus)) {
+            report.setStatus(BugReportStatus.DRAFT.getCode());
+        }
         if (Boolean.TRUE.equals(input.getAutoPrefill()) && ticketIds != null) {
             applyAutoPrefill(report, tickets, ticketIds);
         }
@@ -362,7 +367,10 @@ public class BugReportApplicationService extends BaseApplicationService {
             syncResponsibleUsers(id, distinctIds(input.getResponsibleUserIds()));
         }
         if (!Boolean.TRUE.equals(input.getSkipStatusLog())) {
-            recordLog(id, currentUserId, "EDIT", report.getStatus(), report.getStatus(), "编辑Bug简报");
+            String remark = BugReportStatus.VOIDED.getCode().equals(oldStatus)
+                    ? "重新编辑已作废Bug简报"
+                    : "编辑Bug简报";
+            recordLog(id, currentUserId, "EDIT", oldStatus, report.getStatus(), remark);
         }
     }
 
@@ -1031,7 +1039,8 @@ public class BugReportApplicationService extends BaseApplicationService {
 
     private boolean isEditableStatus(String status) {
         return BugReportStatus.DRAFT.getCode().equals(status)
-                || BugReportStatus.REJECTED.getCode().equals(status);
+                || BugReportStatus.REJECTED.getCode().equals(status)
+                || BugReportStatus.VOIDED.getCode().equals(status);
     }
 
     private BugReportPO getReportById(Long id) {
