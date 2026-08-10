@@ -50,6 +50,7 @@ const dynamicFields = ref<TemplateFieldConfigItem[]>([])
 const customFields = reactive<Record<string, string>>({})
 const pendingAttachments = ref<PendingAttachmentItem[]>([])
 const attachmentUploadRef = ref()
+const isAttachmentDropzoneHovered = ref(false)
 const draftCustomFields = ref<Record<string, string> | null>(null)
 const draftTemplateId = ref<number>()
 
@@ -219,25 +220,45 @@ function createPendingAttachment(file: File): PendingAttachmentItem {
   return item
 }
 
-function handleAttachmentSelect(uploadFile: { raw?: File }): void {
-  const file = uploadFile?.raw
-  if (!file) {
-    return
-  }
+function addPendingAttachment(file: File): boolean {
   if (file.size > MAX_ATTACHMENT_SIZE) {
     notifyWarning(`文件「${file.name}」超过 200MB 上限，请压缩后重试`)
-    return
+    return false
   }
   const duplicated = pendingAttachments.value.some(
     (item) => item.file.name === file.name && item.file.size === file.size,
   )
   if (duplicated) {
     notifyWarning(`文件「${file.name}」已在待上传列表中`)
-    return
+    return false
   }
   pendingAttachments.value.push(createPendingAttachment(file))
+  return true
+}
+
+function handleAttachmentSelect(uploadFile: { raw?: File }): void {
+  const file = uploadFile?.raw
+  if (!file) {
+    return
+  }
+  addPendingAttachment(file)
   if (attachmentUploadRef.value) {
     ;(attachmentUploadRef.value as { clearFiles: () => void }).clearFiles()
+  }
+}
+
+function handleAttachmentPaste(event: ClipboardEvent): void {
+  if (!isAttachmentDropzoneHovered.value || !event.clipboardData) {
+    return
+  }
+  const files = Array.from(event.clipboardData.files)
+  if (!files.length) {
+    return
+  }
+  event.preventDefault()
+  const addedCount = files.filter(addPendingAttachment).length
+  if (addedCount) {
+    notifySuccess(`已从剪贴板添加 ${addedCount} 个附件`)
   }
 }
 
@@ -322,11 +343,13 @@ async function handleCreateTicket(): Promise<void> {
 }
 
 onMounted(async () => {
+  window.addEventListener('paste', handleAttachmentPaste)
   restoreDraft()
   await loadBaseData()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('paste', handleAttachmentPaste)
   pendingAttachments.value.forEach((item) => {
     if (item.previewUrl) {
       URL.revokeObjectURL(item.previewUrl)
@@ -420,24 +443,34 @@ onBeforeUnmount(() => {
 
       <el-form-item label="附件">
         <div class="attachment-section">
-          <el-upload
-            ref="attachmentUploadRef"
-            class="attachment-upload-dropzone"
-            drag
-            multiple
-            :show-file-list="false"
-            :accept="ATTACHMENT_ACCEPT"
-            :on-change="handleAttachmentSelect"
-            :auto-upload="false"
+          <div
+            class="attachment-paste-zone"
+            :class="{ 'is-paste-ready': isAttachmentDropzoneHovered }"
+            @mouseenter="isAttachmentDropzoneHovered = true"
+            @mouseleave="isAttachmentDropzoneHovered = false"
           >
-            <div class="upload-drag-content">
-              <el-icon class="upload-drag-icon"><Plus /></el-icon>
-              <div class="upload-drag-text">将文件拖到此处，或点击选择附件</div>
-              <div class="upload-drag-subtext">
-                支持图片、Excel、文本、PDF、Word、压缩包、视频等，单文件最大 200MB
+            <el-upload
+              ref="attachmentUploadRef"
+              class="attachment-upload-dropzone"
+              drag
+              multiple
+              :show-file-list="false"
+              :accept="ATTACHMENT_ACCEPT"
+              :on-change="handleAttachmentSelect"
+              :auto-upload="false"
+            >
+              <div class="upload-drag-content">
+                <el-icon class="upload-drag-icon"><Plus /></el-icon>
+                <div class="upload-drag-text">将文件拖到此处，或点击选择附件</div>
+                <div class="upload-drag-subtext">
+                  鼠标移入此区域后，可直接粘贴剪贴板中的截图或文件
+                </div>
+                <div class="upload-drag-subtext">
+                  支持图片、Excel、文本、PDF、Word、压缩包、视频等，单文件最大 200MB
+                </div>
               </div>
-            </div>
-          </el-upload>
+            </el-upload>
+          </div>
           <EmptyState
             v-if="!pendingAttachments.length"
             description="暂无附件，可拖拽或点击上方区域添加文件"
@@ -585,7 +618,6 @@ onBeforeUnmount(() => {
 
 .attachment-upload-dropzone {
   width: 100%;
-  margin-bottom: 12px;
 
   :deep(.el-upload) {
     width: 100%;
@@ -599,6 +631,20 @@ onBeforeUnmount(() => {
 
     &:hover {
       border-color: #1675d1;
+    }
+  }
+}
+
+.attachment-paste-zone {
+  margin-bottom: 12px;
+  border-radius: 8px;
+
+  &.is-paste-ready {
+    box-shadow: 0 0 0 2px rgb(22 117 209 / 12%);
+
+    :deep(.el-upload-dragger) {
+      border-color: #1675d1;
+      background: #f5faff;
     }
   }
 }
