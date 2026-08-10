@@ -37,11 +37,11 @@ export function getBugReportStatusTagType(status?: string): BugReportTagType {
 }
 
 export function isBugReportEditable(status?: string): boolean {
-  return status === 'DRAFT' || status === 'REJECTED'
+  return status === 'DRAFT' || status === 'REJECTED' || status === 'VOIDED'
 }
 
 export function canSubmitBugReport(status?: string): boolean {
-  return isBugReportEditable(status)
+  return status === 'DRAFT' || status === 'REJECTED'
 }
 
 export function canReviewBugReport(status?: string): boolean {

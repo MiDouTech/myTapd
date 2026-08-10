@@ -547,7 +547,9 @@ async function loadDetail(): Promise<void> {
   try {
     const detail = await getBugReportDetail(reportId.value)
     fillFormByDetail(detail)
-    if (!isBugReportEditable(detail.status)) {
+    if (detail.status === 'VOIDED') {
+      notifyWarning('当前简报已作废，编辑并保存后将恢复为待填写状态')
+    } else if (!isBugReportEditable(detail.status)) {
       notifyWarning('当前简报状态不可编辑，仅可查看详情')
     }
   } finally {
