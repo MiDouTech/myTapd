@@ -3,6 +3,7 @@ package com.miduo.cloud.ticket.application.webhook;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.miduo.cloud.ticket.application.common.BaseApplicationService;
 import com.miduo.cloud.ticket.application.plugin.PluginIntegrationWebhookService;
 import com.miduo.cloud.ticket.common.enums.DispatchStrategy;
@@ -14,8 +15,10 @@ import com.miduo.cloud.ticket.common.enums.WebhookEventType;
 import com.miduo.cloud.ticket.common.util.DisplayTimeFormat;
 import com.miduo.cloud.ticket.common.util.TicketWecomCompactNotificationFormat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketBugInfoMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketBugInfoPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
@@ -68,6 +71,7 @@ public class WebhookDispatchService extends BaseApplicationService {
     private final WebhookConfigMapper webhookConfigMapper;
     private final WebhookDispatchLogMapper webhookDispatchLogMapper;
     private final TicketMapper ticketMapper;
+    private final TicketBugInfoMapper ticketBugInfoMapper;
     private final SysUserMapper sysUserMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
     private final PluginIntegrationWebhookService pluginIntegrationWebhookService;
@@ -76,6 +80,7 @@ public class WebhookDispatchService extends BaseApplicationService {
     public WebhookDispatchService(WebhookConfigMapper webhookConfigMapper,
                                   WebhookDispatchLogMapper webhookDispatchLogMapper,
                                   TicketMapper ticketMapper,
+                                  TicketBugInfoMapper ticketBugInfoMapper,
                                   SysUserMapper sysUserMapper,
                                   TicketCategoryMapper ticketCategoryMapper,
                                   PluginIntegrationWebhookService pluginIntegrationWebhookService,
@@ -83,6 +88,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         this.webhookConfigMapper = webhookConfigMapper;
         this.webhookDispatchLogMapper = webhookDispatchLogMapper;
         this.ticketMapper = ticketMapper;
+        this.ticketBugInfoMapper = ticketBugInfoMapper;
         this.sysUserMapper = sysUserMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
         this.pluginIntegrationWebhookService = pluginIntegrationWebhookService;
@@ -384,6 +390,13 @@ public class WebhookDispatchService extends BaseApplicationService {
         snapshot.setPriority(ticket.getPriority());
         snapshot.setCreatorId(ticket.getCreatorId());
         snapshot.setAssigneeId(ticket.getAssigneeId());
+        TicketBugInfoPO bugInfo = ticketBugInfoMapper.selectOne(
+                new LambdaQueryWrapper<TicketBugInfoPO>()
+                        .eq(TicketBugInfoPO::getTicketId, ticketId)
+                        .last("LIMIT 1"));
+        if (bugInfo != null) {
+            snapshot.setCompanyName(bugInfo.getCompanyName());
+        }
         if (ticket.getCreatorId() != null) {
             SysUserPO creator = sysUserMapper.selectById(ticket.getCreatorId());
             if (creator != null) {
@@ -576,13 +589,14 @@ public class WebhookDispatchService extends BaseApplicationService {
         String ticketNo = ticket != null ? safeJsonString(ticket, "ticketNo", "-") : "-";
         String statusCode = ticket != null ? safeJsonString(ticket, "status", "-") : "-";
         String ticketTitle = ticket != null ? safeJsonString(ticket, "title", "-") : "-";
+        String companyName = ticket != null ? safeJsonString(ticket, "companyName", null) : null;
         String detailLink = "";
         if (ticketNo != null && !"-".equals(ticketNo) && ticketDetailUrl != null && !ticketDetailUrl.trim().isEmpty()) {
             String baseUrl = ticketDetailUrl.trim().replaceAll("/$", "");
             detailLink = baseUrl + "/" + ticketNo;
         }
         String compactLine = TicketWecomCompactNotificationFormat.build(
-                ticketNo, resolveStatusLabel(statusCode), ticketTitle, detailLink);
+                ticketNo, resolveStatusLabel(statusCode), companyName, ticketTitle, detailLink);
 
         MentionTargets mentionTargets = collectMentionTargets(ticket, data);
 
@@ -1445,6 +1459,7 @@ public class WebhookDispatchService extends BaseApplicationService {
         private String ticketNo;
         private String title;
         private String status;
+        private String companyName;
         private String priority;
         private Long creatorId;
         private String creatorName;

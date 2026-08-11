@@ -2,7 +2,7 @@ package com.miduo.cloud.ticket.common.util;
 
 /**
  * 企微群工单事件通知紧凑单行格式：
- * - 工单事件：【工单编号】【状态】【标题】详情链接
+ * - 工单事件：【工单编号】【状态】【公司名称（可选）】【标题】详情链接
  * - 评论@：【工单编号】【评论人@你】【评论摘要】详情链接
  */
 public final class TicketWecomCompactNotificationFormat {
@@ -17,9 +17,18 @@ public final class TicketWecomCompactNotificationFormat {
     }
 
     public static String build(String ticketNo, String statusLabel, String title, String detailLink) {
+        return build(ticketNo, statusLabel, null, title, detailLink);
+    }
+
+    public static String build(String ticketNo,
+                               String statusLabel,
+                               String companyName,
+                               String title,
+                               String detailLink) {
         StringBuilder line = new StringBuilder();
         line.append("【").append(safeSegment(ticketNo)).append("】");
         line.append("【").append(safeSegment(statusLabel)).append("】");
+        appendOptionalSegment(line, companyName);
         line.append("【").append(safeSegment(title)).append("】");
         appendDetailLink(line, detailLink);
         return line.toString();
@@ -78,5 +87,12 @@ public final class TicketWecomCompactNotificationFormat {
         }
         String normalized = value.trim();
         return normalized.isEmpty() ? "-" : normalized;
+    }
+
+    private static void appendOptionalSegment(StringBuilder line, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return;
+        }
+        line.append("【").append(value.trim()).append("】");
     }
 }
