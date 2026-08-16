@@ -284,6 +284,7 @@ export interface TicketDetailOutput {
   createTime?: string
   updateTime?: string
   customFields?: Record<string, string>
+  customFieldLabels?: Record<string, string>
   attachments?: TicketAttachmentOutput[]
   comments?: TicketCommentOutput[]
   logs?: TicketLogOutput[]

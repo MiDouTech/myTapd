@@ -587,7 +587,11 @@ const customFieldEntries = computed(() => {
   if (!detail.value?.customFields) {
     return []
   }
-  return Object.entries(detail.value.customFields).map(([key, value]) => ({ key, value }))
+  return Object.entries(detail.value.customFields).map(([key, value]) => ({
+    key,
+    label: detail.value?.customFieldLabels?.[key] || key,
+    value,
+  }))
 })
 
 const canEditCustomerInfo = computed(() => true)
@@ -1415,10 +1419,17 @@ watch(
         <!-- 左侧主区 -->
         <div class="detail-main">
           <!-- 工单描述 -->
-          <div v-if="descriptionDisplayHtml" class="description-block">
-            <div class="block-label">描述</div>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="description-content" v-html="descriptionDisplayHtml" />
+          <div v-if="descriptionDisplayHtml || customFieldEntries.length" class="description-block">
+            <div class="core-problem-header">核心问题</div>
+            <div class="core-problem-row description-row">
+              <div class="block-label">问题描述</div>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div class="description-content" v-html="descriptionDisplayHtml" />
+            </div>
+            <div v-for="field in customFieldEntries" :key="field.key" class="core-problem-row">
+              <div class="block-label">{{ field.label }}</div>
+              <div class="description-content">{{ field.value || '--' }}</div>
+            </div>
           </div>
 
           <!-- 主 Tab -->
@@ -1783,24 +1794,6 @@ watch(
       :external-user-id="detail.externalUserId"
       :external-ticket-ref="detail.externalTicketRef"
     />
-
-    <!-- 自定义字段 -->
-    <el-card v-if="customFieldEntries.length > 0" shadow="never" class="section-card">
-      <template #header>
-        <div class="section-header">
-          <span class="section-title">自定义字段</span>
-        </div>
-      </template>
-      <el-table
-        :data="customFieldEntries"
-        :border="false"
-        :stripe="true"
-        :header-cell-style="{ backgroundColor: '#f5f7fa' }"
-      >
-        <el-table-column prop="key" label="字段名" align="center" />
-        <el-table-column prop="value" label="字段值" align="center" />
-      </el-table>
-    </el-card>
 
     <!-- 附件 -->
     <el-card shadow="never" class="section-card">
@@ -2662,11 +2655,36 @@ watch(
   border: 1px solid #ebedf0;
 }
 
+.core-problem-header {
+  padding-bottom: 12px;
+  color: #1d2129;
+  border-bottom: 1px solid #e5e6eb;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.core-problem-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f1f2;
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+
+.description-row {
+  padding-top: 14px;
+}
+
 .block-label {
   font-size: 14px;
   font-weight: 600;
   color: #606266;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .description-content {

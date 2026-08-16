@@ -95,6 +95,9 @@ public class TicketApplicationService {
     private TicketCustomFieldMapper customFieldMapper;
 
     @Resource
+    private CustomFieldDefinitionMapper customFieldDefinitionMapper;
+
+    @Resource
     private SysUserMapper userMapper;
 
     @Resource
@@ -1352,6 +1355,17 @@ public class TicketApplicationService {
                 @SuppressWarnings("unchecked")
                 Map<String, String> cf = JSON.parseObject(ticket.getCustomFields(), Map.class);
                 output.setCustomFields(cf);
+                if (!cf.isEmpty()) {
+                    List<CustomFieldDefinitionPO> definitions = customFieldDefinitionMapper.selectList(
+                            new LambdaQueryWrapper<CustomFieldDefinitionPO>()
+                                    .in(CustomFieldDefinitionPO::getFieldCode, cf.keySet()));
+                    Map<String, String> labels = definitions.stream().collect(Collectors.toMap(
+                            CustomFieldDefinitionPO::getFieldCode,
+                            CustomFieldDefinitionPO::getFieldTitle,
+                            (first, ignored) -> first,
+                            LinkedHashMap::new));
+                    output.setCustomFieldLabels(labels);
+                }
             } catch (Exception e) {
                 log.warn("解析自定义字段失败: ticketId={}", ticket.getId(), e);
             }
