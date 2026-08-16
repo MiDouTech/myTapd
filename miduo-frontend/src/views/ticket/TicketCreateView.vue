@@ -53,6 +53,9 @@ const attachmentUploadRef = ref()
 const isAttachmentDropzoneHovered = ref(false)
 const draftCustomFields = ref<Record<string, string> | null>(null)
 const draftTemplateId = ref<number>()
+const currentTemplateName = computed(
+  () => templates.value.find((item) => item.id === templateId.value)?.name || '系统默认模板',
+)
 
 const form = reactive({
   title: '',
@@ -126,9 +129,14 @@ watch(
       return
     }
     templates.value = await getTemplateList(categoryId)
-    if (draftTemplateId.value) {
+    if (
+      draftTemplateId.value &&
+      templates.value.some((item) => item.id === draftTemplateId.value)
+    ) {
       templateId.value = draftTemplateId.value
       draftTemplateId.value = undefined
+    } else {
+      templateId.value = templates.value[0]?.id
     }
   },
 )
@@ -384,14 +392,14 @@ onBeforeUnmount(() => {
         />
       </el-form-item>
       <el-form-item label="工单模板">
-        <el-select v-model="templateId" placeholder="请选择模板（可选）" clearable class="w-420">
-          <el-option
-            v-for="template in templates"
-            :key="template.id"
-            :label="template.name"
-            :value="template.id"
+        <div class="template-result w-420">
+          <el-input
+            :model-value="form.categoryId ? currentTemplateName : ''"
+            disabled
+            placeholder="选择分类后自动匹配"
           />
-        </el-select>
+          <div class="field-helper">根据工单分类自动带出关联模板；未关联时使用系统默认模板。</div>
+        </div>
       </el-form-item>
       <el-form-item label="优先级" required>
         <el-radio-group v-model="form.priority">
@@ -441,6 +449,52 @@ onBeforeUnmount(() => {
         />
       </el-form-item>
 
+      <template v-if="dynamicFields.length">
+        <el-divider content-position="left">模板补充信息</el-divider>
+        <el-form-item
+          v-for="field in dynamicFields"
+          :key="field.key"
+          :label="field.label"
+          :required="field.required"
+        >
+          <el-select
+            v-if="field.type === 'select'"
+            v-model="customFields[field.key]"
+            :placeholder="field.placeholder"
+            clearable
+            class="w-420"
+          >
+            <el-option
+              v-for="option in field.options || []"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-input
+            v-else-if="field.type === 'textarea'"
+            v-model="customFields[field.key]"
+            type="textarea"
+            :rows="3"
+            :placeholder="field.placeholder"
+          />
+          <el-date-picker
+            v-else-if="field.type === 'date'"
+            v-model="customFields[field.key]"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :placeholder="field.placeholder"
+          />
+          <el-input
+            v-else
+            v-model="customFields[field.key]"
+            :placeholder="field.placeholder"
+            class="w-420"
+          />
+        </el-form-item>
+      </template>
+
+      <div class="form-section-title attachment-title">附件上传</div>
       <el-form-item label="附件">
         <div class="attachment-section">
           <div
@@ -514,51 +568,6 @@ onBeforeUnmount(() => {
         </div>
       </el-form-item>
 
-      <template v-if="dynamicFields.length">
-        <el-divider content-position="left">模板字段</el-divider>
-        <el-form-item
-          v-for="field in dynamicFields"
-          :key="field.key"
-          :label="field.label"
-          :required="field.required"
-        >
-          <el-select
-            v-if="field.type === 'select'"
-            v-model="customFields[field.key]"
-            :placeholder="field.placeholder"
-            clearable
-            class="w-420"
-          >
-            <el-option
-              v-for="option in field.options || []"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-input
-            v-else-if="field.type === 'textarea'"
-            v-model="customFields[field.key]"
-            type="textarea"
-            :rows="3"
-            :placeholder="field.placeholder"
-          />
-          <el-date-picker
-            v-else-if="field.type === 'date'"
-            v-model="customFields[field.key]"
-            type="date"
-            value-format="YYYY-MM-DD"
-            :placeholder="field.placeholder"
-          />
-          <el-input
-            v-else
-            v-model="customFields[field.key]"
-            :placeholder="field.placeholder"
-            class="w-420"
-          />
-        </el-form-item>
-      </template>
-
       <el-form-item>
         <el-space>
           <el-button type="primary" :loading="submitLoading" @click="handleCreateTicket"
@@ -610,6 +619,30 @@ onBeforeUnmount(() => {
 .w-420 {
   max-width: 420px;
   width: 100%;
+}
+
+.template-result {
+  .field-helper {
+    margin-top: 6px;
+    color: #86909c;
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  :deep(.el-input.is-disabled .el-input__wrapper) {
+    background: #f7fbff;
+    box-shadow: 0 0 0 1px #cfe5ff inset;
+  }
+
+  :deep(.el-input.is-disabled .el-input__inner) {
+    color: #1675d1;
+    -webkit-text-fill-color: #1675d1;
+    font-weight: 500;
+  }
+}
+
+.attachment-title {
+  margin-top: 20px !important;
 }
 
 .attachment-section {
