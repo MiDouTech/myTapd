@@ -90,6 +90,9 @@ public class TicketDetailOutput implements Serializable {
 
     private Map<String, String> customFields;
 
+    /** 自定义字段编码对应的展示名称，避免前端直接展示内部唯一编码。 */
+    private Map<String, String> customFieldLabels;
+
     private List<AttachmentOutput> attachments;
 
     private List<CommentOutput> comments;
