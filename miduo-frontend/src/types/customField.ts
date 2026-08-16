@@ -37,7 +37,6 @@ export interface CustomFieldOutput {
 }
 
 export interface CustomFieldCreateInput {
-  fieldCode: string
   fieldTitle: string
   fieldType: CustomFieldType
   description?: string
@@ -48,10 +47,7 @@ export interface CustomFieldCreateInput {
   options?: CustomFieldOption[]
 }
 
-export interface CustomFieldUpdateInput extends Omit<
-  CustomFieldCreateInput,
-  'fieldCode' | 'fieldType'
-> {
+export interface CustomFieldUpdateInput extends Omit<CustomFieldCreateInput, 'fieldType'> {
   id: number
   isActive?: number
 }

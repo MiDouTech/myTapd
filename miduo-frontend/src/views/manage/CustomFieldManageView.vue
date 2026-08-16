@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Delete, Plus } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Plus, UploadFilled } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -22,19 +22,24 @@ import { confirmAction, notifySuccess, notifyWarning } from '@/utils/feedback'
 import { formatDateTime } from '@/utils/formatter'
 
 type EditorMode = 'create' | 'edit'
+type EditorStep = 'type' | 'config'
 
-const fieldTypeOptions: Array<{ label: string; value: CustomFieldType }> = [
-  { label: '单行文本', value: 'INPUT' },
-  { label: '多行文本', value: 'TEXTAREA' },
-  { label: '下拉列表', value: 'SELECT' },
-  { label: '附件', value: 'ATTACHMENT' },
-  { label: '日期', value: 'DATE' },
-  { label: '时间', value: 'TIME' },
-  { label: '日期和时间', value: 'DATETIME' },
-  { label: '数值', value: 'NUMBER' },
-  { label: '单选框', value: 'RADIO' },
-  { label: '复选框', value: 'CHECKBOX' },
-  { label: '级联', value: 'CASCADER' },
+const fieldTypeOptions: Array<{
+  label: string
+  value: CustomFieldType
+  description: string
+}> = [
+  { label: '单行文本', value: 'INPUT', description: '获取少量文本，如姓名、编号' },
+  { label: '多行文本', value: 'TEXTAREA', description: '获取大量文本，如问题描述、处理方案' },
+  { label: '日期', value: 'DATE', description: '选择日期，如 2026-08-16' },
+  { label: '时间', value: 'TIME', description: '选择时间，如 16:00' },
+  { label: '日期和时间', value: 'DATETIME', description: '选择完整日期和时间' },
+  { label: '数值', value: 'NUMBER', description: '填写数值，支持整数和小数' },
+  { label: '下拉列表', value: 'SELECT', description: '从多个选项中选择一个' },
+  { label: '单选框', value: 'RADIO', description: '平铺展示选项并选择一个' },
+  { label: '复选框', value: 'CHECKBOX', description: '从多个选项中选择多个' },
+  { label: '级联', value: 'CASCADER', description: '选择多级关联选项' },
+  { label: '附件', value: 'ATTACHMENT', description: '上传图片、视频或文件' },
 ]
 const optionFieldTypes: CustomFieldType[] = ['SELECT', 'RADIO', 'CHECKBOX', 'CASCADER']
 const lengthFieldTypes: CustomFieldType[] = ['INPUT', 'TEXTAREA']
@@ -44,6 +49,7 @@ const submitLoading = ref(false)
 const switchLoadingId = ref<number>()
 const drawerVisible = ref(false)
 const editorMode = ref<EditorMode>('create')
+const editorStep = ref<EditorStep>('type')
 const fieldList = ref<CustomFieldOutput[]>([])
 
 const query = reactive({
@@ -57,7 +63,6 @@ const query = reactive({
 const form = reactive({
   id: undefined as number | undefined,
   fieldTitle: '',
-  fieldCode: '',
   fieldType: 'INPUT' as CustomFieldType,
   description: '',
   placeholder: '',
@@ -93,7 +98,6 @@ const pagedFields = computed(() => {
 function resetForm(): void {
   form.id = undefined
   form.fieldTitle = ''
-  form.fieldCode = ''
   form.fieldType = 'INPUT'
   form.description = ''
   form.placeholder = ''
@@ -120,15 +124,16 @@ async function loadFields(): Promise<void> {
 
 function openCreateDrawer(): void {
   editorMode.value = 'create'
+  editorStep.value = 'type'
   resetForm()
   drawerVisible.value = true
 }
 
 function openEditDrawer(row: CustomFieldOutput): void {
   editorMode.value = 'edit'
+  editorStep.value = 'config'
   form.id = row.id
   form.fieldTitle = row.fieldTitle
-  form.fieldCode = row.fieldCode
   form.fieldType = row.fieldType
   form.description = row.description || ''
   form.placeholder = row.placeholder || ''
@@ -143,6 +148,18 @@ function openEditDrawer(row: CustomFieldOutput): void {
   drawerVisible.value = true
 }
 
+function selectFieldType(type: CustomFieldType): void {
+  form.fieldType = type
+  form.options = optionFieldTypes.includes(type)
+    ? [
+        { label: '选项1', value: 'OPTION_1', sortOrder: 1, enabled: 1 },
+        { label: '选项2', value: 'OPTION_2', sortOrder: 2, enabled: 1 },
+      ]
+    : []
+  form.maxLength = type === 'TEXTAREA' ? 2000 : 200
+  editorStep.value = 'config'
+}
+
 function addOption(): void {
   form.options.push({ label: '', value: '', sortOrder: form.options.length + 1, enabled: 1 })
 }
@@ -155,14 +172,6 @@ function removeOption(index: number): void {
 function validateForm(): boolean {
   if (!form.fieldTitle.trim()) {
     notifyWarning('请输入字段标题')
-    return false
-  }
-  if (!/^[a-z][a-z0-9_]{1,99}$/.test(form.fieldCode)) {
-    notifyWarning('字段编码须以小写字母开头，且只能包含小写字母、数字和下划线')
-    return false
-  }
-  if (['sys_', 'ticket_', 'workflow_'].some((prefix) => form.fieldCode.startsWith(prefix))) {
-    notifyWarning('字段编码不能使用系统保留前缀')
     return false
   }
   if (isOptionField.value) {
@@ -193,7 +202,6 @@ function validateForm(): boolean {
 function buildBasePayload(): CustomFieldCreateInput {
   return {
     fieldTitle: form.fieldTitle.trim(),
-    fieldCode: form.fieldCode.trim(),
     fieldType: form.fieldType,
     description: form.description.trim() || undefined,
     placeholder: form.placeholder.trim() || undefined,
@@ -390,13 +398,95 @@ onMounted(loadFields)
 
   <el-drawer
     v-model="drawerVisible"
-    :title="editorMode === 'create' ? '添加自定义字段' : '编辑自定义字段'"
-    size="620px"
+    :title="
+      editorMode === 'edit' ? '编辑自定义字段' : editorStep === 'type' ? '添加字段' : '配置字段'
+    "
+    :size="editorStep === 'type' ? '920px' : '680px'"
     destroy-on-close
+    class="custom-field-drawer"
   >
-    <el-form label-position="top" class="field-form">
-      <div class="form-section-title">基本信息</div>
-      <div class="form-grid">
+    <div v-if="editorStep === 'type'" class="type-picker">
+      <div class="type-picker-intro">
+        <div class="type-picker-title">选择字段类型</div>
+        <div class="type-picker-desc">通过模板示例预览填写效果，选择后再配置字段内容。</div>
+      </div>
+      <div class="type-table-header">
+        <span>类型名称</span>
+        <span>类型模板示例</span>
+        <span>适用场景</span>
+        <span>操作</span>
+      </div>
+      <div class="type-list">
+        <div v-for="item in fieldTypeOptions" :key="item.value" class="type-row">
+          <div class="type-name">{{ item.label }}</div>
+          <div class="type-preview">
+            <el-input v-if="item.value === 'INPUT'" disabled placeholder="请输入" />
+            <el-input
+              v-else-if="item.value === 'TEXTAREA'"
+              disabled
+              type="textarea"
+              :rows="2"
+              placeholder="请输入"
+            />
+            <el-date-picker
+              v-else-if="item.value === 'DATE'"
+              disabled
+              type="date"
+              placeholder="请选择日期"
+            />
+            <el-time-picker v-else-if="item.value === 'TIME'" disabled placeholder="请选择时间" />
+            <el-date-picker
+              v-else-if="item.value === 'DATETIME'"
+              disabled
+              type="datetime"
+              placeholder="请选择日期和时间"
+            />
+            <el-input-number
+              v-else-if="item.value === 'NUMBER'"
+              disabled
+              :controls="false"
+              placeholder="请输入数值"
+            />
+            <el-select v-else-if="item.value === 'SELECT'" disabled placeholder="请选择">
+              <el-option label="选项1" value="1" />
+            </el-select>
+            <el-radio-group v-else-if="item.value === 'RADIO'" disabled>
+              <el-radio value="1">选项1</el-radio><el-radio value="2">选项2</el-radio>
+            </el-radio-group>
+            <el-checkbox-group v-else-if="item.value === 'CHECKBOX'" disabled>
+              <el-checkbox value="1">选项1</el-checkbox><el-checkbox value="2">选项2</el-checkbox>
+            </el-checkbox-group>
+            <el-cascader v-else-if="item.value === 'CASCADER'" disabled placeholder="请选择" />
+            <div v-else class="upload-preview">
+              <el-icon><UploadFilled /></el-icon><span>点击或拖拽上传文件</span>
+            </div>
+          </div>
+          <div class="type-description">{{ item.description }}</div>
+          <div><el-button type="primary" @click="selectFieldType(item.value)">添加</el-button></div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="field-editor">
+      <button
+        v-if="editorMode === 'create'"
+        type="button"
+        class="back-button"
+        @click="editorStep = 'type'"
+      >
+        <el-icon><ArrowLeft /></el-icon><span>返回选择类型</span>
+      </button>
+      <div class="selected-type-card">
+        <div>
+          <span class="selected-type-label">当前字段类型</span>
+          <strong>{{
+            fieldTypeOptions.find((item) => item.value === form.fieldType)?.label
+          }}</strong>
+        </div>
+        <span>字段编码将在保存时自动生成，无需手动填写</span>
+      </div>
+      <el-form label-position="top" class="field-form">
+        <div class="form-section-title">基本信息</div>
         <el-form-item label="字段标题" required>
           <el-input
             v-model="form.fieldTitle"
@@ -405,87 +495,68 @@ onMounted(loadFields)
             placeholder="例如：问题还原"
           />
         </el-form-item>
-        <el-form-item label="字段编码" required>
+        <el-form-item label="字段描述">
           <el-input
-            v-model="form.fieldCode"
-            :disabled="editorMode === 'edit'"
-            maxlength="100"
-            placeholder="例如：problem_reproduction"
+            v-model="form.description"
+            type="textarea"
+            :rows="4"
+            maxlength="500"
+            show-word-limit
+            placeholder="说明字段用途，帮助使用者准确填写"
           />
-          <div class="field-tip">创建后不可修改，仅支持小写字母、数字和下划线。</div>
         </el-form-item>
-        <el-form-item label="字段类型" required>
-          <el-select
-            v-model="form.fieldType"
-            :disabled="editorMode === 'edit'"
-            placeholder="请选择字段类型"
-          >
-            <el-option
-              v-for="item in fieldTypeOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
+        <el-form-item label="占位提示">
+          <el-input
+            v-model="form.placeholder"
+            maxlength="200"
+            placeholder="用户填写字段时展示的提示"
+          />
+        </el-form-item>
+        <div class="form-grid">
+          <el-form-item label="默认必填">
+            <el-switch v-model="form.defaultRequired" :active-value="1" :inactive-value="0" />
+            <span class="switch-text">加入模板时默认设为必填</span>
+          </el-form-item>
+          <el-form-item v-if="isLengthField" label="最大长度">
+            <el-input-number
+              v-model="form.maxLength"
+              :min="1"
+              :max="10000"
+              controls-position="right"
             />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="默认必填">
-          <el-switch v-model="form.defaultRequired" :active-value="1" :inactive-value="0" />
-          <span class="switch-text">加入模板时默认设为必填</span>
-        </el-form-item>
-      </div>
-
-      <el-form-item label="字段描述">
-        <el-input
-          v-model="form.description"
-          type="textarea"
-          :rows="3"
-          maxlength="500"
-          show-word-limit
-        />
-      </el-form-item>
-      <el-form-item label="占位提示">
-        <el-input
-          v-model="form.placeholder"
-          maxlength="200"
-          placeholder="用户填写字段时展示的提示"
-        />
-      </el-form-item>
-      <div class="form-grid">
-        <el-form-item label="默认值">
+          </el-form-item>
+        </div>
+        <el-form-item v-if="!isOptionField && form.fieldType !== 'ATTACHMENT'" label="默认值">
           <el-input v-model="form.defaultValue" placeholder="可选" />
         </el-form-item>
-        <el-form-item v-if="isLengthField" label="最大长度">
-          <el-input-number
-            v-model="form.maxLength"
-            :min="1"
-            :max="10000"
-            controls-position="right"
-          />
-        </el-form-item>
-      </div>
 
-      <template v-if="isOptionField">
-        <div class="option-header">
-          <div>
-            <div class="form-section-title">选项配置</div>
-            <div class="field-tip">选项值将用于流程条件和数据统计，保存后不建议修改。</div>
+        <template v-if="isOptionField">
+          <div class="option-header">
+            <div>
+              <div class="form-section-title">选项配置</div>
+              <div class="field-tip">选项值用于流程条件和数据统计，建议使用稳定的英文编码。</div>
+            </div>
+            <el-button type="primary" link :icon="Plus" @click="addOption">添加选项</el-button>
           </div>
-          <el-button type="primary" link :icon="Plus" @click="addOption">添加选项</el-button>
-        </div>
-        <div v-if="form.options.length" class="option-list">
-          <div v-for="(option, index) in form.options" :key="index" class="option-row">
-            <span class="option-index">{{ index + 1 }}</span>
-            <el-input v-model="option.label" placeholder="选项名称，例如：通过" />
-            <el-input v-model="option.value" placeholder="选项值，例如：APPROVED" />
-            <el-button type="danger" link :icon="Delete" @click="removeOption(index)" />
+          <div class="option-column-labels">
+            <span></span><span>选项名称</span><span>选项值</span><span></span>
           </div>
-        </div>
-        <el-empty v-else :image-size="70" description="暂无选项" />
-      </template>
-    </el-form>
+          <div class="option-list">
+            <div v-for="(option, index) in form.options" :key="index" class="option-row">
+              <span class="option-index">{{ index + 1 }}</span>
+              <el-input v-model="option.label" placeholder="例如：通过" />
+              <el-input v-model="option.value" placeholder="例如：APPROVED" />
+              <el-button type="danger" link :icon="Delete" @click="removeOption(index)" />
+            </div>
+          </div>
+        </template>
+      </el-form>
+    </div>
     <template #footer>
-      <el-button @click="drawerVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleSubmit">保存</el-button>
+      <template v-if="editorStep === 'config'">
+        <el-button @click="drawerVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleSubmit">保存</el-button>
+      </template>
     </template>
   </el-drawer>
 </template>
@@ -541,7 +612,152 @@ onMounted(loadFields)
 }
 
 .field-form {
-  padding: 0 6px;
+  padding: 20px 24px 32px;
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+}
+
+.type-picker-intro {
+  padding: 0 4px 18px;
+}
+
+.type-picker-title {
+  color: #1d2129;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.type-picker-desc {
+  margin-top: 6px;
+  color: #86909c;
+  font-size: 13px;
+}
+
+.type-table-header,
+.type-row {
+  display: grid;
+  grid-template-columns: 120px minmax(260px, 1.4fr) minmax(210px, 1fr) 76px;
+  align-items: center;
+  gap: 20px;
+}
+
+.type-table-header {
+  min-height: 48px;
+  padding: 0 20px;
+  color: #4e5969;
+  background: #f2f3f5;
+  border-radius: 8px 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.type-list {
+  border: 1px solid #e5e6eb;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+.type-row {
+  min-height: 92px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #f0f1f2;
+  transition: background 0.2s ease;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:hover {
+    background: #f7faff;
+  }
+}
+
+.type-name {
+  color: #1d2129;
+  font-weight: 600;
+}
+
+.type-preview {
+  min-width: 0;
+
+  :deep(.el-input),
+  :deep(.el-select),
+  :deep(.el-date-editor),
+  :deep(.el-input-number),
+  :deep(.el-cascader) {
+    width: 100%;
+  }
+}
+
+.type-description {
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.upload-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 58px;
+  color: #86909c;
+  background: #fafbfc;
+  border: 1px dashed #c9cdd4;
+  border-radius: 6px;
+
+  .el-icon {
+    color: #1677ff;
+    font-size: 22px;
+  }
+}
+
+.field-editor {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  margin-bottom: 16px;
+  color: #4e5969;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: #1677ff;
+  }
+}
+
+.selected-type-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  color: #86909c;
+  background: #f2f7ff;
+  border: 1px solid #d6e8ff;
+  border-radius: 8px;
+  font-size: 12px;
+
+  strong {
+    margin-left: 10px;
+    color: #1677ff;
+    font-size: 14px;
+  }
+}
+
+.selected-type-label {
+  color: #4e5969;
 }
 
 .form-section-title {
@@ -589,6 +805,15 @@ onMounted(loadFields)
   margin-top: 16px;
 }
 
+.option-column-labels {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) 32px;
+  gap: 10px;
+  margin-top: 16px;
+  color: #86909c;
+  font-size: 12px;
+}
+
 .option-row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) 32px;
@@ -616,6 +841,30 @@ onMounted(loadFields)
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .type-table-header {
+    display: none;
+  }
+
+  .type-list {
+    border-top: 1px solid #e5e6eb;
+    border-radius: 8px;
+  }
+
+  .type-row {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  .type-preview,
+  .type-description {
+    grid-column: 1 / -1;
+  }
+
+  .selected-type-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .option-row {

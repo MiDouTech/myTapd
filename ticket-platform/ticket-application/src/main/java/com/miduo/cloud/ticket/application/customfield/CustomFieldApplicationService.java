@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,7 +31,7 @@ public class CustomFieldApplicationService {
             "NUMBER", "RADIO", "CHECKBOX", "CASCADER"));
     private static final Set<String> OPTION_TYPES = new HashSet<>(Arrays.asList(
             "SELECT", "RADIO", "CHECKBOX", "CASCADER"));
-    private static final List<String> RESERVED_PREFIXES = Arrays.asList("sys_", "ticket_", "workflow_");
+    private static final String GENERATED_CODE_PREFIX = "cf_";
 
     private final CustomFieldDefinitionMapper customFieldMapper;
 
@@ -50,10 +51,8 @@ public class CustomFieldApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public CustomFieldOutput createField(CustomFieldCreateInput input) {
-        String fieldCode = input.getFieldCode().trim();
+        String fieldCode = generateFieldCode();
         String fieldType = normalizeType(input.getFieldType());
-        validateReservedPrefix(fieldCode);
-        validateUniqueCode(fieldCode, null);
         validateOptions(fieldType, input.getOptions());
 
         CustomFieldDefinitionPO po = new CustomFieldDefinitionPO();
@@ -126,24 +125,16 @@ public class CustomFieldApplicationService {
         return normalized;
     }
 
-    private void validateReservedPrefix(String code) {
-        for (String prefix : RESERVED_PREFIXES) {
-            if (code.startsWith(prefix)) {
-                throw BusinessException.of(ErrorCode.PARAM_ERROR, "字段编码不能使用保留前缀：" + prefix);
+    private String generateFieldCode() {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String code = GENERATED_CODE_PREFIX + UUID.randomUUID().toString().replace("-", "");
+            Long count = customFieldMapper.selectCount(new LambdaQueryWrapper<CustomFieldDefinitionPO>()
+                    .eq(CustomFieldDefinitionPO::getFieldCode, code));
+            if (count == null || count == 0) {
+                return code;
             }
         }
-    }
-
-    private void validateUniqueCode(String fieldCode, Long excludedId) {
-        LambdaQueryWrapper<CustomFieldDefinitionPO> query = new LambdaQueryWrapper<CustomFieldDefinitionPO>()
-                .eq(CustomFieldDefinitionPO::getFieldCode, fieldCode);
-        if (excludedId != null) {
-            query.ne(CustomFieldDefinitionPO::getId, excludedId);
-        }
-        Long count = customFieldMapper.selectCount(query);
-        if (count != null && count > 0) {
-            throw BusinessException.of(ErrorCode.DATA_ALREADY_EXISTS, "字段编码已存在：" + fieldCode);
-        }
+        throw BusinessException.of(ErrorCode.INTERNAL_ERROR, "生成字段编码失败，请重试");
     }
 
     private void validateOptions(String fieldType, List<CustomFieldOptionInput> options) {
