@@ -34,6 +34,7 @@ const editorMode = ref<EditorMode>('create')
 const templates = ref<TemplateAdminListOutput[]>([])
 const customFieldPool = ref<CustomFieldOutput[]>([])
 const selectedPoolIds = ref<number[]>([])
+const pickerKeyword = ref('')
 const previewFields = ref<TemplateFieldOutput[]>([])
 const previewName = ref('')
 
@@ -70,9 +71,20 @@ const pagedTemplates = computed(() => {
   return filteredTemplates.value.slice(start, start + query.pageSize)
 })
 const customFields = computed(() => form.fields.filter((item) => item.fieldSource === 'CUSTOM'))
-const availableCustomFields = computed(() => {
-  const added = new Set(customFields.value.map((item) => item.customFieldId))
-  return customFieldPool.value.filter((item) => item.isActive === 1 && !added.has(item.id))
+const pickerCustomFields = computed(() => {
+  const keyword = pickerKeyword.value.trim().toLowerCase()
+  return customFieldPool.value.filter(
+    (item) =>
+      item.isActive === 1 &&
+      (!keyword ||
+        item.fieldTitle.toLowerCase().includes(keyword) ||
+        item.fieldCode.toLowerCase().includes(keyword) ||
+        (item.description || '').toLowerCase().includes(keyword)),
+  )
+})
+const pickerSelectedFields = computed(() => {
+  const selected = new Set(selectedPoolIds.value)
+  return customFieldPool.value.filter((item) => selected.has(item.id))
 })
 
 function systemFields(): TemplateFieldOutput[] {
@@ -164,31 +176,51 @@ async function openPreview(row?: TemplateAdminListOutput): Promise<void> {
 
 async function openPicker(): Promise<void> {
   await ensureCustomFields()
-  selectedPoolIds.value = []
+  pickerKeyword.value = ''
+  selectedPoolIds.value = customFields.value
+    .map((item) => item.customFieldId)
+    .filter((id): id is number => Boolean(id))
   pickerVisible.value = true
 }
 
-function addPickedFields(): void {
-  const picked = customFieldPool.value.filter((item) => selectedPoolIds.value.includes(item.id))
-  let order = form.fields.length + 1
-  picked.forEach((field) => {
-    form.fields.push({
-      fieldSource: 'CUSTOM',
-      customFieldId: field.id,
-      fieldCode: field.fieldCode,
-      fieldTitle: field.fieldTitle,
-      fieldType: field.fieldType,
-      fieldTypeLabel: field.fieldTypeLabel || field.fieldType,
-      sortOrder: order++,
-      isEnabled: 1,
-      isRequired: field.defaultRequired,
-      placeholder: field.placeholder,
-      defaultValue: field.defaultValue,
-      options: field.options,
-      deletable: true,
-      definitionActive: true,
+function togglePickedField(fieldId: number, checked: boolean): void {
+  if (checked) {
+    if (!selectedPoolIds.value.includes(fieldId)) selectedPoolIds.value.push(fieldId)
+    return
+  }
+  selectedPoolIds.value = selectedPoolIds.value.filter((id) => id !== fieldId)
+}
+
+function confirmPickedFields(): void {
+  const existing = new Map(
+    customFields.value.map((field) => [field.customFieldId as number, { ...field }]),
+  )
+  const system = form.fields.filter((field) => field.fieldSource === 'SYSTEM')
+  const selected = selectedPoolIds.value
+    .map((id, index) => {
+      const retained = existing.get(id)
+      if (retained) return { ...retained, sortOrder: index + 3 }
+      const field = customFieldPool.value.find((item) => item.id === id)
+      if (!field) return undefined
+      return {
+        fieldSource: 'CUSTOM',
+        customFieldId: field.id,
+        fieldCode: field.fieldCode,
+        fieldTitle: field.fieldTitle,
+        fieldType: field.fieldType,
+        fieldTypeLabel: field.fieldTypeLabel || field.fieldType,
+        sortOrder: index + 3,
+        isEnabled: 1,
+        isRequired: field.defaultRequired,
+        placeholder: field.placeholder,
+        defaultValue: field.defaultValue,
+        options: field.options,
+        deletable: true,
+        definitionActive: true,
+      } as TemplateFieldOutput
     })
-  })
+    .filter((field): field is TemplateFieldOutput => Boolean(field))
+  form.fields = [...system, ...selected]
   pickerVisible.value = false
 }
 
@@ -485,26 +517,57 @@ onMounted(loadTemplates)
     >
   </el-drawer>
 
-  <el-dialog v-model="pickerVisible" title="添加自定义字段" width="720px">
-    <div class="picker-tip">仅展示已启用且尚未加入当前模板的字段。</div>
-    <el-checkbox-group v-model="selectedPoolIds" class="field-picker-list">
-      <el-checkbox
-        v-for="field in availableCustomFields"
-        :key="field.id"
-        :value="field.id"
-        class="field-picker-item"
-        ><span class="picker-name">{{ field.fieldTitle }}</span
-        ><el-tag size="small" effect="plain">{{ field.fieldTypeLabel || field.fieldType }}</el-tag
-        ><span class="picker-desc">{{ field.description || '暂无描述' }}</span></el-checkbox
-      >
-    </el-checkbox-group>
-    <EmptyState v-if="availableCustomFields.length === 0" description="没有可添加的自定义字段" />
+  <el-dialog v-model="pickerVisible" title="添加字段" width="1040px" class="field-picker-dialog">
+    <div class="field-picker-layout">
+      <div class="field-picker-main">
+        <el-input
+          v-model="pickerKeyword"
+          clearable
+          placeholder="搜索自定义字段名称、编码或描述"
+          class="picker-search"
+        />
+        <div class="picker-table-header picker-grid">
+          <span></span><span>字段标题</span><span>字段类型</span><span>是否必填</span>
+        </div>
+        <div class="picker-table-body">
+          <div
+            v-for="field in systemFields()"
+            :key="field.fieldCode"
+            class="picker-row picker-grid"
+          >
+            <el-checkbox :model-value="true" disabled />
+            <span class="picker-name">{{ field.fieldTitle }}</span>
+            <span>{{ field.fieldTypeLabel }}</span>
+            <span>是</span>
+          </div>
+          <div v-for="field in pickerCustomFields" :key="field.id" class="picker-row picker-grid">
+            <el-checkbox
+              :model-value="selectedPoolIds.includes(field.id)"
+              @change="togglePickedField(field.id, Boolean($event))"
+            />
+            <span class="picker-name" :title="field.description">{{ field.fieldTitle }}</span>
+            <span>{{ field.fieldTypeLabel || field.fieldType }}</span>
+            <span>{{ field.defaultRequired ? '是' : '否' }}</span>
+          </div>
+          <EmptyState v-if="pickerCustomFields.length === 0" description="没有匹配的自定义字段" />
+        </div>
+      </div>
+      <aside class="picker-selected-panel">
+        <div class="selected-header">
+          <span>已选 {{ selectedPoolIds.length + 2 }} 个</span>
+          <el-button link type="primary" @click="selectedPoolIds = []">移除自定义字段</el-button>
+        </div>
+        <div class="selected-fixed">标题 <span>固定</span></div>
+        <div class="selected-fixed">问题描述 <span>固定</span></div>
+        <div v-for="field in pickerSelectedFields" :key="field.id" class="selected-item">
+          <span>{{ field.fieldTitle }}</span>
+          <el-button link type="danger" @click="togglePickedField(field.id, false)">移除</el-button>
+        </div>
+      </aside>
+    </div>
     <template #footer
-      ><span class="selected-count">已选择 {{ selectedPoolIds.length }} 项</span
       ><el-button @click="pickerVisible = false">取消</el-button
-      ><el-button type="primary" :disabled="!selectedPoolIds.length" @click="addPickedFields"
-        >添加</el-button
-      ></template
+      ><el-button type="primary" @click="confirmPickedFields">确定</el-button></template
     >
   </el-dialog>
 
@@ -621,35 +684,71 @@ onMounted(loadTemplates)
   color: #86909c;
   font-size: 13px;
 }
-.field-picker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 440px;
-  margin-top: 16px;
+.field-picker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  min-height: 520px;
+  border: 1px solid #e5e6eb;
+}
+.field-picker-main {
+  min-width: 0;
+  border-right: 1px solid #e5e6eb;
+}
+.picker-search {
+  width: 420px;
+  max-width: calc(100% - 32px);
+  margin: 16px;
+}
+.picker-grid {
+  display: grid;
+  grid-template-columns: 54px minmax(150px, 1.4fr) minmax(110px, 1fr) 100px;
+  align-items: center;
+  gap: 12px;
+}
+.picker-table-header {
+  height: 52px;
+  padding: 0 16px;
+  color: #1d2129;
+  background: #f7f8fa;
+  font-weight: 600;
+}
+.picker-table-body {
+  max-height: 400px;
   overflow: auto;
 }
-.field-picker-item {
-  width: 100%;
-  height: auto;
-  padding: 14px;
-  margin-right: 0;
-  border: 1px solid #e5e6eb;
-  border-radius: 7px;
+.picker-row {
+  min-height: 66px;
+  padding: 0 16px;
+  color: #4e5969;
+  border-bottom: 1px solid #f0f1f2;
 }
-.field-picker-item:hover {
-  border-color: #409eff;
-  background: #f5f9ff;
+.picker-row:hover {
+  background: #f7fbff;
 }
 .picker-name {
-  display: inline-block;
-  min-width: 130px;
   color: #1d2129;
   font-weight: 500;
 }
-.picker-desc {
-  margin-left: 12px;
+.picker-selected-panel {
+  background: #fff;
+}
+.selected-header,
+.selected-item,
+.selected-fixed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid #f0f1f2;
+}
+.selected-header {
+  background: #f7f8fa;
+  font-weight: 600;
+}
+.selected-fixed span {
   color: #86909c;
+  font-size: 12px;
 }
 .selected-count {
   margin-right: auto;

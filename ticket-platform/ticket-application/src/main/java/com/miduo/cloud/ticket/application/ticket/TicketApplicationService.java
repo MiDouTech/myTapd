@@ -56,6 +56,8 @@ public class TicketApplicationService {
 
     private static final int COMMENT_MENTION_SUMMARY_MAX = 200;
 
+    private static final String SYSTEM_DEFAULT_TEMPLATE_CODE = "system_default";
+
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
 
     /** 评论正文中 @ 占位（与前端 data-user-id 一致），用于在请求体未带 mentionedUserIds 时仍能识别被 @ 用户 */
@@ -148,7 +150,7 @@ public class TicketApplicationService {
         }
 
         Long workflowId = category.getWorkflowId();
-        Long templateId = category.getTemplateId();
+        Long templateId = resolveTemplateId(category);
         String initialStatus = workflowService.getInitialStatus(workflowId);
 
         TicketPO ticket = new TicketPO();
@@ -227,6 +229,33 @@ public class TicketApplicationService {
 
         log.info("工单创建成功: ticketNo={}, creatorId={}", ticket.getTicketNo(), currentUserId);
         return ticket.getId();
+    }
+
+    /**
+     * 分类显式关联优先，随后兼容旧版分类绑定，最后回退到系统默认模板。
+     */
+    private Long resolveTemplateId(TicketCategoryPO category) {
+        if (category.getTemplateId() != null) {
+            TicketTemplatePO linkedTemplate = templateMapper.selectById(category.getTemplateId());
+            if (linkedTemplate != null && Integer.valueOf(1).equals(linkedTemplate.getIsActive())) {
+                return linkedTemplate.getId();
+            }
+        }
+        TicketTemplatePO legacyTemplate = templateMapper.selectOne(
+                new LambdaQueryWrapper<TicketTemplatePO>()
+                        .eq(TicketTemplatePO::getCategoryId, category.getId())
+                        .eq(TicketTemplatePO::getIsActive, 1)
+                        .orderByAsc(TicketTemplatePO::getSortOrder)
+                        .last("LIMIT 1"));
+        if (legacyTemplate != null) {
+            return legacyTemplate.getId();
+        }
+        TicketTemplatePO defaultTemplate = templateMapper.selectOne(
+                new LambdaQueryWrapper<TicketTemplatePO>()
+                        .eq(TicketTemplatePO::getTemplateCode, SYSTEM_DEFAULT_TEMPLATE_CODE)
+                        .eq(TicketTemplatePO::getIsActive, 1)
+                        .last("LIMIT 1"));
+        return defaultTemplate == null ? null : defaultTemplate.getId();
     }
 
     public PageOutput<TicketListOutput> getTicketPage(TicketPageInput input, Long currentUserId) {

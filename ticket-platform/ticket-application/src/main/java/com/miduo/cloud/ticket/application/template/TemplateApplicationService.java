@@ -64,18 +64,37 @@ public class TemplateApplicationService {
     public List<TemplateListOutput> getTemplateList(Long categoryId) {
         LambdaQueryWrapper<TicketTemplatePO> query = new LambdaQueryWrapper<TicketTemplatePO>()
                 .eq(TicketTemplatePO::getIsActive, 1);
-        if (categoryId != null) {
-            TicketCategoryPO category = categoryMapper.selectById(categoryId);
-            if (category != null && category.getTemplateId() != null) {
-                query.and(wrapper -> wrapper.eq(TicketTemplatePO::getId, category.getTemplateId())
-                        .or().eq(TicketTemplatePO::getCategoryId, categoryId));
-            } else {
-                query.eq(TicketTemplatePO::getCategoryId, categoryId);
+        if (categoryId == null) {
+            return templateMapper.selectList(query.orderByAsc(TicketTemplatePO::getSortOrder)
+                            .orderByDesc(TicketTemplatePO::getCreateTime))
+                    .stream().map(this::toLegacyOutput).collect(Collectors.toList());
+        }
+
+        TicketCategoryPO category = categoryMapper.selectById(categoryId);
+        TicketTemplatePO effectiveTemplate = null;
+        if (category != null && category.getTemplateId() != null) {
+            TicketTemplatePO linkedTemplate = templateMapper.selectById(category.getTemplateId());
+            if (linkedTemplate != null && Integer.valueOf(1).equals(linkedTemplate.getIsActive())) {
+                effectiveTemplate = linkedTemplate;
             }
         }
-        return templateMapper.selectList(query.orderByAsc(TicketTemplatePO::getSortOrder)
-                        .orderByDesc(TicketTemplatePO::getCreateTime))
-                .stream().map(this::toLegacyOutput).collect(Collectors.toList());
+        // 兼容历史数据：旧版本通过 ticket_template.category_id 绑定分类。
+        if (effectiveTemplate == null) {
+            effectiveTemplate = templateMapper.selectOne(new LambdaQueryWrapper<TicketTemplatePO>()
+                    .eq(TicketTemplatePO::getCategoryId, categoryId)
+                    .eq(TicketTemplatePO::getIsActive, 1)
+                    .orderByAsc(TicketTemplatePO::getSortOrder)
+                    .last("LIMIT 1"));
+        }
+        if (effectiveTemplate == null) {
+            effectiveTemplate = templateMapper.selectOne(new LambdaQueryWrapper<TicketTemplatePO>()
+                    .eq(TicketTemplatePO::getTemplateCode, SYSTEM_DEFAULT_CODE)
+                    .eq(TicketTemplatePO::getIsActive, 1)
+                    .last("LIMIT 1"));
+        }
+        return effectiveTemplate == null
+                ? Collections.emptyList()
+                : Collections.singletonList(toLegacyOutput(effectiveTemplate));
     }
 
     public List<TemplateAdminListOutput> getAdminList(String keyword, Integer isActive) {
