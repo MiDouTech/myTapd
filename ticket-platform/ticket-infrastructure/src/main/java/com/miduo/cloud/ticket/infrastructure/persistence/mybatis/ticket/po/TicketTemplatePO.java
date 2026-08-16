@@ -11,6 +11,9 @@ import lombok.EqualsAndHashCode;
 @TableName("ticket_template")
 public class TicketTemplatePO extends BaseEntity {
 
+    @TableField("template_code")
+    private String templateCode;
+
     @TableField("name")
     private String name;
 
@@ -22,6 +25,12 @@ public class TicketTemplatePO extends BaseEntity {
 
     @TableField("description")
     private String description;
+
+    @TableField("is_system")
+    private Integer isSystem;
+
+    @TableField("sort_order")
+    private Integer sortOrder;
 
     @TableField("is_active")
     private Integer isActive;

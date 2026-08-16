@@ -205,6 +205,22 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'manage/template',
+        name: 'manageTemplate',
+        component: () => import('@/views/manage/TemplateManageView.vue'),
+        meta: {
+          title: '模板设置',
+        },
+      },
+      {
+        path: 'manage/custom-field',
+        name: 'manageCustomField',
+        component: () => import('@/views/manage/CustomFieldManageView.vue'),
+        meta: {
+          title: '自定义字段',
+        },
+      },
+      {
         path: 'manage/user',
         name: 'manageUser',
         component: () => import('@/views/manage/UserManageView.vue'),
