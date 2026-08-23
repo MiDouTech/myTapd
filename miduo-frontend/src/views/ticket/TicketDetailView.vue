@@ -8,6 +8,7 @@ import {
   BellFilled,
   ChatDotSquare,
   Document as DocumentOutlined,
+  Link,
   Plus,
 } from '@element-plus/icons-vue'
 import {
@@ -104,6 +105,49 @@ const closeDialogVisible = ref(false)
 const submitLoading = ref(false)
 const urgeDialogVisible = ref(false)
 const urgeExtraNotifyUserIds = ref<number[]>([])
+const shareDialogVisible = ref(false)
+
+const publicTicketUrl = computed(() => {
+  const ticketNo = detail.value?.ticketNo?.trim()
+  if (!ticketNo || typeof window === 'undefined') return ''
+  return `${window.location.origin}/open/ticket/${encodeURIComponent(ticketNo)}`
+})
+
+const shareMessage = computed(() => {
+  if (!detail.value || !publicTicketUrl.value) return ''
+  const status = detail.value.statusLabel || getTicketStatusLabel(detail.value.status) || '处理中'
+  return [
+    '您好，您的问题已创建工单：',
+    '',
+    `工单编号：${detail.value.ticketNo}`,
+    `工单标题：${detail.value.title || '-'}`,
+    `当前状态：${status}`,
+    '',
+    '您可以通过以下链接查看最新处理进度：',
+    publicTicketUrl.value,
+  ].join('\n')
+})
+
+async function copyShareContent(content: string, successMessage: string): Promise<void> {
+  if (!content) {
+    notifyError('公开链接生成失败，请刷新页面后重试')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(content)
+    notifySuccess(successMessage)
+  } catch {
+    notifyError('复制失败，请手动选择并复制')
+  }
+}
+
+function openPublicTicketPreview(): void {
+  if (!publicTicketUrl.value) {
+    notifyError('公开链接生成失败，请刷新页面后重试')
+    return
+  }
+  window.open(publicTicketUrl.value, '_blank', 'noopener,noreferrer')
+}
 
 // ---- 动态工作流操作 ----
 const availableActions = ref<AvailableActionOutput | null>(null)
@@ -1399,6 +1443,10 @@ watch(
           </el-button>
         </div>
         <div class="action-bar-right">
+          <el-button size="small" plain :disabled="!detail?.ticketNo" @click="shareDialogVisible = true">
+            <el-icon style="margin-right: 4px"><Link /></el-icon>
+            分享给客户
+          </el-button>
           <el-button
             size="small"
             :type="detail?.isFollowed ? 'primary' : 'default'"
@@ -2175,6 +2223,51 @@ watch(
     </el-card>
   </div>
 
+  <el-dialog
+    v-model="shareDialogVisible"
+    title="分享给客户"
+    width="min(600px, 92vw)"
+    class="ticket-share-dialog"
+  >
+    <div class="share-dialog-content">
+      <el-alert
+        title="客户无需登录，即可通过此链接查看工单进度"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+
+      <div class="share-field">
+        <div class="share-field-label">公开链接</div>
+        <el-input :model-value="publicTicketUrl" readonly>
+          <template #append>
+            <el-button @click="copyShareContent(publicTicketUrl, '已复制公开链接，可直接发送给客户')">
+              复制链接
+            </el-button>
+          </template>
+        </el-input>
+      </div>
+
+      <div class="share-field">
+        <div class="share-field-label">分享文案</div>
+        <el-input :model-value="shareMessage" type="textarea" :rows="8" readonly resize="none" />
+      </div>
+
+      <el-alert
+        title="分享前请确认工单中不包含密码、密钥、内部账号、客户隐私等不适合公开的信息。"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+    </div>
+    <template #footer>
+      <el-button @click="openPublicTicketPreview">打开客户视角预览</el-button>
+      <el-button type="primary" @click="copyShareContent(shareMessage, '分享文案已复制')">
+        复制分享文案
+      </el-button>
+    </template>
+  </el-dialog>
+
   <!-- 企微消息解析弹窗 -->
   <el-dialog
     v-model="wecomParseDialogVisible"
@@ -2614,6 +2707,19 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.share-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.share-field-label {
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .action-bar-left :deep(.el-button + .el-button),
