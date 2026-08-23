@@ -84,7 +84,7 @@ const menuItems: MenuItem[] = [
   },
   {
     index: 'customTicketQuery',
-    title: '自定义工单查询',
+    title: '工单查询',
     icon: Files,
     children: [{ index: '/ticket/custom-query', title: '自定义查询', icon: Files }],
   },
@@ -119,27 +119,14 @@ const menuItems: MenuItem[] = [
   { index: '/update-center', title: '动态', icon: CollectionTag },
 ]
 
-/** 游客（GUEST）不显示「管理」菜单 */
-const canViewAllTickets = computed(() => hasAnyRole('ADMIN', 'TICKET_ADMIN'))
-
 const visibleMenuItems = computed(() => {
   return menuItems.filter((item) => {
     if (authStore.isGuest && item.index === 'manage') {
       return false
     }
-    if (item.index === 'customTicketQuery') {
-      return canViewAllTickets.value
-    }
     return true
   })
 })
-
-function hasAnyRole(...roles: string[]): boolean {
-  const targets = roles.map((role) => role.toUpperCase())
-  return (authStore.userInfo?.roleCodes ?? [])
-    .map((code) => String(code).toUpperCase())
-    .some((code) => targets.includes(code))
-}
 
 const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
@@ -247,7 +234,7 @@ function updateViewportState(): void {
 function submitHeaderTicketSearch(): void {
   const raw = layoutTicketSearchKeyword.value.trim()
   persistLayoutTicketSearch(raw)
-  const targetPath = canViewAllTickets.value ? '/ticket/custom-query' : '/ticket/mine'
+  const targetPath = '/ticket/custom-query'
   if (!raw) {
     markTicketListKeywordClearFromHeader()
     void router.push({ path: targetPath, query: {} })

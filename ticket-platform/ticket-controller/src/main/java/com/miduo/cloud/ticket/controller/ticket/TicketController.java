@@ -76,13 +76,10 @@ public class TicketController {
         return ApiResult.success(page);
     }
 
-    /** 自定义条件分页查询；使用 POST 承载组合条件，权限口径与全部工单一致。 */
+    /** 自定义条件分页查询；所有已登录用户均可访问。 */
     @PostMapping("/custom-query/page")
     @Operation(summary = "自定义条件分页查询工单")
     public ApiResult<PageOutput<TicketListOutput>> customQueryPage(@Valid @RequestBody TicketPageInput input) {
-        if (!hasAllTicketPermission()) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN, "仅管理员可查看全部工单");
-        }
         input.setView(TicketView.ALL.getCode());
         return ApiResult.success(ticketService.getTicketPage(input, getCurrentUserId()));
     }
@@ -320,4 +317,5 @@ public class TicketController {
         }
         return false;
     }
+
 }
