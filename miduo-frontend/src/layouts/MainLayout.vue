@@ -73,7 +73,18 @@ let desktopPointerMedia: MediaQueryList | null = null
 
 const menuItems: MenuItem[] = [
   { index: '/dashboard', title: '仪表盘', icon: DataAnalysis },
-  { index: '/ticket/mine', title: '我的工单', icon: Tickets },
+  {
+    index: 'ticketProcessing',
+    title: '工单处理',
+    icon: Tickets,
+    children: [
+      { index: '/ticket/mine?view=my_todo', title: '我待处理工单', icon: Tickets },
+      { index: '/ticket/mine?view=my_participated', title: '我处理的工单', icon: Tickets },
+      { index: '/ticket/mine?view=my_created', title: '我创建的工单', icon: Tickets },
+      { index: '/ticket/mine?view=my_followed', title: '我关注的工单', icon: Tickets },
+      { index: '/ticket/mine?view=my_brief_todo', title: '待出简报工单', icon: Document },
+    ],
+  },
   {
     index: 'ticketCategoryGroups',
     title: '工单分类',
@@ -156,7 +167,11 @@ const activeMenu = computed(() => {
     return route.path
   }
   if (route.path === '/ticket/create') {
-    return '/ticket/mine'
+    return '/ticket/mine?view=my_todo'
+  }
+  if (route.path === '/ticket/mine') {
+    const view = typeof route.query.view === 'string' ? route.query.view : 'my_todo'
+    return `/ticket/mine?view=${view}`
   }
   if (route.path.startsWith('/bug-report/detail/')) {
     return '/bug-report'

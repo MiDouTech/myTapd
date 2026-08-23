@@ -49,7 +49,7 @@ export const routes: RouteRecordRaw[] = [
         name: 'ticketMine',
         component: () => import('@/views/ticket/TicketListView.vue'),
         meta: {
-          title: '我的工单',
+          title: '工单处理',
         },
       },
       {
