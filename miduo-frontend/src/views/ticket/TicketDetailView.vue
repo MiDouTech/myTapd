@@ -1454,11 +1454,8 @@ watch(
             催办
           </el-button>
         </div>
-        <div class="action-bar-right">
-          <el-button size="small" plain :disabled="!detail?.ticketNo" @click="shareDialogVisible = true">
-            <el-icon style="margin-right: 4px"><Link /></el-icon>
-            分享给客户
-          </el-button>
+        <!-- 右侧操作区仅保留关注；客户分享入口统一放在顶部标题区，避免重复展示 -->
+        <div class="follow-action">
           <el-button
             size="small"
             :type="detail?.isFollowed ? 'primary' : 'default'"
@@ -2728,7 +2725,7 @@ watch(
   flex-wrap: wrap;
 }
 
-.action-bar-right {
+.follow-action {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2748,7 +2745,7 @@ watch(
 }
 
 .action-bar-left :deep(.el-button + .el-button),
-.action-bar-right :deep(.el-button + .el-button) {
+.follow-action :deep(.el-button + .el-button) {
   margin-left: 0;
 }
 
@@ -3712,7 +3709,7 @@ watch(
   }
 
   .action-bar-left,
-  .action-bar-right {
+  .follow-action {
     width: 100%;
   }
 
@@ -3721,7 +3718,7 @@ watch(
   }
 
   .action-bar-left :deep(.el-button),
-  .action-bar-right :deep(.el-button) {
+  .follow-action :deep(.el-button) {
     min-height: 36px;
     padding: 0 12px;
   }
