@@ -62,7 +62,12 @@ import type {
 } from '@/types/workflow'
 import type { UserListOutput } from '@/types/user'
 import { confirmAction, notifySuccess, notifyError } from '@/utils/feedback'
-import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import {
+  formatDateTime,
+  formatDurationSec,
+  formatFileSize,
+  formatRoleLabel,
+} from '@/utils/formatter'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 import { getTicketStatusLabel, normalizeTicketStatusCode } from '@/utils/ticket-status'
 
@@ -85,6 +90,9 @@ const descriptionDisplayHtml = computed(() =>
 )
 
 const activeBugTab = ref('customer')
+type BugInfoSection = 'customer' | 'test' | 'dev'
+const editingBugSection = ref<BugInfoSection | null>(null)
+let bugInfoEditSnapshot = ''
 const timeTrackItems = ref<TicketTimeTrackItem[]>([])
 const timeTrackStandalone = ref<BugChangeHistoryOutput[]>([])
 const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
@@ -225,9 +233,7 @@ function closeMentionFloatingPanel(): void {
 }
 
 function onEditorMentionPanel(
-  payload:
-    | { open: false }
-    | { open: true; keyword: string; anchor: MentionPanelAnchor },
+  payload: { open: false } | { open: true; keyword: string; anchor: MentionPanelAnchor },
 ): void {
   if (!payload.open) {
     if (mentionFromInlineEditor.value) {
@@ -644,6 +650,50 @@ const canEditTestInfo = computed(() => true)
 
 const canEditDevInfo = computed(() => true)
 
+const reproduceEnvLabels: Record<string, string> = {
+  PRODUCTION: '生产环境',
+  TEST: '测试环境',
+  BOTH: '均可复现',
+}
+const impactScopeLabels: Record<string, string> = {
+  SINGLE: '单一商户',
+  PARTIAL: '部分商户',
+  ALL: '全部商户',
+}
+const severityLevelLabels: Record<string, string> = {
+  P0: 'P0（致命）',
+  P1: 'P1（严重）',
+  P2: 'P2（一般）',
+  P3: 'P3（轻微）',
+  P4: 'P4（建议）',
+}
+
+function bugInfoSnapshot(): string {
+  return JSON.stringify({
+    customer: { ...customerInfoForm },
+    screenshots: customerProblemScreenshots.value,
+    test: { ...testInfoForm },
+    dev: { ...devInfoForm },
+  })
+}
+
+function startBugInfoEdit(section: BugInfoSection): void {
+  bugInfoEditSnapshot = bugInfoSnapshot()
+  editingBugSection.value = section
+}
+
+function cancelBugInfoEdit(): void {
+  if (bugInfoEditSnapshot) {
+    const snapshot = JSON.parse(bugInfoEditSnapshot)
+    Object.assign(customerInfoForm, snapshot.customer)
+    customerProblemScreenshots.value = snapshot.screenshots
+    Object.assign(testInfoForm, snapshot.test)
+    Object.assign(devInfoForm, snapshot.dev)
+  }
+  editingBugSection.value = null
+  bugInfoEditSnapshot = ''
+}
+
 function hasRole(...targets: string[]): boolean {
   return targets.some((target) => roleCodes.value.includes(target))
 }
@@ -665,7 +715,9 @@ function fillBugForms(ticketDetail: TicketDetailOutput): void {
     sceneCode: ticketDetail.bugCustomerInfo?.sceneCode || '',
     problemScreenshot: ticketDetail.bugCustomerInfo?.problemScreenshot || '',
   })
-  customerProblemScreenshots.value = parseScreenshotList(ticketDetail.bugCustomerInfo?.problemScreenshot)
+  customerProblemScreenshots.value = parseScreenshotList(
+    ticketDetail.bugCustomerInfo?.problemScreenshot,
+  )
 
   // Automatically include WeChat bot images — no manual selection needed
   const wecomImageUrls = (ticketDetail.attachments || [])
@@ -902,7 +954,8 @@ async function handleProcess(): Promise<void> {
       selectedAction.value.targetStatus === 'temp_resolved' &&
       selectedAction.value.actionName?.includes('临时解决')
     ) {
-      const plan = transitForm.plannedFullResolveAt?.trim() || devInfoForm.plannedFullResolveAt?.trim()
+      const plan =
+        transitForm.plannedFullResolveAt?.trim() || devInfoForm.plannedFullResolveAt?.trim()
       if (!plan) {
         notifyError('临时解决必须填写计划彻底解决时间')
         return
@@ -932,8 +985,10 @@ async function handleProcess(): Promise<void> {
       currentStatus.value === 'testing' &&
       selectedAction.value.targetStatus === 'pending_dev_accept'
     ) {
-      transitPayload.reproduceEnv = transitForm.reproduceEnv?.trim() || testInfoForm.reproduceEnv?.trim()
-      transitPayload.severityLevel = transitForm.severityLevel?.trim() || testInfoForm.severityLevel?.trim()
+      transitPayload.reproduceEnv =
+        transitForm.reproduceEnv?.trim() || testInfoForm.reproduceEnv?.trim()
+      transitPayload.severityLevel =
+        transitForm.severityLevel?.trim() || testInfoForm.severityLevel?.trim()
     }
     if (
       isDefectWorkflow.value &&
@@ -1029,6 +1084,8 @@ async function saveCustomerInfo(): Promise<void> {
     customerInfoForm.problemScreenshot = uniqStringList(customerProblemScreenshots.value).join(',')
     await updateBugCustomerInfo(ticketId.value, { ...customerInfoForm })
     notifySuccess('客服信息保存成功')
+    editingBugSection.value = null
+    bugInfoEditSnapshot = ''
     await loadAll()
   } finally {
     bugSubmitLoading.value = false
@@ -1045,6 +1102,8 @@ async function saveTestInfo(): Promise<void> {
     }
     await updateBugTestInfo(ticketId.value, { ...testInfoForm })
     notifySuccess('测试信息保存成功')
+    editingBugSection.value = null
+    bugInfoEditSnapshot = ''
     await loadAll()
   } finally {
     bugSubmitLoading.value = false
@@ -1056,6 +1115,8 @@ async function saveDevInfo(): Promise<void> {
   try {
     await updateBugDevInfo(ticketId.value, { ...devInfoForm })
     notifySuccess('开发信息保存成功')
+    editingBugSection.value = null
+    bugInfoEditSnapshot = ''
     await loadAll()
   } finally {
     bugSubmitLoading.value = false
@@ -1087,9 +1148,7 @@ async function submitComment(): Promise<void> {
   commentSubmitLoading.value = true
   try {
     const fromHtml = extractMentionUserIdsFromCommentHtml(commentContent)
-    const mergedMentions = Array.from(
-      new Set([...commentMentionUserIds.value, ...fromHtml]),
-    )
+    const mergedMentions = Array.from(new Set([...commentMentionUserIds.value, ...fromHtml]))
     await addTicketComment(ticketId.value, {
       content: commentContent,
       mentionedUserIds: mergedMentions.length > 0 ? mergedMentions : undefined,
@@ -1299,7 +1358,10 @@ function isOperationLog(type?: string): boolean {
   return type === 'OPERATION'
 }
 
-interface AvatarColor { bg: string; text: string }
+interface AvatarColor {
+  bg: string
+  text: string
+}
 
 const AVATAR_COLORS: AvatarColor[] = [
   { bg: '#e8f0fe', text: '#1675d1' },
@@ -1355,6 +1417,7 @@ watch(
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-v-html -- Rich text is stored and rendered consistently with the existing ticket detail content. -->
   <div class="ticket-detail-page">
     <!-- 顶部信息卡片 -->
     <el-card shadow="never" class="header-card" v-loading="loading">
@@ -1407,7 +1470,13 @@ watch(
             <el-button
               v-for="action in availableActions.actions"
               :key="action.transitionId"
-              :type="action.isReturn ? 'warning' : action.targetStatus === 'closed' ? 'danger' : 'primary'"
+              :type="
+                action.isReturn
+                  ? 'warning'
+                  : action.targetStatus === 'closed'
+                    ? 'danger'
+                    : 'primary'
+              "
               size="small"
               @click="openTransitDialog(action)"
             >
@@ -1424,7 +1493,9 @@ watch(
           >
             回退上一步
           </el-button>
-          <template v-if="currentStatus === 'pending_assign' || currentStatus === 'alert_triggered'">
+          <template
+            v-if="currentStatus === 'pending_assign' || currentStatus === 'alert_triggered'"
+          >
             <el-button size="small" type="primary" plain @click="openAssignDialog">
               分派处理人
             </el-button>
@@ -1455,7 +1526,12 @@ watch(
           </el-button>
         </div>
         <div class="action-bar-right">
-          <el-button size="small" plain :disabled="!detail?.ticketNo" @click="shareDialogVisible = true">
+          <el-button
+            size="small"
+            plain
+            :disabled="!detail?.ticketNo"
+            @click="shareDialogVisible = true"
+          >
             <el-icon style="margin-right: 4px"><Link /></el-icon>
             分享给客户
           </el-button>
@@ -1497,267 +1573,504 @@ watch(
             <el-tab-pane label="详细信息" name="detail">
               <el-tabs v-model="activeBugTab" class="inner-tabs bug-info-tabs">
                 <el-tab-pane label="客服信息" name="customer">
-                  <!-- 企微消息一键解析入口 -->
-                  <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
+                  <div class="info-section-heading">
+                    <span class="info-section-tip">客户资料、问题说明与截图</span>
                     <el-button
+                      v-if="editingBugSection !== 'customer'"
                       type="primary"
                       plain
-                      size="small"
-                      class="wecom-parse-btn"
-                      @click="openWecomParseDialog"
+                      :disabled="editingBugSection !== null"
+                      @click="startBugInfoEdit('customer')"
+                      >编辑</el-button
                     >
-                      <el-icon style="margin-right: 4px"><ChatDotSquare /></el-icon>
-                      企微消息一键解析
-                    </el-button>
-                    <span class="wecom-parse-hint">粘贴企微收到的客服消息，自动识别并填入下方字段</span>
                   </div>
-                  <el-form
-                    :label-width="isCompactLayout ? 'auto' : '120px'"
-                    :label-position="isCompactLayout ? 'top' : 'right'"
-                    class="info-form"
-                  >
-                    <el-form-item label="商户编号">
-                      <el-input v-model="customerInfoForm.merchantNo" :disabled="!canEditCustomerInfo" />
-                    </el-form-item>
-                    <el-form-item label="公司名称">
-                      <el-input v-model="customerInfoForm.companyName" :disabled="!canEditCustomerInfo" />
-                    </el-form-item>
-                    <el-form-item label="商户账号">
-                      <el-input v-model="customerInfoForm.merchantAccount" :disabled="!canEditCustomerInfo" />
-                    </el-form-item>
-                    <el-form-item label="场景码">
-                      <el-input v-model="customerInfoForm.sceneCode" :disabled="!canEditCustomerInfo" />
-                    </el-form-item>
-                    <el-form-item label="问题描述">
-                      <el-input
-                        v-model="customerInfoForm.problemDesc"
-                        type="textarea"
-                        :rows="3"
-                        :disabled="!canEditCustomerInfo"
-                      />
-                    </el-form-item>
-                    <el-form-item label="预期结果">
-                      <el-input
-                        v-model="customerInfoForm.expectedResult"
-                        type="textarea"
-                        :rows="3"
-                        :disabled="!canEditCustomerInfo"
-                      />
-                    </el-form-item>
-                    <el-form-item label="问题截图">
-                      <div class="problem-screenshot-field">
-                        <el-upload
-                          v-if="canEditCustomerInfo"
-                          ref="customerScreenshotUploadRef"
-                          class="screenshot-upload"
-                          drag
-                          :show-file-list="false"
-                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
-                          :on-change="handleCustomerScreenshotUpload"
-                          :auto-upload="false"
-                        >
-                          <div class="upload-drag-content">
-                            <el-icon class="upload-drag-icon"><Plus /></el-icon>
-                            <div class="upload-drag-text">将文件拖到此处触发上传</div>
-                            <div class="upload-drag-subtext">或点击按钮上传问题截图（支持多张）</div>
-                            <el-button type="primary" size="small" plain :loading="customerScreenshotUploadLoading">
-                              点击上传
-                            </el-button>
-                          </div>
-                        </el-upload>
-
-                        <div class="screenshot-tip">
-                          问题截图支持多选，可来源于企微附图，也可在此处手动上传补充。
-                        </div>
-
-                        <div v-if="customerProblemScreenshots.length" class="selected-screenshot-wrap">
-                          <div class="selected-screenshot-title">
-                            已选问题截图（{{ customerProblemScreenshots.length }}）
-                          </div>
-                          <div class="selected-screenshot-grid">
-                            <div
-                              v-for="(url, urlIndex) in customerProblemScreenshots"
-                              :key="url"
-                              class="selected-screenshot-item"
-                            >
-                              <el-image
-                                :src="url"
-                                :preview-src-list="customerProblemScreenshots"
-                                :initial-index="urlIndex"
-                                fit="cover"
-                                class="selected-screenshot-image"
-                                preview-teleported
-                              />
+                  <template v-if="editingBugSection === 'customer'">
+                    <!-- 企微消息一键解析入口 -->
+                    <div v-if="canEditCustomerInfo" class="wecom-parse-bar">
+                      <el-button
+                        type="primary"
+                        plain
+                        size="small"
+                        class="wecom-parse-btn"
+                        @click="openWecomParseDialog"
+                      >
+                        <el-icon style="margin-right: 4px"><ChatDotSquare /></el-icon>
+                        企微消息一键解析
+                      </el-button>
+                      <span class="wecom-parse-hint"
+                        >粘贴企微收到的客服消息，自动识别并填入下方字段</span
+                      >
+                    </div>
+                    <el-form
+                      :label-width="isCompactLayout ? 'auto' : '120px'"
+                      :label-position="isCompactLayout ? 'top' : 'right'"
+                      class="info-form"
+                    >
+                      <el-form-item label="商户编号">
+                        <el-input
+                          v-model="customerInfoForm.merchantNo"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="公司名称">
+                        <el-input
+                          v-model="customerInfoForm.companyName"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="商户账号">
+                        <el-input
+                          v-model="customerInfoForm.merchantAccount"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="场景码">
+                        <el-input
+                          v-model="customerInfoForm.sceneCode"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="问题描述">
+                        <el-input
+                          v-model="customerInfoForm.problemDesc"
+                          type="textarea"
+                          :autosize="{ minRows: 3, maxRows: 14 }"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="预期结果">
+                        <el-input
+                          v-model="customerInfoForm.expectedResult"
+                          type="textarea"
+                          :autosize="{ minRows: 3, maxRows: 14 }"
+                          :disabled="!canEditCustomerInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="问题截图">
+                        <div class="problem-screenshot-field">
+                          <el-upload
+                            v-if="canEditCustomerInfo"
+                            ref="customerScreenshotUploadRef"
+                            class="screenshot-upload"
+                            drag
+                            :show-file-list="false"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp"
+                            :on-change="handleCustomerScreenshotUpload"
+                            :auto-upload="false"
+                          >
+                            <div class="upload-drag-content">
+                              <el-icon class="upload-drag-icon"><Plus /></el-icon>
+                              <div class="upload-drag-text">将文件拖到此处触发上传</div>
+                              <div class="upload-drag-subtext">
+                                或点击按钮上传问题截图（支持多张）
+                              </div>
                               <el-button
-                                type="danger"
-                                link
+                                type="primary"
                                 size="small"
-                                :disabled="!canEditCustomerInfo"
-                                @click="removeProblemScreenshot(url)"
+                                plain
+                                :loading="customerScreenshotUploadLoading"
                               >
-                                移除
+                                点击上传
                               </el-button>
+                            </div>
+                          </el-upload>
+
+                          <div class="screenshot-tip">
+                            问题截图支持多选，可来源于企微附图，也可在此处手动上传补充。
+                          </div>
+
+                          <div
+                            v-if="customerProblemScreenshots.length"
+                            class="selected-screenshot-wrap"
+                          >
+                            <div class="selected-screenshot-title">
+                              已选问题截图（{{ customerProblemScreenshots.length }}）
+                            </div>
+                            <div class="selected-screenshot-grid">
+                              <div
+                                v-for="(url, urlIndex) in customerProblemScreenshots"
+                                :key="url"
+                                class="selected-screenshot-item"
+                              >
+                                <el-image
+                                  :src="url"
+                                  :preview-src-list="customerProblemScreenshots"
+                                  :initial-index="urlIndex"
+                                  fit="cover"
+                                  class="selected-screenshot-image"
+                                  preview-teleported
+                                />
+                                <el-button
+                                  type="danger"
+                                  link
+                                  size="small"
+                                  :disabled="!canEditCustomerInfo"
+                                  @click="removeProblemScreenshot(url)"
+                                >
+                                  移除
+                                </el-button>
+                              </div>
                             </div>
                           </div>
                         </div>
+                      </el-form-item>
+                    </el-form>
+                    <div class="tab-actions">
+                      <el-button @click="cancelBugInfoEdit">取消</el-button>
+                      <el-button
+                        type="primary"
+                        :disabled="!canEditCustomerInfo"
+                        :loading="bugSubmitLoading"
+                        @click="saveCustomerInfo"
+                        >保存客服信息</el-button
+                      >
+                    </div>
+                  </template>
+                  <div v-else class="info-read-view">
+                    <div class="read-meta-grid">
+                      <div class="read-field">
+                        <span class="read-label">商户编号</span
+                        ><span class="read-value">{{
+                          customerInfoForm.merchantNo || '未填写'
+                        }}</span>
                       </div>
-                    </el-form-item>
-                  </el-form>
-                  <div class="tab-actions">
-                    <el-button
-                      type="primary"
-                      :disabled="!canEditCustomerInfo"
-                      :loading="bugSubmitLoading"
-                      @click="saveCustomerInfo"
-                    >保存客服信息</el-button>
+                      <div class="read-field">
+                        <span class="read-label">公司名称</span
+                        ><span class="read-value">{{
+                          customerInfoForm.companyName || '未填写'
+                        }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">商户账号</span
+                        ><span class="read-value">{{
+                          customerInfoForm.merchantAccount || '未填写'
+                        }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">场景码</span
+                        ><span class="read-value">{{
+                          customerInfoForm.sceneCode || '未填写'
+                        }}</span>
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">问题描述</div>
+                      <div class="read-long-text">
+                        {{ customerInfoForm.problemDesc || '未填写' }}
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">预期结果</div>
+                      <div class="read-long-text">
+                        {{ customerInfoForm.expectedResult || '未填写' }}
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">
+                        问题截图（{{ customerProblemScreenshots.length }}）
+                      </div>
+                      <div v-if="customerProblemScreenshots.length" class="read-image-grid">
+                        <el-image
+                          v-for="(url, index) in customerProblemScreenshots"
+                          :key="url"
+                          :src="url"
+                          :preview-src-list="customerProblemScreenshots"
+                          :initial-index="index"
+                          fit="cover"
+                          class="read-image"
+                          preview-teleported
+                        />
+                      </div>
+                      <div v-else class="read-empty">未上传</div>
+                    </div>
                   </div>
                 </el-tab-pane>
 
                 <el-tab-pane label="测试信息" name="test">
-                  <el-form
-                    :label-width="isCompactLayout ? 'auto' : '120px'"
-                    :label-position="isCompactLayout ? 'top' : 'right'"
-                    class="info-form"
-                  >
-                    <el-form-item label="复现环境">
-                      <el-select v-model="testInfoForm.reproduceEnv" :disabled="!canEditTestInfo" placeholder="请选择">
-                        <el-option label="生产环境" value="PRODUCTION" />
-                        <el-option label="测试环境" value="TEST" />
-                        <el-option label="均可复现" value="BOTH" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="复现步骤">
-                      <RichTextEditor
-                        v-model="testInfoForm.reproduceSteps"
-                        :disabled="!canEditTestInfo"
-                        :ticket-id="ticketId"
-                        placeholder="请填写复现步骤，支持粘贴截图、插入图片和表格..."
-                        :height="220"
-                      />
-                    </el-form-item>
-                    <el-form-item label="实际结果">
-                      <RichTextEditor
-                        v-model="testInfoForm.actualResult"
-                        :disabled="!canEditTestInfo"
-                        :ticket-id="ticketId"
-                        placeholder="请填写实际结果，支持粘贴截图、插入图片和表格..."
-                        :height="180"
-                      />
-                    </el-form-item>
-                    <el-form-item label="影响范围">
-                      <el-select v-model="testInfoForm.impactScope" :disabled="!canEditTestInfo" placeholder="请选择">
-                        <el-option label="单一商户" value="SINGLE" />
-                        <el-option label="部分商户" value="PARTIAL" />
-                        <el-option label="全部商户" value="ALL" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="缺陷等级">
-                      <el-select v-model="testInfoForm.severityLevel" :disabled="!canEditTestInfo" placeholder="请选择">
-                        <el-option label="P0（致命）" value="P0" />
-                        <el-option label="P1（严重）" value="P1" />
-                        <el-option label="P2（一般）" value="P2" />
-                        <el-option label="P3（轻微）" value="P3" />
-                        <el-option label="P4（建议）" value="P4" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="所属模块">
-                      <el-select
-                        v-model="testInfoForm.moduleName"
-                        :disabled="!canEditTestInfo"
-                        filterable
-                        allow-create
-                        clearable
-                        placeholder="请选择或输入模块名称"
-                        style="width: 100%"
-                      >
-                        <el-option
-                          v-for="mod in ticketModules"
-                          :key="mod.id"
-                          :label="mod.name"
-                          :value="mod.name"
-                        />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="测试备注">
-                      <RichTextEditor
-                        v-model="testInfoForm.testRemark"
-                        :disabled="!canEditTestInfo"
-                        :ticket-id="ticketId"
-                        placeholder="请填写测试备注，支持粘贴图片、插入表格等富文本内容..."
-                        :height="180"
-                      />
-                    </el-form-item>
-                  </el-form>
-                  <div class="tab-actions">
+                  <div class="info-section-heading">
+                    <span class="info-section-tip">复现过程、结果与测试结论</span>
                     <el-button
+                      v-if="editingBugSection !== 'test'"
                       type="primary"
-                      :disabled="!canEditTestInfo"
-                      :loading="bugSubmitLoading"
-                      @click="saveTestInfo"
-                    >保存测试信息</el-button>
+                      plain
+                      :disabled="editingBugSection !== null"
+                      @click="startBugInfoEdit('test')"
+                      >编辑</el-button
+                    >
+                  </div>
+                  <template v-if="editingBugSection === 'test'">
+                    <el-form
+                      :label-width="isCompactLayout ? 'auto' : '120px'"
+                      :label-position="isCompactLayout ? 'top' : 'right'"
+                      class="info-form"
+                    >
+                      <el-form-item label="复现环境">
+                        <el-select
+                          v-model="testInfoForm.reproduceEnv"
+                          :disabled="!canEditTestInfo"
+                          placeholder="请选择"
+                        >
+                          <el-option label="生产环境" value="PRODUCTION" />
+                          <el-option label="测试环境" value="TEST" />
+                          <el-option label="均可复现" value="BOTH" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="复现步骤">
+                        <RichTextEditor
+                          v-model="testInfoForm.reproduceSteps"
+                          :disabled="!canEditTestInfo"
+                          :ticket-id="ticketId"
+                          placeholder="请填写复现步骤，支持粘贴截图、插入图片和表格..."
+                          :height="180"
+                          auto-grow
+                          :max-height="640"
+                        />
+                      </el-form-item>
+                      <el-form-item label="实际结果">
+                        <RichTextEditor
+                          v-model="testInfoForm.actualResult"
+                          :disabled="!canEditTestInfo"
+                          :ticket-id="ticketId"
+                          placeholder="请填写实际结果，支持粘贴截图、插入图片和表格..."
+                          :height="160"
+                          auto-grow
+                          :max-height="640"
+                        />
+                      </el-form-item>
+                      <el-form-item label="影响范围">
+                        <el-select
+                          v-model="testInfoForm.impactScope"
+                          :disabled="!canEditTestInfo"
+                          placeholder="请选择"
+                        >
+                          <el-option label="单一商户" value="SINGLE" />
+                          <el-option label="部分商户" value="PARTIAL" />
+                          <el-option label="全部商户" value="ALL" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="缺陷等级">
+                        <el-select
+                          v-model="testInfoForm.severityLevel"
+                          :disabled="!canEditTestInfo"
+                          placeholder="请选择"
+                        >
+                          <el-option label="P0（致命）" value="P0" />
+                          <el-option label="P1（严重）" value="P1" />
+                          <el-option label="P2（一般）" value="P2" />
+                          <el-option label="P3（轻微）" value="P3" />
+                          <el-option label="P4（建议）" value="P4" />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="所属模块">
+                        <el-select
+                          v-model="testInfoForm.moduleName"
+                          :disabled="!canEditTestInfo"
+                          filterable
+                          allow-create
+                          clearable
+                          placeholder="请选择或输入模块名称"
+                          style="width: 100%"
+                        >
+                          <el-option
+                            v-for="mod in ticketModules"
+                            :key="mod.id"
+                            :label="mod.name"
+                            :value="mod.name"
+                          />
+                        </el-select>
+                      </el-form-item>
+                      <el-form-item label="测试备注">
+                        <RichTextEditor
+                          v-model="testInfoForm.testRemark"
+                          :disabled="!canEditTestInfo"
+                          :ticket-id="ticketId"
+                          placeholder="请填写测试备注，支持粘贴图片、插入表格等富文本内容..."
+                          :height="160"
+                          auto-grow
+                          :max-height="640"
+                        />
+                      </el-form-item>
+                    </el-form>
+                    <div class="tab-actions">
+                      <el-button @click="cancelBugInfoEdit">取消</el-button>
+                      <el-button
+                        type="primary"
+                        :disabled="!canEditTestInfo"
+                        :loading="bugSubmitLoading"
+                        @click="saveTestInfo"
+                        >保存测试信息</el-button
+                      >
+                    </div>
+                  </template>
+                  <div v-else class="info-read-view">
+                    <div class="read-meta-grid">
+                      <div class="read-field">
+                        <span class="read-label">复现环境</span
+                        ><span class="read-value">{{
+                          reproduceEnvLabels[testInfoForm.reproduceEnv || ''] || '未填写'
+                        }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">缺陷等级</span
+                        ><span class="read-value">{{
+                          severityLevelLabels[testInfoForm.severityLevel || ''] || '未填写'
+                        }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">影响范围</span
+                        ><span class="read-value">{{
+                          impactScopeLabels[testInfoForm.impactScope || ''] || '未填写'
+                        }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">所属模块</span
+                        ><span class="read-value">{{ testInfoForm.moduleName || '未填写' }}</span>
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">复现步骤</div>
+                      <div
+                        v-if="testInfoForm.reproduceSteps"
+                        class="rich-read-content"
+                        v-html="testInfoForm.reproduceSteps"
+                      />
+                      <div v-else class="read-empty">未填写</div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">实际结果</div>
+                      <div
+                        v-if="testInfoForm.actualResult"
+                        class="rich-read-content"
+                        v-html="testInfoForm.actualResult"
+                      />
+                      <div v-else class="read-empty">未填写</div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">测试备注</div>
+                      <div
+                        v-if="testInfoForm.testRemark"
+                        class="rich-read-content"
+                        v-html="testInfoForm.testRemark"
+                      />
+                      <div v-else class="read-empty">未填写</div>
+                    </div>
                   </div>
                 </el-tab-pane>
 
                 <el-tab-pane label="开发信息" name="dev">
-                  <el-form
-                    :label-width="isCompactLayout ? 'auto' : '120px'"
-                    :label-position="isCompactLayout ? 'top' : 'right'"
-                    class="info-form"
-                  >
-                    <el-form-item label="缺陷原因">
-                      <el-input
-                        v-model="devInfoForm.rootCause"
-                        type="textarea"
-                        :rows="3"
-                        :disabled="!canEditDevInfo"
-                      />
-                    </el-form-item>
-                    <el-form-item label="修复方案">
-                      <el-input
-                        v-model="devInfoForm.fixSolution"
-                        type="textarea"
-                        :rows="3"
-                        :disabled="!canEditDevInfo"
-                      />
-                    </el-form-item>
-                    <el-form-item label="关联分支">
-                      <el-input v-model="devInfoForm.gitBranch" :disabled="!canEditDevInfo" />
-                    </el-form-item>
-                    <el-form-item label="影响评估">
-                      <el-input
-                        v-model="devInfoForm.impactAssessment"
-                        type="textarea"
-                        :rows="3"
-                        :disabled="!canEditDevInfo"
-                      />
-                    </el-form-item>
-                    <el-form-item label="开发备注">
-                      <RichTextEditor
-                        v-model="devInfoForm.devRemark"
-                        :disabled="!canEditDevInfo"
-                        :ticket-id="ticketId"
-                        placeholder="请填写开发备注，支持粘贴图片、插入表格等富文本内容..."
-                        :height="180"
-                      />
-                    </el-form-item>
-                    <el-form-item label="计划彻底解决">
-                      <el-date-picker
-                        v-model="devInfoForm.plannedFullResolveAt"
-                        type="datetime"
-                        value-format="YYYY-MM-DDTHH:mm:ss"
-                        placeholder="临时解决时必填，可选填以提前维护"
-                        :disabled="!canEditDevInfo"
-                        style="width: 100%"
-                      />
-                    </el-form-item>
-                  </el-form>
-                  <div class="tab-actions">
+                  <div class="info-section-heading">
+                    <span class="info-section-tip">原因分析、修复方案与开发记录</span>
                     <el-button
+                      v-if="editingBugSection !== 'dev'"
                       type="primary"
-                      :disabled="!canEditDevInfo"
-                      :loading="bugSubmitLoading"
-                      @click="saveDevInfo"
-                    >保存开发信息</el-button>
+                      plain
+                      :disabled="editingBugSection !== null"
+                      @click="startBugInfoEdit('dev')"
+                      >编辑</el-button
+                    >
+                  </div>
+                  <template v-if="editingBugSection === 'dev'">
+                    <el-form
+                      :label-width="isCompactLayout ? 'auto' : '120px'"
+                      :label-position="isCompactLayout ? 'top' : 'right'"
+                      class="info-form"
+                    >
+                      <el-form-item label="缺陷原因">
+                        <el-input
+                          v-model="devInfoForm.rootCause"
+                          type="textarea"
+                          :autosize="{ minRows: 3, maxRows: 14 }"
+                          :disabled="!canEditDevInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="修复方案">
+                        <el-input
+                          v-model="devInfoForm.fixSolution"
+                          type="textarea"
+                          :autosize="{ minRows: 3, maxRows: 14 }"
+                          :disabled="!canEditDevInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="关联分支">
+                        <el-input v-model="devInfoForm.gitBranch" :disabled="!canEditDevInfo" />
+                      </el-form-item>
+                      <el-form-item label="影响评估">
+                        <el-input
+                          v-model="devInfoForm.impactAssessment"
+                          type="textarea"
+                          :autosize="{ minRows: 3, maxRows: 14 }"
+                          :disabled="!canEditDevInfo"
+                        />
+                      </el-form-item>
+                      <el-form-item label="开发备注">
+                        <RichTextEditor
+                          v-model="devInfoForm.devRemark"
+                          :disabled="!canEditDevInfo"
+                          :ticket-id="ticketId"
+                          placeholder="请填写开发备注，支持粘贴图片、插入表格等富文本内容..."
+                          :height="160"
+                          auto-grow
+                          :max-height="640"
+                        />
+                      </el-form-item>
+                      <el-form-item label="计划彻底解决">
+                        <el-date-picker
+                          v-model="devInfoForm.plannedFullResolveAt"
+                          type="datetime"
+                          value-format="YYYY-MM-DDTHH:mm:ss"
+                          placeholder="临时解决时必填，可选填以提前维护"
+                          :disabled="!canEditDevInfo"
+                          style="width: 100%"
+                        />
+                      </el-form-item>
+                    </el-form>
+                    <div class="tab-actions">
+                      <el-button @click="cancelBugInfoEdit">取消</el-button>
+                      <el-button
+                        type="primary"
+                        :disabled="!canEditDevInfo"
+                        :loading="bugSubmitLoading"
+                        @click="saveDevInfo"
+                        >保存开发信息</el-button
+                      >
+                    </div>
+                  </template>
+                  <div v-else class="info-read-view">
+                    <div class="read-meta-grid">
+                      <div class="read-field">
+                        <span class="read-label">关联分支</span
+                        ><span class="read-value">{{ devInfoForm.gitBranch || '未填写' }}</span>
+                      </div>
+                      <div class="read-field">
+                        <span class="read-label">计划彻底解决</span
+                        ><span class="read-value">{{
+                          formatDateTime(devInfoForm.plannedFullResolveAt)
+                        }}</span>
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">缺陷原因</div>
+                      <div class="read-long-text">{{ devInfoForm.rootCause || '未填写' }}</div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">修复方案</div>
+                      <div class="read-long-text">{{ devInfoForm.fixSolution || '未填写' }}</div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">影响评估</div>
+                      <div class="read-long-text">
+                        {{ devInfoForm.impactAssessment || '未填写' }}
+                      </div>
+                    </div>
+                    <div class="read-block">
+                      <div class="read-label">开发备注</div>
+                      <div
+                        v-if="devInfoForm.devRemark"
+                        class="rich-read-content"
+                        v-html="devInfoForm.devRemark"
+                      />
+                      <div v-else class="read-empty">未填写</div>
+                    </div>
                   </div>
                 </el-tab-pane>
 
@@ -1787,7 +2100,10 @@ watch(
             <!-- 流转历史 Tab -->
             <el-tab-pane label="流转历史" name="flow-history">
               <div v-loading="flowHistoryLoading" class="flow-history-container">
-                <el-empty v-if="!flowHistory.length && !flowHistoryLoading" description="暂无流转记录" />
+                <el-empty
+                  v-if="!flowHistory.length && !flowHistoryLoading"
+                  description="暂无流转记录"
+                />
                 <el-timeline v-else>
                   <el-timeline-item
                     v-for="record in flowHistory"
@@ -1797,7 +2113,10 @@ watch(
                   >
                     <div class="flow-record-card">
                       <div class="flow-record-main">
-                        <el-tag size="small" :type="record.flowType === 'RETURN' ? 'warning' : 'primary'">
+                        <el-tag
+                          size="small"
+                          :type="record.flowType === 'RETURN' ? 'warning' : 'primary'"
+                        >
                           {{ record.flowTypeLabel || record.flowType }}
                         </el-tag>
                         <span v-if="record.fromStatusName" class="flow-status-text">
@@ -1806,18 +2125,28 @@ watch(
                         <el-icon v-if="record.toStatus !== record.fromStatus" class="flow-arrow">
                           <ArrowRight />
                         </el-icon>
-                        <span v-if="record.toStatus !== record.fromStatus" class="flow-status-text flow-status-to">
+                        <span
+                          v-if="record.toStatus !== record.fromStatus"
+                          class="flow-status-text flow-status-to"
+                        >
                           {{ record.toStatusName }}
                         </span>
                         <el-divider direction="vertical" />
                         <span class="flow-operator">
-                          操作人：{{ record.operatorName || record.operatorId }}
-                          （{{ formatRoleLabel(record.operatorRole) }}）
+                          操作人：{{ record.operatorName || record.operatorId }} （{{
+                            formatRoleLabel(record.operatorRole)
+                          }}）
                         </span>
-                        <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
+                        <template
+                          v-if="
+                            record.fromAssigneeName !== record.toAssigneeName &&
+                            record.toAssigneeName
+                          "
+                        >
                           <el-divider direction="vertical" />
                           <span class="flow-operator">
-                            处理人：{{ record.fromAssigneeName || '-' }} → {{ record.toAssigneeName }}
+                            处理人：{{ record.fromAssigneeName || '-' }} →
+                            {{ record.toAssigneeName }}
                           </span>
                         </template>
                       </div>
@@ -1887,11 +2216,7 @@ watch(
         description="暂无附件，可拖拽或点击上方区域上传文件"
       />
       <div v-else class="attachment-list">
-        <div
-          v-for="attachment in detail.attachments"
-          :key="attachment.id"
-          class="attachment-item"
-        >
+        <div v-for="attachment in detail.attachments" :key="attachment.id" class="attachment-item">
           <div class="attachment-preview">
             <el-image
               v-if="isImageFile(attachment.fileType)"
@@ -1914,7 +2239,9 @@ watch(
           </div>
           <div class="attachment-info">
             <div class="attachment-name-row">
-              <div class="attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+              <div class="attachment-name" :title="attachment.fileName">
+                {{ attachment.fileName }}
+              </div>
               <div class="attachment-actions attachment-actions-inline">
                 <el-button
                   v-if="isImageFile(attachment.fileType) && attachment.filePath"
@@ -1922,14 +2249,16 @@ watch(
                   link
                   size="small"
                   @click="openAttachmentPreview(attachment.filePath)"
-                >查看</el-button>
+                  >查看</el-button
+                >
                 <el-button
                   v-if="isVideoFile(attachment.fileType) && attachment.filePath"
                   type="primary"
                   link
                   size="small"
                   @click="openVideoInNewTab(attachment.filePath)"
-                >播放</el-button>
+                  >播放</el-button
+                >
                 <el-button
                   v-if="
                     attachment.filePath &&
@@ -1943,7 +2272,8 @@ watch(
                   :href="attachment.filePath"
                   target="_blank"
                   rel="noopener noreferrer"
-                >下载</el-button>
+                  >下载</el-button
+                >
                 <el-popconfirm
                   title="确认删除此附件？"
                   @confirm="handleDeleteAttachment(attachment.id)"
@@ -1960,13 +2290,9 @@ watch(
                 type="success"
                 size="small"
                 effect="plain"
-              >企微</el-tag>
-              <el-tag
-                v-else
-                type="info"
-                size="small"
-                effect="plain"
-              >Web</el-tag>
+                >企微</el-tag
+              >
+              <el-tag v-else type="info" size="small" effect="plain">Web</el-tag>
               <span>{{ formatFileSize(attachment.fileSize) }}</span>
             </div>
             <div class="attachment-meta attachment-meta-secondary">
@@ -2023,7 +2349,8 @@ watch(
               plain
               class="bug-report-view-btn"
               @click="openBugReportDetail(row.id)"
-            >查看简报</el-button>
+              >查看简报</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -2105,17 +2432,24 @@ watch(
                         @mousedown.prevent
                         @click="pickMentionUser(u)"
                       >
-                        <el-avatar :size="32" :src="u.avatarUrl || undefined" class="comment-mention-av">
+                        <el-avatar
+                          :size="32"
+                          :src="u.avatarUrl || undefined"
+                          class="comment-mention-av"
+                        >
                           {{ u.name?.charAt(0) || '?' }}
                         </el-avatar>
                         <div class="comment-mention-row-text">
                           <div class="comment-mention-primary">
-                            {{ u.name }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
+                            {{ u.name
+                            }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
                           </div>
                           <div class="comment-mention-sub">{{ mentionDisplaySub(u) }}</div>
                         </div>
                       </div>
-                      <div v-if="!mentionCandidates.length" class="comment-mention-status">无匹配用户</div>
+                      <div v-if="!mentionCandidates.length" class="comment-mention-status">
+                        无匹配用户
+                      </div>
                     </template>
                   </el-scrollbar>
                 </template>
@@ -2128,7 +2462,8 @@ watch(
           <div class="comment-submit-row">
             <div class="comment-submit-left">
               <span class="comment-hint">
-                支持粘贴图片、表格。点击「@同事」可在正文插入 @，对方将收到站内通知；若已绑定企微且开启推送，会同步收到企微消息。
+                支持粘贴图片、表格。点击「@同事」可在正文插入
+                @，对方将收到站内通知；若已绑定企微且开启推送，会同步收到企微消息。
               </span>
               <el-popover
                 v-model:visible="mentionPopoverVisible"
@@ -2172,17 +2507,24 @@ watch(
                         @mouseenter="mentionActiveIndex = idx"
                         @click="pickMentionUser(u)"
                       >
-                        <el-avatar :size="32" :src="u.avatarUrl || undefined" class="comment-mention-av">
+                        <el-avatar
+                          :size="32"
+                          :src="u.avatarUrl || undefined"
+                          class="comment-mention-av"
+                        >
                           {{ u.name?.charAt(0) || '?' }}
                         </el-avatar>
                         <div class="comment-mention-row-text">
                           <div class="comment-mention-primary">
-                            {{ u.name }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
+                            {{ u.name
+                            }}<span class="comment-mention-id">({{ mentionDisplaySub(u) }})</span>
                           </div>
                           <div class="comment-mention-sub">{{ mentionDisplaySub(u) }}</div>
                         </div>
                       </div>
-                      <div v-if="!mentionCandidates.length" class="comment-mention-status">无匹配用户</div>
+                      <div v-if="!mentionCandidates.length" class="comment-mention-status">
+                        无匹配用户
+                      </div>
                     </template>
                   </el-scrollbar>
                 </div>
@@ -2194,7 +2536,8 @@ watch(
               :loading="commentSubmitLoading"
               :disabled="!hasRichTextContent(commentInput)"
               @click="submitComment"
-            >发表评论</el-button>
+              >发表评论</el-button
+            >
           </div>
         </div>
       </div>
@@ -2213,7 +2556,10 @@ watch(
             <el-avatar
               :size="32"
               class="user-avatar"
-              :style="{ background: getAvatarColor(comment.userName ?? '').bg, color: getAvatarColor(comment.userName ?? '').text }"
+              :style="{
+                background: getAvatarColor(comment.userName ?? '').bg,
+                color: getAvatarColor(comment.userName ?? '').text,
+              }"
             >
               {{ comment.userName?.charAt(0) || '?' }}
             </el-avatar>
@@ -2221,14 +2567,21 @@ watch(
           <div class="comment-body">
             <div class="comment-header">
               <span class="comment-username">{{ comment.userName || '-' }}</span>
-              <el-tag v-if="isOperationLog(comment.type)" type="info" size="small" effect="plain">操作记录</el-tag>
+              <el-tag v-if="isOperationLog(comment.type)" type="info" size="small" effect="plain"
+                >操作记录</el-tag
+              >
               <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
             </div>
             <div v-if="isOperationLog(comment.type)" class="comment-content comment-content-plain">
               {{ comment.content || '-' }}
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-else class="comment-content" v-html="comment.content || '-'" @click="handleCommentImageClick" />
+            <div
+              v-else
+              class="comment-content"
+              v-html="comment.content || '-'"
+              @click="handleCommentImageClick"
+            />
           </div>
         </div>
       </div>
@@ -2253,7 +2606,9 @@ watch(
         <div class="share-field-label">公开链接</div>
         <el-input :model-value="publicTicketUrl" readonly>
           <template #append>
-            <el-button @click="copyShareContent(publicTicketUrl, '已复制公开链接，可直接发送给客户')">
+            <el-button
+              @click="copyShareContent(publicTicketUrl, '已复制公开链接，可直接发送给客户')"
+            >
               复制链接
             </el-button>
           </template>
@@ -2297,15 +2652,19 @@ watch(
           <div class="parse-example-content">
             <div class="parse-example-section">
               <div class="parse-example-label">✅ 结构化格式（识别率最高）</div>
-              <pre class="parse-example-code">商户编号：10004557
+              <pre class="parse-example-code">
+商户编号：10004557
 公司名称：山东英贝健生物技术有限公司
 商户账号：ybj0101
 问题描述：用户反馈支付页面无法跳转，点击支付按钮后页面白屏
-预期结果：点击支付后应正常跳转到支付页面</pre>
+预期结果：点击支付后应正常跳转到支付页面</pre
+              >
             </div>
             <div class="parse-example-section">
               <div class="parse-example-label">✅ 自然语言格式（也可识别）</div>
-              <pre class="parse-example-code">商户10004557，山东英贝健生物技术有限公司反馈，用户无法完成支付，点击支付按钮后页面出现白屏，账号ybj0101，预期点击后正常跳转到支付页面</pre>
+              <pre class="parse-example-code">
+商户10004557，山东英贝健生物技术有限公司反馈，用户无法完成支付，点击支付按钮后页面出现白屏，账号ybj0101，预期点击后正常跳转到支付页面</pre
+              >
             </div>
           </div>
         </el-collapse-item>
@@ -2377,7 +2736,11 @@ watch(
         {{ wecomParseResult ? '重新解析' : '开始解析' }}
       </el-button>
       <el-button
-        v-if="wecomParseResult && wecomParseResult.matchedFields && wecomParseResult.matchedFields.length > 0"
+        v-if="
+          wecomParseResult &&
+          wecomParseResult.matchedFields &&
+          wecomParseResult.matchedFields.length > 0
+        "
         type="primary"
         @click="applyWecomParseResult"
       >
@@ -2389,10 +2752,7 @@ watch(
   <!-- 分派工单弹窗（支持多人，首位为主处理人） -->
   <el-dialog v-model="assignDialogVisible" :title="assignDialogTitle" width="min(520px, 92vw)">
     <el-form label-width="100px">
-      <p
-        v-if="isDefectWorkflow && currentStatus === 'testing'"
-        class="assign-merge-hint"
-      >
+      <p v-if="isDefectWorkflow && currentStatus === 'testing'" class="assign-merge-hint">
         工单仍为「测试复现中」，不会变更流程状态；所选人员将加入协同处理人（主负责人不变）。
       </p>
       <el-form-item label="处理人" required>
@@ -2456,10 +2816,19 @@ watch(
   </el-dialog>
 
   <!-- 待分派：仅更换对接人（不改变流程状态） -->
-  <el-dialog v-model="pendingPoolTransferVisible" title="待分派 · 对接转派" width="min(480px, 92vw)">
+  <el-dialog
+    v-model="pendingPoolTransferVisible"
+    title="待分派 · 对接转派"
+    width="min(480px, 92vw)"
+  >
     <el-form label-width="90px">
       <el-form-item label="对接人" required>
-        <el-select v-model="pendingPoolTransferForm.targetUserId" filterable placeholder="选择新的测试对接人" style="width: 100%">
+        <el-select
+          v-model="pendingPoolTransferForm.targetUserId"
+          filterable
+          placeholder="选择新的测试对接人"
+          style="width: 100%"
+        >
           <el-option v-for="user in users" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
@@ -2469,7 +2838,9 @@ watch(
     </el-form>
     <template #footer>
       <el-button @click="pendingPoolTransferVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handlePendingPoolTransfer">确认</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handlePendingPoolTransfer"
+        >确认</el-button
+      >
     </template>
   </el-dialog>
 
@@ -2484,7 +2855,9 @@ watch(
         <el-tag type="primary">
           {{ selectedAction?.targetStatusName || transitForm.targetStatus }}
         </el-tag>
-        <el-tag v-if="selectedAction?.isReturn" type="warning" style="margin-left:8px;">退回</el-tag>
+        <el-tag v-if="selectedAction?.isReturn" type="warning" style="margin-left: 8px"
+          >退回</el-tag
+        >
       </el-form-item>
       <el-form-item v-if="selectedAction?.allowTransfer" label="指定处理人">
         <el-select
@@ -2578,7 +2951,9 @@ watch(
     </el-form>
     <template #footer>
       <el-button @click="closeDialogVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleCloseTicket">确认关闭</el-button>
+      <el-button type="primary" :loading="submitLoading" @click="handleCloseTicket"
+        >确认关闭</el-button
+      >
     </template>
   </el-dialog>
 
@@ -2601,6 +2976,7 @@ watch(
       <EmptyState v-else description="暂无可预览图片" />
     </div>
   </el-dialog>
+  <!-- eslint-enable vue/no-v-html -->
 </template>
 
 <style scoped lang="scss">
@@ -2861,6 +3237,118 @@ watch(
   }
 }
 
+.info-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  margin-bottom: 18px;
+}
+
+.info-section-tip {
+  color: #909399;
+  font-size: 13px;
+}
+
+.info-read-view {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.read-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 36px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.read-field {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.read-label {
+  color: #909399;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.read-value,
+.read-long-text,
+.rich-read-content {
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.read-long-text {
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.read-empty {
+  margin-top: 8px;
+  color: #b1b3b8;
+  font-size: 14px;
+}
+
+.rich-read-content {
+  margin-top: 8px;
+
+  :deep(p:first-child) {
+    margin-top: 0;
+  }
+
+  :deep(img) {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    cursor: zoom-in;
+    border-radius: 6px;
+  }
+
+  :deep(pre) {
+    max-width: 100%;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 6px;
+    background: #f5f7fa;
+  }
+
+  :deep(table) {
+    max-width: 100%;
+  }
+}
+
+.read-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 160px));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.read-image {
+  width: 100%;
+  height: 108px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  cursor: zoom-in;
+}
+
+.info-form :deep(.rich-text-editor img) {
+  width: auto !important;
+  max-width: 100% !important;
+  max-height: 520px;
+  object-fit: contain;
+}
+
 .info-form {
   :deep(.el-form-item) {
     margin-bottom: 18px;
@@ -2879,6 +3367,16 @@ watch(
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #f0f0f0;
+}
+
+@media (max-width: 768px) {
+  .read-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .read-field {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
 }
 
 .upload-drag-content {
