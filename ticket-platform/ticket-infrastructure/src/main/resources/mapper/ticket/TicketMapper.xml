@@ -177,6 +177,49 @@
         <if test="assigneeId != null">
             AND t.assignee_id = #{assigneeId}
         </if>
+        <if test="customConditions != null and customConditions.size() &gt; 0">
+            AND
+            <trim prefix="(" suffix=")" prefixOverrides="AND|OR">
+                <foreach collection="customConditions" item="condition">
+                    <choose>
+                        <when test="conditionLogic == 'OR'">OR</when>
+                        <otherwise>AND</otherwise>
+                    </choose>
+                    <choose>
+                        <when test="condition.field == 'ticketNo'">
+                            <include refid="customTextCondition"><property name="column" value="t.ticket_no"/></include>
+                        </when>
+                        <when test="condition.field == 'title'">
+                            <include refid="customTextCondition"><property name="column" value="t.title"/></include>
+                        </when>
+                        <when test="condition.field == 'source'">
+                            <include refid="customTextCondition"><property name="column" value="t.source"/></include>
+                        </when>
+                        <when test="condition.field == 'status'">
+                            <include refid="customScalarCondition"><property name="column" value="t.status"/></include>
+                        </when>
+                        <when test="condition.field == 'priority'">
+                            <include refid="customScalarCondition"><property name="column" value="t.priority"/></include>
+                        </when>
+                        <when test="condition.field == 'categoryId'">
+                            <include refid="customScalarCondition"><property name="column" value="t.category_id"/></include>
+                        </when>
+                        <when test="condition.field == 'creatorId'">
+                            <include refid="customScalarCondition"><property name="column" value="t.creator_id"/></include>
+                        </when>
+                        <when test="condition.field == 'assigneeId'">
+                            <include refid="customScalarCondition"><property name="column" value="t.assignee_id"/></include>
+                        </when>
+                        <when test="condition.field == 'createTime'">
+                            <include refid="customScalarCondition"><property name="column" value="t.create_time"/></include>
+                        </when>
+                        <otherwise>
+                            <include refid="customScalarCondition"><property name="column" value="t.update_time"/></include>
+                        </otherwise>
+                    </choose>
+                </foreach>
+            </trim>
+        </if>
         <if test="createTimeStart != null and createTimeStart != ''">
             AND t.create_time &gt;= #{createTimeStart}
         </if>
@@ -223,6 +266,31 @@
             </otherwise>
         </choose>
     </select>
+
+    <sql id="customTextCondition">
+        <choose>
+            <when test="condition.operator == 'CONTAINS'">${column} LIKE CONCAT('%', #{condition.values[0]}, '%')</when>
+            <when test="condition.operator == 'NOT_CONTAINS'">${column} NOT LIKE CONCAT('%', #{condition.values[0]}, '%')</when>
+            <otherwise><include refid="customScalarCondition"><property name="column" value="${column}"/></include></otherwise>
+        </choose>
+    </sql>
+
+    <sql id="customScalarCondition">
+        <choose>
+            <when test="condition.operator == 'EQ'">${column} = #{condition.values[0]}</when>
+            <when test="condition.operator == 'NE'">${column} != #{condition.values[0]}</when>
+            <when test="condition.operator == 'GT'">${column} &gt; #{condition.values[0]}</when>
+            <when test="condition.operator == 'GTE'">${column} &gt;= #{condition.values[0]}</when>
+            <when test="condition.operator == 'LT'">${column} &lt; #{condition.values[0]}</when>
+            <when test="condition.operator == 'LTE'">${column} &lt;= #{condition.values[0]}</when>
+            <when test="condition.operator == 'NOT_IN'">
+                ${column} NOT IN <foreach collection="condition.values" item="value" open="(" separator="," close=")">#{value}</foreach>
+            </when>
+            <otherwise>
+                ${column} IN <foreach collection="condition.values" item="value" open="(" separator="," close=")">#{value}</foreach>
+            </otherwise>
+        </choose>
+    </sql>
 
     <select id="selectFollowedTicketIds" resultType="java.lang.Long">
         SELECT tf.ticket_id

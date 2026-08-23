@@ -65,4 +65,10 @@ public class TicketPageInput extends PageInput {
      * 且排除已关联「已归档」Bug 简报的工单（避免重复闭环）
      */
     private Boolean linkableForBugReport;
+
+    /** 自定义条件之间的连接关系：AND / OR。 */
+    private String conditionLogic;
+
+    /** 自定义查询条件（仅支持后端白名单中的字段和操作符）。 */
+    private List<TicketCustomConditionInput> customConditions;
 }
