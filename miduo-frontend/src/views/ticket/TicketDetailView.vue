@@ -1359,32 +1359,44 @@ watch(
     <!-- 顶部信息卡片 -->
     <el-card shadow="never" class="header-card" v-loading="loading">
       <template #header>
-        <div class="detail-header">
-          <!-- 左侧：工单号 + 优先级 + 状态 -->
-          <div class="header-meta">
-            <span class="ticket-no-text">{{ detail?.ticketNo || '-' }}</span>
-            <el-tag
-              v-if="detail?.priority"
-              :type="getPriorityType(detail.priority)"
-              size="small"
-              effect="light"
-              class="priority-tag"
-            >
-              {{ getPriorityLabel(detail.priority) }}
-            </el-tag>
-            <BugStatusBadge
-              v-if="detail?.status"
-              :status="detail.status"
-              :status-label="detail?.statusLabel"
-            />
-          </div>
-          <!-- 中间：工单标题 -->
-          <div class="ticket-title-row">
-            <h2 class="ticket-title">{{ detail?.title || '工单详情' }}</h2>
-            <div v-if="detail?.categoryFullPath" class="ticket-category">
-              {{ detail.categoryFullPath }}
+        <div class="detail-header-container">
+          <div class="detail-header">
+            <!-- 左侧：工单号 + 优先级 + 状态 -->
+            <div class="header-meta">
+              <span class="ticket-no-text">{{ detail?.ticketNo || '-' }}</span>
+              <el-tag
+                v-if="detail?.priority"
+                :type="getPriorityType(detail.priority)"
+                size="small"
+                effect="light"
+                class="priority-tag"
+              >
+                {{ getPriorityLabel(detail.priority) }}
+              </el-tag>
+              <BugStatusBadge
+                v-if="detail?.status"
+                :status="detail.status"
+                :status-label="detail?.statusLabel"
+              />
+            </div>
+            <!-- 中间：工单标题 -->
+            <div class="ticket-title-row">
+              <h2 class="ticket-title">{{ detail?.title || '工单详情' }}</h2>
+              <div v-if="detail?.categoryFullPath" class="ticket-category">
+                {{ detail.categoryFullPath }}
+              </div>
             </div>
           </div>
+          <el-button
+            class="customer-share-button"
+            type="primary"
+            plain
+            :disabled="!detail?.ticketNo"
+            @click="shareDialogVisible = true"
+          >
+            <el-icon><Link /></el-icon>
+            分享给客户
+          </el-button>
         </div>
       </template>
 
@@ -2638,10 +2650,23 @@ watch(
   }
 }
 
+.detail-header-container {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .detail-header {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   gap: 10px;
+}
+
+.customer-share-button {
+  flex-shrink: 0;
 }
 
 .header-meta {
@@ -3669,6 +3694,14 @@ watch(
 
   .ticket-title {
     font-size: 16px;
+  }
+
+  .detail-header-container {
+    flex-direction: column;
+  }
+
+  .customer-share-button {
+    width: 100%;
   }
 
   .action-bar {
