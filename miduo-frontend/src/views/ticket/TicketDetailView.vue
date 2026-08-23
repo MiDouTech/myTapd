@@ -163,6 +163,11 @@ const selectedAction = ref<TicketActionItem | null>(null)
 const flowHistory = ref<TicketFlowRecordOutput[]>([])
 const flowHistoryLoading = ref(false)
 
+const processConfirmText = computed(() => {
+  const actionName = selectedAction.value?.actionName || '操作'
+  return actionName.startsWith('确认') ? actionName : `确认${actionName}`
+})
+
 const transitForm = reactive({
   transitionId: '',
   targetStatus: '',
@@ -2937,7 +2942,7 @@ watch(
     <template #footer>
       <el-button @click="processDialogVisible = false">取消</el-button>
       <el-button type="primary" :loading="submitLoading" @click="handleProcess">
-        确认{{ selectedAction?.actionName || '操作' }}
+        {{ processConfirmText }}
       </el-button>
     </template>
   </el-dialog>
