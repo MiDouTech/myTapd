@@ -274,6 +274,7 @@ public class TicketApplicationService {
         }
 
         List<String> statusFilterList = mergeStatusFilter(input.getStatus(), input.getStatuses());
+        normalizeCustomConditions(input);
 
         String createTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCreateTimeStart());
         String createTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCreateTimeEnd());
@@ -308,7 +309,9 @@ public class TicketApplicationService {
                 viewFilter.getExcludeCategoryIds(),
                 viewFilter.getAlertCategoryIds(),
                 viewFilter.getAlertSource(),
-                viewFilter.getExcludeAlertSource()
+                viewFilter.getExcludeAlertSource(),
+                input.getConditionLogic(),
+                input.getCustomConditions()
         );
 
         List<TicketPO> records = result.getRecords();
@@ -388,6 +391,36 @@ public class TicketApplicationService {
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
+    }
+
+    private static final Set<String> CUSTOM_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "ticketNo", "title", "source", "status", "priority", "categoryId",
+            "creatorId", "assigneeId", "createTime", "updateTime"));
+    private static final Set<String> CUSTOM_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
+            "EQ", "NE", "CONTAINS", "NOT_CONTAINS", "IN", "NOT_IN", "GT", "GTE", "LT", "LTE"));
+
+    /** 严格校验字段与操作符，XML 只会从白名单映射到固定列，绝不接收 SQL 片段。 */
+    private void normalizeCustomConditions(TicketPageInput input) {
+        String logic = input.getConditionLogic();
+        input.setConditionLogic("OR".equalsIgnoreCase(logic) ? "OR" : "AND");
+        if (input.getCustomConditions() == null) {
+            return;
+        }
+        if (input.getCustomConditions().size() > 30) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件不能超过30个");
+        }
+        input.getCustomConditions().forEach(condition -> {
+            if (condition == null || !CUSTOM_QUERY_FIELDS.contains(condition.getField())
+                    || condition.getOperator() == null
+                    || !CUSTOM_QUERY_OPERATORS.contains(condition.getOperator().toUpperCase())) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "存在不支持的自定义查询条件");
+            }
+            condition.setOperator(condition.getOperator().toUpperCase());
+            if (condition.getValues() == null || condition.getValues().isEmpty()
+                    || condition.getValues().size() > 100) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件值不能为空且不能超过100个");
+            }
+        });
     }
 
     public TicketDetailOutput getTicketDetail(Long id, Long currentUserId) {
