@@ -3104,7 +3104,7 @@ watch(
   flex-wrap: wrap;
 }
 
-.action-bar-right {
+.follow-action {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3124,7 +3124,7 @@ watch(
 }
 
 .action-bar-left :deep(.el-button + .el-button),
-.action-bar-right :deep(.el-button + .el-button) {
+.follow-action :deep(.el-button + .el-button) {
   margin-left: 0;
 }
 
@@ -4210,7 +4210,7 @@ watch(
   }
 
   .action-bar-left,
-  .action-bar-right {
+  .follow-action {
     width: 100%;
   }
 
@@ -4219,7 +4219,7 @@ watch(
   }
 
   .action-bar-left :deep(.el-button),
-  .action-bar-right :deep(.el-button) {
+  .follow-action :deep(.el-button) {
     min-height: 36px;
     padding: 0 12px;
   }
