@@ -201,6 +201,17 @@ const activeTabValue = computed(() => {
   return query.view || ''
 })
 
+const personalViewTitle = computed(() => {
+  const titles: Record<string, string> = {
+    my_todo: '我待处理工单',
+    my_participated: '我处理的工单',
+    my_created: '我创建的工单',
+    my_followed: '我关注的工单',
+    my_brief_todo: '待出简报工单',
+  }
+  return titles[activeTabValue.value] || ''
+})
+
 const isBriefTodoView = computed(() => query.view === 'my_brief_todo')
 const selectedBriefTicketIds = computed(() =>
   Array.from(
@@ -724,24 +735,37 @@ onUnmounted(() => {
 <template>
   <div class="ticket-list-page">
     <el-card shadow="never" class="ticket-list-card">
-      <div v-if="isMobile" class="mobile-view-switch">
-        <el-select
+      <h2 v-if="personalViewTitle" class="ticket-view-title">{{ personalViewTitle }}</h2>
+      <template v-else>
+        <div v-if="isMobile" class="mobile-view-switch">
+          <el-select
+            :model-value="activeTabValue"
+            placeholder="请选择内容"
+            class="mobile-view-select"
+            @change="handleTabChange"
+          >
+            <el-option
+              v-for="tab in activeViewTabs"
+              :key="tab.value"
+              :label="tab.label"
+              :value="tab.value"
+            />
+          </el-select>
+        </div>
+        <el-tabs
+          v-else
           :model-value="activeTabValue"
-          placeholder="请选择内容"
-          class="mobile-view-select"
-          @change="handleTabChange"
+          class="ticket-view-tabs"
+          @tab-change="handleTabChange"
         >
-          <el-option v-for="tab in activeViewTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
-        </el-select>
-      </div>
-      <el-tabs v-else :model-value="activeTabValue" class="ticket-view-tabs" @tab-change="handleTabChange">
-        <el-tab-pane
-          v-for="tab in activeViewTabs"
-          :key="tab.value"
-          :label="tab.label"
-          :name="tab.value"
-        />
-      </el-tabs>
+          <el-tab-pane
+            v-for="tab in activeViewTabs"
+            :key="tab.value"
+            :label="tab.label"
+            :name="tab.value"
+          />
+        </el-tabs>
+      </template>
       <el-form
         :inline="!isMobile"
         :label-width="isMobile ? 'auto' : '72px'"
@@ -1420,6 +1444,13 @@ onUnmounted(() => {
 
 .mobile-view-select {
   width: 100%;
+}
+
+.ticket-view-title {
+  margin: 0 0 16px;
+  color: var(--md-text-primary, #303133);
+  font-size: 20px;
+  line-height: 28px;
 }
 
 .ticket-view-tabs {
