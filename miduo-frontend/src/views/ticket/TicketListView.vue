@@ -177,8 +177,8 @@ const customFieldOptions = [
   { label: '分类', value: 'categoryId', type: 'category' },
   { label: '状态', value: 'status', type: 'status' },
   { label: '优先级', value: 'priority', type: 'priority' },
-  { label: '创建人ID', value: 'creatorId', type: 'number' },
-  { label: '处理人ID', value: 'assigneeId', type: 'number' },
+  { label: '创建人', value: 'creatorName', type: 'text' },
+  { label: '处理人', value: 'assigneeName', type: 'text' },
   { label: '创建时间', value: 'createTime', type: 'date' },
   { label: '更新时间', value: 'updateTime', type: 'date' },
 ] as const
@@ -1072,7 +1072,11 @@ onUnmounted(() => {
             v-model="condition.values[0]"
             class="condition-value"
             :type="customFieldType(condition.field) === 'number' ? 'number' : 'text'"
-            placeholder="请输入条件值"
+            :placeholder="
+              ['creatorName', 'assigneeName'].includes(condition.field)
+                ? '请输入姓名'
+                : '请输入条件值'
+            "
             clearable
           />
           <el-button type="danger" link @click="removeCustomCondition(index)">删除</el-button>

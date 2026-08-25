@@ -395,9 +395,13 @@ public class TicketApplicationService {
 
     private static final Set<String> CUSTOM_QUERY_FIELDS = new HashSet<>(Arrays.asList(
             "ticketNo", "title", "source", "status", "priority", "categoryId",
-            "creatorId", "assigneeId", "createTime", "updateTime"));
+            "creatorName", "assigneeName", "createTime", "updateTime"));
     private static final Set<String> CUSTOM_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
             "EQ", "NE", "CONTAINS", "NOT_CONTAINS", "IN", "NOT_IN", "GT", "GTE", "LT", "LTE"));
+    private static final Set<String> USER_NAME_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "creatorName", "assigneeName"));
+    private static final Set<String> USER_NAME_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
+            "EQ", "NE", "CONTAINS", "NOT_CONTAINS"));
 
     /** 严格校验字段与操作符，XML 只会从白名单映射到固定列，绝不接收 SQL 片段。 */
     private void normalizeCustomConditions(TicketPageInput input) {
@@ -416,6 +420,10 @@ public class TicketApplicationService {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR, "存在不支持的自定义查询条件");
             }
             condition.setOperator(condition.getOperator().toUpperCase());
+            if (USER_NAME_QUERY_FIELDS.contains(condition.getField())
+                    && !USER_NAME_QUERY_OPERATORS.contains(condition.getOperator())) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "创建人和处理人仅支持按姓名匹配");
+            }
             if (condition.getValues() == null || condition.getValues().isEmpty()
                     || condition.getValues().size() > 100) {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件值不能为空且不能超过100个");
