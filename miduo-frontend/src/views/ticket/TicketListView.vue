@@ -6,6 +6,7 @@ import { ArrowRight, Document as DocumentOutlined, Edit } from '@element-plus/ic
 
 import { getCategoryTree } from '@/api/category'
 import {
+  customQueryTicketPage,
   getTicketDetail,
   getTicketNodeDuration,
   getTicketPage,
@@ -23,6 +24,7 @@ import type { CategoryTreeOutput } from '@/types/category'
 import type {
   BugChangeHistoryOutput,
   TicketDetailOutput,
+  TicketCustomConditionInput,
   TicketListOutput,
   TicketNodeDurationItem,
   TicketPageInput,
@@ -35,7 +37,12 @@ import {
   layoutTicketSearchKeyword,
   persistLayoutTicketSearch,
 } from '@/stores/layoutTicketSearch'
-import { formatDateTime, formatDurationSec, formatFileSize, formatRoleLabel } from '@/utils/formatter'
+import {
+  formatDateTime,
+  formatDurationSec,
+  formatFileSize,
+  formatRoleLabel,
+} from '@/utils/formatter'
 import { parseProblemScreenshotUrls } from '@/utils/problem-screenshot-urls'
 import { formatTicketDescriptionForDisplay } from '@/utils/ticket-description-display'
 import { notifyError, notifySuccess, notifyWarning } from '@/utils/feedback'
@@ -160,6 +167,65 @@ const query = reactive<TicketPageInput>({
 })
 
 const timeRange = ref<string[]>([])
+const isCustomQueryView = computed(() => route.path === '/ticket/custom-query')
+const conditionLogic = ref<'AND' | 'OR'>('AND')
+const customConditions = ref<TicketCustomConditionInput[]>([])
+const customFieldOptions = [
+  { label: '工单编号', value: 'ticketNo', type: 'text' },
+  { label: '标题', value: 'title', type: 'text' },
+  { label: '来源', value: 'source', type: 'text' },
+  { label: '分类', value: 'categoryId', type: 'category' },
+  { label: '状态', value: 'status', type: 'status' },
+  { label: '优先级', value: 'priority', type: 'priority' },
+  { label: '创建人', value: 'creatorName', type: 'text' },
+  { label: '处理人', value: 'assigneeName', type: 'text' },
+  { label: '创建时间', value: 'createTime', type: 'date' },
+  { label: '更新时间', value: 'updateTime', type: 'date' },
+] as const
+const customStatusOptions = Object.entries(STATUS_LABEL_MAP).map(([value, label]) => ({
+  value,
+  label,
+}))
+
+function customFieldType(field: string): string {
+  return customFieldOptions.find((item) => item.value === field)?.type || 'text'
+}
+
+function operatorOptions(field: string): Array<{ label: string; value: string }> {
+  const type = customFieldType(field)
+  if (type === 'text') {
+    return [
+      { label: '包含', value: 'CONTAINS' },
+      { label: '不包含', value: 'NOT_CONTAINS' },
+      { label: '等于', value: 'EQ' },
+      { label: '不等于', value: 'NE' },
+    ]
+  }
+  if (type === 'date') {
+    return [
+      { label: '晚于', value: 'GTE' },
+      { label: '早于', value: 'LTE' },
+      { label: '等于', value: 'EQ' },
+    ]
+  }
+  return [
+    { label: '等于', value: 'EQ' },
+    { label: '不等于', value: 'NE' },
+  ]
+}
+
+function addCustomCondition(): void {
+  customConditions.value.push({ field: 'priority', operator: 'EQ', values: [''] })
+}
+
+function removeCustomCondition(index: number): void {
+  customConditions.value.splice(index, 1)
+}
+
+function handleCustomFieldChange(condition: TicketCustomConditionInput): void {
+  condition.operator = operatorOptions(condition.field)[0]?.value || 'EQ'
+  condition.values = ['']
+}
 
 const personalViewTabs: Array<{ label: string; value: string }> = [
   { label: '我待办的', value: 'my_todo' },
@@ -264,6 +330,9 @@ function normalizeViewFromRoute(): TicketView {
   if (route.path === '/ticket/all') {
     return 'all'
   }
+  if (route.path === '/ticket/custom-query') {
+    return 'all'
+  }
   const routeView = route.query.view
   const values = activeViewTabs.value.map((item) => item.value)
   if (typeof routeView === 'string' && values.includes(routeView as TicketView)) {
@@ -314,7 +383,13 @@ async function loadTickets(): Promise<void> {
     if (timeRange.value?.[0]) params.createTimeStart = timeRange.value[0]
     if (timeRange.value?.[1]) params.createTimeEnd = timeRange.value[1]
 
-    const response = await getTicketPage(params)
+    if (isCustomQueryView.value) {
+      params.conditionLogic = conditionLogic.value
+      params.customConditions = customConditions.value.filter((item) => item.values[0] !== '')
+    }
+    const response = isCustomQueryView.value
+      ? await customQueryTicketPage(params)
+      : await getTicketPage(params)
     tableData.value = response.records
     total.value = response.total
     // 列表刷新后清空选择，避免跨页/筛选后仍保留旧勾选导致误写简报
@@ -369,6 +444,8 @@ function handleReset(): void {
   query.creatorId = undefined
   query.assigneeId = undefined
   timeRange.value = []
+  conditionLogic.value = 'AND'
+  customConditions.value = []
   query.pageNum = 1
   layoutTicketSearchKeyword.value = ''
   persistLayoutTicketSearch('')
@@ -669,7 +746,10 @@ watch(
     // 从仪表盘卡片跳转时携带的状态/SLA过滤参数（status 支持单值或多值 query）
     const rawStatusQ = route.query.status
     const routeStatuses: string[] = Array.isArray(rawStatusQ)
-      ? rawStatusQ.filter((s): s is string => typeof s === 'string').map((s) => s.trim()).filter(Boolean)
+      ? rawStatusQ
+          .filter((s): s is string => typeof s === 'string')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : typeof rawStatusQ === 'string' && rawStatusQ.trim()
         ? [rawStatusQ.trim()]
         : []
@@ -735,7 +815,8 @@ onUnmounted(() => {
 <template>
   <div class="ticket-list-page">
     <el-card shadow="never" class="ticket-list-card">
-      <h2 v-if="personalViewTitle" class="ticket-view-title">{{ personalViewTitle }}</h2>
+      <h2 v-if="isCustomQueryView" class="ticket-view-title">自定义查询</h2>
+      <h2 v-else-if="personalViewTitle" class="ticket-view-title">{{ personalViewTitle }}</h2>
       <template v-else>
         <div v-if="isMobile" class="mobile-view-switch">
           <el-select
@@ -773,10 +854,20 @@ onUnmounted(() => {
         @submit.prevent="handleSearch"
       >
         <el-form-item label="工单编号" class="query-form-item">
-          <el-input v-model="query.ticketNo" class="query-input" placeholder="支持模糊匹配" clearable />
+          <el-input
+            v-model="query.ticketNo"
+            class="query-input"
+            placeholder="支持模糊匹配"
+            clearable
+          />
         </el-form-item>
         <el-form-item label="标题" class="query-form-item">
-          <el-input v-model="query.title" class="query-input" placeholder="支持模糊匹配" clearable />
+          <el-input
+            v-model="query.title"
+            class="query-input"
+            placeholder="支持模糊匹配"
+            clearable
+          />
         </el-form-item>
         <el-form-item label="公司名称" class="query-form-item">
           <el-input
@@ -813,51 +904,61 @@ onUnmounted(() => {
               collapse-tags
               collapse-tags-tooltip
             >
-            <!-- 通用工单状态 -->
-            <el-option label="待处理" value="pending" />
-            <el-option label="待分派" value="pending_assign" />
-            <el-option label="待受理" value="pending_accept" />
-            <el-option label="告警·待认领" value="alert_triggered" />
-            <el-option label="告警·处置中" value="alert_acknowledged" />
-            <el-option label="告警·待确认" value="alert_stable" />
-            <el-option label="告警·已解决" value="alert_resolved" />
-            <el-option label="告警·已抑制" value="alert_suppressed" />
-            <el-option label="处理中" value="processing" />
-            <el-option label="已挂起" value="suspended" />
-            <el-option label="待验收" value="pending_verify" />
-            <el-option label="新建" value="new_created" />
-            <el-option label="已修复" value="fixed" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="已关闭" value="closed" />
-            <!-- 缺陷工单专属状态 -->
-            <el-option label="待客服受理" value="pending_cs_accept" />
-            <el-option label="待测试受理" value="pending_test_accept" />
-            <el-option label="测试复现中" value="testing" />
-            <el-option label="待开发受理" value="pending_dev_accept" />
-            <el-option label="开发解决中" value="developing" />
-            <el-option label="临时解决" value="temp_resolved" />
-            <el-option label="待客服确认" value="pending_cs_confirm" />
-            <!-- 审批及需求类工作流状态 -->
-            <el-option label="已提交" value="submitted" />
-            <el-option label="部门审批" value="dept_approval" />
-            <el-option label="执行中" value="executing" />
-            <el-option label="已驳回" value="rejected" />
-            <el-option label="待评审" value="pending_review" />
-            <el-option label="待规划" value="pending_planning" />
-            <el-option label="待调研" value="pending_research" />
-            <el-option label="方案中" value="in_design" />
-            <el-option label="无需处理" value="no_action" />
-            <el-option label="无效" value="invalid" />
+              <!-- 通用工单状态 -->
+              <el-option label="待处理" value="pending" />
+              <el-option label="待分派" value="pending_assign" />
+              <el-option label="待受理" value="pending_accept" />
+              <el-option label="告警·待认领" value="alert_triggered" />
+              <el-option label="告警·处置中" value="alert_acknowledged" />
+              <el-option label="告警·待确认" value="alert_stable" />
+              <el-option label="告警·已解决" value="alert_resolved" />
+              <el-option label="告警·已抑制" value="alert_suppressed" />
+              <el-option label="处理中" value="processing" />
+              <el-option label="已挂起" value="suspended" />
+              <el-option label="待验收" value="pending_verify" />
+              <el-option label="新建" value="new_created" />
+              <el-option label="已修复" value="fixed" />
+              <el-option label="已完成" value="completed" />
+              <el-option label="已关闭" value="closed" />
+              <!-- 缺陷工单专属状态 -->
+              <el-option label="待客服受理" value="pending_cs_accept" />
+              <el-option label="待测试受理" value="pending_test_accept" />
+              <el-option label="测试复现中" value="testing" />
+              <el-option label="待开发受理" value="pending_dev_accept" />
+              <el-option label="开发解决中" value="developing" />
+              <el-option label="临时解决" value="temp_resolved" />
+              <el-option label="待客服确认" value="pending_cs_confirm" />
+              <!-- 审批及需求类工作流状态 -->
+              <el-option label="已提交" value="submitted" />
+              <el-option label="部门审批" value="dept_approval" />
+              <el-option label="执行中" value="executing" />
+              <el-option label="已驳回" value="rejected" />
+              <el-option label="待评审" value="pending_review" />
+              <el-option label="待规划" value="pending_planning" />
+              <el-option label="待调研" value="pending_research" />
+              <el-option label="方案中" value="in_design" />
+              <el-option label="无需处理" value="no_action" />
+              <el-option label="无效" value="invalid" />
             </el-select>
             <el-checkbox
               v-model="query.excludeStatuses"
               :disabled="!query.statuses?.length"
               class="status-invert-checkbox"
-            >反选</el-checkbox>
+              >反选</el-checkbox
+            >
           </div>
         </el-form-item>
-        <el-form-item v-if="!isBriefTodoView" label="优先级" class="query-form-item">
-          <el-select v-model="query.priority" class="query-input" placeholder="请选择内容" clearable>
+        <el-form-item
+          v-if="!isBriefTodoView && !isCustomQueryView"
+          label="优先级"
+          class="query-form-item"
+        >
+          <el-select
+            v-model="query.priority"
+            class="query-input"
+            placeholder="请选择内容"
+            clearable
+          >
             <el-option label="紧急" value="urgent" />
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
@@ -881,6 +982,107 @@ onUnmounted(() => {
           </el-space>
         </el-form-item>
       </el-form>
+      <div v-if="isCustomQueryView" class="custom-query-builder">
+        <div class="custom-query-header">
+          <div>
+            <strong>自定义条件</strong>
+            <span class="custom-query-tip">基础条件与自定义条件之间按“并且”查询</span>
+          </div>
+          <el-radio-group v-model="conditionLogic" size="small">
+            <el-radio-button value="AND">满足全部</el-radio-button>
+            <el-radio-button value="OR">满足任意</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div
+          v-for="(condition, index) in customConditions"
+          :key="index"
+          class="custom-condition-row"
+        >
+          <el-select
+            v-model="condition.field"
+            class="condition-field"
+            @change="handleCustomFieldChange(condition)"
+          >
+            <el-option
+              v-for="option in customFieldOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-select v-model="condition.operator" class="condition-operator">
+            <el-option
+              v-for="option in operatorOptions(condition.field)"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-select
+            v-if="customFieldType(condition.field) === 'priority'"
+            v-model="condition.values[0]"
+            class="condition-value"
+            placeholder="请选择优先级"
+          >
+            <el-option
+              v-for="option in priorityOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-select
+            v-else-if="customFieldType(condition.field) === 'status'"
+            v-model="condition.values[0]"
+            class="condition-value"
+            filterable
+            placeholder="请选择状态"
+          >
+            <el-option
+              v-for="option in customStatusOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-select
+            v-else-if="customFieldType(condition.field) === 'category'"
+            v-model="condition.values[0]"
+            class="condition-value"
+            filterable
+            placeholder="请选择分类"
+          >
+            <el-option
+              v-for="option in categoryOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="String(option.value)"
+            />
+          </el-select>
+          <el-date-picker
+            v-else-if="customFieldType(condition.field) === 'date'"
+            v-model="condition.values[0]"
+            class="condition-value"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择时间"
+          />
+          <el-input
+            v-else
+            v-model="condition.values[0]"
+            class="condition-value"
+            :type="customFieldType(condition.field) === 'number' ? 'number' : 'text'"
+            :placeholder="
+              ['creatorName', 'assigneeName'].includes(condition.field)
+                ? '请输入姓名'
+                : '请输入条件值'
+            "
+            clearable
+          />
+          <el-button type="danger" link @click="removeCustomCondition(index)">删除</el-button>
+        </div>
+        <el-button type="primary" link @click="addCustomCondition">+ 添加条件</el-button>
+      </div>
     </el-card>
 
     <el-card shadow="never" class="ticket-list-card">
@@ -910,7 +1112,12 @@ onUnmounted(() => {
           <el-table-column prop="ticketNo" label="工单编号" min-width="220" sortable="custom">
             <template #default="{ row }">
               <el-tooltip :content="row.ticketNo" placement="top" :disabled="!row.ticketNo">
-                <el-button type="primary" link class="cell-link ticket-no-cell-btn" @click="openDetail(row)">
+                <el-button
+                  type="primary"
+                  link
+                  class="cell-link ticket-no-cell-btn"
+                  @click="openDetail(row)"
+                >
                   <span class="ticket-no-cell-text">{{ row.ticketNo }}</span>
                 </el-button>
               </el-tooltip>
@@ -929,7 +1136,12 @@ onUnmounted(() => {
           <el-table-column prop="title" label="标题" min-width="320" :show-overflow-tooltip="true">
             <template #default="{ row }">
               <el-tooltip :content="row.title" placement="top" :disabled="!row.title">
-                <el-button type="primary" link class="cell-link title-cell-btn" @click="openTitlePreview(row)">
+                <el-button
+                  type="primary"
+                  link
+                  class="cell-link title-cell-btn"
+                  @click="openTitlePreview(row)"
+                >
                   <span class="title-cell-text">{{ row.title }}</span>
                 </el-button>
               </el-tooltip>
@@ -952,7 +1164,9 @@ onUnmounted(() => {
                   :label="option.label"
                   :value="option.value"
                 >
-                  <el-tag :type="getPriorityType(option.value)" size="small">{{ option.label }}</el-tag>
+                  <el-tag :type="getPriorityType(option.value)" size="small">{{
+                    option.label
+                  }}</el-tag>
                 </el-option>
               </el-select>
             </template>
@@ -967,7 +1181,12 @@ onUnmounted(() => {
               <el-tag v-if="row.slaStatus === 'BREACHED'" type="danger" size="small" effect="dark">
                 {{ row.slaStatusLabel || '已超时' }}
               </el-tag>
-              <el-tag v-else-if="row.slaStatus === 'WARNING'" type="warning" size="small" effect="dark">
+              <el-tag
+                v-else-if="row.slaStatus === 'WARNING'"
+                type="warning"
+                size="small"
+                effect="dark"
+              >
                 {{ row.slaStatusLabel || '预警中' }}
               </el-tag>
               <span v-else-if="row.slaStatus === 'NORMAL'" class="sla-normal">正常</span>
@@ -975,7 +1194,12 @@ onUnmounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="creatorName" label="创建人" width="120" />
-          <el-table-column prop="assigneeName" label="处理人" min-width="160" :show-overflow-tooltip="true" />
+          <el-table-column
+            prop="assigneeName"
+            label="处理人"
+            min-width="160"
+            :show-overflow-tooltip="true"
+          />
           <el-table-column prop="createTime" label="创建时间" width="180" sortable="custom">
             <template #default="{ row }">
               {{ formatDateTime(row.createTime) }}
@@ -1034,7 +1258,9 @@ onUnmounted(() => {
               </el-tag>
               <span class="preview-ticket-no">{{ previewDetail?.ticketNo || '—' }}</span>
             </div>
-            <h3 class="preview-title" :title="previewDetail?.title">{{ previewDetail?.title || '加载中…' }}</h3>
+            <h3 class="preview-title" :title="previewDetail?.title">
+              {{ previewDetail?.title || '加载中…' }}
+            </h3>
           </div>
           <el-button type="primary" :disabled="!previewDetail" @click="goPreviewEdit">
             <el-icon class="preview-edit-icon"><Edit /></el-icon>
@@ -1071,27 +1297,43 @@ onUnmounted(() => {
                           {{ previewDetail.bugCustomerInfo?.sceneCode || '-' }}
                         </el-descriptions-item>
                         <el-descriptions-item label="问题描述">
-                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.problemDesc || '-' }}</span>
+                          <span class="preview-plain">{{
+                            previewDetail.bugCustomerInfo?.problemDesc || '-'
+                          }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="预期结果">
-                          <span class="preview-plain">{{ previewDetail.bugCustomerInfo?.expectedResult || '-' }}</span>
+                          <span class="preview-plain">{{
+                            previewDetail.bugCustomerInfo?.expectedResult || '-'
+                          }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="问题截图">
-                          <div v-if="previewProblemScreenshotUrls.length" class="preview-screenshot-block">
-                            <div v-for="url in previewProblemScreenshotUrls" :key="url" class="preview-screenshot-row">
+                          <div
+                            v-if="previewProblemScreenshotUrls.length"
+                            class="preview-screenshot-block"
+                          >
+                            <div
+                              v-for="url in previewProblemScreenshotUrls"
+                              :key="url"
+                              class="preview-screenshot-row"
+                            >
                               <a
                                 v-if="url.startsWith('http')"
                                 :href="url"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="preview-screenshot-link"
-                              >{{ url }}</a>
+                                >{{ url }}</a
+                              >
                               <span v-else class="preview-plain">{{ url }}</span>
                               <el-image
                                 v-if="url.startsWith('http')"
                                 :src="url"
                                 :preview-src-list="previewProblemScreenshotImageUrls"
-                                :initial-index="previewProblemScreenshotImageUrls.indexOf(url) >= 0 ? previewProblemScreenshotImageUrls.indexOf(url) : 0"
+                                :initial-index="
+                                  previewProblemScreenshotImageUrls.indexOf(url) >= 0
+                                    ? previewProblemScreenshotImageUrls.indexOf(url)
+                                    : 0
+                                "
                                 fit="cover"
                                 class="preview-screenshot-thumb"
                                 preview-teleported
@@ -1148,16 +1390,22 @@ onUnmounted(() => {
                     <el-tab-pane label="开发信息" name="dev">
                       <el-descriptions :column="1" border size="small" class="preview-desc">
                         <el-descriptions-item label="缺陷原因">
-                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.rootCause || '-' }}</span>
+                          <span class="preview-plain">{{
+                            previewDetail.bugDevInfo?.rootCause || '-'
+                          }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="修复方案">
-                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.fixSolution || '-' }}</span>
+                          <span class="preview-plain">{{
+                            previewDetail.bugDevInfo?.fixSolution || '-'
+                          }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="关联分支">
                           {{ previewDetail.bugDevInfo?.gitBranch || '-' }}
                         </el-descriptions-item>
                         <el-descriptions-item label="影响评估">
-                          <span class="preview-plain">{{ previewDetail.bugDevInfo?.impactAssessment || '-' }}</span>
+                          <span class="preview-plain">{{
+                            previewDetail.bugDevInfo?.impactAssessment || '-'
+                          }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item label="开发备注">
                           <div
@@ -1201,28 +1449,49 @@ onUnmounted(() => {
                       >
                         <div class="preview-flow-record">
                           <div class="preview-flow-record-main">
-                            <el-tag size="small" :type="record.flowType === 'RETURN' ? 'warning' : 'primary'">
+                            <el-tag
+                              size="small"
+                              :type="record.flowType === 'RETURN' ? 'warning' : 'primary'"
+                            >
                               {{ record.flowTypeLabel || record.flowType }}
                             </el-tag>
-                            <span v-if="record.fromStatusName" class="preview-flow-status">{{ record.fromStatusName }}</span>
-                            <el-icon v-if="record.toStatus !== record.fromStatus" class="preview-flow-arrow">
+                            <span v-if="record.fromStatusName" class="preview-flow-status">{{
+                              record.fromStatusName
+                            }}</span>
+                            <el-icon
+                              v-if="record.toStatus !== record.fromStatus"
+                              class="preview-flow-arrow"
+                            >
                               <ArrowRight />
                             </el-icon>
-                            <span v-if="record.toStatus !== record.fromStatus" class="preview-flow-status preview-flow-status-to">
+                            <span
+                              v-if="record.toStatus !== record.fromStatus"
+                              class="preview-flow-status preview-flow-status-to"
+                            >
                               {{ record.toStatusName }}
                             </span>
                             <el-divider direction="vertical" />
                             <span class="preview-flow-operator">
-                              操作人：{{ record.operatorName || record.operatorId }}（{{ formatRoleLabel(record.operatorRole) }}）
+                              操作人：{{ record.operatorName || record.operatorId }}（{{
+                                formatRoleLabel(record.operatorRole)
+                              }}）
                             </span>
-                            <template v-if="record.fromAssigneeName !== record.toAssigneeName && record.toAssigneeName">
+                            <template
+                              v-if="
+                                record.fromAssigneeName !== record.toAssigneeName &&
+                                record.toAssigneeName
+                              "
+                            >
                               <el-divider direction="vertical" />
                               <span class="preview-flow-operator">
-                                处理人：{{ record.fromAssigneeName || '-' }} → {{ record.toAssigneeName }}
+                                处理人：{{ record.fromAssigneeName || '-' }} →
+                                {{ record.toAssigneeName }}
                               </span>
                             </template>
                           </div>
-                          <div v-if="record.remark" class="preview-flow-remark">{{ record.remark }}</div>
+                          <div v-if="record.remark" class="preview-flow-remark">
+                            {{ record.remark }}
+                          </div>
                         </div>
                       </el-timeline-item>
                     </el-timeline>
@@ -1240,7 +1509,11 @@ onUnmounted(() => {
             </aside>
           </div>
 
-          <el-card v-if="previewCustomFieldEntries.length > 0" shadow="never" class="preview-section-card">
+          <el-card
+            v-if="previewCustomFieldEntries.length > 0"
+            shadow="never"
+            class="preview-section-card"
+          >
             <template #header>
               <span class="preview-section-title">自定义字段</span>
             </template>
@@ -1287,9 +1560,17 @@ onUnmounted(() => {
                   <el-icon v-else class="preview-attachment-icon"><DocumentOutlined /></el-icon>
                 </div>
                 <div class="preview-attachment-info">
-                  <div class="preview-attachment-name" :title="attachment.fileName">{{ attachment.fileName }}</div>
+                  <div class="preview-attachment-name" :title="attachment.fileName">
+                    {{ attachment.fileName }}
+                  </div>
                   <div class="preview-attachment-meta">
-                    <el-tag v-if="attachment.source === 'WECOM_BOT'" type="success" size="small" effect="plain">企微</el-tag>
+                    <el-tag
+                      v-if="attachment.source === 'WECOM_BOT'"
+                      type="success"
+                      size="small"
+                      effect="plain"
+                      >企微</el-tag
+                    >
                     <el-tag v-else type="info" size="small" effect="plain">Web</el-tag>
                     <span>{{ formatFileSize(attachment.fileSize) }}</span>
                     <span class="preview-meta-dot">·</span>
@@ -1304,19 +1585,25 @@ onUnmounted(() => {
                   :href="attachment.filePath"
                   target="_blank"
                   rel="noopener noreferrer"
-                >查看</el-link>
+                  >查看</el-link
+                >
                 <el-link
                   v-if="isVideoFile(attachment.fileType) && attachment.filePath"
                   type="primary"
                   :href="attachment.filePath"
                   target="_blank"
                   rel="noopener noreferrer"
-                >播放</el-link>
+                  >播放</el-link
+                >
               </div>
             </div>
           </el-card>
 
-          <el-card v-if="previewDetail.bugReports?.length" shadow="never" class="preview-section-card">
+          <el-card
+            v-if="previewDetail.bugReports?.length"
+            shadow="never"
+            class="preview-section-card"
+          >
             <template #header>
               <span class="preview-section-title">关联Bug简报</span>
             </template>
@@ -1350,7 +1637,8 @@ onUnmounted(() => {
                     plain
                     class="bug-report-view-btn"
                     @click="openBugReportDetail(row.id)"
-                  >查看简报</el-button>
+                    >查看简报</el-button
+                  >
                 </template>
               </el-table-column>
             </el-table>
@@ -1360,7 +1648,9 @@ onUnmounted(() => {
             <template #header>
               <div class="preview-section-header">
                 <span class="preview-section-title">评论与处理记录</span>
-                <span class="preview-section-count">{{ previewDetail.comments?.length || 0 }} 条</span>
+                <span class="preview-section-count"
+                  >{{ previewDetail.comments?.length || 0 }} 条</span
+                >
               </div>
             </template>
             <EmptyState v-if="!previewDetail.comments?.length" description="暂无评论" />
@@ -1377,10 +1667,21 @@ onUnmounted(() => {
                 <div class="preview-comment-body">
                   <div class="preview-comment-head">
                     <span class="preview-comment-user">{{ comment.userName || '-' }}</span>
-                    <el-tag v-if="comment.type === 'OPERATION'" type="info" size="small" effect="plain">操作记录</el-tag>
-                    <span class="preview-comment-time">{{ formatDateTime(comment.createTime) }}</span>
+                    <el-tag
+                      v-if="comment.type === 'OPERATION'"
+                      type="info"
+                      size="small"
+                      effect="plain"
+                      >操作记录</el-tag
+                    >
+                    <span class="preview-comment-time">{{
+                      formatDateTime(comment.createTime)
+                    }}</span>
                   </div>
-                  <div v-if="comment.type === 'OPERATION'" class="preview-comment-text preview-comment-text-plain">
+                  <div
+                    v-if="comment.type === 'OPERATION'"
+                    class="preview-comment-text preview-comment-text-plain"
+                  >
                     {{ comment.content || '-' }}
                   </div>
                   <!-- eslint-disable-next-line vue/no-v-html — 与工单详情页一致，评论为富文本 -->
@@ -1930,7 +2231,9 @@ onUnmounted(() => {
   border: 1px solid #ebedf0;
   border-radius: 8px;
   background: #fafbfc;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 
   &:hover {
     background: #f0f7ff;
@@ -2102,6 +2405,46 @@ onUnmounted(() => {
   color: #606266;
 }
 
+.custom-query-builder {
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid #ebeef5;
+}
+
+.custom-query-header,
+.custom-condition-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.custom-query-header {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.custom-query-tip {
+  margin-left: 12px;
+  color: #909399;
+  font-size: 13px;
+}
+
+.custom-condition-row {
+  margin-bottom: 12px;
+}
+
+.condition-field {
+  width: 180px;
+}
+
+.condition-operator {
+  width: 130px;
+}
+
+.condition-value {
+  width: 280px;
+}
+
 // ===== 响应式 =====
 @media (max-width: 900px) {
   .preview-layout {
@@ -2117,6 +2460,17 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .custom-query-header,
+  .custom-condition-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .condition-field,
+  .condition-operator,
+  .condition-value {
+    width: 100%;
+  }
   .brief-toolbar {
     flex-direction: column;
     align-items: stretch;
