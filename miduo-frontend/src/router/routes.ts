@@ -85,12 +85,16 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
-        path: 'ticket/all',
-        name: 'ticketAll',
+        path: 'ticket/custom-query',
+        name: 'ticketCustomQuery',
         component: () => import('@/views/ticket/TicketListView.vue'),
         meta: {
-          title: '全部工单',
+          title: '自定义查询',
         },
+      },
+      {
+        path: 'ticket/all',
+        redirect: '/ticket/custom-query',
       },
       {
         path: 'ticket/kanban',
