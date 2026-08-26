@@ -37,6 +37,14 @@ export interface TicketPageInput extends PageQuery {
   slaStatus?: string
   /** 为 true 时仅返回可关联 Bug 简报的工单（临时解决、已完成；不含非缺陷关闭的已关闭）；不含已有关联且该简报已归档的工单 */
   linkableForBugReport?: boolean
+  conditionLogic?: 'AND' | 'OR'
+  customConditions?: TicketCustomConditionInput[]
+}
+
+export interface TicketCustomConditionInput {
+  field: string
+  operator: string
+  values: string[]
 }
 
 export interface TicketListOutput {
