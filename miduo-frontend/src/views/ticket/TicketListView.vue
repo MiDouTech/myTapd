@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { ArrowRight, Document as DocumentOutlined, Edit } from '@element-plus/icons-vue'
+import { ArrowRight, Delete, Document as DocumentOutlined, Edit } from '@element-plus/icons-vue'
 
 import { getCategoryTree } from '@/api/category'
 import {
@@ -170,6 +170,26 @@ const timeRange = ref<string[]>([])
 const isCustomQueryView = computed(() => route.path === '/ticket/custom-query')
 const conditionLogic = ref<'AND' | 'OR'>('AND')
 const customConditions = ref<TicketCustomConditionInput[]>([])
+const advancedExpanded = ref(true)
+const invalidConditionIndexes = ref<number[]>([])
+const appliedFilterTags = ref<Array<{ key: string; label: string }>>([])
+const savedQueryDialogVisible = ref(false)
+const savedQueryName = ref('')
+interface SavedTicketQuery {
+  id: string
+  name: string
+  ticketNo: string
+  title: string
+  companyName: string
+  categoryId?: number
+  statuses: string[]
+  excludeStatuses: boolean
+  timeRange: string[]
+  conditionLogic: 'AND' | 'OR'
+  customConditions: TicketCustomConditionInput[]
+}
+const SAVED_QUERY_STORAGE_KEY = 'miduo-ticket-saved-queries'
+const savedQueries = ref<SavedTicketQuery[]>([])
 const customFieldOptions = [
   { label: '工单编号', value: 'ticketNo', type: 'text' },
   { label: '标题', value: 'title', type: 'text' },
@@ -220,11 +240,200 @@ function addCustomCondition(): void {
 
 function removeCustomCondition(index: number): void {
   customConditions.value.splice(index, 1)
+  invalidConditionIndexes.value = invalidConditionIndexes.value
+    .filter((item) => item !== index)
+    .map((item) => (item > index ? item - 1 : item))
 }
 
 function handleCustomFieldChange(condition: TicketCustomConditionInput): void {
   condition.operator = operatorOptions(condition.field)[0]?.value || 'EQ'
   condition.values = ['']
+}
+
+function customFieldLabel(field: string): string {
+  return customFieldOptions.find((item) => item.value === field)?.label || field
+}
+
+function customOperatorLabel(condition: TicketCustomConditionInput): string {
+  return (
+    operatorOptions(condition.field).find((item) => item.value === condition.operator)?.label ||
+    condition.operator
+  )
+}
+
+function customValueLabel(condition: TicketCustomConditionInput): string {
+  const value = condition.values[0] || ''
+  if (condition.field === 'priority') {
+    return priorityOptions.find((item) => item.value === value)?.label || value
+  }
+  if (condition.field === 'status') {
+    return customStatusOptions.find((item) => item.value === value)?.label || value
+  }
+  if (condition.field === 'categoryId') {
+    return categoryOptions.value.find((item) => String(item.value) === value)?.label || value
+  }
+  return value
+}
+
+const customLogicPreview = computed(() => {
+  const complete = customConditions.value.filter((item) => item.values[0]?.trim())
+  if (!complete.length) return '尚未添加高级条件'
+  const connector = conditionLogic.value === 'AND' ? ' 并且 ' : ' 或者 '
+  return complete
+    .map(
+      (item) =>
+        `${customFieldLabel(item.field)} ${customOperatorLabel(item)} ${customValueLabel(item)}`,
+    )
+    .join(connector)
+})
+
+function validateCustomConditions(): boolean {
+  if (!isCustomQueryView.value) return true
+  invalidConditionIndexes.value = customConditions.value
+    .map((item, index) => (item.values[0]?.trim() ? -1 : index))
+    .filter((index) => index >= 0)
+  if (!invalidConditionIndexes.value.length) return true
+  advancedExpanded.value = true
+  const first = invalidConditionIndexes.value[0]
+  void nextTick(() =>
+    document.querySelector<HTMLElement>(`[data-condition-index="${first}"] input`)?.focus(),
+  )
+  notifyWarning('请先补充完整高级查询条件')
+  return false
+}
+
+function formatLocalDateTime(value: Date): string {
+  const pad = (part: number): string => String(part).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+}
+
+function applyTimeShortcut(days: number): void {
+  const end = new Date()
+  end.setHours(23, 59, 59, 0)
+  const start = new Date(end)
+  start.setDate(start.getDate() - Math.max(days - 1, 0))
+  start.setHours(0, 0, 0, 0)
+  timeRange.value = [formatLocalDateTime(start), formatLocalDateTime(end)]
+}
+
+function refreshAppliedFilterTags(): void {
+  if (!isCustomQueryView.value) return
+  const tags: Array<{ key: string; label: string }> = []
+  if (query.ticketNo?.trim())
+    tags.push({ key: 'ticketNo', label: `工单编号：${query.ticketNo.trim()}` })
+  if (query.title?.trim()) tags.push({ key: 'title', label: `标题：${query.title.trim()}` })
+  if (query.companyName?.trim())
+    tags.push({ key: 'companyName', label: `公司名称：${query.companyName.trim()}` })
+  if (query.categoryId) {
+    const label =
+      categoryOptions.value.find((item) => item.value === query.categoryId)?.label ||
+      query.categoryId
+    tags.push({ key: 'categoryId', label: `分类：${label}` })
+  }
+  if (query.statuses?.length) {
+    const labels = query.statuses.map((value) => STATUS_LABEL_MAP[value] || value).join('、')
+    tags.push({
+      key: 'statuses',
+      label: `状态${query.excludeStatuses ? '不属于' : '属于'}：${labels}`,
+    })
+  }
+  if (timeRange.value.length === 2)
+    tags.push({
+      key: 'timeRange',
+      label: `创建时间：${timeRange.value[0]} 至 ${timeRange.value[1]}`,
+    })
+  customConditions.value.forEach((condition, index) => {
+    if (condition.values[0]?.trim()) {
+      tags.push({
+        key: `custom:${index}`,
+        label: `${customFieldLabel(condition.field)} ${customOperatorLabel(condition)} ${customValueLabel(condition)}`,
+      })
+    }
+  })
+  appliedFilterTags.value = tags
+}
+
+function removeAppliedFilter(key: string): void {
+  if (key.startsWith('custom:')) {
+    removeCustomCondition(Number(key.slice('custom:'.length)))
+  } else if (key === 'ticketNo') query.ticketNo = ''
+  else if (key === 'title') query.title = ''
+  else if (key === 'companyName') query.companyName = ''
+  else if (key === 'categoryId') query.categoryId = undefined
+  else if (key === 'statuses') {
+    query.statuses = []
+    query.excludeStatuses = false
+  } else if (key === 'timeRange') timeRange.value = []
+  handleSearch()
+}
+
+function cloneCustomConditions(): TicketCustomConditionInput[] {
+  return customConditions.value.map((item) => ({ ...item, values: [...item.values] }))
+}
+
+function persistSavedQueries(): void {
+  localStorage.setItem(SAVED_QUERY_STORAGE_KEY, JSON.stringify(savedQueries.value))
+}
+
+function openSaveQueryDialog(): void {
+  if (!validateCustomConditions()) return
+  savedQueryName.value = ''
+  savedQueryDialogVisible.value = true
+}
+
+function saveCurrentQuery(): void {
+  const name = savedQueryName.value.trim()
+  if (!name) {
+    notifyWarning('请输入常用查询名称')
+    return
+  }
+  savedQueries.value.push({
+    id: `${Date.now()}`,
+    name,
+    ticketNo: query.ticketNo || '',
+    title: query.title || '',
+    companyName: query.companyName || '',
+    categoryId: query.categoryId,
+    statuses: [...(query.statuses || [])],
+    excludeStatuses: Boolean(query.excludeStatuses),
+    timeRange: [...timeRange.value],
+    conditionLogic: conditionLogic.value,
+    customConditions: cloneCustomConditions(),
+  })
+  persistSavedQueries()
+  savedQueryDialogVisible.value = false
+  notifySuccess('常用查询保存成功')
+}
+
+function applySavedQuery(saved: SavedTicketQuery): void {
+  query.ticketNo = saved.ticketNo
+  query.title = saved.title
+  query.companyName = saved.companyName
+  query.categoryId = saved.categoryId
+  query.statuses = [...saved.statuses]
+  query.excludeStatuses = saved.excludeStatuses
+  timeRange.value = [...saved.timeRange]
+  conditionLogic.value = saved.conditionLogic
+  customConditions.value = saved.customConditions.map((item) => ({
+    ...item,
+    values: [...item.values],
+  }))
+  advancedExpanded.value = customConditions.value.length > 0
+  handleSearch()
+}
+
+function deleteSavedQuery(id: string): void {
+  savedQueries.value = savedQueries.value.filter((item) => item.id !== id)
+  persistSavedQueries()
+}
+
+function loadSavedQueries(): void {
+  try {
+    const raw = localStorage.getItem(SAVED_QUERY_STORAGE_KEY)
+    savedQueries.value = raw ? (JSON.parse(raw) as SavedTicketQuery[]) : []
+  } catch {
+    savedQueries.value = []
+  }
 }
 
 const personalViewTabs: Array<{ label: string; value: string }> = [
@@ -392,6 +601,7 @@ async function loadTickets(): Promise<void> {
       : await getTicketPage(params)
     tableData.value = response.records
     total.value = response.total
+    refreshAppliedFilterTags()
     // 列表刷新后清空选择，避免跨页/筛选后仍保留旧勾选导致误写简报
     selectedRows.value = []
   } catch {
@@ -403,6 +613,7 @@ async function loadTickets(): Promise<void> {
 }
 
 function handleSearch(): void {
+  if (!validateCustomConditions()) return
   query.pageNum = 1
   query.keyword = ''
   const kw = (query.ticketNo || '').trim() || (query.title || '').trim()
@@ -446,6 +657,8 @@ function handleReset(): void {
   timeRange.value = []
   conditionLogic.value = 'AND'
   customConditions.value = []
+  invalidConditionIndexes.value = []
+  appliedFilterTags.value = []
   query.pageNum = 1
   layoutTicketSearchKeyword.value = ''
   persistLayoutTicketSearch('')
@@ -453,6 +666,11 @@ function handleReset(): void {
   delete next.q
   delete next.status
   delete next.slaStatus
+  const targetPath = router.resolve({ path: route.path, query: next }).fullPath
+  if (targetPath === route.fullPath) {
+    void loadTickets()
+    return
+  }
   void router.replace({ path: route.path, query: next })
 }
 
@@ -805,6 +1023,7 @@ onMounted(() => {
   updateViewportState()
   window.addEventListener('resize', updateViewportState)
   loadCategoryTree()
+  loadSavedQueries()
 })
 
 onUnmounted(() => {
@@ -815,7 +1034,29 @@ onUnmounted(() => {
 <template>
   <div class="ticket-list-page">
     <el-card shadow="never" class="ticket-list-card">
-      <h2 v-if="isCustomQueryView" class="ticket-view-title">自定义查询</h2>
+      <template v-if="isCustomQueryView">
+        <div class="custom-page-heading">
+          <div>
+            <h2 class="ticket-view-title">自定义查询</h2>
+            <p>基础筛选用于高频查询，高级条件用于组合查询</p>
+          </div>
+          <el-button @click="openSaveQueryDialog">保存为常用查询</el-button>
+        </div>
+        <div v-if="savedQueries.length" class="saved-query-bar">
+          <span>常用查询</span>
+          <div v-for="saved in savedQueries" :key="saved.id" class="saved-query-item">
+            <el-button size="small" @click="applySavedQuery(saved)">{{ saved.name }}</el-button>
+            <el-button
+              link
+              type="danger"
+              :aria-label="`删除常用查询 ${saved.name}`"
+              @click="deleteSavedQuery(saved.id)"
+            >
+              ×
+            </el-button>
+          </div>
+        </div>
+      </template>
       <h2 v-else-if="personalViewTitle" class="ticket-view-title">{{ personalViewTitle }}</h2>
       <template v-else>
         <div v-if="isMobile" class="mobile-view-switch">
@@ -966,126 +1207,207 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item label="时间范围" class="query-form-item">
-          <el-date-picker
-            v-model="timeRange"
-            class="query-input"
-            type="daterange"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
-            value-format="YYYY-MM-DD HH:mm:ss"
-          />
+          <div class="time-filter-wrap">
+            <el-date-picker
+              v-model="timeRange"
+              class="query-input"
+              type="daterange"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
+              value-format="YYYY-MM-DD HH:mm:ss"
+            />
+            <el-space v-if="isCustomQueryView" class="time-shortcuts" :size="4">
+              <el-button size="small" @click="applyTimeShortcut(1)">今天</el-button>
+              <el-button size="small" @click="applyTimeShortcut(7)">近7天</el-button>
+              <el-button size="small" @click="applyTimeShortcut(30)">近30天</el-button>
+            </el-space>
+          </div>
         </el-form-item>
-        <el-form-item class="query-form-item query-form-actions">
+        <el-form-item v-if="!isCustomQueryView" class="query-form-item query-form-actions">
           <el-space class="query-action-buttons">
             <el-button type="primary" native-type="submit" @click="handleSearch">查询</el-button>
             <el-button @click="handleReset">重置</el-button>
           </el-space>
         </el-form-item>
       </el-form>
-      <div v-if="isCustomQueryView" class="custom-query-builder">
-        <div class="custom-query-header">
-          <div>
-            <strong>自定义条件</strong>
-            <span class="custom-query-tip">基础条件与自定义条件之间按“并且”查询</span>
+      <template v-if="isCustomQueryView">
+        <div class="query-and-connector"><span>AND</span></div>
+        <div class="custom-query-builder" :class="{ 'is-collapsed': !advancedExpanded }">
+          <div class="custom-query-header" @click="advancedExpanded = !advancedExpanded">
+            <div class="custom-query-title">
+              <strong>高级条件</strong>
+              <el-tag size="small" type="info">{{ customConditions.length }} 条</el-tag>
+              <span class="custom-query-tip">与基础筛选固定使用“并且”连接</span>
+            </div>
+            <div class="custom-query-header-actions" @click.stop>
+              <span>组内关系</span>
+              <el-radio-group v-model="conditionLogic" size="small">
+                <el-radio-button value="AND">满足全部</el-radio-button>
+                <el-radio-button value="OR">满足任意</el-radio-button>
+              </el-radio-group>
+              <el-button link @click="advancedExpanded = !advancedExpanded">
+                {{ advancedExpanded ? '收起' : '展开' }}
+              </el-button>
+            </div>
           </div>
-          <el-radio-group v-model="conditionLogic" size="small">
-            <el-radio-button value="AND">满足全部</el-radio-button>
-            <el-radio-button value="OR">满足任意</el-radio-button>
-          </el-radio-group>
+          <template v-if="advancedExpanded">
+            <div
+              v-for="(condition, index) in customConditions"
+              :key="index"
+              class="custom-condition-row"
+              :class="{ 'has-error': invalidConditionIndexes.includes(index) }"
+              :data-condition-index="index"
+            >
+              <span class="condition-index">{{ index + 1 }}</span>
+              <el-select
+                v-model="condition.field"
+                class="condition-field"
+                @change="handleCustomFieldChange(condition)"
+              >
+                <el-option
+                  v-for="option in customFieldOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-select v-model="condition.operator" class="condition-operator">
+                <el-option
+                  v-for="option in operatorOptions(condition.field)"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-select
+                v-if="customFieldType(condition.field) === 'priority'"
+                v-model="condition.values[0]"
+                class="condition-value"
+                placeholder="请选择优先级"
+              >
+                <el-option
+                  v-for="option in priorityOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-select
+                v-else-if="customFieldType(condition.field) === 'status'"
+                v-model="condition.values[0]"
+                class="condition-value"
+                filterable
+                placeholder="请选择状态"
+              >
+                <el-option
+                  v-for="option in customStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-select
+                v-else-if="customFieldType(condition.field) === 'category'"
+                v-model="condition.values[0]"
+                class="condition-value"
+                filterable
+                placeholder="请选择分类"
+              >
+                <el-option
+                  v-for="option in categoryOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="String(option.value)"
+                />
+              </el-select>
+              <el-date-picker
+                v-else-if="customFieldType(condition.field) === 'date'"
+                v-model="condition.values[0]"
+                class="condition-value"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                placeholder="请选择时间"
+              />
+              <el-input
+                v-else
+                v-model="condition.values[0]"
+                class="condition-value"
+                :type="customFieldType(condition.field) === 'number' ? 'number' : 'text'"
+                :placeholder="
+                  ['creatorName', 'assigneeName'].includes(condition.field)
+                    ? '请输入姓名'
+                    : '请输入条件值'
+                "
+                clearable
+                @input="
+                  invalidConditionIndexes = invalidConditionIndexes.filter((item) => item !== index)
+                "
+              />
+              <el-button
+                class="condition-delete"
+                circle
+                text
+                :icon="Delete"
+                :aria-label="`删除第 ${index + 1} 条高级条件`"
+                @click="removeCustomCondition(index)"
+              />
+              <span v-if="invalidConditionIndexes.includes(index)" class="condition-error"
+                >请填写条件值</span
+              >
+            </div>
+            <div class="custom-query-content-footer">
+              <el-button type="primary" link @click="addCustomCondition">+ 添加条件</el-button>
+              <div class="query-logic-preview"><span>逻辑预览：</span>{{ customLogicPreview }}</div>
+            </div>
+          </template>
         </div>
-        <div
-          v-for="(condition, index) in customConditions"
-          :key="index"
-          class="custom-condition-row"
-        >
-          <el-select
-            v-model="condition.field"
-            class="condition-field"
-            @change="handleCustomFieldChange(condition)"
-          >
-            <el-option
-              v-for="option in customFieldOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-select v-model="condition.operator" class="condition-operator">
-            <el-option
-              v-for="option in operatorOptions(condition.field)"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-select
-            v-if="customFieldType(condition.field) === 'priority'"
-            v-model="condition.values[0]"
-            class="condition-value"
-            placeholder="请选择优先级"
-          >
-            <el-option
-              v-for="option in priorityOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-select
-            v-else-if="customFieldType(condition.field) === 'status'"
-            v-model="condition.values[0]"
-            class="condition-value"
-            filterable
-            placeholder="请选择状态"
-          >
-            <el-option
-              v-for="option in customStatusOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-select
-            v-else-if="customFieldType(condition.field) === 'category'"
-            v-model="condition.values[0]"
-            class="condition-value"
-            filterable
-            placeholder="请选择分类"
-          >
-            <el-option
-              v-for="option in categoryOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="String(option.value)"
-            />
-          </el-select>
-          <el-date-picker
-            v-else-if="customFieldType(condition.field) === 'date'"
-            v-model="condition.values[0]"
-            class="condition-value"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="请选择时间"
-          />
-          <el-input
-            v-else
-            v-model="condition.values[0]"
-            class="condition-value"
-            :type="customFieldType(condition.field) === 'number' ? 'number' : 'text'"
-            :placeholder="
-              ['creatorName', 'assigneeName'].includes(condition.field)
-                ? '请输入姓名'
-                : '请输入条件值'
-            "
-            clearable
-          />
-          <el-button type="danger" link @click="removeCustomCondition(index)">删除</el-button>
+        <div class="custom-query-submit-bar">
+          <span>基础筛选 <strong>AND</strong> 高级条件组</span>
+          <el-space>
+            <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :loading="loading" @click="handleSearch">查询工单</el-button>
+          </el-space>
         </div>
-        <el-button type="primary" link @click="addCustomCondition">+ 添加条件</el-button>
-      </div>
+      </template>
     </el-card>
 
+    <el-dialog v-model="savedQueryDialogVisible" title="保存为常用查询" width="420px">
+      <el-form label-width="84px" @submit.prevent="saveCurrentQuery">
+        <el-form-item label="查询名称" required>
+          <el-input
+            v-model="savedQueryName"
+            maxlength="30"
+            show-word-limit
+            placeholder="例如：近7天紧急缺陷"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="savedQueryDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveCurrentQuery">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-card shadow="never" class="ticket-list-card">
+      <div v-if="isCustomQueryView" class="query-result-summary">
+        <div class="result-count">
+          查询结果 <strong>{{ total }}</strong> 条
+        </div>
+        <div v-if="appliedFilterTags.length" class="applied-filter-tags">
+          <span>已生效：</span>
+          <el-tag
+            v-for="tag in appliedFilterTags"
+            :key="tag.key"
+            closable
+            effect="plain"
+            @close="removeAppliedFilter(tag.key)"
+          >
+            {{ tag.label }}
+          </el-tag>
+          <el-button type="primary" link @click="handleReset">清除全部</el-button>
+        </div>
+        <span v-else class="all-ticket-tip">未设置筛选条件，当前显示全部工单</span>
+      </div>
       <div v-if="isBriefTodoView" class="brief-toolbar">
         <div class="brief-toolbar-left">
           <span class="brief-toolbar-title">个人待出简报工单</span>
@@ -1099,7 +1421,12 @@ onUnmounted(() => {
           去写简报（{{ selectedBriefTicketIds.length }}）
         </el-button>
       </div>
-      <EmptyState v-if="!loading && tableData.length === 0" description="暂无工单数据" />
+      <EmptyState
+        v-if="!loading && tableData.length === 0"
+        :description="
+          isCustomQueryView ? '未找到匹配工单，请减少条件或切换高级条件组关系' : '暂无工单数据'
+        "
+      />
       <template v-else>
         <BaseTable
           :data="tableData"
@@ -2406,9 +2733,10 @@ onUnmounted(() => {
 }
 
 .custom-query-builder {
-  margin-top: 8px;
-  padding-top: 18px;
-  border-top: 1px solid #ebeef5;
+  padding: 14px 16px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #fafcff;
 }
 
 .custom-query-header,
@@ -2420,7 +2748,73 @@ onUnmounted(() => {
 
 .custom-query-header {
   justify-content: space-between;
+  cursor: pointer;
+}
+
+.custom-query-builder:not(.is-collapsed) .custom-query-header {
   margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.custom-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  p {
+    margin: 4px 0 14px;
+    color: #909399;
+    font-size: 13px;
+  }
+}
+
+.custom-query-title,
+.custom-query-header-actions,
+.custom-query-content-footer,
+.custom-query-submit-bar,
+.query-result-summary,
+.applied-filter-tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.saved-query-bar,
+.saved-query-item {
+  display: flex;
+  align-items: center;
+}
+
+.saved-query-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+
+  > span {
+    color: #909399;
+    font-size: 13px;
+  }
+}
+
+.saved-query-item {
+  gap: 0;
+  padding-right: 2px;
+  border: 1px solid #dcdfe6;
+  border-radius: 5px;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
+
+  > .el-button:first-child {
+    border: 0;
+  }
+}
+
+.custom-query-header-actions {
+  color: #606266;
+  font-size: 13px;
 }
 
 .custom-query-tip {
@@ -2430,7 +2824,46 @@ onUnmounted(() => {
 }
 
 .custom-condition-row {
+  position: relative;
   margin-bottom: 12px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  &.has-error {
+    padding-bottom: 24px;
+    border-color: #f56c6c;
+    background: #fef0f0;
+  }
+}
+
+.condition-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ecf5ff;
+  color: #409eff;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  flex: none;
+}
+
+.condition-delete {
+  color: #909399;
+
+  &:hover {
+    color: #f56c6c;
+    background: #fef0f0;
+  }
+}
+
+.condition-error {
+  position: absolute;
+  bottom: 3px;
+  left: 376px;
+  color: #f56c6c;
+  font-size: 12px;
 }
 
 .condition-field {
@@ -2443,6 +2876,97 @@ onUnmounted(() => {
 
 .condition-value {
   width: 280px;
+}
+
+.query-and-connector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  color: #909399;
+  font-size: 12px;
+
+  &::before,
+  &::after {
+    content: '';
+    height: 1px;
+    flex: 1;
+    background: #ebeef5;
+  }
+
+  span {
+    padding: 2px 10px;
+    border-radius: 10px;
+    color: #409eff;
+    background: #ecf5ff;
+    font-weight: 600;
+  }
+}
+
+.custom-query-content-footer {
+  justify-content: space-between;
+}
+
+.query-logic-preview {
+  max-width: 70%;
+  color: #606266;
+  font-size: 13px;
+  text-align: right;
+
+  span {
+    color: #909399;
+  }
+}
+
+.custom-query-submit-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-top: 1px solid #ebeef5;
+  background: rgba(255, 255, 255, 0.96);
+  color: #909399;
+  font-size: 13px;
+
+  strong {
+    color: #409eff;
+  }
+}
+
+.time-filter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.query-result-summary {
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.result-count {
+  margin-right: 8px;
+  color: #303133;
+
+  strong {
+    color: #409eff;
+  }
+}
+
+.applied-filter-tags {
+  flex: 1;
+  flex-wrap: wrap;
+  color: #909399;
+  font-size: 13px;
+}
+
+.all-ticket-tip {
+  color: #909399;
+  font-size: 13px;
 }
 
 // ===== 响应式 =====
@@ -2464,6 +2988,31 @@ onUnmounted(() => {
   .custom-condition-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .custom-query-header-actions,
+  .custom-query-content-footer,
+  .custom-query-submit-bar,
+  .time-filter-wrap {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .custom-page-heading {
+    gap: 12px;
+  }
+
+  .condition-index {
+    display: none;
+  }
+
+  .condition-error {
+    left: 8px;
+  }
+
+  .query-logic-preview {
+    max-width: 100%;
+    text-align: left;
   }
 
   .condition-field,
