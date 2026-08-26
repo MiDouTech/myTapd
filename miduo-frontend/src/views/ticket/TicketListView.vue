@@ -190,6 +190,35 @@ interface SavedTicketQuery {
 }
 const SAVED_QUERY_STORAGE_KEY = 'miduo-ticket-saved-queries'
 const savedQueries = ref<SavedTicketQuery[]>([])
+const exportDialogVisible = ref(false)
+const exportLoading = ref(false)
+const exportFieldOptions = [
+  { key: 'ticketNo', label: '工单编号' },
+  { key: 'companyName', label: '公司名称' },
+  { key: 'title', label: '标题' },
+  { key: 'categoryName', label: '分类' },
+  { key: 'priorityLabel', label: '优先级' },
+  { key: 'statusLabel', label: '状态' },
+  { key: 'responseSlaStatusLabel', label: '响应SLA' },
+  { key: 'resolveSlaStatusLabel', label: '解决SLA' },
+  { key: 'creatorName', label: '创建人' },
+  { key: 'assigneeName', label: '处理人' },
+  { key: 'testAssigneeName', label: '测试受理人' },
+  { key: 'urgeCount', label: '催办次数' },
+  { key: 'sourceLabel', label: '来源' },
+  { key: 'merchantNo', label: '商户编号' },
+  { key: 'severityLevel', label: '缺陷等级' },
+  { key: 'impactScope', label: '影响范围' },
+  { key: 'manualValidReportLabel', label: '是否有效反馈' },
+  { key: 'expectedTime', label: '期望完成时间' },
+  { key: 'createTime', label: '创建时间' },
+  { key: 'updateTime', label: '更新时间' },
+  { key: 'resolvedAt', label: '解决时间' },
+  { key: 'closedAt', label: '关闭时间' },
+] as const
+type ExportFieldKey = (typeof exportFieldOptions)[number]['key']
+const exportFieldKeys = ref<ExportFieldKey[]>(exportFieldOptions.map((item) => item.key))
+const MAX_EXPORT_RECORDS = 5000
 const customFieldOptions = [
   { label: '工单编号', value: 'ticketNo', type: 'text' },
   { label: '标题', value: 'title', type: 'text' },
@@ -564,48 +593,43 @@ async function loadCategoryTree(): Promise<void> {
   categoryTree.value = await getCategoryTree()
 }
 
+function buildTicketPageParams(pageNum: number, pageSize: number): TicketPageInput {
+  const params: TicketPageInput = { pageNum, pageSize, view: query.view }
+  if (query.categoryGroupId) params.categoryGroupId = query.categoryGroupId
+  if (query.keyword?.trim()) params.keyword = query.keyword.trim()
+  else {
+    if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
+    if (query.title?.trim()) params.title = query.title.trim()
+  }
+  if (query.companyName?.trim()) params.companyName = query.companyName.trim()
+  if (!isBriefTodoView.value) {
+    if (query.categoryId) params.categoryId = query.categoryId
+    if (query.statuses?.length) {
+      params.statuses = query.statuses
+      params.excludeStatuses = query.excludeStatuses
+    }
+    if (query.priority) params.priority = query.priority
+  }
+  if (query.slaStatus) params.slaStatus = query.slaStatus
+  if (query.creatorId) params.creatorId = query.creatorId
+  if (query.assigneeId) params.assigneeId = query.assigneeId
+  if (query.orderBy) {
+    params.orderBy = query.orderBy
+    params.asc = query.asc
+  }
+  if (timeRange.value?.[0]) params.createTimeStart = timeRange.value[0]
+  if (timeRange.value?.[1]) params.createTimeEnd = timeRange.value[1]
+  if (isCustomQueryView.value) {
+    params.conditionLogic = conditionLogic.value
+    params.customConditions = customConditions.value.filter((item) => item.values[0] !== '')
+  }
+  return params
+}
+
 async function loadTickets(): Promise<void> {
   loading.value = true
   try {
-    const params: TicketPageInput = {
-      pageNum: query.pageNum,
-      pageSize: query.pageSize,
-      view: query.view,
-    }
-    if (query.categoryGroupId) {
-      params.categoryGroupId = query.categoryGroupId
-    }
-    if (query.keyword?.trim()) {
-      params.keyword = query.keyword.trim()
-    } else {
-      if (query.ticketNo?.trim()) params.ticketNo = query.ticketNo.trim()
-      if (query.title?.trim()) params.title = query.title.trim()
-    }
-    if (query.companyName?.trim()) {
-      params.companyName = query.companyName.trim()
-    }
-    if (!isBriefTodoView.value) {
-      if (query.categoryId) params.categoryId = query.categoryId
-      if (query.statuses?.length) {
-        params.statuses = query.statuses
-        params.excludeStatuses = query.excludeStatuses
-      }
-      if (query.priority) params.priority = query.priority
-    }
-    if (query.slaStatus) params.slaStatus = query.slaStatus
-    if (query.creatorId) params.creatorId = query.creatorId
-    if (query.assigneeId) params.assigneeId = query.assigneeId
-    if (query.orderBy) {
-      params.orderBy = query.orderBy
-      params.asc = query.asc
-    }
-    if (timeRange.value?.[0]) params.createTimeStart = timeRange.value[0]
-    if (timeRange.value?.[1]) params.createTimeEnd = timeRange.value[1]
-
-    if (isCustomQueryView.value) {
-      params.conditionLogic = conditionLogic.value
-      params.customConditions = customConditions.value.filter((item) => item.values[0] !== '')
-    }
+    const params = buildTicketPageParams(query.pageNum, query.pageSize)
     const response = isCustomQueryView.value
       ? await customQueryTicketPage(params)
       : await getTicketPage(params)
@@ -619,6 +643,76 @@ async function loadTickets(): Promise<void> {
     total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+function openExportDialog(): void {
+  if (!validateCustomConditions()) return
+  exportDialogVisible.value = true
+}
+
+function csvCell(value: unknown): string {
+  let text = value == null || value === '' ? '-' : String(value)
+  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function exportFieldValue(row: TicketListOutput, key: ExportFieldKey): string {
+  if (['expectedTime', 'createTime', 'updateTime', 'resolvedAt', 'closedAt'].includes(key)) {
+    return formatDateTime(
+      row[key as 'createTime' | 'updateTime' | 'resolvedAt' | 'closedAt' | 'expectedTime'],
+    )
+  }
+  if (key === 'priorityLabel') return row.priorityLabel || row.priority || '-'
+  if (key === 'statusLabel') return row.statusLabel || row.status || '-'
+  if (key === 'sourceLabel') return row.sourceLabel || row.source || '-'
+  if (key === 'severityLevel') return severityLabel(row.severityLevel)
+  if (key === 'impactScope') return impactScopeLabel(row.impactScope)
+  return String(row[key] ?? '-')
+}
+
+async function handleExport(): Promise<void> {
+  if (!exportFieldKeys.value.length) {
+    notifyWarning('请至少选择一个导出字段')
+    return
+  }
+  if (!validateCustomConditions()) return
+  exportLoading.value = true
+  try {
+    const first = await customQueryTicketPage(buildTicketPageParams(1, 100))
+    const exportTotal = Math.min(first.total, MAX_EXPORT_RECORDS)
+    const records = [...first.records]
+    const pageCount = Math.ceil(exportTotal / 100)
+    for (let pageNum = 2; pageNum <= pageCount; pageNum += 1) {
+      const page = await customQueryTicketPage(buildTicketPageParams(pageNum, 100))
+      records.push(...page.records)
+    }
+    const selectedFields = exportFieldOptions.filter((item) =>
+      exportFieldKeys.value.includes(item.key),
+    )
+    const csvRows = [
+      selectedFields.map((item) => csvCell(item.label)).join(','),
+      ...records
+        .slice(0, exportTotal)
+        .map((row) =>
+          selectedFields.map((item) => csvCell(exportFieldValue(row, item.key))).join(','),
+        ),
+    ]
+    const blob = new Blob([`\uFEFF${csvRows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `工单查询结果_${formatLocalDateTime(new Date()).replace(/[: ]/g, '-')}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    exportDialogVisible.value = false
+    notifySuccess(`已导出 ${Math.min(records.length, exportTotal)} 条工单`)
+    if (first.total > MAX_EXPORT_RECORDS)
+      notifyWarning(`单次最多导出 ${MAX_EXPORT_RECORDS} 条，请增加筛选条件后分批导出`)
+  } catch {
+    notifyError('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = false
   }
 }
 
@@ -1408,6 +1502,35 @@ onUnmounted(() => {
       </template>
     </el-dialog>
 
+    <el-dialog v-model="exportDialogVisible" title="导出工单" width="640px">
+      <div class="export-dialog-tip">
+        将按当前查询条件导出全部匹配结果，单次最多
+        {{ MAX_EXPORT_RECORDS }} 条。请选择需要包含的字段。
+      </div>
+      <div class="export-field-actions">
+        <el-button
+          type="primary"
+          link
+          @click="exportFieldKeys = exportFieldOptions.map((item) => item.key)"
+        >
+          全选
+        </el-button>
+        <el-button link @click="exportFieldKeys = []">清空</el-button>
+        <span>已选择 {{ exportFieldKeys.length }} / {{ exportFieldOptions.length }} 项</span>
+      </div>
+      <el-checkbox-group v-model="exportFieldKeys" class="export-field-grid">
+        <el-checkbox v-for="field in exportFieldOptions" :key="field.key" :value="field.key">
+          {{ field.label }}
+        </el-checkbox>
+      </el-checkbox-group>
+      <template #footer>
+        <el-button @click="exportDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="exportLoading" @click="handleExport"
+          >导出 CSV</el-button
+        >
+      </template>
+    </el-dialog>
+
     <el-card shadow="never" class="ticket-list-card">
       <div v-if="isCustomQueryView" class="query-result-summary">
         <div class="result-count">
@@ -1427,6 +1550,7 @@ onUnmounted(() => {
           <el-button type="primary" link @click="handleReset">清除全部</el-button>
         </div>
         <span v-else class="all-ticket-tip">未设置筛选条件，当前显示全部工单</span>
+        <el-button class="result-export-button" @click="openExportDialog">导出</el-button>
       </div>
       <div v-if="isBriefTodoView" class="brief-toolbar">
         <div class="brief-toolbar-left">
@@ -3000,6 +3124,41 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.result-export-button {
+  margin-left: auto;
+}
+
+.export-dialog-tip {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f4f7fb;
+  color: #606266;
+  font-size: 13px;
+}
+
+.export-field-actions {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+
+  span {
+    margin-left: auto;
+    color: #909399;
+    font-size: 12px;
+  }
+}
+
+.export-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 16px;
+
+  :deep(.el-checkbox) {
+    margin-right: 0;
+  }
+}
+
 // ===== 响应式 =====
 @media (max-width: 900px) {
   .preview-layout {
@@ -3044,6 +3203,10 @@ onUnmounted(() => {
   .query-logic-preview {
     max-width: 100%;
     text-align: left;
+  }
+
+  .export-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .condition-field,

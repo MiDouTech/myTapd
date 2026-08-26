@@ -72,4 +72,20 @@ public class TicketListOutput implements Serializable {
     private String resolveSlaStatus;
 
     private String resolveSlaStatusLabel;
+
+    /** 测试受理人名称。 */
+    private String testAssigneeName;
+
+    private Integer urgeCount;
+
+    private String merchantNo;
+
+    private String severityLevel;
+
+    private String impactScope;
+
+    /** 是否有效反馈原始值：YES / NO。 */
+    private String manualValidReport;
+
+    private String manualValidReportLabel;
 }

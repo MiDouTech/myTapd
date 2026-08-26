@@ -79,6 +79,13 @@ export interface TicketListOutput {
   /** 解决 SLA 状态 */
   resolveSlaStatus?: string
   resolveSlaStatusLabel?: string
+  testAssigneeName?: string
+  urgeCount?: number
+  merchantNo?: string
+  severityLevel?: string
+  impactScope?: string
+  manualValidReport?: string
+  manualValidReportLabel?: string
 }
 
 export interface TicketCreateInput {
