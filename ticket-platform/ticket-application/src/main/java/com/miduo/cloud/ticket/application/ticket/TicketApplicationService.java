@@ -378,7 +378,7 @@ public class TicketApplicationService {
                             (a, b) -> a));
         }
 
-        Map<Long, String> slaStatusByTicketId = resolveSlaStatusByTicketId(ticketIds);
+        SlaStatusSummary slaStatusSummary = resolveSlaStatusesByTicketId(ticketIds);
         Map<Long, Date> resolveDeadlineByTicketId = resolveSlaResolveDeadlineByTicketId(ticketIds);
 
         Map<Long, String> finalUserNameMap = userNameMap;
@@ -387,7 +387,8 @@ public class TicketApplicationService {
         Map<Long, String> finalMultiAssigneeNameMap = multiAssigneeNameByTicketId;
         List<TicketListOutput> outputs = records.stream()
                 .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap,
-                        finalMultiAssigneeNameMap, slaStatusByTicketId, resolveDeadlineByTicketId))
+                        finalMultiAssigneeNameMap, slaStatusSummary.overall, slaStatusSummary.response,
+                        slaStatusSummary.resolve, resolveDeadlineByTicketId))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -395,13 +396,16 @@ public class TicketApplicationService {
 
     private static final Set<String> CUSTOM_QUERY_FIELDS = new HashSet<>(Arrays.asList(
             "ticketNo", "title", "source", "status", "priority", "categoryId",
-            "creatorName", "assigneeName", "createTime", "updateTime"));
+            "creatorName", "assigneeName", "responseSlaStatus", "resolveSlaStatus",
+            "createTime", "updateTime"));
     private static final Set<String> CUSTOM_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
             "EQ", "NE", "CONTAINS", "NOT_CONTAINS", "IN", "NOT_IN", "GT", "GTE", "LT", "LTE"));
     private static final Set<String> USER_NAME_QUERY_FIELDS = new HashSet<>(Arrays.asList(
             "creatorName", "assigneeName"));
     private static final Set<String> USER_NAME_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
             "EQ", "NE", "CONTAINS", "NOT_CONTAINS"));
+    private static final Set<String> SLA_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "responseSlaStatus", "resolveSlaStatus"));
 
     /** 严格校验字段与操作符，XML 只会从白名单映射到固定列，绝不接收 SQL 片段。 */
     private void normalizeCustomConditions(TicketPageInput input) {
@@ -420,13 +424,18 @@ public class TicketApplicationService {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR, "存在不支持的自定义查询条件");
             }
             condition.setOperator(condition.getOperator().toUpperCase());
+            if (condition.getValues() == null || condition.getValues().isEmpty()
+                    || condition.getValues().size() > 100) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件值不能为空且不能超过100个");
+            }
             if (USER_NAME_QUERY_FIELDS.contains(condition.getField())
                     && !USER_NAME_QUERY_OPERATORS.contains(condition.getOperator())) {
                 throw BusinessException.of(ErrorCode.PARAM_ERROR, "创建人和处理人仅支持按姓名匹配");
             }
-            if (condition.getValues() == null || condition.getValues().isEmpty()
-                    || condition.getValues().size() > 100) {
-                throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件值不能为空且不能超过100个");
+            if (SLA_QUERY_FIELDS.contains(condition.getField())
+                    && (!"EQ".equals(condition.getOperator())
+                    || !Arrays.asList("NORMAL", "WARNING", "BREACHED").contains(condition.getValues().get(0)))) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "SLA仅支持按正常、预警中、已超时查询");
             }
         });
     }
@@ -1642,6 +1651,8 @@ public class TicketApplicationService {
                                                   Map<Long, String> companyNameByTicketId,
                                                   Map<Long, String> multiAssigneeNameByTicketId,
                                                   Map<Long, String> slaStatusByTicketId,
+                                                  Map<Long, String> responseSlaStatusByTicketId,
+                                                  Map<Long, String> resolveSlaStatusByTicketId,
                                                   Map<Long, Date> resolveDeadlineByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
@@ -1695,8 +1706,27 @@ public class TicketApplicationService {
                 output.setSlaStatusLabel(getSlaStatusLabel(slaStatus));
             }
         }
+        if (po.getId() != null) {
+            applySlaStatus(output, responseSlaStatusByTicketId == null ? null
+                    : responseSlaStatusByTicketId.get(po.getId()), true);
+            applySlaStatus(output, resolveSlaStatusByTicketId == null ? null
+                    : resolveSlaStatusByTicketId.get(po.getId()), false);
+        }
 
         return output;
+    }
+
+    private void applySlaStatus(TicketListOutput output, String status, boolean response) {
+        if (status == null) {
+            return;
+        }
+        if (response) {
+            output.setResponseSlaStatus(status);
+            output.setResponseSlaStatusLabel(getSlaStatusLabel(status));
+        } else {
+            output.setResolveSlaStatus(status);
+            output.setResolveSlaStatusLabel(getSlaStatusLabel(status));
+        }
     }
 
     private static final String SLA_STATUS_BREACHED = "BREACHED";
@@ -1720,14 +1750,14 @@ public class TicketApplicationService {
      * 批量查询工单的 SLA 状态（BREACHED > WARNING > NORMAL）
      * 取每张工单所有 sla_timer 中最严重的状态
      */
-    private Map<Long, String> resolveSlaStatusByTicketId(List<Long> ticketIds) {
+    private SlaStatusSummary resolveSlaStatusesByTicketId(List<Long> ticketIds) {
         if (ticketIds == null || ticketIds.isEmpty()) {
-            return Collections.emptyMap();
+            return new SlaStatusSummary();
         }
         List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO> timers =
                 slaTimerMapper.selectByTicketIds(ticketIds);
         if (timers == null || timers.isEmpty()) {
-            return Collections.emptyMap();
+            return new SlaStatusSummary();
         }
         Map<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> grouped =
                 timers.stream()
@@ -1735,22 +1765,49 @@ public class TicketApplicationService {
                         .collect(Collectors.groupingBy(
                                 com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO::getTicketId));
 
-        Map<Long, String> result = new HashMap<>();
+        SlaStatusSummary summary = new SlaStatusSummary();
         for (Map.Entry<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> entry : grouped.entrySet()) {
             String worst = SLA_STATUS_NORMAL;
             for (com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO timer : entry.getValue()) {
-                if (timer.getIsBreached() != null && timer.getIsBreached() == 1) {
-                    worst = SLA_STATUS_BREACHED;
-                    break;
-                }
-                if (timer.getIsWarned() != null && timer.getIsWarned() == 1
-                        && !SLA_STATUS_BREACHED.equals(worst)) {
-                    worst = SLA_STATUS_WARNING;
+                String timerStatus = resolveSingleSlaStatus(timer);
+                worst = worseSlaStatus(worst, timerStatus);
+                if (SlaTimerType.RESPONSE.getCode().equals(timer.getTimerType())) {
+                    summary.response.put(entry.getKey(), worseSlaStatus(
+                            summary.response.get(entry.getKey()), timerStatus));
+                } else if (SlaTimerType.RESOLVE.getCode().equals(timer.getTimerType())) {
+                    summary.resolve.put(entry.getKey(), worseSlaStatus(
+                            summary.resolve.get(entry.getKey()), timerStatus));
                 }
             }
-            result.put(entry.getKey(), worst);
+            summary.overall.put(entry.getKey(), worst);
         }
-        return result;
+        return summary;
+    }
+
+    private String resolveSingleSlaStatus(SlaTimerPO timer) {
+        if (timer.getIsBreached() != null && timer.getIsBreached() == 1) {
+            return SLA_STATUS_BREACHED;
+        }
+        if (timer.getIsWarned() != null && timer.getIsWarned() == 1) {
+            return SLA_STATUS_WARNING;
+        }
+        return SLA_STATUS_NORMAL;
+    }
+
+    private String worseSlaStatus(String current, String candidate) {
+        if (SLA_STATUS_BREACHED.equals(current) || SLA_STATUS_BREACHED.equals(candidate)) {
+            return SLA_STATUS_BREACHED;
+        }
+        if (SLA_STATUS_WARNING.equals(current) || SLA_STATUS_WARNING.equals(candidate)) {
+            return SLA_STATUS_WARNING;
+        }
+        return SLA_STATUS_NORMAL;
+    }
+
+    private static class SlaStatusSummary {
+        private final Map<Long, String> overall = new HashMap<>();
+        private final Map<Long, String> response = new HashMap<>();
+        private final Map<Long, String> resolve = new HashMap<>();
     }
 
     /**

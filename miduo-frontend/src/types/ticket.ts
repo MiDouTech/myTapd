@@ -73,6 +73,12 @@ export interface TicketListOutput {
   /** SLA整体状态：NORMAL-正常 / WARNING-预警中 / BREACHED-已超时 / null-无SLA */
   slaStatus?: string
   slaStatusLabel?: string
+  /** 首次响应 SLA 状态 */
+  responseSlaStatus?: string
+  responseSlaStatusLabel?: string
+  /** 解决 SLA 状态 */
+  resolveSlaStatus?: string
+  resolveSlaStatusLabel?: string
 }
 
 export interface TicketCreateInput {

@@ -210,6 +210,12 @@
                         <when test="condition.field == 'assigneeName'">
                             <include refid="customAssigneeNameCondition"/>
                         </when>
+                        <when test="condition.field == 'responseSlaStatus'">
+                            <include refid="customSlaStatusCondition"><property name="timerType" value="RESPONSE"/></include>
+                        </when>
+                        <when test="condition.field == 'resolveSlaStatus'">
+                            <include refid="customSlaStatusCondition"><property name="timerType" value="RESOLVE"/></include>
+                        </when>
                         <when test="condition.field == 'createTime'">
                             <include refid="customScalarCondition"><property name="column" value="t.create_time"/></include>
                         </when>
@@ -333,6 +339,33 @@
                 </otherwise>
             </choose>
         )
+    </sql>
+
+    <sql id="customSlaStatusCondition">
+        <choose>
+            <when test="condition.values[0] == 'BREACHED'">
+                EXISTS (SELECT 1 FROM sla_timer custom_sla
+                        WHERE custom_sla.ticket_id = t.id AND custom_sla.deleted = 0
+                          AND custom_sla.timer_type = '${timerType}' AND custom_sla.is_breached = 1)
+            </when>
+            <when test="condition.values[0] == 'WARNING'">
+                EXISTS (SELECT 1 FROM sla_timer custom_sla
+                        WHERE custom_sla.ticket_id = t.id AND custom_sla.deleted = 0
+                          AND custom_sla.timer_type = '${timerType}' AND custom_sla.is_warned = 1)
+                AND NOT EXISTS (SELECT 1 FROM sla_timer custom_sla
+                                WHERE custom_sla.ticket_id = t.id AND custom_sla.deleted = 0
+                                  AND custom_sla.timer_type = '${timerType}' AND custom_sla.is_breached = 1)
+            </when>
+            <otherwise>
+                EXISTS (SELECT 1 FROM sla_timer custom_sla
+                        WHERE custom_sla.ticket_id = t.id AND custom_sla.deleted = 0
+                          AND custom_sla.timer_type = '${timerType}')
+                AND NOT EXISTS (SELECT 1 FROM sla_timer custom_sla
+                                WHERE custom_sla.ticket_id = t.id AND custom_sla.deleted = 0
+                                  AND custom_sla.timer_type = '${timerType}'
+                                  AND (custom_sla.is_breached = 1 OR custom_sla.is_warned = 1))
+            </otherwise>
+        </choose>
     </sql>
 
     <select id="selectFollowedTicketIds" resultType="java.lang.Long">

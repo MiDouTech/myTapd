@@ -199,6 +199,8 @@ const customFieldOptions = [
   { label: '优先级', value: 'priority', type: 'priority' },
   { label: '创建人', value: 'creatorName', type: 'text' },
   { label: '处理人', value: 'assigneeName', type: 'text' },
+  { label: '响应SLA', value: 'responseSlaStatus', type: 'sla' },
+  { label: '解决SLA', value: 'resolveSlaStatus', type: 'sla' },
   { label: '创建时间', value: 'createTime', type: 'date' },
   { label: '更新时间', value: 'updateTime', type: 'date' },
 ] as const
@@ -206,6 +208,10 @@ const customStatusOptions = Object.entries(STATUS_LABEL_MAP).map(([value, label]
   value,
   label,
 }))
+const slaColumns = [
+  { label: '响应SLA', statusKey: 'responseSlaStatus', labelKey: 'responseSlaStatusLabel' },
+  { label: '解决SLA', statusKey: 'resolveSlaStatus', labelKey: 'resolveSlaStatusLabel' },
+] as const
 
 function customFieldType(field: string): string {
   return customFieldOptions.find((item) => item.value === field)?.type || 'text'
@@ -228,6 +234,7 @@ function operatorOptions(field: string): Array<{ label: string; value: string }>
       { label: '等于', value: 'EQ' },
     ]
   }
+  if (type === 'sla') return [{ label: '等于', value: 'EQ' }]
   return [
     { label: '等于', value: 'EQ' },
     { label: '不等于', value: 'NE' },
@@ -271,6 +278,9 @@ function customValueLabel(condition: TicketCustomConditionInput): string {
   }
   if (condition.field === 'categoryId') {
     return categoryOptions.value.find((item) => String(item.value) === value)?.label || value
+  }
+  if (['responseSlaStatus', 'resolveSlaStatus'].includes(condition.field)) {
+    return { NORMAL: '正常', WARNING: '预警中', BREACHED: '已超时' }[value] || value
   }
   return value
 }
@@ -1307,6 +1317,16 @@ onUnmounted(() => {
                 />
               </el-select>
               <el-select
+                v-else-if="customFieldType(condition.field) === 'sla'"
+                v-model="condition.values[0]"
+                class="condition-value"
+                placeholder="请选择SLA状态"
+              >
+                <el-option label="正常" value="NORMAL" />
+                <el-option label="预警中" value="WARNING" />
+                <el-option label="已超时" value="BREACHED" />
+              </el-select>
+              <el-select
                 v-else-if="customFieldType(condition.field) === 'category'"
                 v-model="condition.values[0]"
                 class="condition-value"
@@ -1503,20 +1523,31 @@ onUnmounted(() => {
               <el-tag :type="getStatusType(row.status)">{{ row.statusLabel || row.status }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="SLA" width="100" align="center">
+          <el-table-column
+            v-for="column in slaColumns"
+            :key="column.statusKey"
+            :label="column.label"
+            width="100"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag v-if="row.slaStatus === 'BREACHED'" type="danger" size="small" effect="dark">
-                {{ row.slaStatusLabel || '已超时' }}
+              <el-tag
+                v-if="row[column.statusKey] === 'BREACHED'"
+                type="danger"
+                size="small"
+                effect="dark"
+              >
+                {{ row[column.labelKey] || '已超时' }}
               </el-tag>
               <el-tag
-                v-else-if="row.slaStatus === 'WARNING'"
+                v-else-if="row[column.statusKey] === 'WARNING'"
                 type="warning"
                 size="small"
                 effect="dark"
               >
-                {{ row.slaStatusLabel || '预警中' }}
+                {{ row[column.labelKey] || '预警中' }}
               </el-tag>
-              <span v-else-if="row.slaStatus === 'NORMAL'" class="sla-normal">正常</span>
+              <span v-else-if="row[column.statusKey] === 'NORMAL'" class="sla-normal">正常</span>
               <span v-else class="sla-none">-</span>
             </template>
           </el-table-column>
