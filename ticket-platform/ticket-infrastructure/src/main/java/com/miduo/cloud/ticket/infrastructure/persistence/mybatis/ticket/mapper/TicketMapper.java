@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.UserTicketLoadStat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.entity.dto.ticket.TicketCustomConditionInput;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -37,7 +38,9 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
                                      @Param("excludeCategoryIds") List<Long> excludeCategoryIds,
                                      @Param("alertCategoryIds") List<Long> alertCategoryIds,
                                      @Param("alertSource") String alertSource,
-                                     @Param("excludeAlertSource") Boolean excludeAlertSource);
+                                     @Param("excludeAlertSource") Boolean excludeAlertSource,
+                                     @Param("conditionLogic") String conditionLogic,
+                                     @Param("customConditions") List<TicketCustomConditionInput> customConditions);
 
     List<Long> selectFollowedTicketIds(@Param("userId") Long userId);
 

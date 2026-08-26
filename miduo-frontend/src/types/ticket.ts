@@ -37,6 +37,14 @@ export interface TicketPageInput extends PageQuery {
   slaStatus?: string
   /** 为 true 时仅返回可关联 Bug 简报的工单（临时解决、已完成；不含非缺陷关闭的已关闭）；不含已有关联且该简报已归档的工单 */
   linkableForBugReport?: boolean
+  conditionLogic?: 'AND' | 'OR'
+  customConditions?: TicketCustomConditionInput[]
+}
+
+export interface TicketCustomConditionInput {
+  field: string
+  operator: string
+  values: string[]
 }
 
 export interface TicketListOutput {
@@ -65,6 +73,19 @@ export interface TicketListOutput {
   /** SLA整体状态：NORMAL-正常 / WARNING-预警中 / BREACHED-已超时 / null-无SLA */
   slaStatus?: string
   slaStatusLabel?: string
+  /** 首次响应 SLA 状态 */
+  responseSlaStatus?: string
+  responseSlaStatusLabel?: string
+  /** 解决 SLA 状态 */
+  resolveSlaStatus?: string
+  resolveSlaStatusLabel?: string
+  testAssigneeName?: string
+  urgeCount?: number
+  merchantNo?: string
+  severityLevel?: string
+  impactScope?: string
+  manualValidReport?: string
+  manualValidReportLabel?: string
 }
 
 export interface TicketCreateInput {

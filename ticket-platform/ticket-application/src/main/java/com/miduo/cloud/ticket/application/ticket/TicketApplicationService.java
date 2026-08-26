@@ -137,6 +137,9 @@ public class TicketApplicationService {
     private TicketBugInfoMapper ticketBugInfoMapper;
 
     @Resource
+    private TicketBugTestInfoMapper ticketBugTestInfoMapper;
+
+    @Resource
     private TicketAssigneeMapper ticketAssigneeMapper;
 
     @Resource
@@ -274,6 +277,7 @@ public class TicketApplicationService {
         }
 
         List<String> statusFilterList = mergeStatusFilter(input.getStatus(), input.getStatuses());
+        normalizeCustomConditions(input);
 
         String createTimeStart = DateTimeRangeQueryUtil.normalizeRangeStart(input.getCreateTimeStart());
         String createTimeEnd = DateTimeRangeQueryUtil.normalizeRangeEndInclusive(input.getCreateTimeEnd());
@@ -308,7 +312,9 @@ public class TicketApplicationService {
                 viewFilter.getExcludeCategoryIds(),
                 viewFilter.getAlertCategoryIds(),
                 viewFilter.getAlertSource(),
-                viewFilter.getExcludeAlertSource()
+                viewFilter.getExcludeAlertSource(),
+                input.getConditionLogic(),
+                input.getCustomConditions()
         );
 
         List<TicketPO> records = result.getRecords();
@@ -362,32 +368,114 @@ public class TicketApplicationService {
         Map<Long, String> multiAssigneeNameByTicketId =
                 buildMultiAssigneeDisplayNames(assigneeUserIdsByTicketId, userNameMap);
         Map<Long, String> companyNameByTicketId = Collections.emptyMap();
+        Map<Long, String> merchantNoByTicketId = Collections.emptyMap();
+        Map<Long, String> severityByTicketId = Collections.emptyMap();
+        Map<Long, String> impactScopeByTicketId = Collections.emptyMap();
+        Map<Long, String> validReportByTicketId = Collections.emptyMap();
         if (!ticketIds.isEmpty()) {
             List<TicketBugInfoPO> bugInfos = ticketBugInfoMapper.selectList(
                     new LambdaQueryWrapper<TicketBugInfoPO>()
                             // 这里限制查询字段，因为列表只需要企业名称，避免历史库缺少新增列导致整表查询失败。
-                            .select(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName)
+                            .select(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName,
+                                    TicketBugInfoPO::getMerchantNo, TicketBugInfoPO::getManualValidReport)
                             .in(TicketBugInfoPO::getTicketId, ticketIds));
             companyNameByTicketId = bugInfos.stream()
                     .filter(b -> b.getTicketId() != null && b.getCompanyName() != null
                             && !b.getCompanyName().trim().isEmpty())
                     .collect(Collectors.toMap(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getCompanyName,
                             (a, b) -> a));
+            merchantNoByTicketId = bugInfos.stream()
+                    .filter(b -> b.getTicketId() != null && b.getMerchantNo() != null
+                            && !b.getMerchantNo().trim().isEmpty())
+                    .collect(Collectors.toMap(TicketBugInfoPO::getTicketId, TicketBugInfoPO::getMerchantNo,
+                            (a, b) -> a));
+            validReportByTicketId = bugInfos.stream()
+                    .filter(b -> b.getTicketId() != null && b.getManualValidReport() != null)
+                    .collect(Collectors.toMap(TicketBugInfoPO::getTicketId,
+                            TicketBugInfoPO::getManualValidReport, (a, b) -> a));
+            List<TicketBugTestInfoPO> testInfos = ticketBugTestInfoMapper.selectList(
+                    new LambdaQueryWrapper<TicketBugTestInfoPO>()
+                            .select(TicketBugTestInfoPO::getTicketId, TicketBugTestInfoPO::getSeverityLevel,
+                                    TicketBugTestInfoPO::getImpactScope)
+                            .in(TicketBugTestInfoPO::getTicketId, ticketIds));
+            severityByTicketId = testInfos.stream()
+                    .filter(info -> info.getTicketId() != null && info.getSeverityLevel() != null)
+                    .collect(Collectors.toMap(TicketBugTestInfoPO::getTicketId,
+                            TicketBugTestInfoPO::getSeverityLevel, (a, b) -> a));
+            impactScopeByTicketId = testInfos.stream()
+                    .filter(info -> info.getTicketId() != null && info.getImpactScope() != null)
+                    .collect(Collectors.toMap(TicketBugTestInfoPO::getTicketId,
+                            TicketBugTestInfoPO::getImpactScope, (a, b) -> a));
         }
+        Map<Long, String> testAssigneeNameByTicketId = loadTestAssigneeNames(ticketIds);
 
-        Map<Long, String> slaStatusByTicketId = resolveSlaStatusByTicketId(ticketIds);
+        SlaStatusSummary slaStatusSummary = resolveSlaStatusesByTicketId(ticketIds);
         Map<Long, Date> resolveDeadlineByTicketId = resolveSlaResolveDeadlineByTicketId(ticketIds);
 
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalCategoryNameMap = categoryNameMap;
         Map<Long, String> finalCompanyNameMap = companyNameByTicketId;
         Map<Long, String> finalMultiAssigneeNameMap = multiAssigneeNameByTicketId;
+        Map<Long, String> finalMerchantNoMap = merchantNoByTicketId;
+        Map<Long, String> finalSeverityMap = severityByTicketId;
+        Map<Long, String> finalImpactScopeMap = impactScopeByTicketId;
+        Map<Long, String> finalTestAssigneeNameMap = testAssigneeNameByTicketId;
+        Map<Long, String> finalValidReportMap = resolveValidReportByTicketId(records, validReportByTicketId);
         List<TicketListOutput> outputs = records.stream()
                 .map(po -> convertToListOutput(po, finalUserNameMap, finalCategoryNameMap, finalCompanyNameMap,
-                        finalMultiAssigneeNameMap, slaStatusByTicketId, resolveDeadlineByTicketId))
+                        finalMultiAssigneeNameMap, slaStatusSummary.overall, slaStatusSummary.response,
+                        slaStatusSummary.resolve, resolveDeadlineByTicketId, finalMerchantNoMap,
+                        finalSeverityMap, finalImpactScopeMap, finalTestAssigneeNameMap,
+                        finalValidReportMap))
                 .collect(Collectors.toList());
 
         return PageOutput.of(outputs, result.getTotal(), input.getPageNum(), input.getPageSize());
+    }
+
+    private static final Set<String> CUSTOM_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "ticketNo", "title", "source", "status", "priority", "categoryId",
+            "creatorName", "assigneeName", "responseSlaStatus", "resolveSlaStatus",
+            "createTime", "updateTime"));
+    private static final Set<String> CUSTOM_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
+            "EQ", "NE", "CONTAINS", "NOT_CONTAINS", "IN", "NOT_IN", "GT", "GTE", "LT", "LTE"));
+    private static final Set<String> USER_NAME_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "creatorName", "assigneeName"));
+    private static final Set<String> USER_NAME_QUERY_OPERATORS = new HashSet<>(Arrays.asList(
+            "EQ", "NE", "CONTAINS", "NOT_CONTAINS"));
+    private static final Set<String> SLA_QUERY_FIELDS = new HashSet<>(Arrays.asList(
+            "responseSlaStatus", "resolveSlaStatus"));
+
+    /** 严格校验字段与操作符，XML 只会从白名单映射到固定列，绝不接收 SQL 片段。 */
+    private void normalizeCustomConditions(TicketPageInput input) {
+        String logic = input.getConditionLogic();
+        input.setConditionLogic("OR".equalsIgnoreCase(logic) ? "OR" : "AND");
+        if (input.getCustomConditions() == null) {
+            return;
+        }
+        if (input.getCustomConditions().size() > 30) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件不能超过30个");
+        }
+        input.getCustomConditions().forEach(condition -> {
+            if (condition == null || !CUSTOM_QUERY_FIELDS.contains(condition.getField())
+                    || condition.getOperator() == null
+                    || !CUSTOM_QUERY_OPERATORS.contains(condition.getOperator().toUpperCase())) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "存在不支持的自定义查询条件");
+            }
+            condition.setOperator(condition.getOperator().toUpperCase());
+            if (condition.getValues() == null || condition.getValues().isEmpty()
+                    || condition.getValues().size() > 100) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "自定义查询条件值不能为空且不能超过100个");
+            }
+            if (USER_NAME_QUERY_FIELDS.contains(condition.getField())
+                    && !USER_NAME_QUERY_OPERATORS.contains(condition.getOperator())) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "创建人和处理人仅支持按姓名匹配");
+            }
+            if (SLA_QUERY_FIELDS.contains(condition.getField())
+                    && (!"EQ".equals(condition.getOperator())
+                    || !Arrays.asList("NORMAL", "WARNING", "BREACHED").contains(condition.getValues().get(0)))) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "SLA仅支持按正常、预警中、已超时查询");
+            }
+        });
     }
 
     public TicketDetailOutput getTicketDetail(Long id, Long currentUserId) {
@@ -1601,7 +1689,14 @@ public class TicketApplicationService {
                                                   Map<Long, String> companyNameByTicketId,
                                                   Map<Long, String> multiAssigneeNameByTicketId,
                                                   Map<Long, String> slaStatusByTicketId,
-                                                  Map<Long, Date> resolveDeadlineByTicketId) {
+                                                  Map<Long, String> responseSlaStatusByTicketId,
+                                                  Map<Long, String> resolveSlaStatusByTicketId,
+                                                  Map<Long, Date> resolveDeadlineByTicketId,
+                                                  Map<Long, String> merchantNoByTicketId,
+                                                  Map<Long, String> severityByTicketId,
+                                                  Map<Long, String> impactScopeByTicketId,
+                                                  Map<Long, String> testAssigneeNameByTicketId,
+                                                  Map<Long, String> validReportByTicketId) {
         TicketListOutput output = new TicketListOutput();
         output.setId(po.getId());
         output.setTicketNo(po.getTicketNo());
@@ -1633,6 +1728,17 @@ public class TicketApplicationService {
         output.setUpdateTime(po.getUpdateTime());
         output.setResolvedAt(po.getResolvedAt());
         output.setClosedAt(po.getClosedAt());
+        output.setUrgeCount(po.getUrgeCount() == null ? 0 : po.getUrgeCount());
+        if (po.getId() != null) {
+            output.setMerchantNo(merchantNoByTicketId.get(po.getId()));
+            output.setSeverityLevel(severityByTicketId.get(po.getId()));
+            output.setImpactScope(impactScopeByTicketId.get(po.getId()));
+            output.setTestAssigneeName(testAssigneeNameByTicketId.get(po.getId()));
+            String validReport = validReportByTicketId.get(po.getId());
+            output.setManualValidReport(validReport);
+            ValidReportOption option = ValidReportOption.fromCode(validReport);
+            output.setManualValidReportLabel(option == null ? null : option.getLabel());
+        }
 
         Priority priority = Priority.fromCode(po.getPriority());
         if (priority != null) {
@@ -1654,8 +1760,123 @@ public class TicketApplicationService {
                 output.setSlaStatusLabel(getSlaStatusLabel(slaStatus));
             }
         }
+        if (po.getId() != null) {
+            applySlaStatus(output, responseSlaStatusByTicketId == null ? null
+                    : responseSlaStatusByTicketId.get(po.getId()), true);
+            applySlaStatus(output, resolveSlaStatusByTicketId == null ? null
+                    : resolveSlaStatusByTicketId.get(po.getId()), false);
+        }
 
         return output;
+    }
+
+    private void applySlaStatus(TicketListOutput output, String status, boolean response) {
+        if (status == null) {
+            return;
+        }
+        if (response) {
+            output.setResponseSlaStatus(status);
+            output.setResponseSlaStatusLabel(getSlaStatusLabel(status));
+        } else {
+            output.setResolveSlaStatus(status);
+            output.setResolveSlaStatusLabel(getSlaStatusLabel(status));
+        }
+    }
+
+    /** 批量解析测试受理人，避免导出分页时逐工单查询产生 N+1。 */
+    private Map<Long, String> loadTestAssigneeNames(List<Long> ticketIds) {
+        if (ticketIds == null || ticketIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Long> userIdByTicketId = new LinkedHashMap<>();
+        List<TicketFlowRecordPO> flowRecords = flowRecordMapper.selectList(
+                new LambdaQueryWrapper<TicketFlowRecordPO>()
+                        .select(TicketFlowRecordPO::getTicketId, TicketFlowRecordPO::getOperatorId,
+                                TicketFlowRecordPO::getCreateTime, TicketFlowRecordPO::getId)
+                        .in(TicketFlowRecordPO::getTicketId, ticketIds)
+                        .eq(TicketFlowRecordPO::getFlowType, "TRANSIT")
+                        .eq(TicketFlowRecordPO::getFromStatus, TicketStatus.PENDING_TEST_ACCEPT.getCode())
+                        .eq(TicketFlowRecordPO::getToStatus, TicketStatus.TESTING.getCode())
+                        .isNotNull(TicketFlowRecordPO::getOperatorId)
+                        .orderByDesc(TicketFlowRecordPO::getCreateTime)
+                        .orderByDesc(TicketFlowRecordPO::getId));
+        for (TicketFlowRecordPO record : flowRecords) {
+            if (record.getTicketId() != null && record.getOperatorId() != null) {
+                userIdByTicketId.putIfAbsent(record.getTicketId(), record.getOperatorId());
+            }
+        }
+        List<TicketNodeDurationPO> nodeRows = nodeDurationMapper.selectList(
+                new LambdaQueryWrapper<TicketNodeDurationPO>()
+                        .select(TicketNodeDurationPO::getTicketId, TicketNodeDurationPO::getAssigneeId,
+                                TicketNodeDurationPO::getArriveAt, TicketNodeDurationPO::getId)
+                        .in(TicketNodeDurationPO::getTicketId, ticketIds)
+                        .eq(TicketNodeDurationPO::getNodeName, TicketStatus.PENDING_TEST_ACCEPT.getCode())
+                        .isNotNull(TicketNodeDurationPO::getAssigneeId)
+                        .orderByDesc(TicketNodeDurationPO::getArriveAt)
+                        .orderByDesc(TicketNodeDurationPO::getId));
+        for (TicketNodeDurationPO row : nodeRows) {
+            if (row.getTicketId() != null && row.getAssigneeId() != null) {
+                userIdByTicketId.putIfAbsent(row.getTicketId(), row.getAssigneeId());
+            }
+        }
+        if (userIdByTicketId.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> userNames = userMapper.selectBatchIds(new HashSet<>(userIdByTicketId.values())).stream()
+                .filter(user -> user.getId() != null && user.getName() != null)
+                .collect(Collectors.toMap(SysUserPO::getId, SysUserPO::getName, (a, b) -> a));
+        Map<Long, String> result = new HashMap<>();
+        userIdByTicketId.forEach((ticketId, userId) -> {
+            String name = userNames.get(userId);
+            if (name != null && !name.trim().isEmpty()) {
+                result.put(ticketId, name.trim());
+            }
+        });
+        return result;
+    }
+
+    /** 与详情页保持一致：简报已归档为有效，其他状态为无效，已关闭工单可由人工值覆盖。 */
+    private Map<Long, String> resolveValidReportByTicketId(List<TicketPO> tickets,
+                                                            Map<Long, String> manualValues) {
+        if (tickets == null || tickets.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Long> ticketIds = tickets.stream().map(TicketPO::getId)
+                .filter(Objects::nonNull).collect(Collectors.toList());
+        List<BugReportTicketPO> links = bugReportTicketMapper.selectList(
+                new LambdaQueryWrapper<BugReportTicketPO>()
+                        .in(BugReportTicketPO::getTicketId, ticketIds)
+                        .orderByDesc(BugReportTicketPO::getCreateTime)
+                        .orderByDesc(BugReportTicketPO::getId));
+        Map<Long, Long> latestReportIdByTicketId = new LinkedHashMap<>();
+        for (BugReportTicketPO link : links) {
+            if (link.getTicketId() != null && link.getReportId() != null) {
+                latestReportIdByTicketId.putIfAbsent(link.getTicketId(), link.getReportId());
+            }
+        }
+        Map<Long, String> reportStatusById = Collections.emptyMap();
+        if (!latestReportIdByTicketId.isEmpty()) {
+            reportStatusById = bugReportMapper.selectBatchIds(new HashSet<>(latestReportIdByTicketId.values())).stream()
+                    .filter(report -> report.getId() != null)
+                    .collect(Collectors.toMap(BugReportPO::getId, BugReportPO::getStatus, (a, b) -> a));
+        }
+        Map<Long, String> result = new HashMap<>();
+        for (TicketPO ticket : tickets) {
+            if (ticket.getId() == null) {
+                continue;
+            }
+            Long reportId = latestReportIdByTicketId.get(ticket.getId());
+            if (reportId != null) {
+                result.put(ticket.getId(), BugReportStatus.ARCHIVED.getCode().equals(reportStatusById.get(reportId))
+                        ? ValidReportOption.YES.getCode() : ValidReportOption.NO.getCode());
+            }
+            String manual = manualValues.get(ticket.getId());
+            if ((isClosedStatus(ticket.getStatus()) || ticket.getClosedAt() != null)
+                    && ValidReportOption.fromCode(manual) != null) {
+                result.put(ticket.getId(), ValidReportOption.fromCode(manual).getCode());
+            }
+        }
+        return result;
     }
 
     private static final String SLA_STATUS_BREACHED = "BREACHED";
@@ -1679,14 +1900,14 @@ public class TicketApplicationService {
      * 批量查询工单的 SLA 状态（BREACHED > WARNING > NORMAL）
      * 取每张工单所有 sla_timer 中最严重的状态
      */
-    private Map<Long, String> resolveSlaStatusByTicketId(List<Long> ticketIds) {
+    private SlaStatusSummary resolveSlaStatusesByTicketId(List<Long> ticketIds) {
         if (ticketIds == null || ticketIds.isEmpty()) {
-            return Collections.emptyMap();
+            return new SlaStatusSummary();
         }
         List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO> timers =
                 slaTimerMapper.selectByTicketIds(ticketIds);
         if (timers == null || timers.isEmpty()) {
-            return Collections.emptyMap();
+            return new SlaStatusSummary();
         }
         Map<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> grouped =
                 timers.stream()
@@ -1694,22 +1915,49 @@ public class TicketApplicationService {
                         .collect(Collectors.groupingBy(
                                 com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO::getTicketId));
 
-        Map<Long, String> result = new HashMap<>();
+        SlaStatusSummary summary = new SlaStatusSummary();
         for (Map.Entry<Long, List<com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO>> entry : grouped.entrySet()) {
             String worst = SLA_STATUS_NORMAL;
             for (com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO timer : entry.getValue()) {
-                if (timer.getIsBreached() != null && timer.getIsBreached() == 1) {
-                    worst = SLA_STATUS_BREACHED;
-                    break;
-                }
-                if (timer.getIsWarned() != null && timer.getIsWarned() == 1
-                        && !SLA_STATUS_BREACHED.equals(worst)) {
-                    worst = SLA_STATUS_WARNING;
+                String timerStatus = resolveSingleSlaStatus(timer);
+                worst = worseSlaStatus(worst, timerStatus);
+                if (SlaTimerType.RESPONSE.getCode().equals(timer.getTimerType())) {
+                    summary.response.put(entry.getKey(), worseSlaStatus(
+                            summary.response.get(entry.getKey()), timerStatus));
+                } else if (SlaTimerType.RESOLVE.getCode().equals(timer.getTimerType())) {
+                    summary.resolve.put(entry.getKey(), worseSlaStatus(
+                            summary.resolve.get(entry.getKey()), timerStatus));
                 }
             }
-            result.put(entry.getKey(), worst);
+            summary.overall.put(entry.getKey(), worst);
         }
-        return result;
+        return summary;
+    }
+
+    private String resolveSingleSlaStatus(SlaTimerPO timer) {
+        if (timer.getIsBreached() != null && timer.getIsBreached() == 1) {
+            return SLA_STATUS_BREACHED;
+        }
+        if (timer.getIsWarned() != null && timer.getIsWarned() == 1) {
+            return SLA_STATUS_WARNING;
+        }
+        return SLA_STATUS_NORMAL;
+    }
+
+    private String worseSlaStatus(String current, String candidate) {
+        if (SLA_STATUS_BREACHED.equals(current) || SLA_STATUS_BREACHED.equals(candidate)) {
+            return SLA_STATUS_BREACHED;
+        }
+        if (SLA_STATUS_WARNING.equals(current) || SLA_STATUS_WARNING.equals(candidate)) {
+            return SLA_STATUS_WARNING;
+        }
+        return SLA_STATUS_NORMAL;
+    }
+
+    private static class SlaStatusSummary {
+        private final Map<Long, String> overall = new HashMap<>();
+        private final Map<Long, String> response = new HashMap<>();
+        private final Map<Long, String> resolve = new HashMap<>();
     }
 
     /**

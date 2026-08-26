@@ -76,6 +76,14 @@ public class TicketController {
         return ApiResult.success(page);
     }
 
+    /** 自定义条件分页查询；所有已登录用户均可访问。 */
+    @PostMapping("/custom-query/page")
+    @Operation(summary = "自定义条件分页查询工单")
+    public ApiResult<PageOutput<TicketListOutput>> customQueryPage(@Valid @RequestBody TicketPageInput input) {
+        input.setView(TicketView.ALL.getCode());
+        return ApiResult.success(ticketService.getTicketPage(input, getCurrentUserId()));
+    }
+
     /**
      * 获取工单详情
      * 接口编号：API000008
@@ -309,4 +317,5 @@ public class TicketController {
         }
         return false;
     }
+
 }
