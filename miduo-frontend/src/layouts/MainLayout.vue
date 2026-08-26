@@ -29,7 +29,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { getCategoryTree } from '@/api/category'
 import EmptyState from '@/components/common/EmptyState.vue'
 import SidebarMenuItem from '@/components/layout/SidebarMenuItem.vue'
 import type { SidebarMenuItemModel } from '@/components/layout/SidebarMenuItem.vue'
@@ -42,7 +41,6 @@ import {
 } from '@/stores/layoutTicketSearch'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
-import type { CategoryTreeOutput } from '@/types/category'
 import type { NotificationOutput } from '@/types/notification'
 import { formatDateTime } from '@/utils/formatter'
 import { createInertiaWheelScroll } from '@/utils/inertiaWheelScroll'
@@ -67,7 +65,6 @@ const mobileSidebarVisible = ref(false)
 const MOBILE_BREAKPOINT = 768
 const DESKTOP_POINTER_MEDIA_QUERY = '(hover: hover) and (pointer: fine)'
 const mainScrollRef = ref<HTMLElement | { $el?: Element | null } | null>(null)
-const categoryGroupMenuItems = ref<MenuItem[]>([])
 let inertiaWheelController: { destroy: () => void } | null = null
 let desktopPointerMedia: MediaQueryList | null = null
 
@@ -86,12 +83,11 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    index: 'ticketCategoryGroups',
-    title: '工单分类',
+    index: 'customTicketQuery',
+    title: '工单查询',
     icon: Files,
-    children: categoryGroupMenuItems.value,
+    children: [{ index: '/ticket/custom-query', title: '自定义查询', icon: Files }],
   },
-  { index: '/ticket/all', title: '全部工单', icon: Files },
   { index: '/ticket/kanban', title: '工单看板', icon: Grid },
   { index: '/report', title: '报表中心', icon: Histogram },
   {
@@ -123,45 +119,20 @@ const menuItems: MenuItem[] = [
   { index: '/update-center', title: '动态', icon: CollectionTag },
 ]
 
-/** 游客（GUEST）不显示「管理」菜单 */
-const canViewAllTickets = computed(() => hasAnyRole('ADMIN', 'TICKET_ADMIN'))
-
 const visibleMenuItems = computed(() => {
-  const items = menuItems.map((item) => {
-    if (item.index === 'ticketCategoryGroups') {
-      return {
-        ...item,
-        children: categoryGroupMenuItems.value,
-      }
-    }
-    return item
-  })
-  return items.filter((item) => {
-    if (item.index === 'ticketCategoryGroups' && !item.children?.length) {
-      return false
-    }
+  return menuItems.filter((item) => {
     if (authStore.isGuest && item.index === 'manage') {
       return false
-    }
-    if (item.index === '/ticket/all') {
-      return canViewAllTickets.value
     }
     return true
   })
 })
 
-function hasAnyRole(...roles: string[]): boolean {
-  const targets = roles.map((role) => role.toUpperCase())
-  return (authStore.userInfo?.roleCodes ?? [])
-    .map((code) => String(code).toUpperCase())
-    .some((code) => targets.includes(code))
-}
-
 const currentTitle = computed(() => String(route.meta.title || '工单系统'))
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/ticket/detail/')) {
-    return categoryGroupMenuItems.value[0]?.index || '/ticket/mine'
+    return '/ticket/custom-query'
   }
   if (route.path.startsWith('/ticket/category/')) {
     return route.path
@@ -263,38 +234,13 @@ function updateViewportState(): void {
 function submitHeaderTicketSearch(): void {
   const raw = layoutTicketSearchKeyword.value.trim()
   persistLayoutTicketSearch(raw)
-  const targetPath = route.path.startsWith('/ticket/category/')
-    ? route.path
-    : categoryGroupMenuItems.value[0]?.index || '/ticket/mine'
+  const targetPath = '/ticket/custom-query'
   if (!raw) {
     markTicketListKeywordClearFromHeader()
     void router.push({ path: targetPath, query: {} })
     return
   }
   void router.push({ path: targetPath, query: { q: raw } })
-}
-
-async function loadCategoryGroupMenus(): Promise<void> {
-  try {
-    const tree = await getCategoryTree()
-    categoryGroupMenuItems.value = (tree || [])
-      .filter((item: CategoryTreeOutput) => item.isActive !== 0)
-      .map(buildCategoryMenuItem)
-  } catch {
-    categoryGroupMenuItems.value = []
-  }
-}
-
-function buildCategoryMenuItem(category: CategoryTreeOutput): MenuItem {
-  const children = (category.children || [])
-    .filter((child) => child.isActive !== 0)
-    .map(buildCategoryMenuItem)
-  return {
-    index: `/ticket/category/${category.id}`,
-    title: category.name,
-    icon: Files,
-    children: children.length ? children : undefined,
-  }
 }
 
 function resolveMainScrollElement(): HTMLElement | null {
@@ -400,7 +346,6 @@ onMounted(() => {
   }
   desktopPointerMedia = window.matchMedia(DESKTOP_POINTER_MEDIA_QUERY)
   desktopPointerMedia.addEventListener('change', setupInertiaWheelScroll)
-  void loadCategoryGroupMenus()
   void setupInertiaWheelScroll()
 })
 

@@ -47,6 +47,12 @@ export function getTicketPage(params: TicketPageInput): Promise<PageOutput<Ticke
   })
 }
 
+export function customQueryTicketPage(
+  data: TicketPageInput,
+): Promise<PageOutput<TicketListOutput>> {
+  return request.post<PageOutput<TicketListOutput>>('/ticket/custom-query/page', data)
+}
+
 /**
  * 获取工单详情
  * 接口编号：API000008
@@ -262,7 +268,9 @@ export function deleteTicketModule(id: number): Promise<void> {
  * 接口编号：API000504
  * 产品文档功能：4.2.3 缺陷工单详情页 - 客服信息区企微消息一键解析赋值
  */
-export function parseWecomCustomerInfo(data: WecomMessageParseInput): Promise<WecomMessageParseOutput> {
+export function parseWecomCustomerInfo(
+  data: WecomMessageParseInput,
+): Promise<WecomMessageParseOutput> {
   return request.post<WecomMessageParseOutput>('/ticket/wecom/parse-customer-info', data)
 }
 
