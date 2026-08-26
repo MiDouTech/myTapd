@@ -325,6 +325,9 @@ const customLogicPreview = computed(() => {
     )
     .join(connector)
 })
+const incompleteCustomConditionCount = computed(
+  () => customConditions.value.filter((item) => !item.values[0]?.trim()).length,
+)
 
 function validateCustomConditions(): boolean {
   if (!isCustomQueryView.value) return true
@@ -647,7 +650,6 @@ async function loadTickets(): Promise<void> {
 }
 
 function openExportDialog(): void {
-  if (!validateCustomConditions()) return
   exportDialogVisible.value = true
 }
 
@@ -676,7 +678,6 @@ async function handleExport(): Promise<void> {
     notifyWarning('请至少选择一个导出字段')
     return
   }
-  if (!validateCustomConditions()) return
   exportLoading.value = true
   try {
     const first = await customQueryTicketPage(buildTicketPageParams(1, 100))
@@ -1506,6 +1507,9 @@ onUnmounted(() => {
       <div class="export-dialog-tip">
         将按当前查询条件导出全部匹配结果，单次最多
         {{ MAX_EXPORT_RECORDS }} 条。请选择需要包含的字段。
+        <span v-if="incompleteCustomConditionCount">
+          当前有 {{ incompleteCustomConditionCount }} 条未填写完整的高级条件，导出时将自动忽略。
+        </span>
       </div>
       <div class="export-field-actions">
         <el-button
