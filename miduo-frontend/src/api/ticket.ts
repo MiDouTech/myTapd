@@ -18,6 +18,8 @@ import type {
   TicketProcessInput,
   TicketPriorityUpdateInput,
   TicketPublicDetailOutput,
+  TicketSavedQueryOutput,
+  TicketSavedQuerySaveInput,
   TicketTimeTrackOutput,
   TicketUrgeInput,
   WecomMessageParseInput,
@@ -51,6 +53,27 @@ export function customQueryTicketPage(
   data: TicketPageInput,
 ): Promise<PageOutput<TicketListOutput>> {
   return request.post<PageOutput<TicketListOutput>>('/ticket/custom-query/page', data)
+}
+
+export function getTicketSavedQueries(): Promise<TicketSavedQueryOutput[]> {
+  return request.get<TicketSavedQueryOutput[]>('/ticket/saved-query/list')
+}
+
+export function createTicketSavedQuery(
+  data: TicketSavedQuerySaveInput,
+): Promise<TicketSavedQueryOutput> {
+  return request.post<TicketSavedQueryOutput>('/ticket/saved-query', data)
+}
+
+export function updateTicketSavedQuery(
+  id: number,
+  data: TicketSavedQuerySaveInput,
+): Promise<TicketSavedQueryOutput> {
+  return request.put<TicketSavedQueryOutput>(`/ticket/saved-query/${id}`, data)
+}
+
+export function deleteTicketSavedQuery(id: number): Promise<void> {
+  return request.del<void>(`/ticket/saved-query/${id}`)
 }
 
 /**

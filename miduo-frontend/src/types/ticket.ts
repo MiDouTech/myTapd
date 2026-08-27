@@ -470,3 +470,38 @@ export interface TicketPublicDetailOutput {
   slaTimers?: TicketPublicSlaTimerOutput[]
   comments?: TicketPublicCommentOutput[]
 }
+
+export interface TicketSavedQueryConfig {
+  ticketNo?: string
+  title?: string
+  companyName?: string
+  categoryId?: number
+  statuses?: string[]
+  excludeStatuses?: boolean
+  timeRange?: string[]
+  conditionLogic?: 'AND' | 'OR'
+  customConditions?: TicketCustomConditionInput[]
+  priority?: string
+  creatorId?: number
+  assigneeId?: number
+  slaStatus?: string
+  orderBy?: string
+  asc?: boolean
+}
+
+export interface TicketSavedQueryOutput {
+  id: number
+  name: string
+  queryConfig: TicketSavedQueryConfig
+  exportFields: string[]
+  schemaVersion: number
+  sortOrder: number
+  createTime: string
+  updateTime: string
+}
+
+export interface TicketSavedQuerySaveInput {
+  name: string
+  queryConfig: TicketSavedQueryConfig
+  exportFields: string[]
+}
