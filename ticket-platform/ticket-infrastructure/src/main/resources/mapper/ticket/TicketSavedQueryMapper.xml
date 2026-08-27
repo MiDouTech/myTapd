@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketSavedQueryMapper">
+    <select id="selectByUserId" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketSavedQueryPO">
+        SELECT id, user_id, query_name, query_config, export_fields, schema_version, sort_order,
+               create_time, update_time, create_by, update_by, deleted
+        FROM ticket_saved_query
+        WHERE user_id = #{userId} AND deleted = 0
+        ORDER BY sort_order ASC, id DESC
+    </select>
+
+    <select id="selectOwnedById" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketSavedQueryPO">
+        SELECT id, user_id, query_name, query_config, export_fields, schema_version, sort_order,
+               create_time, update_time, create_by, update_by, deleted
+        FROM ticket_saved_query
+        WHERE id = #{id} AND user_id = #{userId} AND deleted = 0
+    </select>
+
+    <select id="countActiveByName" resultType="int">
+        SELECT COUNT(1) FROM ticket_saved_query
+        WHERE user_id = #{userId} AND query_name = #{name} AND deleted = 0
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+    </select>
+
+    <update id="updateOwned" parameterType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketSavedQueryPO">
+        UPDATE ticket_saved_query
+        SET query_name = #{queryName}, query_config = #{queryConfig}, export_fields = #{exportFields},
+            schema_version = #{schemaVersion}, update_time = NOW(), update_by = #{updateBy}
+        WHERE id = #{id} AND user_id = #{userId} AND deleted = 0
+    </update>
+
+    <update id="softDeleteOwned">
+        UPDATE ticket_saved_query SET deleted = 1, update_time = NOW(), update_by = #{updateBy}
+        WHERE id = #{id} AND user_id = #{userId} AND deleted = 0
+    </update>
+</mapper>

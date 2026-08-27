@@ -6,12 +6,16 @@ import { ArrowRight, Delete, Document as DocumentOutlined, Edit } from '@element
 
 import { getCategoryTree } from '@/api/category'
 import {
+  createTicketSavedQuery,
   customQueryTicketPage,
+  deleteTicketSavedQuery,
   getTicketDetail,
   getTicketNodeDuration,
   getTicketPage,
+  getTicketSavedQueries,
   getTicketTimeTrack,
   updateTicketPriority,
+  updateTicketSavedQuery,
 } from '@/api/ticket'
 import { getFlowHistory } from '@/api/workflow'
 import BasePagination from '@/components/common/BasePagination.vue'
@@ -28,6 +32,8 @@ import type {
   TicketListOutput,
   TicketNodeDurationItem,
   TicketPageInput,
+  TicketSavedQueryConfig,
+  TicketSavedQueryOutput,
   TicketTimeTrackItem,
   TicketView,
 } from '@/types/ticket'
@@ -175,21 +181,8 @@ const invalidConditionIndexes = ref<number[]>([])
 const appliedFilterTags = ref<Array<{ key: string; label: string }>>([])
 const savedQueryDialogVisible = ref(false)
 const savedQueryName = ref('')
-interface SavedTicketQuery {
-  id: string
-  name: string
-  ticketNo: string
-  title: string
-  companyName: string
-  categoryId?: number
-  statuses: string[]
-  excludeStatuses: boolean
-  timeRange: string[]
-  conditionLogic: 'AND' | 'OR'
-  customConditions: TicketCustomConditionInput[]
-}
-const SAVED_QUERY_STORAGE_KEY = 'miduo-ticket-saved-queries'
-const savedQueries = ref<SavedTicketQuery[]>([])
+const savedQueries = ref<TicketSavedQueryOutput[]>([])
+const activeSavedQueryId = ref<number | null>(null)
 const exportDialogVisible = ref(false)
 const exportLoading = ref(false)
 const exportFieldOptions = [
@@ -413,25 +406,14 @@ function cloneCustomConditions(): TicketCustomConditionInput[] {
   return customConditions.value.map((item) => ({ ...item, values: [...item.values] }))
 }
 
-function persistSavedQueries(): void {
-  localStorage.setItem(SAVED_QUERY_STORAGE_KEY, JSON.stringify(savedQueries.value))
-}
-
 function openSaveQueryDialog(): void {
   if (!validateCustomConditions()) return
   savedQueryName.value = ''
   savedQueryDialogVisible.value = true
 }
 
-function saveCurrentQuery(): void {
-  const name = savedQueryName.value.trim()
-  if (!name) {
-    notifyWarning('请输入常用查询名称')
-    return
-  }
-  savedQueries.value.push({
-    id: `${Date.now()}`,
-    name,
+function buildSavedQueryConfig(): TicketSavedQueryConfig {
+  return {
     ticketNo: query.ticketNo || '',
     title: query.title || '',
     companyName: query.companyName || '',
@@ -441,38 +423,90 @@ function saveCurrentQuery(): void {
     timeRange: [...timeRange.value],
     conditionLogic: conditionLogic.value,
     customConditions: cloneCustomConditions(),
+    priority: query.priority || '',
+    creatorId: query.creatorId,
+    assigneeId: query.assigneeId,
+    slaStatus: query.slaStatus || '',
+    orderBy: query.orderBy,
+    asc: query.asc,
+  }
+}
+
+async function saveCurrentQuery(): Promise<void> {
+  const name = savedQueryName.value.trim()
+  if (!name) {
+    notifyWarning('请输入常用查询名称')
+    return
+  }
+  if (!exportFieldKeys.value.length) {
+    notifyWarning('请至少选择一个导出字段后再保存')
+    return
+  }
+  const saved = await createTicketSavedQuery({
+    name,
+    queryConfig: buildSavedQueryConfig(),
+    exportFields: [...exportFieldKeys.value],
   })
-  persistSavedQueries()
+  savedQueries.value.push(saved)
+  activeSavedQueryId.value = saved.id
   savedQueryDialogVisible.value = false
   notifySuccess('常用查询保存成功')
 }
 
-function applySavedQuery(saved: SavedTicketQuery): void {
-  query.ticketNo = saved.ticketNo
-  query.title = saved.title
-  query.companyName = saved.companyName
-  query.categoryId = saved.categoryId
-  query.statuses = [...saved.statuses]
-  query.excludeStatuses = saved.excludeStatuses
-  timeRange.value = [...saved.timeRange]
-  conditionLogic.value = saved.conditionLogic
-  customConditions.value = saved.customConditions.map((item) => ({
+function applySavedQuery(saved: TicketSavedQueryOutput): void {
+  activeSavedQueryId.value = saved.id
+  const config = saved.queryConfig
+  query.ticketNo = config.ticketNo || ''
+  query.title = config.title || ''
+  query.companyName = config.companyName || ''
+  query.categoryId = config.categoryId
+  query.statuses = [...(config.statuses || [])]
+  query.excludeStatuses = Boolean(config.excludeStatuses)
+  query.priority = config.priority || ''
+  query.creatorId = config.creatorId
+  query.assigneeId = config.assigneeId
+  query.slaStatus = config.slaStatus || ''
+  query.orderBy = config.orderBy
+  query.asc = Boolean(config.asc)
+  timeRange.value = [...(config.timeRange || [])]
+  conditionLogic.value = config.conditionLogic || 'AND'
+  customConditions.value = (config.customConditions || []).map((item) => ({
     ...item,
     values: [...item.values],
   }))
   advancedExpanded.value = customConditions.value.length > 0
+  const validExportFields = new Set(exportFieldOptions.map((item) => item.key))
+  exportFieldKeys.value = saved.exportFields.filter((key): key is ExportFieldKey =>
+    validExportFields.has(key as ExportFieldKey),
+  )
+  if (!exportFieldKeys.value.length) {
+    exportFieldKeys.value = exportFieldOptions.map((item) => item.key)
+    notifyWarning('该常用查询的导出字段已失效，已恢复为全部字段')
+  }
   handleSearch()
 }
 
-function deleteSavedQuery(id: string): void {
-  savedQueries.value = savedQueries.value.filter((item) => item.id !== id)
-  persistSavedQueries()
+async function updateSavedQuery(saved: TicketSavedQueryOutput): Promise<void> {
+  const updated = await updateTicketSavedQuery(saved.id, {
+    name: saved.name,
+    queryConfig: buildSavedQueryConfig(),
+    exportFields: [...exportFieldKeys.value],
+  })
+  savedQueries.value = savedQueries.value.map((item) => (item.id === updated.id ? updated : item))
+  activeSavedQueryId.value = updated.id
+  notifySuccess('常用查询已更新')
 }
 
-function loadSavedQueries(): void {
+async function deleteSavedQuery(id: number): Promise<void> {
+  await deleteTicketSavedQuery(id)
+  savedQueries.value = savedQueries.value.filter((item) => item.id !== id)
+  if (activeSavedQueryId.value === id) activeSavedQueryId.value = null
+  notifySuccess('常用查询已删除')
+}
+
+async function loadSavedQueries(): Promise<void> {
   try {
-    const raw = localStorage.getItem(SAVED_QUERY_STORAGE_KEY)
-    savedQueries.value = raw ? (JSON.parse(raw) as SavedTicketQuery[]) : []
+    savedQueries.value = await getTicketSavedQueries()
   } catch {
     savedQueries.value = []
   }
@@ -1128,7 +1162,7 @@ onMounted(() => {
   updateViewportState()
   window.addEventListener('resize', updateViewportState)
   loadCategoryTree()
-  loadSavedQueries()
+  void loadSavedQueries()
 })
 
 onUnmounted(() => {
@@ -1151,6 +1185,15 @@ onUnmounted(() => {
           <span>常用查询</span>
           <div v-for="saved in savedQueries" :key="saved.id" class="saved-query-item">
             <el-button size="small" @click="applySavedQuery(saved)">{{ saved.name }}</el-button>
+            <el-button
+              v-if="activeSavedQueryId === saved.id"
+              link
+              type="primary"
+              :aria-label="`更新常用查询 ${saved.name}`"
+              @click="updateSavedQuery(saved)"
+            >
+              更新
+            </el-button>
             <el-button
               link
               type="danger"
@@ -1495,6 +1538,9 @@ onUnmounted(() => {
             show-word-limit
             placeholder="例如：近7天紧急缺陷"
           />
+        </el-form-item>
+        <el-form-item label="导出字段">
+          <span>同时保存当前已选择的 {{ exportFieldKeys.length }} 个导出字段</span>
         </el-form-item>
       </el-form>
       <template #footer>
