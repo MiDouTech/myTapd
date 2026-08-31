@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: Build the Vue 3 app
 # ============================================================
-FROM node:20-alpine AS builder
+FROM docker.io/gzmidoo/node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN npm run build
 # ============================================================
 # Stage 2: Serve with Nginx
 # ============================================================
-FROM nginx:1.27-alpine
+FROM docker.io/gzmidoo/nginx:1.27-alpine
 
 LABEL maintainer="miduo-team"
 
