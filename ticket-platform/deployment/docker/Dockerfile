@@ -1,4 +1,4 @@
-FROM eclipse-temurin:8-jre-jammy
+FROM docker.io/gzmidoo/java:eclipse-temurin-8-jre-jammy
 
 LABEL maintainer="miduo-team"
 
