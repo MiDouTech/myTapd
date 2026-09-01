@@ -1,4 +1,4 @@
-FROM docker.io/gzmidoo/java:eclipse-temurin-8-jre-jammy
+FROM docker.io/gzmidoo/openjdk:8u342-coding-6616e16
 
 LABEL maintainer="miduo-team"
 
