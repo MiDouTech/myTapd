@@ -15,4 +15,7 @@ ENV UPDATE_CENTER_REPO_ROOT="/data/repo"
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/health > /dev/null || exit 1
+
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar --spring.profiles.active=$SPRING_PROFILES_ACTIVE"]

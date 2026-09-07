@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .and()
                 .authorizeRequests()
                 .antMatchers(
+                        "/health",
                         "/api/auth/**",
                         "/actuator/**",
                         "/api/actuator/**",
