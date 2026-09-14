@@ -98,6 +98,25 @@ interface PluginTicketDetail {
   messages: PluginTicketMessage[]
 }
 
+interface PluginTicketSummary {
+  ticketNo: string
+  title: string
+  categoryId?: number
+  categoryName?: string
+  status: string
+  statusLabel?: string
+}
+
+interface PluginTicketMinePage {
+  records: PluginTicketSummary[]
+  total: number
+  pageNum: number
+  pageSize: number
+  totalPages?: number
+  categoryOptions?: Array<{ id: number; name: string }>
+  statusOptions?: Array<{ code: string; name: string }>
+}
+
 interface SupplementUpload {
   url: string
   name: string
@@ -107,6 +126,7 @@ interface SupplementUpload {
 type TicketAttachment = SupplementUpload
 
 const DEFAULT_API_BASE = ''
+const SDK_VERSION = '1.2.1'
 
 class TicketSdkImpl {
   private options: TicketSdkInitOptions | null = null
@@ -287,7 +307,7 @@ class TicketSdkImpl {
       'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;'
     const panel = document.createElement('div')
     panel.style.cssText = myTickets
-      ? 'width:420px;max-width:92vw;max-height:92vh;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
+      ? 'width:880px;max-width:96vw;height:min(720px,90vh);box-sizing:border-box;background:#fff;border-radius:12px;box-shadow:0 18px 54px rgba(15,23,42,.24);padding:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
       : 'width:420px;max-width:92vw;max-height:92vh;box-sizing:border-box;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;'
     panel.setAttribute(myTickets ? 'data-ticket-list-panel' : 'data-ticket-submit-panel', '')
     panel.innerHTML = myTickets
@@ -297,11 +317,11 @@ class TicketSdkImpl {
            [data-ticket-list-panel] [data-action="open-ticket-item"]:focus-visible{outline:2px solid ${primary};outline-offset:-2px;background:#f5f9ff!important;}
            [data-ticket-list-panel] [data-action="close"]:focus-visible{outline:2px solid ${primary};outline-offset:2px;}
          </style>
-         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex:0 0 auto;">
-           <strong style="font-size:16px;">我的工单</strong>
-           <button type="button" data-action="close" aria-label="关闭" style="border:none;background:transparent;font-size:20px;cursor:pointer;">×</button>
+         <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 14px;flex:0 0 auto;">
+           <strong style="font-size:18px;line-height:24px;color:#1f2937;">我的工单</strong>
+           <button type="button" data-action="close" aria-label="关闭" style="width:32px;height:32px;border:none;border-radius:6px;background:transparent;color:#64748b;font-size:20px;line-height:1;cursor:pointer;">×</button>
          </div>
-         <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:auto;">
+         <div data-role="list-container" style="flex:1 1 auto;min-height:0;overflow:hidden;padding:0 24px 18px;display:flex;flex-direction:column;">
            <div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>
          </div>`
       : `<div style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid #ebeef5;flex:0 0 auto;">
@@ -695,34 +715,106 @@ class TicketSdkImpl {
   }
 
   private async renderMyTickets(panel: HTMLElement): Promise<void> {
-    const listEl = panel.querySelector('[data-role="list"]') as HTMLElement
-    try {
-      const page = await this.fetchMineTickets()
-      if (!page.records.length) {
-        listEl.textContent = '暂无工单'
-        return
-      }
-      listEl.innerHTML = page.records
-        .map(
-          (item) => `<button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo || '')}" aria-label="查看工单：${escapeHtml(item.title)}" style="width:100%;padding:11px 8px;border:0;border-bottom:1px solid #ebeef5;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;text-align:left;transition:background .2s;">
-            <span style="min-width:0;flex:1;">
-              <span style="display:block;font-weight:500;color:#303133;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.title)}</span>
-              <span style="display:block;font-size:12px;color:#909399;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.ticketNo)} · ${escapeHtml(item.statusLabel || item.status)}</span>
-            </span>
-            <span data-role="ticket-item-arrow" aria-hidden="true" style="width:28px;height:28px;box-sizing:border-box;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border:1px solid #dcdfe6;border-radius:50%;color:#909399;font-size:20px;line-height:1;transition:all .2s;">›</span>
-          </button>`,
-        )
-        .join('')
-      listEl.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => {
-        node.addEventListener('click', () => {
-          const ticketNo = (node as HTMLElement).getAttribute('data-ticket-no') ?? ''
-          void this.renderTicketDetail(panel, ticketNo)
-        })
-      })
-    } catch (error) {
-      listEl.style.color = '#f56c6c'
-      listEl.textContent = error instanceof Error ? error.message : '加载失败'
+    const container = panel.querySelector('[data-role="list-container"]') as HTMLElement
+    container.innerHTML = `<style>
+      [data-role="mine-filters"] input,[data-role="mine-filters"] select{width:100%;height:38px;box-sizing:border-box;border:1px solid #d8dee8;border-radius:6px;padding:0 12px;background:#fff;color:#344054;outline:none;min-width:0;font:inherit;font-size:13px;transition:border-color .18s,box-shadow .18s}
+      [data-role="mine-filters"] select{appearance:none;padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+      [data-role="mine-filters"] input::placeholder{color:#98a2b3}[data-role="mine-filters"] input:focus,[data-role="mine-filters"] select:focus{border-color:${primary};box-shadow:0 0 0 3px rgba(22,117,209,.1)}
+      [data-role="ticket-table"]{min-width:700px;color:#344054;font-size:13px}[data-role="ticket-head"],[data-role="ticket-row"]{display:grid;grid-template-columns:minmax(168px,1.15fr) minmax(190px,1.5fr) minmax(110px,.75fr) minmax(110px,.72fr) 64px;align-items:center}
+      [data-role="ticket-head"]{position:sticky;top:0;z-index:1;background:#f6f8fb;color:#7b8798;font-size:12px;font-weight:500;border-bottom:1px solid #e8edf3}
+      [data-role="ticket-head"]>span,[data-role="ticket-row"]>span{padding:0 12px;min-width:0;box-sizing:border-box}[data-role="ticket-head"]>span{height:40px;display:flex;align-items:center}
+      [data-role="ticket-row"]{min-height:52px;border-bottom:1px solid #edf0f5;background:#fff;transition:background .16s}[data-role="ticket-row"]:hover{background:#f7fbff}
+      [data-role="mine-page-button"]{min-width:30px;height:30px;padding:0 8px;border:1px solid #d8dee8;border-radius:5px;background:#fff;color:#475467;cursor:pointer;font-size:12px}[data-role="mine-page-button"]:hover:not(:disabled){border-color:${primary};color:${primary}}[data-role="mine-page-button"]:disabled{background:#f5f7fa;color:#c0c4cc;cursor:not-allowed}[data-role="mine-page-button"].is-active{border-color:${primary};background:${primary};color:#fff}
+      @media(max-width:560px){[data-role="mine-filter-grid"]{grid-template-columns:1fr 1fr!important}[data-role="mine-title"]{grid-column:1/-1}[data-role="mine-actions"]{grid-column:1/-1;justify-content:flex-end}[data-role="ticket-scroller"]{overflow-x:hidden!important}[data-role="ticket-table"]{min-width:0}[data-role="ticket-head"]{display:none}[data-role="ticket-row"]{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:14px 2px;min-height:0}[data-role="ticket-row"]>span{padding:0!important;border:0!important}[data-col="title"]{grid-column:1/2;grid-row:1}[data-col="status"]{grid-column:2;grid-row:1}[data-col="number"]{grid-column:1/-1;grid-row:2}[data-col="category"]{grid-column:1;grid-row:3}[data-col="action"]{grid-column:2;grid-row:3}[data-role="mine-pagination"]{align-items:flex-start!important;flex-direction:column}[data-role="mine-page-numbers"]{display:none!important}}
+    </style>
+    <div data-role="mine-filters" style="flex:0 0 auto;background:#fff;padding-bottom:14px;">
+      <div data-role="mine-filter-grid" style="display:grid;grid-template-columns:minmax(220px,1fr) 160px 160px auto;gap:10px;">
+        <input data-role="mine-title" maxlength="100" aria-label="按标题搜索" placeholder="搜索工单标题" />
+        <select data-role="mine-category" aria-label="按分类筛选"><option value="">全部分类</option></select>
+        <select data-role="mine-status" aria-label="按状态筛选"><option value="">全部状态</option></select>
+        <span data-role="mine-actions" style="display:flex;gap:8px;"><button data-action="mine-search" type="button" style="height:38px;padding:0 16px;border:1px solid ${primary};border-radius:6px;background:${primary};color:#fff;cursor:pointer;font-weight:500;">查询</button><button data-action="mine-reset" type="button" style="height:38px;padding:0 16px;border:1px solid #d8dee8;border-radius:6px;background:#fff;color:#475467;cursor:pointer;">重置</button></span>
+      </div>
+    </div>
+    <div data-role="mine-results" style="flex:1 1 auto;min-height:180px;overflow:hidden;border:1px solid #e8edf3;border-radius:8px;"><div style="padding:48px;text-align:center;color:#98a2b3;">加载中...</div></div>
+    <div data-role="mine-pagination" style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;color:#667085;font-size:12px;"></div>`
+
+    const titleInput = container.querySelector('[data-role="mine-title"]') as HTMLInputElement
+    const categorySelect = container.querySelector('[data-role="mine-category"]') as HTMLSelectElement
+    const statusSelect = container.querySelector('[data-role="mine-status"]') as HTMLSelectElement
+    const results = container.querySelector('[data-role="mine-results"]') as HTMLElement
+    const pagination = container.querySelector('[data-role="mine-pagination"]') as HTMLElement
+    let pageNum = 1
+    let pageSize = 10
+    let requestId = 0
+    const statusStyle = (status: string): string => {
+      if (['completed', 'fixed', 'alert_resolved'].includes(status)) return 'background:#ecfdf3;color:#027a48;border-color:#abefc6'
+      if (['closed', 'rejected', 'invalid', 'no_action'].includes(status)) return 'background:#f2f4f7;color:#667085;border-color:#e4e7ec'
+      if (['processing', 'developing', 'testing', 'executing', 'alert_acknowledged'].includes(status)) return `background:#eff8ff;color:${primary};border-color:#b2ddff`
+      return 'background:#fff7ed;color:#c2410c;border-color:#fed7aa'
     }
+    const pageItems = (current: number, total: number): Array<number | 'ellipsis'> => {
+      if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
+      const items: Array<number | 'ellipsis'> = [1]
+      if (current > 4) items.push('ellipsis')
+      for (let page = Math.max(2, current - 1); page <= Math.min(total - 1, current + 1); page++) items.push(page)
+      if (current < total - 3) items.push('ellipsis')
+      items.push(total)
+      return items
+    }
+
+    const load = async (): Promise<void> => {
+      const currentRequest = ++requestId
+      results.style.opacity = '.55'
+      try {
+        const page = await this.fetchMineTickets({
+          pageNum,
+          pageSize,
+          title: titleInput.value.trim(),
+          categoryId: categorySelect.value,
+          status: statusSelect.value,
+        })
+        if (currentRequest !== requestId) return
+        results.style.opacity = '1'
+        const selectedCategory = categorySelect.value
+        const selectedStatus = statusSelect.value
+        categorySelect.innerHTML = `<option value="">全部分类</option>${(page.categoryOptions ?? []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}`
+        statusSelect.innerHTML = `<option value="">全部状态</option>${(page.statusOptions ?? []).map((item) => `<option value="${escapeHtml(item.code)}">${escapeHtml(item.name)}</option>`).join('')}`
+        categorySelect.value = selectedCategory
+        statusSelect.value = selectedStatus
+        const totalPages = page.totalPages ?? Math.ceil(page.total / page.pageSize)
+        if (!page.records.length) {
+          results.innerHTML = `<div style="padding:52px 16px;text-align:center;color:#909399;">${titleInput.value || categorySelect.value || statusSelect.value ? '没有符合条件的工单' : '暂无工单'}</div>`
+        } else {
+          results.innerHTML = `<div data-role="ticket-scroller" style="height:100%;overflow:auto;"><div data-role="ticket-table"><div data-role="ticket-head">${['编号', '标题', '分类', '状态', '操作'].map((label) => `<span>${label}</span>`).join('')}</div>${page.records.map((item) => `<div data-role="ticket-row">
+            <span data-col="number" style="color:#7890a8;font-size:12px;word-break:break-all;">${escapeHtml(item.ticketNo)}</span>
+            <span data-col="title" title="${escapeHtml(item.title)}" style="color:#1f2937;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.title)}</span>
+            <span data-col="category"><span title="${escapeHtml(item.categoryName || '未分类')}" style="display:inline-block;max-width:100%;padding:3px 9px;border-radius:12px;background:#f0f2f5;color:#667085;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;">${escapeHtml(item.categoryName || '未分类')}</span></span>
+            <span data-col="status"><span style="display:inline-block;padding:3px 9px;border:1px solid;border-radius:12px;font-size:12px;line-height:16px;white-space:nowrap;${statusStyle(item.status)}">${escapeHtml(item.statusLabel || item.status)}</span></span>
+            <span data-col="action"><button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo)}" aria-label="查看工单 ${escapeHtml(item.title)}" style="height:30px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:${primary};cursor:pointer;font-weight:500;">查看</button></span>
+          </div>`).join('')}</div></div>`
+          results.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => node.addEventListener('click', () => void this.renderTicketDetail(panel, (node as HTMLElement).dataset.ticketNo ?? '')))
+        }
+        const numberedPages = pageItems(pageNum, Math.max(totalPages, 1)).map((item) => item === 'ellipsis'
+          ? '<span style="padding:0 2px;color:#98a2b3;">•••</span>'
+          : `<button type="button" data-role="mine-page-button" data-page="${item}" class="${item === pageNum ? 'is-active' : ''}">${item}</button>`).join('')
+        pagination.innerHTML = `<span>共 <strong style="color:#344054;font-weight:500;">${page.total}</strong> 条</span><span style="display:flex;align-items:center;gap:6px;"><select data-role="mine-page-size" aria-label="每页条数" style="height:30px;padding:0 24px 0 9px;border:1px solid #d8dee8;border-radius:5px;background:#fff;color:#475467;"><option value="10">10 条/页</option><option value="20">20 条/页</option><option value="50">50 条/页</option></select><button data-role="mine-page-button" data-action="mine-prev" aria-label="上一页" ${pageNum <= 1 ? 'disabled' : ''}>‹</button><span data-role="mine-page-numbers" style="display:flex;align-items:center;gap:6px;">${numberedPages}</span><button data-role="mine-page-button" data-action="mine-next" aria-label="下一页" ${pageNum >= totalPages ? 'disabled' : ''}>›</button></span>`
+        const sizeSelect = pagination.querySelector('[data-role="mine-page-size"]') as HTMLSelectElement
+        sizeSelect.value = String(pageSize)
+        sizeSelect.addEventListener('change', () => { pageSize = Number(sizeSelect.value); pageNum = 1; void load() })
+        pagination.querySelector('[data-action="mine-prev"]')?.addEventListener('click', () => { pageNum--; void load() })
+        pagination.querySelector('[data-action="mine-next"]')?.addEventListener('click', () => { pageNum++; void load() })
+        pagination.querySelectorAll('[data-page]').forEach((node) => node.addEventListener('click', () => { pageNum = Number((node as HTMLElement).dataset.page); void load() }))
+      } catch (error) {
+        if (currentRequest !== requestId) return
+        results.style.opacity = '1'
+        results.innerHTML = `<div style="padding:40px;text-align:center;color:#f56c6c;">${escapeHtml(error instanceof Error ? error.message : '加载失败')}<br/><button type="button" data-action="mine-retry" style="margin-top:10px;color:#1675d1;border:0;background:transparent;cursor:pointer;">重新加载</button></div>`
+        results.querySelector('[data-action="mine-retry"]')?.addEventListener('click', () => void load())
+      }
+    }
+    container.querySelector('[data-action="mine-search"]')?.addEventListener('click', () => { pageNum = 1; void load() })
+    container.querySelector('[data-action="mine-reset"]')?.addEventListener('click', () => { titleInput.value = ''; categorySelect.value = ''; statusSelect.value = ''; pageNum = 1; void load() })
+    titleInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { pageNum = 1; void load() } })
+    await load()
   }
 
   private async renderTicketDetail(panel: HTMLElement, ticketNo: string): Promise<void> {
@@ -1171,8 +1263,12 @@ class TicketSdkImpl {
     return result.data
   }
 
-  private async fetchMineTickets(): Promise<{ records: Array<{ title: string; ticketNo: string; status: string; statusLabel?: string }> }> {
-    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/mine?pageNum=1&pageSize=20`, {
+  private async fetchMineTickets(queryInput: { pageNum: number; pageSize: number; title?: string; categoryId?: string; status?: string }): Promise<PluginTicketMinePage> {
+    const query = new URLSearchParams({ pageNum: String(queryInput.pageNum), pageSize: String(queryInput.pageSize) })
+    if (queryInput.title) query.set('title', queryInput.title)
+    if (queryInput.categoryId) query.set('categoryId', queryInput.categoryId)
+    if (queryInput.status) query.set('status', queryInput.status)
+    const response = await fetch(`${this.apiBase}/api/open/v1/plugin/tickets/mine?${query.toString()}`, {
       headers: { Authorization: `Bearer ${this.options!.launchToken}` },
     })
     const result = await response.json()
@@ -1323,6 +1419,7 @@ function formatSdkDate(value?: unknown): string {
 const ticketSdk = new TicketSdkImpl()
 
 export const TicketSDK = {
+  version: SDK_VERSION,
   init: (options: TicketSdkInitOptions) => ticketSdk.init(options),
   setContext: (context: TicketSdkContext) => ticketSdk.setContext(context),
   setUser: (user: TicketSdkUser) => ticketSdk.setUser(user),

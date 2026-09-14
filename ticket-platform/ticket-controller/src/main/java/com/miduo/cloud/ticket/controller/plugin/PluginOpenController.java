@@ -6,7 +6,6 @@ import com.miduo.cloud.ticket.application.plugin.PluginLaunchTokenClaims;
 import com.miduo.cloud.ticket.application.plugin.PluginTicketApplicationService;
 import com.miduo.cloud.ticket.common.constants.OpenApiAuthConstants;
 import com.miduo.cloud.ticket.common.dto.common.ApiResult;
-import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketUploadPurpose;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
@@ -96,7 +95,7 @@ public class PluginOpenController {
      */
     @Operation(summary = "插件我的工单列表", description = "接口编号：API000533")
     @GetMapping("/tickets/mine")
-    public ApiResult<PageOutput<PluginTicketSummaryOutput>> listMineTickets(
+    public ApiResult<PluginTicketMinePageOutput> listMineTickets(
             @RequestHeader("Authorization") String authorization,
             @Valid PluginTicketMinePageInput input) {
         PluginLaunchTokenClaims claims = pluginLaunchTokenApplicationService.requireValidToken(authorization);
