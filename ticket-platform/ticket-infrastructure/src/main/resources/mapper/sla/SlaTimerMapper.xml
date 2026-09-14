@@ -11,13 +11,16 @@
     </resultMap>
 
     <select id="selectRunningTimers" resultType="com.miduo.cloud.ticket.infrastructure.persistence.mybatis.sla.po.SlaTimerPO">
-        SELECT id, ticket_id, sla_policy_id, timer_type, status,
-               threshold_minutes, elapsed_minutes, base_elapsed_minutes, start_at, pause_at,
-               deadline, breached_at, completed_at, is_warned, is_breached,
-               create_time, update_time, create_by, update_by, deleted
-        FROM sla_timer
-        WHERE status = 'RUNNING'
-          AND deleted = 0
+        SELECT timer.id, timer.ticket_id, timer.sla_policy_id, timer.timer_type, timer.status,
+               timer.threshold_minutes, timer.elapsed_minutes, timer.base_elapsed_minutes,
+               timer.start_at, timer.pause_at, timer.deadline, timer.breached_at, timer.completed_at,
+               timer.is_warned, timer.is_breached, timer.create_time, timer.update_time,
+               timer.create_by, timer.update_by, timer.deleted
+        FROM sla_timer timer
+        INNER JOIN ticket t ON t.id = timer.ticket_id AND t.deleted = 0
+        WHERE timer.status = 'RUNNING'
+          AND timer.deleted = 0
+          AND UPPER(TRIM(t.status)) NOT IN ('COMPLETED', 'CLOSED')
     </select>
 
     <update id="batchUpdateStatus" parameterType="java.util.List">

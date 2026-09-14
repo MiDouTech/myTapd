@@ -299,9 +299,10 @@ public class TicketWorkflowAppService extends BaseApplicationService {
             saveOperationComment(ticketId, operatorId, input.getRemark().trim());
         }
 
-        // SLA计时器联动：根据目标状态的slaAction驱动计时器生命周期
+        // SLA计时器联动：终态必须无条件停止计时，不依赖可变的工作流 slaAction 配置。
+        // 否则旧流程或配置遗漏 STOP 时，已关闭工单的计时器仍会被定时任务扫描并在数日后误报超时。
         if (targetState != null) {
-            dispatchSlaAction(ticketId, targetState.getSlaAction());
+            dispatchSlaAction(ticketId, targetState.isTerminal() ? "STOP" : targetState.getSlaAction());
         }
 
         boolean assigneeChangedInTransit = willApplyAssignees
