@@ -450,4 +450,26 @@
         LIMIT 1
     </select>
 
+    <select id="selectPluginMineCategoryOptions"
+            resultType="com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCategoryOptionOutput">
+        SELECT c.id, c.name
+        FROM ticket t
+        INNER JOIN ticket_category c ON c.id = t.category_id AND c.deleted = 0
+        WHERE t.deleted = 0
+          AND t.integration_app_id = #{integrationAppId}
+          AND t.creator_id = #{creatorId}
+          AND t.source = 'plugin'
+        GROUP BY c.id, c.name, c.sort_order
+        ORDER BY c.sort_order ASC, c.id ASC
+    </select>
+
+    <select id="selectPluginMineStatuses" resultType="java.lang.String">
+        SELECT DISTINCT t.status
+        FROM ticket t
+        WHERE t.deleted = 0
+          AND t.integration_app_id = #{integrationAppId}
+          AND t.creator_id = #{creatorId}
+          AND t.source = 'plugin'
+    </select>
+
 </mapper>
