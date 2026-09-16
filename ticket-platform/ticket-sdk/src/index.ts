@@ -126,7 +126,7 @@ interface SupplementUpload {
 type TicketAttachment = SupplementUpload
 
 const DEFAULT_API_BASE = ''
-const SDK_VERSION = '1.2.2'
+const SDK_VERSION = '1.2.3'
 
 class TicketSdkImpl {
   private options: TicketSdkInitOptions | null = null
@@ -722,9 +722,9 @@ class TicketSdkImpl {
       [data-role="mine-filters"] input,[data-role="mine-filters"] select{width:100%;height:38px;box-sizing:border-box;border:1px solid #d8dee8;border-radius:6px;padding:0 12px;background:#fff;color:#344054;outline:none;min-width:0;font:inherit;font-size:13px;transition:border-color .18s,box-shadow .18s}
       [data-role="mine-filters"] select{appearance:none;padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
       [data-role="mine-filters"] input::placeholder{color:#98a2b3}[data-role="mine-filters"] input:focus,[data-role="mine-filters"] select:focus{border-color:${primary};box-shadow:0 0 0 3px rgba(22,117,209,.1)}
-      [data-role="ticket-table"]{min-width:700px;color:#344054;font-size:13px}[data-role="ticket-head"],[data-role="ticket-row"]{display:grid;grid-template-columns:minmax(168px,1.15fr) minmax(190px,1.5fr) minmax(110px,.75fr) minmax(110px,.72fr) 64px;align-items:center}
+      [data-role="ticket-table"]{min-width:700px;color:#344054;font-size:13px}[data-role="ticket-head"],[data-role="ticket-row"]{display:grid;grid-template-columns:minmax(168px,1.15fr) minmax(190px,1.5fr) minmax(110px,.75fr) minmax(110px,.72fr) 76px;align-items:center}
       [data-role="ticket-head"]{position:sticky;top:0;z-index:1;background:#f6f8fb;color:#7b8798;font-size:12px;font-weight:500;border-bottom:1px solid #e8edf3}
-      [data-role="ticket-head"]>span,[data-role="ticket-row"]>span{padding:0 12px;min-width:0;box-sizing:border-box}[data-role="ticket-head"]>span{height:40px;display:flex;align-items:center}
+      [data-role="ticket-head"]>span,[data-role="ticket-row"]>span{padding:0 12px;min-width:0;box-sizing:border-box}[data-role="ticket-head"]>span{height:40px;display:flex;align-items:center}[data-role="ticket-head"]>span:last-child,[data-col="action"]{display:flex;align-items:center;justify-content:center;white-space:nowrap}
       [data-role="ticket-row"]{min-height:52px;border-bottom:1px solid #edf0f5;background:#fff;transition:background .16s}[data-role="ticket-row"]:hover{background:#f7fbff}
       [data-role="mine-page-button"]{min-width:30px;height:30px;padding:0 8px;border:1px solid #d8dee8;border-radius:5px;background:#fff;color:#475467;cursor:pointer;font-size:12px}[data-role="mine-page-button"]:hover:not(:disabled){border-color:${primary};color:${primary}}[data-role="mine-page-button"]:disabled{background:#f5f7fa;color:#c0c4cc;cursor:not-allowed}[data-role="mine-page-button"].is-active{border-color:${primary};background:${primary};color:#fff}
       @media(max-width:560px){[data-role="mine-filter-grid"]{grid-template-columns:1fr 1fr!important}[data-role="mine-title"]{grid-column:1/-1}[data-role="mine-actions"]{grid-column:1/-1;justify-content:flex-end}[data-role="ticket-scroller"]{overflow-x:hidden!important}[data-role="ticket-table"]{min-width:0}[data-role="ticket-head"]{display:none}[data-role="ticket-row"]{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:14px 2px;min-height:0}[data-role="ticket-row"]>span{padding:0!important;border:0!important}[data-col="title"]{grid-column:1/2;grid-row:1}[data-col="status"]{grid-column:2;grid-row:1}[data-col="number"]{grid-column:1/-1;grid-row:2}[data-col="category"]{grid-column:1;grid-row:3}[data-col="action"]{grid-column:2;grid-row:3}[data-role="mine-pagination"]{align-items:flex-start!important;flex-direction:column}[data-role="mine-page-numbers"]{display:none!important}}
@@ -792,7 +792,7 @@ class TicketSdkImpl {
             <span data-col="title" title="${escapeHtml(item.title)}" style="color:#1f2937;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.title)}</span>
             <span data-col="category"><span title="${escapeHtml(item.categoryName || '未分类')}" style="display:inline-block;max-width:100%;padding:3px 9px;border-radius:12px;background:#f0f2f5;color:#667085;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;">${escapeHtml(item.categoryName || '未分类')}</span></span>
             <span data-col="status"><span style="display:inline-block;padding:3px 9px;border:1px solid;border-radius:12px;font-size:12px;line-height:16px;white-space:nowrap;${statusStyle(item.status)}">${escapeHtml(item.statusLabel || item.status)}</span></span>
-            <span data-col="action"><button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo)}" aria-label="查看工单 ${escapeHtml(item.title)}" style="height:30px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:${primary};cursor:pointer;font-weight:500;">查看</button></span>
+            <span data-col="action"><button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo)}" aria-label="查看工单 ${escapeHtml(item.title)}" style="display:inline-flex;align-items:center;justify-content:center;width:48px;min-width:48px;height:30px;padding:0;border:0;border-radius:5px;background:transparent;color:${primary};cursor:pointer;font-weight:500;white-space:nowrap;word-break:keep-all;">查看</button></span>
           </div>`).join('')}</div></div>`
           results.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => node.addEventListener('click', () => void this.renderTicketDetail(panel, (node as HTMLElement).dataset.ticketNo ?? '')))
         }
