@@ -9,7 +9,6 @@ import com.miduo.cloud.ticket.application.ticket.TicketAssigneeSyncService;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketUrgeApplicationService;
-import com.miduo.cloud.ticket.common.dto.common.PageOutput;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.Priority;
 import com.miduo.cloud.ticket.common.enums.TicketAction;
@@ -21,7 +20,9 @@ import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCreateOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketDetailOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketMinePageInput;
+import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketMinePageOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketMessageInput;
+import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketStatusOptionOutput;
 import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketSummaryOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.ImageUploadOutput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketBugCustomerInfoInput;
@@ -30,8 +31,10 @@ import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketPublicDetailOutput;
 import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import lombok.extern.slf4j.Slf4j;
@@ -46,9 +49,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -76,6 +82,7 @@ public class PluginTicketApplicationService {
     private final TicketBugApplicationService ticketBugApplicationService;
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
     private final TicketMapper ticketMapper;
+    private final TicketCategoryMapper ticketCategoryMapper;
     private final TicketLogMapper ticketLogMapper;
     private final IntegrationAppCredentialResolver credentialResolver;
     private final QiniuUploadService qiniuUploadService;
@@ -86,6 +93,7 @@ public class PluginTicketApplicationService {
                                           TicketBugApplicationService ticketBugApplicationService,
                                           TicketUrgeApplicationService ticketUrgeApplicationService,
                                           TicketMapper ticketMapper,
+                                          TicketCategoryMapper ticketCategoryMapper,
                                           TicketLogMapper ticketLogMapper,
                                           IntegrationAppCredentialResolver credentialResolver,
                                           QiniuUploadService qiniuUploadService,
@@ -95,6 +103,7 @@ public class PluginTicketApplicationService {
         this.ticketBugApplicationService = ticketBugApplicationService;
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
         this.ticketMapper = ticketMapper;
+        this.ticketCategoryMapper = ticketCategoryMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.credentialResolver = credentialResolver;
         this.qiniuUploadService = qiniuUploadService;
@@ -146,19 +155,44 @@ public class PluginTicketApplicationService {
         return toCreateOutput(ticket);
     }
 
-    public PageOutput<PluginTicketSummaryOutput> listMineTickets(PluginLaunchTokenClaims claims,
-                                                                 PluginTicketMinePageInput input) {
+    public PluginTicketMinePageOutput listMineTickets(PluginLaunchTokenClaims claims,
+                                                       PluginTicketMinePageInput input) {
+        String title = trimToNull(input.getTitle());
+        String statusCode = trimToNull(input.getStatus());
+        TicketStatus requestedStatus = statusCode == null ? null : TicketStatus.fromCode(statusCode);
+        if (statusCode != null && requestedStatus == null) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "工单状态不合法");
+        }
         Page<TicketPO> page = new Page<>(input.getPageNum(), input.getPageSize());
         LambdaQueryWrapper<TicketPO> wrapper = new LambdaQueryWrapper<TicketPO>()
                 .eq(TicketPO::getIntegrationAppId, claims.getIntegrationAppId())
                 .eq(TicketPO::getCreatorId, claims.getUserId())
                 .eq(TicketPO::getSource, TicketSource.PLUGIN.getCode())
-                .orderByDesc(TicketPO::getCreateTime);
+                .like(title != null, TicketPO::getTitle, title)
+                .eq(input.getCategoryId() != null, TicketPO::getCategoryId, input.getCategoryId())
+                .eq(requestedStatus != null, TicketPO::getStatus,
+                        requestedStatus == null ? null : requestedStatus.getCode())
+                .orderByDesc(TicketPO::getCreateTime)
+                .orderByDesc(TicketPO::getId);
         Page<TicketPO> result = ticketMapper.selectPage(page, wrapper);
+        Map<Long, String> categoryNames = loadCategoryNames(result.getRecords());
         List<PluginTicketSummaryOutput> records = result.getRecords().stream()
-                .map(this::toSummaryOutput)
+                .map(ticket -> toSummaryOutput(ticket, categoryNames))
                 .collect(Collectors.toList());
-        return PageOutput.of(records, result.getTotal(), input.getPageNum(), input.getPageSize());
+        PluginTicketMinePageOutput output = new PluginTicketMinePageOutput(
+                records, result.getTotal(), input.getPageNum(), input.getPageSize());
+        output.setCategoryOptions(ticketMapper.selectPluginMineCategoryOptions(
+                claims.getIntegrationAppId(), claims.getUserId()));
+        Set<String> availableStatuses = new HashSet<>(ticketMapper.selectPluginMineStatuses(
+                claims.getIntegrationAppId(), claims.getUserId()));
+        List<PluginTicketStatusOptionOutput> statusOptions = new ArrayList<>();
+        for (TicketStatus item : TicketStatus.values()) {
+            if (availableStatuses.contains(item.getCode())) {
+                statusOptions.add(new PluginTicketStatusOptionOutput(item.getCode(), item.getLabel()));
+            }
+        }
+        output.setStatusOptions(statusOptions);
+        return output;
     }
 
     public PluginTicketSummaryOutput getTicketSummary(PluginLaunchTokenClaims claims, String ticketNo) {
@@ -666,6 +700,10 @@ public class PluginTicketApplicationService {
     }
 
     private PluginTicketSummaryOutput toSummaryOutput(TicketPO ticket) {
+        return toSummaryOutput(ticket, loadCategoryNames(Collections.singletonList(ticket)));
+    }
+
+    private PluginTicketSummaryOutput toSummaryOutput(TicketPO ticket, Map<Long, String> categoryNames) {
         PluginTicketSummaryOutput output = new PluginTicketSummaryOutput();
         output.setTicketId(ticket.getId());
         output.setTicketNo(ticket.getTicketNo());
@@ -674,9 +712,29 @@ public class PluginTicketApplicationService {
         TicketStatus status = TicketStatus.fromCode(ticket.getStatus());
         output.setStatusLabel(status != null ? status.getLabel() : ticket.getStatus());
         output.setPriority(ticket.getPriority());
+        output.setCategoryId(ticket.getCategoryId());
+        output.setCategoryName(categoryNames.getOrDefault(ticket.getCategoryId(), "未分类"));
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());
         return output;
+    }
+
+    private Map<Long, String> loadCategoryNames(List<TicketPO> tickets) {
+        List<Long> categoryIds = tickets.stream()
+                .map(TicketPO::getCategoryId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        if (categoryIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (TicketCategoryPO category : ticketCategoryMapper.selectBatchIds(categoryIds)) {
+            if (StringUtils.hasText(category.getName())) {
+                names.put(category.getId(), category.getName());
+            }
+        }
+        return names;
     }
 
     private String buildPublicUrl(String ticketNo) {

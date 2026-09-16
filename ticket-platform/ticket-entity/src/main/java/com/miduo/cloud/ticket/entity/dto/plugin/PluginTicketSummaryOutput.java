@@ -23,6 +23,10 @@ public class PluginTicketSummaryOutput implements Serializable {
 
     private String priority;
 
+    private Long categoryId;
+
+    private String categoryName;
+
     private Date createTime;
 
     private Date updateTime;

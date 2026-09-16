@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.model.UserTicketLoadStat;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCustomConditionInput;
+import com.miduo.cloud.ticket.entity.dto.plugin.PluginTicketCategoryOptionOutput;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -78,4 +79,10 @@ public interface TicketMapper extends BaseMapper<TicketPO> {
 
     TicketPO selectByIntegrationRef(@Param("integrationAppId") Long integrationAppId,
                                     @Param("externalTicketRef") String externalTicketRef);
+
+    List<PluginTicketCategoryOptionOutput> selectPluginMineCategoryOptions(
+            @Param("integrationAppId") Long integrationAppId, @Param("creatorId") Long creatorId);
+
+    List<String> selectPluginMineStatuses(@Param("integrationAppId") Long integrationAppId,
+                                          @Param("creatorId") Long creatorId);
 }
