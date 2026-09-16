@@ -126,7 +126,7 @@ interface SupplementUpload {
 type TicketAttachment = SupplementUpload
 
 const DEFAULT_API_BASE = ''
-const SDK_VERSION = '1.2.1'
+const SDK_VERSION = '1.2.2'
 
 class TicketSdkImpl {
   private options: TicketSdkInitOptions | null = null
@@ -400,7 +400,7 @@ class TicketSdkImpl {
       node.addEventListener('click', () => tryCloseModal())
     })
     if (myTickets) {
-      void this.renderMyTickets(panel)
+      void this.renderMyTickets(panel).catch((error) => this.renderMyTicketsFatalError(panel, error))
     } else {
       const descriptionEl = panel.querySelector('[data-role="description"]') as HTMLDivElement
       if (descriptionEl) {
@@ -715,7 +715,9 @@ class TicketSdkImpl {
   }
 
   private async renderMyTickets(panel: HTMLElement): Promise<void> {
-    const container = panel.querySelector('[data-role="list-container"]') as HTMLElement
+    const container = panel.querySelector('[data-role="list-container"]') as HTMLElement | null
+    if (!container) throw new Error('工单列表容器不存在')
+    const primary = this.config?.theme?.primaryColor ?? '#1675d1'
     container.innerHTML = `<style>
       [data-role="mine-filters"] input,[data-role="mine-filters"] select{width:100%;height:38px;box-sizing:border-box;border:1px solid #d8dee8;border-radius:6px;padding:0 12px;background:#fff;color:#344054;outline:none;min-width:0;font:inherit;font-size:13px;transition:border-color .18s,box-shadow .18s}
       [data-role="mine-filters"] select{appearance:none;padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
@@ -817,6 +819,16 @@ class TicketSdkImpl {
     await load()
   }
 
+  private renderMyTicketsFatalError(panel: HTMLElement, error: unknown): void {
+    const container = panel.querySelector('[data-role="list-container"]') as HTMLElement | null
+    if (!container) return
+    const message = error instanceof Error ? error.message : '工单列表初始化失败'
+    container.innerHTML = `<div style="padding:48px 16px;text-align:center;color:#f56c6c;">${escapeHtml(message)}<br/><button type="button" data-action="mine-init-retry" style="margin-top:12px;height:34px;padding:0 14px;border:1px solid #d8dee8;border-radius:6px;background:#fff;color:#1675d1;cursor:pointer;">重新加载</button></div>`
+    container.querySelector('[data-action="mine-init-retry"]')?.addEventListener('click', () => {
+      void this.renderMyTickets(panel).catch((retryError) => this.renderMyTicketsFatalError(panel, retryError))
+    })
+  }
+
   private async renderTicketDetail(panel: HTMLElement, ticketNo: string): Promise<void> {
     const container = panel.querySelector('[data-role="list-container"]') as HTMLElement
     container.innerHTML = '<div style="padding:20px 0;color:#909399;text-align:center;">加载中...</div>'
@@ -875,7 +887,7 @@ class TicketSdkImpl {
         const supplementUploads: SupplementUpload[] = []
         container.querySelector('[data-action="back-to-tickets"]')?.addEventListener('click', () => {
           container.innerHTML = '<div data-role="list" style="min-height:120px;color:#606266;">加载中...</div>'
-          void this.renderMyTickets(panel)
+          void this.renderMyTickets(panel).catch((error) => this.renderMyTicketsFatalError(panel, error))
         })
         container.querySelector('[data-action="open-public-detail"]')?.addEventListener('click', () => this.openPublicTicket(detail.ticketNo))
         container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => {
