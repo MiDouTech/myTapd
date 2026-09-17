@@ -73,14 +73,16 @@ public class IntegrationAppApplicationService extends BaseApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public Long create(IntegrationAppCreateInput input) {
-        validateCategory(input.getDefaultCategoryId());
+        List<Long> categoryIds = normalizeCategoryIds(input.getCategoryIds(), input.getDefaultCategoryId());
+        validateCategories(categoryIds);
         validateSystemCodeUnique(input.getSystemCode(), null);
         IntegrationAppPO po = new IntegrationAppPO();
         po.setAppName(input.getAppName().trim());
         po.setSystemCode(input.getSystemCode().trim());
         po.setAppKey(generateAppKey());
         po.setAppSecret(generateAppSecret());
-        po.setDefaultCategoryId(input.getDefaultCategoryId());
+        po.setDefaultCategoryId(categoryIds.get(0));
+        po.setCategoryIds(JSON.toJSONString(categoryIds));
         po.setCategoryMapping(serializeCategoryMapping(input.getCategoryMapping()));
         po.setCallbackUrl(trimToNull(input.getCallbackUrl()));
         po.setCallbackSecret(trimToNull(input.getCallbackSecret()));
@@ -94,9 +96,11 @@ public class IntegrationAppApplicationService extends BaseApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, IntegrationAppUpdateInput input) {
         IntegrationAppPO existing = requireApp(id);
-        validateCategory(input.getDefaultCategoryId());
+        List<Long> categoryIds = normalizeCategoryIds(input.getCategoryIds(), input.getDefaultCategoryId());
+        validateCategories(categoryIds);
         existing.setAppName(input.getAppName().trim());
-        existing.setDefaultCategoryId(input.getDefaultCategoryId());
+        existing.setDefaultCategoryId(categoryIds.get(0));
+        existing.setCategoryIds(JSON.toJSONString(categoryIds));
         existing.setCategoryMapping(serializeCategoryMapping(input.getCategoryMapping()));
         existing.setCallbackUrl(trimToNull(input.getCallbackUrl()));
         if (StringUtils.hasText(input.getCallbackSecret())) {
@@ -127,10 +131,24 @@ public class IntegrationAppApplicationService extends BaseApplicationService {
         return po;
     }
 
-    private void validateCategory(Long categoryId) {
-        TicketCategoryPO category = ticketCategoryMapper.selectById(categoryId);
-        if (category == null) {
-            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "默认工单分类不存在");
+    private List<Long> normalizeCategoryIds(List<Long> categoryIds, Long defaultCategoryId) {
+        LinkedHashSet<Long> normalized = new LinkedHashSet<>();
+        if (categoryIds != null) {
+            categoryIds.stream().filter(id -> id != null && id > 0).forEach(normalized::add);
+        }
+        if (normalized.isEmpty() && defaultCategoryId != null) {
+            normalized.add(defaultCategoryId);
+        }
+        if (normalized.isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "请至少选择一个工单分类");
+        }
+        return new java.util.ArrayList<>(normalized);
+    }
+
+    private void validateCategories(List<Long> categoryIds) {
+        List<TicketCategoryPO> categories = ticketCategoryMapper.selectBatchIds(categoryIds);
+        if (categories.size() != categoryIds.size()) {
+            throw BusinessException.of(ErrorCode.DATA_NOT_FOUND, "部分工单分类不存在");
         }
     }
 
@@ -177,6 +195,11 @@ public class IntegrationAppApplicationService extends BaseApplicationService {
         output.setAppSecret(po.getAppSecret());
         output.setSystemCode(po.getSystemCode());
         output.setDefaultCategoryId(po.getDefaultCategoryId());
+        if (StringUtils.hasText(po.getCategoryIds())) {
+            output.setCategoryIds(JSON.parseArray(po.getCategoryIds(), Long.class));
+        } else if (po.getDefaultCategoryId() != null) {
+            output.setCategoryIds(java.util.Collections.singletonList(po.getDefaultCategoryId()));
+        }
         if (StringUtils.hasText(po.getCategoryMapping())) {
             output.setCategoryMapping(JSON.parseObject(po.getCategoryMapping(),
                     new TypeReference<Map<String, Long>>() {

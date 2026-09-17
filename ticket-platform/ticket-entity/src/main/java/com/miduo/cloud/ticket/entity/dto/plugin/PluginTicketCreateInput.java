@@ -14,6 +14,8 @@ import java.util.Map;
 @Data
 public class PluginTicketCreateInput implements Serializable {
 
+    private Long categoryId;
+
     @NotBlank(message = "问题描述不能为空")
     private String description;
 

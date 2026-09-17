@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.List;
 
 /**
  * 插件 SDK 初始化配置
@@ -21,4 +22,6 @@ public class PluginConfigOutput implements Serializable {
     private Boolean showPriorityPicker;
 
     private Map<String, Object> theme;
+
+    private List<PluginCategoryConfigOutput> categories;
 }
