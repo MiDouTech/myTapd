@@ -126,7 +126,7 @@ interface SupplementUpload {
 type TicketAttachment = SupplementUpload
 
 const DEFAULT_API_BASE = ''
-const SDK_VERSION = '1.2.3'
+const SDK_VERSION = '1.2.4'
 
 class TicketSdkImpl {
   private options: TicketSdkInitOptions | null = null
@@ -792,9 +792,18 @@ class TicketSdkImpl {
             <span data-col="title" title="${escapeHtml(item.title)}" style="color:#1f2937;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.title)}</span>
             <span data-col="category"><span title="${escapeHtml(item.categoryName || '未分类')}" style="display:inline-block;max-width:100%;padding:3px 9px;border-radius:12px;background:#f0f2f5;color:#667085;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;">${escapeHtml(item.categoryName || '未分类')}</span></span>
             <span data-col="status"><span style="display:inline-block;padding:3px 9px;border:1px solid;border-radius:12px;font-size:12px;line-height:16px;white-space:nowrap;${statusStyle(item.status)}">${escapeHtml(item.statusLabel || item.status)}</span></span>
-            <span data-col="action"><button type="button" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo)}" aria-label="查看工单 ${escapeHtml(item.title)}" style="display:inline-flex;align-items:center;justify-content:center;width:48px;min-width:48px;height:30px;padding:0;border:0;border-radius:5px;background:transparent;color:${primary};cursor:pointer;font-weight:500;white-space:nowrap;word-break:keep-all;">查看</button></span>
+            <span data-col="action"><a role="button" tabindex="0" data-action="open-ticket-item" data-ticket-no="${escapeHtml(item.ticketNo)}" aria-label="查看工单 ${escapeHtml(item.title)}" style="display:inline-flex!important;align-items:center!important;justify-content:center!important;width:48px!important;min-width:48px!important;height:30px!important;padding:0!important;border:0!important;border-radius:5px;background:transparent;color:${primary};cursor:pointer;font-weight:500;text-decoration:none!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;"><span style="display:inline-block!important;min-width:32px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;">查看</span></a></span>
           </div>`).join('')}</div></div>`
-          results.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => node.addEventListener('click', () => void this.renderTicketDetail(panel, (node as HTMLElement).dataset.ticketNo ?? '')))
+          results.querySelectorAll('[data-action="open-ticket-item"]').forEach((node) => {
+            const openTicket = (): void => { void this.renderTicketDetail(panel, (node as HTMLElement).dataset.ticketNo ?? '') }
+            node.addEventListener('click', openTicket)
+            node.addEventListener('keydown', (event) => {
+              if ((event as KeyboardEvent).key === 'Enter' || (event as KeyboardEvent).key === ' ') {
+                event.preventDefault()
+                openTicket()
+              }
+            })
+          })
         }
         const numberedPages = pageItems(pageNum, Math.max(totalPages, 1)).map((item) => item === 'ellipsis'
           ? '<span style="padding:0 2px;color:#98a2b3;">•••</span>'
