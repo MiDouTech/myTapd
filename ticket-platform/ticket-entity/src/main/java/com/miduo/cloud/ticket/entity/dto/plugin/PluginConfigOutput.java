@@ -21,6 +21,8 @@ public class PluginConfigOutput implements Serializable {
 
     private Boolean showPriorityPicker;
 
+    private Long defaultCategoryId;
+
     private Map<String, Object> theme;
 
     private List<PluginCategoryConfigOutput> categories;

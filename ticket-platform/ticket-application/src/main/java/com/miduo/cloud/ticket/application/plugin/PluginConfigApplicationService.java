@@ -57,6 +57,7 @@ public class PluginConfigApplicationService {
         theme.put("primaryColor", "#1675d1");
         output.setTheme(theme);
         IntegrationAppPO app = credentialResolver.requireEnabledApp(client.getIntegrationAppId());
+        output.setDefaultCategoryId(app.getDefaultCategoryId());
         List<Long> categoryIds = StringUtils.hasText(app.getCategoryIds())
                 ? JSON.parseArray(app.getCategoryIds(), Long.class)
                 : Collections.singletonList(app.getDefaultCategoryId());
