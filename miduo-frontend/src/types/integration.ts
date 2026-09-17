@@ -12,6 +12,7 @@ export interface IntegrationAppOutput {
   appSecret?: string
   systemCode: string
   defaultCategoryId: number
+  categoryIds?: number[]
   categoryMapping?: Record<string, number>
   callbackUrl?: string
   allowedOrigins?: string
@@ -25,6 +26,7 @@ export interface IntegrationAppCreateInput {
   appName: string
   systemCode: string
   defaultCategoryId: number
+  categoryIds: number[]
   categoryMapping?: Record<string, number>
   callbackUrl?: string
   callbackSecret?: string
@@ -35,6 +37,7 @@ export interface IntegrationAppCreateInput {
 export interface IntegrationAppUpdateInput {
   appName: string
   defaultCategoryId: number
+  categoryIds: number[]
   categoryMapping?: Record<string, number>
   callbackUrl?: string
   callbackSecret?: string

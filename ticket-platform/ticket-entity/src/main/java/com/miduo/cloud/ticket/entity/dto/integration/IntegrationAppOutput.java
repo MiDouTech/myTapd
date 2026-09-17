@@ -5,6 +5,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Map;
+import java.util.List;
 
 /**
  * 接入应用输出
@@ -23,6 +24,8 @@ public class IntegrationAppOutput implements Serializable {
     private String systemCode;
 
     private Long defaultCategoryId;
+
+    private List<Long> categoryIds;
 
     private Map<String, Long> categoryMapping;
 

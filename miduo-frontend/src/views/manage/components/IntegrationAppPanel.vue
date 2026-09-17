@@ -2,6 +2,8 @@
 import { DocumentCopy } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
+import { getCategoryTree } from '@/api/category'
+import type { CategoryTreeOutput } from '@/types/category'
 
 import {
   createIntegrationApp,
@@ -58,11 +60,13 @@ const query = reactive<IntegrationAppPageInput>({
 
 const tableData = ref<IntegrationAppOutput[]>([])
 const total = ref(0)
+const categoryOptions = ref<Array<{ value: number; label: string }>>([])
 
 const form = reactive({
   appName: '',
   systemCode: '',
   defaultCategoryId: undefined as number | undefined,
+  categoryIds: [] as number[],
   categoryMappingText: '',
   callbackUrl: '',
   callbackSecret: '',
@@ -74,7 +78,7 @@ const form = reactive({
 const formRules: FormRules = {
   appName: [{ required: true, message: '请输入应用名称', trigger: 'blur' }],
   systemCode: [{ required: true, message: '请输入系统标识', trigger: 'blur' }],
-  defaultCategoryId: [{ required: true, message: '请输入默认分类 ID', trigger: 'change' }],
+  categoryIds: [{ required: true, message: '请至少选择一个工单分类', trigger: 'change' }],
   status: [{ required: true, message: '请选择状态', trigger: 'change' }],
 }
 
@@ -84,6 +88,7 @@ function resetForm(): void {
   form.appName = ''
   form.systemCode = ''
   form.defaultCategoryId = undefined
+  form.categoryIds = []
   form.categoryMappingText = ''
   form.callbackUrl = ''
   form.callbackSecret = ''
@@ -212,6 +217,7 @@ async function openEditDialog(row: IntegrationAppOutput): Promise<void> {
     form.appName = detail.appName || ''
     form.systemCode = detail.systemCode || ''
     form.defaultCategoryId = detail.defaultCategoryId
+    form.categoryIds = detail.categoryIds?.length ? detail.categoryIds : [detail.defaultCategoryId]
     form.categoryMappingText = formatCategoryMapping(detail.categoryMapping)
     form.callbackUrl = detail.callbackUrl || ''
     form.callbackSecret = ''
@@ -274,7 +280,8 @@ async function handleSubmit(): Promise<void> {
       const payload: IntegrationAppCreateInput = {
         appName: form.appName.trim(),
         systemCode: form.systemCode.trim(),
-        defaultCategoryId: Number(form.defaultCategoryId),
+        defaultCategoryId: form.categoryIds[0]!,
+        categoryIds: form.categoryIds,
         categoryMapping,
         callbackUrl: form.callbackUrl.trim() || undefined,
         callbackSecret: form.callbackSecret.trim() || undefined,
@@ -290,7 +297,8 @@ async function handleSubmit(): Promise<void> {
     } else if (editingId.value) {
       const payload: IntegrationAppUpdateInput = {
         appName: form.appName.trim(),
-        defaultCategoryId: Number(form.defaultCategoryId),
+        defaultCategoryId: form.categoryIds[0]!,
+        categoryIds: form.categoryIds,
         categoryMapping,
         callbackUrl: form.callbackUrl.trim() || undefined,
         callbackSecret: form.callbackSecret.trim() || undefined,
@@ -312,6 +320,16 @@ async function handleSubmit(): Promise<void> {
 }
 
 onMounted(async () => {
+  const flatten = (nodes: CategoryTreeOutput[], parents: string[] = []): void => {
+    nodes.forEach((node) => {
+      const path = [...parents, node.name]
+      if (node.isActive !== 0)
+        categoryOptions.value.push({ value: node.id, label: path.join(' / ') })
+      if (node.children?.length) flatten(node.children, path)
+    })
+  }
+  const tree = await getCategoryTree()
+  flatten(tree)
   await loadApps()
 })
 </script>
@@ -357,15 +375,38 @@ onMounted(async () => {
       <EmptyState v-if="!tableLoading && total === 0" description="暂无接入应用" />
       <template v-else>
         <BaseTable :data="tableData" :loading="tableLoading">
-          <el-table-column prop="appName" label="应用名称" min-width="120" align="center" show-overflow-tooltip />
-          <el-table-column prop="systemCode" label="系统标识" min-width="100" align="center" show-overflow-tooltip />
-          <el-table-column prop="appKey" label="AppKey" min-width="160" align="center" show-overflow-tooltip />
           <el-table-column
-            prop="defaultCategoryId"
-            label="默认分类 ID"
-            width="120"
+            prop="appName"
+            label="应用名称"
+            min-width="120"
             align="center"
+            show-overflow-tooltip
           />
+          <el-table-column
+            prop="systemCode"
+            label="系统标识"
+            min-width="100"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="appKey"
+            label="AppKey"
+            min-width="160"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column label="可用分类" min-width="180" align="center" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{
+                (row.categoryIds || [row.defaultCategoryId])
+                  .map(
+                    (id: number) => categoryOptions.find((item) => item.value === id)?.label || id,
+                  )
+                  .join('、')
+              }}
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="80" align="center">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.status)" size="small">
@@ -380,7 +421,9 @@ onMounted(async () => {
           </el-table-column>
           <el-table-column label="操作" width="80" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button type="primary" link size="small" @click="openEditDialog(row)"
+                >编辑</el-button
+              >
             </template>
           </el-table-column>
         </BaseTable>
@@ -402,7 +445,12 @@ onMounted(async () => {
     <div v-loading="dialogLoading">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="130px">
         <el-form-item label="应用名称" prop="appName" required>
-          <el-input v-model="form.appName" placeholder="如：米多星球" maxlength="100" show-word-limit />
+          <el-input
+            v-model="form.appName"
+            placeholder="如：米多星球"
+            maxlength="100"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="系统标识" prop="systemCode" :required="!isEditMode">
           <el-input
@@ -412,14 +460,24 @@ onMounted(async () => {
             maxlength="64"
           />
         </el-form-item>
-        <el-form-item label="默认分类 ID" prop="defaultCategoryId" required>
-          <el-input-number
-            v-model="form.defaultCategoryId"
-            :min="1"
-            :step="1"
-            controls-position="right"
-            placeholder="工单分类 ID"
-          />
+        <el-form-item label="工单分类" prop="categoryIds" required>
+          <el-select
+            v-model="form.categoryIds"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择插件中可提交的分类"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="option in categoryOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <div class="field-helper">第一个分类作为旧版 SDK 的默认分类。</div>
         </el-form-item>
         <el-form-item label="分类映射">
           <el-input
@@ -450,7 +508,11 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="开放权限">
           <el-checkbox-group v-model="form.permissionCodes">
-            <el-checkbox v-for="option in PERMISSION_OPTIONS" :key="option.value" :value="option.value">
+            <el-checkbox
+              v-for="option in PERMISSION_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+            >
               {{ option.label }}
             </el-checkbox>
           </el-checkbox-group>
@@ -496,7 +558,12 @@ onMounted(async () => {
     </template>
   </el-dialog>
 
-  <el-dialog v-model="credentialVisible" title="接入凭证" width="560px" @closed="credentialAppKey = ''">
+  <el-dialog
+    v-model="credentialVisible"
+    title="接入凭证"
+    width="560px"
+    @closed="credentialAppKey = ''"
+  >
     <el-alert
       type="warning"
       :closable="false"
