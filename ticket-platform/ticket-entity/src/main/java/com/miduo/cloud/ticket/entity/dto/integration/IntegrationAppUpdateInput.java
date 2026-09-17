@@ -6,6 +6,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.List;
 
 /**
  * 更新接入应用
@@ -19,6 +20,8 @@ public class IntegrationAppUpdateInput implements Serializable {
 
     @NotNull(message = "默认分类不能为空")
     private Long defaultCategoryId;
+
+    private List<Long> categoryIds;
 
     private Map<String, Long> categoryMapping;
 

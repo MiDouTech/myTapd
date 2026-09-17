@@ -123,7 +123,7 @@ public class PluginTicketApplicationService {
                 return toCreateOutput(existing);
             }
         }
-        Long categoryId = resolveCategoryId(app, input.getPluginContext());
+        Long categoryId = resolveCategoryId(app, input.getCategoryId(), input.getPluginContext());
         String priority = normalizePriority(input.getPriority());
         String submittedContent = StringUtils.hasText(input.getContent()) ? input.getContent() : input.getDescription();
         String sanitizedDescription = sanitizePluginDescription(submittedContent, input.getAttachments());
@@ -407,7 +407,16 @@ public class PluginTicketApplicationService {
         }
     }
 
-    private Long resolveCategoryId(IntegrationAppPO app, Map<String, Object> pluginContext) {
+    private Long resolveCategoryId(IntegrationAppPO app, Long requestedCategoryId, Map<String, Object> pluginContext) {
+        if (requestedCategoryId != null) {
+            List<Long> allowed = StringUtils.hasText(app.getCategoryIds())
+                    ? JSON.parseArray(app.getCategoryIds(), Long.class)
+                    : Collections.singletonList(app.getDefaultCategoryId());
+            if (!allowed.contains(requestedCategoryId)) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "所选分类不在当前插件的可用范围内");
+            }
+            return requestedCategoryId;
+        }
         if (pluginContext != null && StringUtils.hasText(app.getCategoryMapping())) {
             Object bizType = pluginContext.get("bizType");
             if (bizType != null) {

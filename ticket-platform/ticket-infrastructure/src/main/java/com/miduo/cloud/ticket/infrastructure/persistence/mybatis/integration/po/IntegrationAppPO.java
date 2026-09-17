@@ -29,6 +29,9 @@ public class IntegrationAppPO extends BaseEntity {
     @TableField("default_category_id")
     private Long defaultCategoryId;
 
+    @TableField("category_ids")
+    private String categoryIds;
+
     @TableField("category_mapping")
     private String categoryMapping;
 
