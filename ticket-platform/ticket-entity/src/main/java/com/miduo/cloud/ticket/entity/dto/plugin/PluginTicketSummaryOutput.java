@@ -27,6 +27,11 @@ public class PluginTicketSummaryOutput implements Serializable {
 
     private String categoryName;
 
+    /**
+     * 当前处理人名称；多人处理时使用顿号拼接。
+     */
+    private String assigneeName;
+
     private Date createTime;
 
     private Date updateTime;

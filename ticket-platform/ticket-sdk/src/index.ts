@@ -103,6 +103,7 @@ interface PluginTicketSummary {
   title: string
   categoryId?: number
   categoryName?: string
+  assigneeName?: string
   status: string
   statusLabel?: string
 }
