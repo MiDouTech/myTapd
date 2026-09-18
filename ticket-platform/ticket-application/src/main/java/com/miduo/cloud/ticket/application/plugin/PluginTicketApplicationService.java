@@ -31,12 +31,16 @@ import com.miduo.cloud.ticket.entity.dto.ticket.TicketCreateInput;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketPublicDetailOutput;
 import com.miduo.cloud.ticket.infrastructure.external.qiniu.QiniuUploadService;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.integration.po.IntegrationAppPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketAssigneeMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCategoryMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketLogMapper;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketAssigneePO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCategoryPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketLogPO;
 import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketPO;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.mapper.SysUserMapper;
+import com.miduo.cloud.ticket.infrastructure.persistence.mybatis.user.po.SysUserPO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -83,6 +87,8 @@ public class PluginTicketApplicationService {
     private final TicketUrgeApplicationService ticketUrgeApplicationService;
     private final TicketMapper ticketMapper;
     private final TicketCategoryMapper ticketCategoryMapper;
+    private final TicketAssigneeMapper ticketAssigneeMapper;
+    private final SysUserMapper sysUserMapper;
     private final TicketLogMapper ticketLogMapper;
     private final IntegrationAppCredentialResolver credentialResolver;
     private final QiniuUploadService qiniuUploadService;
@@ -94,6 +100,8 @@ public class PluginTicketApplicationService {
                                           TicketUrgeApplicationService ticketUrgeApplicationService,
                                           TicketMapper ticketMapper,
                                           TicketCategoryMapper ticketCategoryMapper,
+                                          TicketAssigneeMapper ticketAssigneeMapper,
+                                          SysUserMapper sysUserMapper,
                                           TicketLogMapper ticketLogMapper,
                                           IntegrationAppCredentialResolver credentialResolver,
                                           QiniuUploadService qiniuUploadService,
@@ -104,6 +112,8 @@ public class PluginTicketApplicationService {
         this.ticketUrgeApplicationService = ticketUrgeApplicationService;
         this.ticketMapper = ticketMapper;
         this.ticketCategoryMapper = ticketCategoryMapper;
+        this.ticketAssigneeMapper = ticketAssigneeMapper;
+        this.sysUserMapper = sysUserMapper;
         this.ticketLogMapper = ticketLogMapper;
         this.credentialResolver = credentialResolver;
         this.qiniuUploadService = qiniuUploadService;
@@ -176,8 +186,9 @@ public class PluginTicketApplicationService {
                 .orderByDesc(TicketPO::getId);
         Page<TicketPO> result = ticketMapper.selectPage(page, wrapper);
         Map<Long, String> categoryNames = loadCategoryNames(result.getRecords());
+        Map<Long, String> assigneeNames = loadAssigneeNames(result.getRecords());
         List<PluginTicketSummaryOutput> records = result.getRecords().stream()
-                .map(ticket -> toSummaryOutput(ticket, categoryNames))
+                .map(ticket -> toSummaryOutput(ticket, categoryNames, assigneeNames))
                 .collect(Collectors.toList());
         PluginTicketMinePageOutput output = new PluginTicketMinePageOutput(
                 records, result.getTotal(), input.getPageNum(), input.getPageSize());
@@ -709,10 +720,12 @@ public class PluginTicketApplicationService {
     }
 
     private PluginTicketSummaryOutput toSummaryOutput(TicketPO ticket) {
-        return toSummaryOutput(ticket, loadCategoryNames(Collections.singletonList(ticket)));
+        List<TicketPO> tickets = Collections.singletonList(ticket);
+        return toSummaryOutput(ticket, loadCategoryNames(tickets), loadAssigneeNames(tickets));
     }
 
-    private PluginTicketSummaryOutput toSummaryOutput(TicketPO ticket, Map<Long, String> categoryNames) {
+    private PluginTicketSummaryOutput toSummaryOutput(TicketPO ticket, Map<Long, String> categoryNames,
+                                                      Map<Long, String> assigneeNames) {
         PluginTicketSummaryOutput output = new PluginTicketSummaryOutput();
         output.setTicketId(ticket.getId());
         output.setTicketNo(ticket.getTicketNo());
@@ -723,6 +736,7 @@ public class PluginTicketApplicationService {
         output.setPriority(ticket.getPriority());
         output.setCategoryId(ticket.getCategoryId());
         output.setCategoryName(categoryNames.getOrDefault(ticket.getCategoryId(), "未分类"));
+        output.setAssigneeName(assigneeNames.get(ticket.getId()));
         output.setCreateTime(ticket.getCreateTime());
         output.setUpdateTime(ticket.getUpdateTime());
         return output;
@@ -744,6 +758,61 @@ public class PluginTicketApplicationService {
             }
         }
         return names;
+    }
+
+    /**
+     * 批量解析当前处理人，避免插件列表逐条查询；兼容尚未写入多人明细表的历史工单。
+     */
+    private Map<Long, String> loadAssigneeNames(List<TicketPO> tickets) {
+        if (tickets == null || tickets.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Long> ticketIds = tickets.stream()
+                .map(TicketPO::getId)
+                .filter(id -> id != null)
+                .collect(Collectors.toList());
+        Map<Long, List<Long>> userIdsByTicketId = new LinkedHashMap<>();
+        if (!ticketIds.isEmpty()) {
+            List<TicketAssigneePO> rows = ticketAssigneeMapper.selectList(
+                    new LambdaQueryWrapper<TicketAssigneePO>()
+                            .in(TicketAssigneePO::getTicketId, ticketIds)
+                            .orderByAsc(TicketAssigneePO::getSortOrder)
+                            .orderByAsc(TicketAssigneePO::getId));
+            for (TicketAssigneePO row : rows) {
+                if (row.getTicketId() != null && row.getUserId() != null) {
+                    userIdsByTicketId.computeIfAbsent(row.getTicketId(), key -> new ArrayList<>())
+                            .add(row.getUserId());
+                }
+            }
+        }
+        for (TicketPO ticket : tickets) {
+            if (ticket.getId() != null && ticket.getAssigneeId() != null
+                    && !userIdsByTicketId.containsKey(ticket.getId())) {
+                userIdsByTicketId.put(ticket.getId(), Collections.singletonList(ticket.getAssigneeId()));
+            }
+        }
+        List<Long> userIds = userIdsByTicketId.values().stream()
+                .flatMap(List::stream)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, String> userNames = sysUserMapper.selectBatchIds(userIds).stream()
+                .filter(user -> StringUtils.hasText(user.getName()))
+                .collect(Collectors.toMap(SysUserPO::getId, SysUserPO::getName));
+        Map<Long, String> result = new HashMap<>();
+        for (Map.Entry<Long, List<Long>> entry : userIdsByTicketId.entrySet()) {
+            String names = entry.getValue().stream()
+                    .map(userNames::get)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.joining("、"));
+            if (StringUtils.hasText(names)) {
+                result.put(entry.getKey(), names);
+            }
+        }
+        return result;
     }
 
     private String buildPublicUrl(String ticketNo) {
