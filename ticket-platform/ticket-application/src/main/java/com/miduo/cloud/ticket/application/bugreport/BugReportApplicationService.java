@@ -315,7 +315,7 @@ public class BugReportApplicationService extends BaseApplicationService {
 
         syncReportTickets(report.getId(), ticketIds, 0);
         removeAutoDraftReportsOnManualLink(ticketIds, null);
-        List<Long> responsibleUserIds = mergeResponsibleUserIds(input.getResponsibleUserIds(), tickets);
+        List<Long> responsibleUserIds = resolveResponsibleUserIds(input.getResponsibleUserIds(), tickets);
         syncResponsibleUsers(report.getId(), responsibleUserIds);
         recordLog(report.getId(), currentUserId, "CREATE", null, report.getStatus(), "创建Bug简报");
         return report.getId();
@@ -325,7 +325,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     public void update(Long id, BugReportUpdateInput input, Long currentUserId) {
         BugReportPO report = getReportById(id);
         if (!isEditableStatus(report.getStatus())) {
-            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "仅待填写/已退回/已作废状态可编辑");
+            throw BusinessException.of(ErrorCode.BUG_REPORT_STATUS_INVALID, "仅待填写/已退回/已归档/已作废状态可编辑");
         }
         String oldStatus = report.getStatus();
 
@@ -364,7 +364,7 @@ public class BugReportApplicationService extends BaseApplicationService {
             }
         }
         if (input.getResponsibleUserIds() != null) {
-            syncResponsibleUsers(id, distinctIds(input.getResponsibleUserIds()));
+            syncResponsibleUsers(id, requireSingleResponsibleUser(input.getResponsibleUserIds()));
         }
         if (!Boolean.TRUE.equals(input.getSkipStatusLog())) {
             String remark = BugReportStatus.VOIDED.getCode().equals(oldStatus)
@@ -1040,6 +1040,7 @@ public class BugReportApplicationService extends BaseApplicationService {
     private boolean isEditableStatus(String status) {
         return BugReportStatus.DRAFT.getCode().equals(status)
                 || BugReportStatus.REJECTED.getCode().equals(status)
+                || BugReportStatus.ARCHIVED.getCode().equals(status)
                 || BugReportStatus.VOIDED.getCode().equals(status);
     }
 
@@ -1154,7 +1155,10 @@ public class BugReportApplicationService extends BaseApplicationService {
                         "关联工单仅可选择状态为「临时解决」或「已完成」的工单（非缺陷关闭的工单不可关联）");
             }
         }
-        return tickets;
+        Map<Long, TicketPO> ticketById = tickets.stream()
+                .collect(Collectors.toMap(TicketPO::getId, ticket -> ticket));
+        // selectBatchIds 不保证返回顺序；恢复请求里的关联顺序，确保“最后一个工单”口径稳定。
+        return ticketIds.stream().map(ticketById::get).collect(Collectors.toList());
     }
 
     /**
@@ -1525,17 +1529,27 @@ public class BugReportApplicationService extends BaseApplicationService {
         return new ArrayList<>(ids);
     }
 
-    private List<Long> mergeResponsibleUserIds(List<Long> inputUserIds, List<TicketPO> tickets) {
-        LinkedHashSet<Long> merged = new LinkedHashSet<>();
-        if (!CollectionUtils.isEmpty(inputUserIds)) {
-            merged.addAll(inputUserIds.stream().filter(Objects::nonNull).collect(Collectors.toList()));
+    private List<Long> resolveResponsibleUserIds(List<Long> inputUserIds, List<TicketPO> tickets) {
+        List<Long> selected = distinctIds(inputUserIds);
+        if (!selected.isEmpty()) {
+            return requireSingleResponsibleUser(selected);
         }
-        for (TicketPO ticket : tickets) {
-            if (ticket.getAssigneeId() != null) {
-                merged.add(ticket.getAssigneeId());
+        // 未显式选择时保持原有默认口径：取最后一个关联工单的当前处理人。
+        for (int index = tickets.size() - 1; index >= 0; index--) {
+            Long assigneeId = tickets.get(index).getAssigneeId();
+            if (assigneeId != null) {
+                return Collections.singletonList(assigneeId);
             }
         }
-        return new ArrayList<>(merged);
+        throw BusinessException.of(ErrorCode.PARAM_ERROR, "Bug简报必须选择一位责任人");
+    }
+
+    private List<Long> requireSingleResponsibleUser(List<Long> userIds) {
+        List<Long> distinctUserIds = distinctIds(userIds);
+        if (distinctUserIds.size() != 1) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "Bug简报必须且只能选择一位责任人");
+        }
+        return distinctUserIds;
     }
 
     private List<Long> distinctIds(List<Long> ids) {
