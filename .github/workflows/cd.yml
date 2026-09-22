@@ -4,7 +4,6 @@ name: CD – Build & Push Docker Images
 on:
   push:
     branches:
-      - main
       - master
       - develop
       - 'release/**'
@@ -20,6 +19,11 @@ on:
 
   workflow_dispatch:
     inputs:
+      publish_test:
+        description: 是否发布到测试环境；选择否时 CNB 更新提交会添加 [skip ci]
+        required: true
+        default: true
+        type: boolean
       service_names:
         description: "后端构建服务：ticket-platform-backend"
         type: choice
@@ -670,5 +674,5 @@ jobs:
           if [[ -f "${FRONTEND_VERSION_FILE}" ]]; then
             git add -f "${FRONTEND_VERSION_FILE}"
           fi
-          git commit -m "提交人: ${AUTHOR} 提交信息: ${MSG_CLEAN}"
+          git commit -m "提交人: ${AUTHOR} 提交信息: ${MSG_CLEAN}${{ github.event_name == 'workflow_dispatch' && inputs.publish_test == false && ' [skip ci]' || '' }}"
           git push
