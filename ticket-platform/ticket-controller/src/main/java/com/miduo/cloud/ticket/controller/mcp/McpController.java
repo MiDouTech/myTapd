@@ -17,10 +17,10 @@ import javax.annotation.Resource;
 /**
  * 工单 MCP（Model Context Protocol）服务端点。
  *
- * <p>供 WorkBuddy 等支持 MCP 的 AI 客户端连接，以 JSON-RPC 2.0 暴露只读工具（P0）。
+ * <p>供 WorkBuddy 等支持 MCP 的 AI 客户端连接，以 JSON-RPC 2.0 暴露查询和追加评论工具。
  * 鉴权复用个人 API 密钥：{@code Authorization: Bearer <mdt_...>} 或 {@code X-Api-Key}。
  */
-@Tag(name = "MCP 服务", description = "WorkBuddy/MCP 客户端接入（JSON-RPC 2.0，P0 只读）")
+@Tag(name = "MCP 服务", description = "WorkBuddy/MCP 客户端接入（JSON-RPC 2.0，查询与追加评论）")
 @RestController
 @RequestMapping("/api/mcp")
 public class McpController {
@@ -31,7 +31,7 @@ public class McpController {
     /**
      * MCP JSON-RPC 入口
      * 接口编号：API000521
-     * 产品文档功能：WorkBuddy 结合 P0 - MCP 只读服务（initialize/tools.list/tools.call/ping）
+     * 产品文档功能：MCP 查询与评论服务（initialize/tools.list/tools.call/ping）
      */
     @Operation(summary = "MCP JSON-RPC 入口", description = "接口编号：API000521。处理 initialize/tools.list/tools.call/ping；通知类方法返回 202")
     @PostMapping

@@ -9,6 +9,10 @@ import com.miduo.cloud.ticket.common.security.SecurityUtil;
 import com.miduo.cloud.ticket.entity.dto.mcp.McpToolDefinition;
 import com.miduo.cloud.ticket.entity.dto.mcp.McpToolResult;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketPageInput;
+import com.miduo.cloud.ticket.entity.dto.ticket.TicketCommentInput;
+import javax.validation.Validator;
+import javax.validation.ConstraintViolation;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,9 +26,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * MCP 工具注册与执行（P0 只读）。
+ * MCP 工具注册与执行。
  *
- * <p>所有工具均以「当前调用者身份」执行，委托现有查询服务，权限随用户角色收敛；不暴露任何写操作。
+ * <p>所有工具均以「当前调用者身份」执行，委托现有应用服务；评论作者由服务端当前用户身份确定。
  */
 @Service
 public class McpToolService {
@@ -35,6 +39,7 @@ public class McpToolService {
     public static final String TOOL_GET_TICKET = "get_ticket";
     public static final String TOOL_GET_FLOW_HISTORY = "get_ticket_flow_history";
     public static final String TOOL_QUERY_TICKETS = "query_tickets";
+    public static final String TOOL_ADD_COMMENT = "add_ticket_comment";
     public static final String TOOL_GET_AVAILABLE_ACTIONS = "get_available_actions";
 
     @Resource
@@ -46,8 +51,11 @@ public class McpToolService {
     @Resource
     private ObjectMapper objectMapper;
 
+    @Resource
+    private Validator validator;
+
     /**
-     * 返回 P0 只读工具清单（tools/list）。
+     * 返回工具清单（tools/list），包含查询与追加评论。
      */
     public List<McpToolDefinition> listTools() {
         List<McpToolDefinition> tools = new ArrayList<>();
@@ -90,6 +98,26 @@ public class McpToolService {
                 "按条件检索工单（关键词/状态/分类/优先级/时间范围），范围随当前用户权限收敛",
                 objectSchema(queryProps, null)));
 
+        Map<String, Object> commentProps = new LinkedHashMap<>();
+        Map<String, Object> ticketIdProp = longProp("工单ID，正整数");
+        ticketIdProp.put("minimum", 1);
+        commentProps.put("ticketId", ticketIdProp);
+        Map<String, Object> contentProp = stringProp("评论正文，与现有评论接口格式一致；不能为空，最多20000字符", null);
+        contentProp.put("minLength", 1);
+        contentProp.put("maxLength", 20000);
+        commentProps.put("content", contentProp);
+        Map<String, Object> mentionsProp = new LinkedHashMap<>();
+        mentionsProp.put("type", "array");
+        mentionsProp.put("description", "可选：@提醒的用户ID，最多20人；将触发通知");
+        Map<String, Object> mentionIdProp = longProp("用户ID，正整数");
+        mentionIdProp.put("minimum", 1);
+        mentionsProp.put("items", mentionIdProp);
+        mentionsProp.put("maxItems", 20);
+        commentProps.put("mentionedUserIds", mentionsProp);
+        tools.add(new McpToolDefinition(TOOL_ADD_COMMENT,
+                "写操作：以当前用户身份追加工单评论并返回commentId；可能触发@通知。仅在用户明确授权提交后调用，勿自动重试以免重复评论",
+                objectSchema(commentProps, new String[]{"ticketId", "content"})));
+
         return tools;
     }
 
@@ -111,6 +139,8 @@ public class McpToolService {
                     return getFlowHistory(arguments);
                 case TOOL_GET_AVAILABLE_ACTIONS:
                     return getAvailableActions(arguments, userId);
+                case TOOL_ADD_COMMENT:
+                    return addComment(arguments, userId);
                 case TOOL_QUERY_TICKETS:
                     return queryTickets(arguments, userId);
                 default:
@@ -159,6 +189,46 @@ public class McpToolService {
     private McpToolResult getAvailableActions(JsonNode args, Long userId) throws Exception {
         Long id = requiredLong(args, "ticketId");
         return McpToolResult.ofText(toJson(ticketWorkflowAppService.getAvailableActions(id, userId)));
+    }
+
+    private McpToolResult addComment(JsonNode args, Long userId) throws Exception {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("需要登录后才能添加评论");
+        }
+        Long ticketId = positiveId(args == null ? null : args.get("ticketId"), "ticketId");
+        JsonNode content = args.get("content");
+        if (content == null || !content.isTextual()) {
+            throw new IllegalArgumentException("content 必须是字符串");
+        }
+        TicketCommentInput input = new TicketCommentInput();
+        input.setContent(content.textValue());
+        JsonNode mentions = args.get("mentionedUserIds");
+        if (mentions != null && !mentions.isNull()) {
+            if (!mentions.isArray() || mentions.size() > 20) {
+                throw new IllegalArgumentException("mentionedUserIds 必须是数组，最多@提醒20人");
+            }
+            List<Long> ids = new ArrayList<>();
+            for (JsonNode mention : mentions) {
+                ids.add(positiveId(mention, "mentionedUserIds"));
+            }
+            input.setMentionedUserIds(ids);
+        }
+        // MCP 不经过 REST 的 @Valid，显式复用同一 DTO 约束。
+        Set<ConstraintViolation<TicketCommentInput>> violations = validator.validate(input);
+        if (!violations.isEmpty()) {
+            throw new IllegalArgumentException(violations.iterator().next().getMessage());
+        }
+        Long commentId = ticketApplicationService.addComment(ticketId, input, userId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("commentId", commentId);
+        return McpToolResult.ofText(toJson(result));
+    }
+
+    private Long positiveId(JsonNode value, String field) {
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToLong() || value.longValue() <= 0) {
+            throw new IllegalArgumentException(field + " 必须是正整数");
+        }
+        return value.longValue();
     }
 
     // ---- 工具辅助 ----

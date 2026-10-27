@@ -35,7 +35,7 @@ description: 使用个人 API 密钥访问米多内部工单（列表、详情�
 - 不在对话中复述完整 API Key；日志与截图注意脱敏。
 - 权限与浏览器登录用户一致，不可越权操作他人私有数据。
 
-## MCP 接入（WorkBuddy，P0 只读）
+## MCP 接入（WorkBuddy / Codex）
 
 除裸 HTTP 外，工单系统现提供 **MCP 端点** `POST /api/mcp`（JSON-RPC 2.0），供 WorkBuddy 等支持 MCP 的客户端原生接入。
 
@@ -54,7 +54,25 @@ description: 使用个人 API 密钥访问米多内部工单（列表、详情�
 ```
 
 - **只读工具（P0）**：`list_my_tickets`、`get_ticket`、`get_ticket_flow_history`、`query_tickets`、`get_available_actions`。
-- **边界**：P0 不含任何写操作（评论/流转/受理/完结/转单将于 P1 开放）。
+- **评论工具**：`add_ticket_comment`，追加评论并返回 `commentId`；与 `POST /api/ticket/{id}/comment` 复用同一应用服务，作者取当前密钥用户。
+- **边界**：除评论外，流转/受理/完结/转单等写操作仍未开放。
+
+### 追加评论
+
+先用 `get_ticket` 核对目标工单，再展示评论草稿并取得用户明确提交授权。正文不能为空，最多 20000 字符；`mentionedUserIds` 可选，最多 20 个正整数用户 ID，会触发通知。不允许指定评论作者。
+
+```json
+{
+  "name": "add_ticket_comment",
+  "arguments": {
+    "ticketId": 123,
+    "content": "复测结果：问题仍存在，详见追踪号及复现步骤。",
+    "mentionedUserIds": [456]
+  }
+}
+```
+
+成功结果的文本内容为 `{"commentId":789}`。出现 `isError: true` 时提交未获成功确认；超时或连接中断时先查询工单评论，避免自动重试造成重复。此工具不上传附件，也不更改工单状态。已有客户端配置无需改动；部署新版后重新连接以刷新工具列表。
 - 角色化触发词见 `mcp/SKILL-dev.md`（开发）、`mcp/SKILL-test.md`（测试）；工具清单见 `mcp/manifest.json`。
 
 ## 相关文档
