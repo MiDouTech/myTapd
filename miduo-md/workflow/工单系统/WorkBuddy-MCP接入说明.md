@@ -1,10 +1,10 @@
-# WorkBuddy · 工单 MCP 接入说明（P0 只读）
+# WorkBuddy · 工单 MCP 接入说明
 
-> **版本**：v0.1（P0）
+> **版本**：v0.2（查询与评论）
 > **关联变更**：`openspec/changes/ticket-mcp-readonly`
 > **配套**：个人 API 密钥（`Authorization: Bearer` / `X-Api-Key`）、技能包目录 `ticket-platform/docs/lobster-skill/mcp/`
 
-本文面向把「米多工单」接入 **WorkBuddy（腾讯云 CodeBuddy）** 的同事。P0 切片仅提供 **只读** 能力（拉待办、看详情、看流转、条件检索、查看可执行动作），**不含写操作**（评论/流转/受理/完结/转单将在 P1 开放）。
+本文面向把「米多工单」接入 **WorkBuddy（腾讯云 CodeBuddy）** 的同事。提供查询能力（拉待办、看详情、看流转、条件检索、查看可执行动作）及追加评论；流转/受理/完结/转单仍未开放。
 
 ---
 
@@ -16,9 +16,10 @@
 | 工单详情 | `get_ticket` | 标题、状态、处理人、优先级、描述、附件元数据、评论等 |
 | 流转历史 | `get_ticket_flow_history` | 每次状态流转/转派/退回记录 |
 | 条件检索 | `query_tickets` | 关键词/状态/分类/优先级/时间范围 |
-| 可执行动作 | `get_available_actions` | 仅展示，不执行（P0） |
+| 可执行动作 | `get_available_actions` | 仅展示，不执行 |
+| 追加评论 | `add_ticket_comment` | 必填 `ticketId`（正整数）、`content`（非空，最多20000字符）；可选 `mentionedUserIds`（最多20个正整数ID，会触发通知）。返回 `commentId` |
 
-**不能做的事**：P0 不能写（评论/流转/受理/完结/转单）；不能越权——可见范围与你浏览器登录一致。
+**写操作边界**：仅开放追加评论，作者为当前密钥用户；提交前先核对目标工单及评论草稿，并取得用户明确授权。不可指定其他作者，勿自动重试以免重复评论。
 
 ---
 
@@ -73,7 +74,7 @@ curl -sS -X POST "https://<工单域名>/api/mcp" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-期望返回 P0 的 5 个只读工具定义。再试：
+期望返回 6 个工具定义（5 个查询工具及 `add_ticket_comment`）。已配置的客户端部署新版后重新连接即可刷新，无需更换密钥。再试：
 
 ```bash
 curl -sS -X POST "https://<工单域名>/api/mcp" \
@@ -91,7 +92,8 @@ curl -sS -X POST "https://<工单域名>/api/mcp" \
 | 401 / 鉴权失败 | 密钥被禁用/删除、复制缺字符、`url` 少了 `/api`、未带 `Authorization: Bearer` |
 | `tools/list` 为空或报错 | 端点未部署到该环境、协议版本不匹配（`initialize` 时回显） |
 | 列表为空 | `view` 与系统枚举不一致（用 `my_todo`/`my_created`/`defect` 等）；或你名下确实无单 |
-| 要求写操作被拒 | P0 为只读版本，写操作在 P1 |
+| 找不到评论工具 | 服务端尚未部署新版，或客户端需要重新连接刷新工具列表 |
+| 评论返回 `isError: true` | 检查工单ID、正文、@用户ID及服务端返回原因；不要盲目重试 |
 
 ---
 
