@@ -844,6 +844,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         comment.setUserId(operatorId);
         comment.setContent(content);
         comment.setType(CommentType.OPERATION.getCode());
+        comment.setVisibility("INTERNAL");
         ticketCommentMapper.insert(comment);
     }
 

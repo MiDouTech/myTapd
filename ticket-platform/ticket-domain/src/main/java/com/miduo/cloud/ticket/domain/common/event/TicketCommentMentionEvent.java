@@ -12,18 +12,24 @@ import java.util.List;
 public class TicketCommentMentionEvent extends DomainEvent {
 
     private final Long ticketId;
+    private final Long commentId;
+    private final String visibility;
     private final List<Long> mentionedUserIds;
     private final Long commentAuthorUserId;
     private final String commentPlainSummary;
 
     public TicketCommentMentionEvent(Long ticketId,
+                                     Long commentId,
+                                     String visibility,
                                      List<Long> mentionedUserIds,
                                      Long commentAuthorUserId,
                                      String commentPlainSummary) {
         super();
         this.ticketId = ticketId;
+        this.commentId = commentId;
+        this.visibility = visibility;
         this.mentionedUserIds = mentionedUserIds != null
-                ? Collections.unmodifiableList(mentionedUserIds)
+                ? Collections.unmodifiableList(new java.util.ArrayList<>(mentionedUserIds))
                 : Collections.emptyList();
         this.commentAuthorUserId = commentAuthorUserId;
         this.commentPlainSummary = commentPlainSummary;

@@ -58,7 +58,8 @@ class McpCommentToolTest {
         assertFalse(result.at("/result/isError").asBoolean());
         assertEquals(99L, mapper.readTree(result.at("/result/content/0/text").asText()).get("commentId").asLong());
         verify(tickets).addComment(eq(42L), argThat(input ->
-                "复测仍失败".equals(input.getContent()) && Arrays.asList(8L, 9L).equals(input.getMentionedUserIds())), eq(7L));
+                "INTERNAL".equals(input.getVisibility()) && "复测仍失败".equals(input.getContent())
+                        && Arrays.asList(8L, 9L).equals(input.getMentionedUserIds())), eq(7L));
     }
 
     @Test
@@ -66,6 +67,13 @@ class McpCommentToolTest {
         when(tickets.addComment(eq(42L), any(), eq(7L))).thenReturn(99L);
         assertFalse(call("{\"ticketId\":42,\"content\":\"进展更新\"}").getIsError());
         verify(tickets).addComment(eq(42L), argThat(input -> input.getMentionedUserIds() == null), eq(7L));
+    }
+
+    @Test
+    void ignoresForgedPublicVisibility() throws Exception {
+        when(tickets.addComment(eq(42L), any(), eq(7L))).thenReturn(99L);
+        assertFalse(call("{\"ticketId\":42,\"content\":\"analysis\",\"visibility\":\"PUBLIC\"}").getIsError());
+        verify(tickets).addComment(eq(42L), argThat(input -> "INTERNAL".equals(input.getVisibility())), eq(7L));
     }
 
     @Test

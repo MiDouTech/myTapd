@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "mockedAPIs": false,
+  "checks": [
+    "real UI private image paste/save/read/render",
+    "real UI public reply save",
+    "anonymous page public only",
+    "private inline images absent from external DOM",
+    "no page errors"
+  ]
+}

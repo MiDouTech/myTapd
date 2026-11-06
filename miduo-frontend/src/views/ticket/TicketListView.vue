@@ -2200,6 +2200,12 @@ onUnmounted(() => {
                   <div class="preview-comment-head">
                     <span class="preview-comment-user">{{ comment.userName || '-' }}</span>
                     <el-tag
+                      size="small"
+                      :type="comment.visibility === 'PUBLIC' ? 'success' : 'warning'"
+                    >
+                      {{ comment.visibility === 'PUBLIC' ? '公开回复' : '内部备注' }}
+                    </el-tag>
+                    <el-tag
                       v-if="comment.type === 'OPERATION'"
                       type="info"
                       size="small"
@@ -2211,7 +2217,11 @@ onUnmounted(() => {
                     }}</span>
                   </div>
                   <div
-                    v-if="comment.type === 'OPERATION'"
+                    v-if="
+                      comment.contentFormat === 'PLAIN_TEXT' ||
+                      (!comment.contentFormat && comment.visibility !== 'PUBLIC') ||
+                      comment.type === 'OPERATION'
+                    "
                     class="preview-comment-text preview-comment-text-plain"
                   >
                     {{ comment.content || '-' }}

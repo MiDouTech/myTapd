@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-06",
+  "backend": {"command": "mvn package", "passed": true, "tests": 24, "failures": 0, "errors": 0, "skipped": 0},
+  "mysql": {"version": "8.0.44", "scenarios": ["empty database to V73", "bug-report V54 history through V69 to V73", "workflow V54 history through V69 to V73", "every pre-existing history row unchanged", "second startup no-op", "checksum drift blocks startup without repair"]},
+  "frontend": {"build": "passed", "changedFileLint": "passed", "browser": "real Chrome, no API mocks"},
+  "limitations": ["Qiniu test bucket upload/read not tested: no configuration", "production Redis 7 not tested; local Redis 5.0.14.1 used", "real WeCom/email/webhook delivery not tested", "no production deployment"]
+}

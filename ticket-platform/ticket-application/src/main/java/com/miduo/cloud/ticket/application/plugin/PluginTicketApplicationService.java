@@ -264,7 +264,7 @@ public class PluginTicketApplicationService {
             notifyUserIds = Collections.singletonList(ticket.getAssigneeId());
         }
         commentInput.setMentionedUserIds(notifyUserIds);
-        return ticketApplicationService.addComment(ticket.getId(), commentInput, claims.getUserId());
+        return ticketApplicationService.addPluginComment(ticket.getId(), commentInput, claims.getUserId());
     }
 
     /**
@@ -281,7 +281,7 @@ public class PluginTicketApplicationService {
         ticketUrgeApplicationService.urgeByTicketId(ticket.getId(), claims.getUserId(), null);
         TicketCommentInput timelineRecord = new TicketCommentInput();
         timelineRecord.setContent("<p><strong>客户催单：</strong>客户通过工单插件发起催办。</p>");
-        ticketApplicationService.addComment(ticket.getId(), timelineRecord, claims.getUserId());
+        ticketApplicationService.addPluginComment(ticket.getId(), timelineRecord, claims.getUserId());
     }
 
     private TicketPO requireOwnedTicket(PluginLaunchTokenClaims claims, String ticketNo) {

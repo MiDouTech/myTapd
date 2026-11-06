@@ -25,6 +25,9 @@ import java.util.List;
 @Component
 public class TicketWebhookEventListener {
 
+    @javax.annotation.Resource
+    private com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCommentMapper commentMapper;
+
     private static final Logger log = LoggerFactory.getLogger(TicketWebhookEventListener.class);
 
     private final WebhookDispatchService webhookDispatchService;
@@ -162,10 +165,17 @@ public class TicketWebhookEventListener {
      * {@code org.springframework.scheduling.annotation.Async}，
      * 否则异步代理可能在提交前介入，导致 {@link TransactionPhase#AFTER_COMMIT} 不可靠（与站内通知监听器同类处理一致）。
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTicketCommentMention(TicketCommentMentionEvent event) {
-        if (event == null || event.getTicketId() == null
+        if (event == null || event.getTicketId() == null || event.getCommentId() == null
+                || !"PUBLIC".equals(event.getVisibility())
                 || event.getMentionedUserIds() == null || event.getMentionedUserIds().isEmpty()) {
+            return;
+        }
+        com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCommentPO comment =
+                commentMapper.selectById(event.getCommentId());
+        if (comment == null || !"PUBLIC".equals(comment.getVisibility())
+                || !java.util.Objects.equals(comment.getTicketId(), event.getTicketId())) {
             return;
         }
         try {
