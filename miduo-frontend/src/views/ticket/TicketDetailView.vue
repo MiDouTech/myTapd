@@ -13,6 +13,7 @@ import {
 } from '@element-plus/icons-vue'
 import {
   addTicketComment,
+  getInternalCommentRecipients,
   assignTicket,
   closeTicket,
   createTicketModule,
@@ -203,8 +204,21 @@ const closeForm = reactive({
 
 // ---- 评论输入 ----
 const commentInput = ref('')
+const commentVisibility = ref<'INTERNAL' | 'PUBLIC'>('INTERNAL')
+const internalCommentInput = ref('')
+const internalMentionUserIds = ref<number[]>([])
+const internalMentionNames = ref<Record<number, string>>({})
+const activeCommentInput = computed(() =>
+  commentVisibility.value === 'INTERNAL' ? internalCommentInput.value : commentInput.value,
+)
+const canSubmitComment = computed(() => hasRichTextContent(activeCommentInput.value))
+watch(commentVisibility, () => {
+  closeMentionFloatingPanel()
+  mentionPopoverVisible.value = false
+})
 const commentSubmitLoading = ref(false)
 const commentEditorRef = ref<InstanceType<typeof RichTextEditor> | null>(null)
+const internalCommentEditorRef = ref<InstanceType<typeof RichTextEditor> | null>(null)
 const commentMentionUserIds = ref<number[]>([])
 const mentionPopoverVisible = ref(false)
 const mentionKeyword = ref('')
@@ -285,10 +299,13 @@ async function loadMentionUsers() {
     const kw = mentionPanelOpen.value
       ? mentionPanelKeyword.value.trim()
       : mentionKeyword.value.trim()
-    const list = await getUserList({
-      accountStatus: 1,
-      ...(kw ? { keyword: kw } : {}),
-    })
+    const list =
+      commentVisibility.value === 'INTERNAL'
+        ? await getInternalCommentRecipients(ticketId.value, kw)
+        : await getUserList({
+            accountStatus: 1,
+            ...(kw ? { keyword: kw } : {}),
+          })
     mentionCandidates.value = list
   } catch {
     mentionCandidates.value = []
@@ -306,7 +323,8 @@ function mentionDisplaySub(u: UserListOutput): string {
 }
 
 function pickMentionUser(u: UserListOutput) {
-  const editor = commentEditorRef.value
+  const internal = commentVisibility.value === 'INTERNAL'
+  const editor = internal ? internalCommentEditorRef.value : commentEditorRef.value
   if (!editor || u.id == null) {
     return
   }
@@ -319,7 +337,10 @@ function pickMentionUser(u: UserListOutput) {
   const sub = mentionDisplaySub(u)
   const html = `<span data-comment-mention="1" data-user-id="${u.id}" class="ticket-comment-mention">@${safeName}(${sub})</span>`
   editor.insertHtml(html)
-  if (!commentMentionUserIds.value.includes(u.id)) {
+  if (internal && !internalMentionUserIds.value.includes(u.id)) {
+    internalMentionUserIds.value.push(u.id)
+    internalMentionNames.value[u.id] = u.name
+  } else if (!internal && !commentMentionUserIds.value.includes(u.id)) {
     commentMentionUserIds.value.push(u.id)
   }
   mentionPopoverVisible.value = false
@@ -1145,23 +1166,46 @@ function hasRichTextContent(content?: string): boolean {
 }
 
 async function submitComment(): Promise<void> {
-  const commentContent = commentInput.value || ''
-  if (!hasRichTextContent(commentContent)) {
+  if (commentSubmitLoading.value) return
+  const visibility = commentVisibility.value
+  const commentContent = activeCommentInput.value || ''
+  if (!canSubmitComment.value) {
     notifyError('请输入评论内容')
     return
   }
   commentSubmitLoading.value = true
   try {
-    const fromHtml = extractMentionUserIdsFromCommentHtml(commentContent)
-    const mergedMentions = Array.from(new Set([...commentMentionUserIds.value, ...fromHtml]))
+    const mergedMentions =
+      visibility === 'INTERNAL'
+        ? [...internalMentionUserIds.value]
+        : Array.from(
+            new Set([
+              ...commentMentionUserIds.value,
+              ...extractMentionUserIdsFromCommentHtml(commentContent),
+            ]),
+          )
     await addTicketComment(ticketId.value, {
       content: commentContent,
+      contentFormat: 'HTML',
+      visibility,
       mentionedUserIds: mergedMentions.length > 0 ? mergedMentions : undefined,
     })
-    notifySuccess('评论发表成功')
-    commentInput.value = ''
-    commentMentionUserIds.value = []
+    notifySuccess(visibility === 'INTERNAL' ? '内部备注已保存' : '已发布')
+    if (visibility === 'INTERNAL') {
+      internalCommentInput.value = ''
+      internalMentionUserIds.value = []
+    } else {
+      commentInput.value = ''
+      commentMentionUserIds.value = []
+    }
     await loadAll()
+  } catch (error) {
+    // 请求层已展示错误；保留对应草稿，禁止自动重发可能已经提交的评论。
+    const code = (error as { code?: string })?.code
+    if (code === 'ECONNABORTED' || code === 'ETIMEDOUT') {
+      notifyError('请求超时，请先核对评论列表再决定是否重试')
+      await loadAll().catch(() => undefined)
+    }
   } finally {
     commentSubmitLoading.value = false
   }
@@ -1416,6 +1460,12 @@ watch(
     if (!newTicketId || newTicketId === oldTicketId) {
       return
     }
+    commentVisibility.value = 'INTERNAL'
+    commentInput.value = ''
+    internalCommentInput.value = ''
+    commentMentionUserIds.value = []
+    internalMentionUserIds.value = []
+    internalMentionNames.value = {}
     await Promise.all([loadAll(), trackReadSilently()])
   },
 )
@@ -2371,22 +2421,54 @@ watch(
       </template>
 
       <!-- 发表评论输入框 -->
-      <div class="comment-input-area">
+      <div v-if="detail?.canWriteComments" class="comment-input-area">
         <div class="comment-input-avatar">
           <el-avatar :size="32" class="current-user-avatar">
             {{ authStore.userInfo?.name?.charAt(0) || '我' }}
           </el-avatar>
         </div>
         <div class="comment-input-body">
+          <el-radio-group
+            v-model="commentVisibility"
+            :disabled="commentSubmitLoading"
+            class="comment-mode"
+          >
+            <el-radio-button value="INTERNAL">内部备注</el-radio-button>
+            <el-radio-button value="PUBLIC">回复客户</el-radio-button>
+          </el-radio-group>
+          <p class="comment-hint">
+            {{
+              commentVisibility === 'INTERNAL'
+                ? '仅内部员工可见；未指定通知人时不发送提醒。'
+                : '发布后将在公开页和工单插件展示。'
+            }}
+          </p>
           <RichTextEditor
+            v-show="commentVisibility === 'INTERNAL'"
+            ref="internalCommentEditorRef"
+            v-model="internalCommentInput"
+            :disabled="commentVisibility !== 'INTERNAL' || commentSubmitLoading"
+            :ticket-id="ticketId"
+            :private-images="true"
+            :height="180"
+            :auto-grow="true"
+            :max-height="480"
+            :mention-trigger="commentVisibility === 'INTERNAL'"
+            placeholder="填写内部备注（支持粘贴图片、表格；输入 @ 可搜索同事）..."
+            class="comment-editor internal-comment-editor"
+            @mention-panel="onEditorMentionPanel"
+          />
+          <RichTextEditor
+            v-show="commentVisibility === 'PUBLIC'"
             ref="commentEditorRef"
             v-model="commentInput"
+            :disabled="commentVisibility !== 'PUBLIC' || commentSubmitLoading"
             :ticket-id="ticketId"
             placeholder="发表评论（支持粘贴图片、表格；输入 @ 可搜索同事）..."
             :height="180"
             :auto-grow="true"
             :max-height="480"
-            :mention-trigger="true"
+            :mention-trigger="commentVisibility === 'PUBLIC'"
             class="comment-editor"
             @mention-panel="onEditorMentionPanel"
           />
@@ -2466,10 +2548,13 @@ watch(
           </Teleport>
           <div class="comment-submit-row">
             <div class="comment-submit-left">
-              <span class="comment-hint">
+              <span v-if="commentVisibility === 'PUBLIC'" class="comment-hint">
                 支持粘贴图片、表格。点击「@同事」可在正文插入
                 @，对方将收到站内通知；若已绑定企微且开启推送，会同步收到企微消息。
               </span>
+              <span v-else class="comment-hint"
+                >支持排版、表格、图片和 @同事；内部图片单张512KB，总量2MB，最多5张。</span
+              >
               <el-popover
                 v-model:visible="mentionPopoverVisible"
                 placement="top-start"
@@ -2477,7 +2562,9 @@ watch(
                 trigger="click"
               >
                 <template #reference>
-                  <el-button type="primary" link size="small">@同事</el-button>
+                  <el-button type="primary" link size="small" :disabled="commentSubmitLoading">{{
+                    commentVisibility === 'INTERNAL' ? '选择通知人' : '@同事'
+                  }}</el-button>
                 </template>
                 <div class="comment-mention-popover">
                   <div class="comment-mention-float-head comment-mention-popover-head">
@@ -2489,7 +2576,11 @@ watch(
                     </div>
                   </div>
                   <p class="comment-mention-tip">
-                    选择后插入 @；也可在编辑框内直接输入 @ 搜索。发表后被 @ 同事会收到站内提醒。
+                    {{
+                      commentVisibility === 'INTERNAL'
+                        ? '仅向选中的内部员工发送不含备注正文的站内提醒。'
+                        : '选择后插入 @；发表后被 @ 同事会收到提醒。'
+                    }}
                   </p>
                   <el-input
                     v-model="mentionKeyword"
@@ -2539,10 +2630,22 @@ watch(
               type="primary"
               size="small"
               :loading="commentSubmitLoading"
-              :disabled="!hasRichTextContent(commentInput)"
+              :disabled="!canSubmitComment"
               @click="submitComment"
-              >发表评论</el-button
+              >{{ commentVisibility === 'INTERNAL' ? '保存内部备注' : '发布公开回复' }}</el-button
             >
+          </div>
+          <div v-if="commentVisibility === 'INTERNAL'" class="comment-recipients">
+            <el-tag
+              v-for="id in internalMentionUserIds"
+              :key="id"
+              closable
+              @close="
+                internalMentionUserIds = internalMentionUserIds.filter((value) => value !== id)
+              "
+            >
+              {{ internalMentionNames[id] || id }}
+            </el-tag>
           </div>
         </div>
       </div>
@@ -2572,12 +2675,22 @@ watch(
           <div class="comment-body">
             <div class="comment-header">
               <span class="comment-username">{{ comment.userName || '-' }}</span>
+              <el-tag size="small" :type="comment.visibility === 'PUBLIC' ? 'success' : 'warning'">
+                {{ comment.visibility === 'PUBLIC' ? '公开回复' : '内部备注' }}
+              </el-tag>
               <el-tag v-if="isOperationLog(comment.type)" type="info" size="small" effect="plain"
                 >操作记录</el-tag
               >
               <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
             </div>
-            <div v-if="isOperationLog(comment.type)" class="comment-content comment-content-plain">
+            <div
+              v-if="
+                comment.contentFormat === 'PLAIN_TEXT' ||
+                (!comment.contentFormat && comment.visibility !== 'PUBLIC') ||
+                isOperationLog(comment.type)
+              "
+              class="comment-content comment-content-plain"
+            >
               {{ comment.content || '-' }}
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->

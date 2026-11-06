@@ -299,7 +299,9 @@ export function parseWecomCustomerInfo(
 
 /** 新增工单评论请求体（可含 @ 提醒用户 ID 列表） */
 export interface TicketCommentPayload {
+  contentFormat?: 'HTML' | 'PLAIN_TEXT'
   content: string
+  visibility: 'PUBLIC' | 'INTERNAL'
   mentionedUserIds?: number[]
 }
 
@@ -310,4 +312,11 @@ export interface TicketCommentPayload {
  */
 export function addTicketComment(id: number, payload: TicketCommentPayload): Promise<number> {
   return request.post<number>(`/ticket/${id}/comment`, payload)
+}
+
+export function getInternalCommentRecipients(
+  id: number,
+  keyword?: string,
+): Promise<import('@/types/user').UserListOutput[]> {
+  return request.get(`/ticket/${id}/comment/recipients`, { params: { keyword } })
 }

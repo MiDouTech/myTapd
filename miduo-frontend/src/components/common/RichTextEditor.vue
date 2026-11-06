@@ -24,6 +24,8 @@ interface Props {
   maxHeight?: number
   /** 为 true 时在正文内输入 @ 可触发选人浮层（由父组件渲染） */
   mentionTrigger?: boolean
+  /** 内部备注图片以内嵌数据保存，禁止走公开附件上传接口。 */
+  privateImages?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -35,6 +37,7 @@ const props = withDefaults(defineProps<Props>(), {
   autoGrow: false,
   maxHeight: 520,
   mentionTrigger: false,
+  privateImages: false,
 })
 
 export interface MentionPanelAnchor {
@@ -47,9 +50,7 @@ export interface MentionPanelAnchor {
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'mention-panel': [
-    payload:
-      | { open: false }
-      | { open: true; keyword: string; anchor: MentionPanelAnchor },
+    payload: { open: false } | { open: true; keyword: string; anchor: MentionPanelAnchor },
   ]
 }>()
 
@@ -209,11 +210,33 @@ function buildEditorConfig(): Partial<IEditorConfig> {
     readOnly: props.disabled,
     scroll: !props.autoGrow,
     MENU_CONF: {
+      insertImage: {
+        checkImage(src: string) {
+          if (props.privateImages && !/^data:image\/(png|jpeg|gif);base64,/.test(src)) {
+            return '内部图片请使用上传或粘贴，不支持外链'
+          }
+          return true
+        },
+      },
       uploadImage: {
-        async customUpload(
-          file: File,
-          insertFn: (url: string, alt: string, href: string) => void,
-        ) {
+        async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
+          if (props.privateImages) {
+            if (
+              !['image/png', 'image/jpeg', 'image/gif'].includes(file.type) ||
+              file.size > 512 * 1024
+            ) {
+              notifyWarning('内部图片支持 PNG、JPEG、GIF，单张不超过512KB')
+              return
+            }
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(String(reader.result))
+              reader.onerror = () => reject(new Error('图片读取失败'))
+              reader.readAsDataURL(file)
+            })
+            insertFn(dataUrl, file.name, '')
+            return
+          }
           if (!props.ticketId) {
             notifyWarning('当前无法上传图片，请确认已打开有效工单页面')
             return

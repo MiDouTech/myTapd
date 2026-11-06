@@ -237,6 +237,8 @@ export interface ImageUploadOutput {
 }
 
 export interface TicketCommentOutput {
+  contentFormat?: 'HTML' | 'PLAIN_TEXT'
+  visibility: 'PUBLIC' | 'INTERNAL'
   id: number
   userId?: number
   userName?: string
@@ -308,6 +310,7 @@ export interface TicketDetailOutput {
   customFieldLabels?: Record<string, string>
   attachments?: TicketAttachmentOutput[]
   comments?: TicketCommentOutput[]
+  canWriteComments?: boolean
   logs?: TicketLogOutput[]
   bugReports?: TicketBugReportOutput[]
   bugCustomerInfo?: TicketBugCustomerInfoInput

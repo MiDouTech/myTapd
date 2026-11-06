@@ -56,4 +56,10 @@ public final class SecurityUtil {
     public static boolean isAuthenticated() {
         return getCurrentUser() != null;
     }
+
+    public static boolean isAgentAuthenticated() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "AGENT_API_KEY".equals(authority.getAuthority()));
+    }
 }

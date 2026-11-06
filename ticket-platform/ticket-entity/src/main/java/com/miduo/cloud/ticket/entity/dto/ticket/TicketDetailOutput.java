@@ -97,6 +97,8 @@ public class TicketDetailOutput implements Serializable {
 
     private List<CommentOutput> comments;
 
+    private Boolean canWriteComments;
+
     private List<LogOutput> logs;
 
     private List<BugReportOutput> bugReports;
@@ -146,6 +148,8 @@ public class TicketDetailOutput implements Serializable {
         private String userAvatar;
         private String content;
         private String type;
+        private String visibility;
+        private String contentFormat;
         private Date createTime;
     }
 

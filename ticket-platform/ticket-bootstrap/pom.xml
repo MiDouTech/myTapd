@@ -146,6 +146,10 @@
                                 -->
                                 <delete file="${project.build.outputDirectory}/db/migration/V11__enhance_org_account_management.sql"
                                         quiet="true"/>
+                                <!-- V54 originals now live in separately selected legacy locations. -->
+                                <delete file="${project.build.outputDirectory}/db/migration/V54__bug_report_add_resolve_time.sql" quiet="true"/>
+                                <delete file="${project.build.outputDirectory}/db/migration/V54__workflow_customization_delete_guard.sql" quiet="true"/>
+                                <delete file="${project.build.outputDirectory}/db/migration/V57__ensure_ticket_bug_info_manual_valid_report.sql" quiet="true"/>
                             </target>
                         </configuration>
                         <goals>

@@ -102,7 +102,7 @@ public class McpToolService {
         Map<String, Object> ticketIdProp = longProp("工单ID，正整数");
         ticketIdProp.put("minimum", 1);
         commentProps.put("ticketId", ticketIdProp);
-        Map<String, Object> contentProp = stringProp("评论正文，与现有评论接口格式一致；不能为空，最多20000字符", null);
+        Map<String, Object> contentProp = stringProp("内部备注纯文本；不解析 HTML 或 Markdown，不支持附件；不能为空，最多20000字符", null);
         contentProp.put("minLength", 1);
         contentProp.put("maxLength", 20000);
         commentProps.put("content", contentProp);
@@ -115,7 +115,7 @@ public class McpToolService {
         mentionsProp.put("maxItems", 20);
         commentProps.put("mentionedUserIds", mentionsProp);
         tools.add(new McpToolDefinition(TOOL_ADD_COMMENT,
-                "写操作：以当前用户身份追加工单评论并返回commentId；可能触发@通知。仅在用户明确授权提交后调用，勿自动重试以免重复评论",
+                "写操作：以当前授权员工身份追加内部备注并返回commentId，不能发布公开回复；仅向指定内部员工发站内提醒，无通知人只留痕。仅在用户明确授权提交后调用，勿自动重试以免重复评论",
                 objectSchema(commentProps, new String[]{"ticketId", "content"})));
 
         return tools;
@@ -202,6 +202,11 @@ public class McpToolService {
         }
         TicketCommentInput input = new TicketCommentInput();
         input.setContent(content.textValue());
+        if (content.textValue().length() > 20000) {
+            throw new IllegalArgumentException("评论内容不能超过20000个字符");
+        }
+        input.setContentFormat("PLAIN_TEXT");
+        input.setVisibility("INTERNAL");
         JsonNode mentions = args.get("mentionedUserIds");
         if (mentions != null && !mentions.isNull()) {
             if (!mentions.isArray() || mentions.size() > 20) {

@@ -22,4 +22,10 @@ public class TicketCommentPO extends BaseEntity {
 
     @TableField("type")
     private String type;
+
+    @TableField("visibility")
+    private String visibility;
+
+    @TableField("content_format")
+    private String contentFormat;
 }

@@ -86,6 +86,9 @@ public class TicketApplicationService {
     private TicketCommentMapper commentMapper;
 
     @Resource
+    private TicketCommentPolicy commentPolicy;
+
+    @Resource
     private TicketAttachmentMapper attachmentMapper;
 
     @Resource
@@ -649,6 +652,27 @@ public class TicketApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long addComment(Long ticketId, TicketCommentInput input, Long currentUserId) {
+        commentPolicy.requireInternalAccess(currentUserId);
+        CommentVisibility visibility = CommentVisibility.fromInput(input == null ? null : input.getVisibility());
+        // API Key 也可调用普通 REST 评论接口，不能靠切换入口公开 Agent 分析。
+        if (com.miduo.cloud.ticket.common.security.SecurityUtil.isAgentAuthenticated()) {
+            visibility = CommentVisibility.INTERNAL;
+        }
+        return saveComment(ticketId, input, currentUserId, visibility);
+    }
+
+    /** 仅供已完成插件归属校验的服务调用，不暴露为客户端可选 source 参数。 */
+    @Transactional(rollbackFor = Exception.class)
+    public Long addPluginComment(Long ticketId, TicketCommentInput input, Long currentUserId) {
+        TicketPO ticket = ticketMapper.selectById(ticketId);
+        if (ticket == null || currentUserId == null || !currentUserId.equals(ticket.getCreatorId())) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN);
+        }
+        return saveComment(ticketId, input, currentUserId, CommentVisibility.PUBLIC);
+    }
+
+    private Long saveComment(Long ticketId, TicketCommentInput input, Long currentUserId,
+                             CommentVisibility visibility) {
         if (input == null) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "请求体不能为空");
         }
@@ -660,21 +684,88 @@ public class TicketApplicationService {
         if (content == null || content.trim().isEmpty()) {
             throw BusinessException.of(ErrorCode.PARAM_ERROR, "评论内容不能为空");
         }
+        String format = input.getContentFormat() == null
+                ? (visibility == CommentVisibility.PUBLIC ? "HTML" : "PLAIN_TEXT") : input.getContentFormat();
+        if (!"HTML".equals(format) && !"PLAIN_TEXT".equals(format)) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "评论格式必须为 HTML 或 PLAIN_TEXT");
+        }
+        if (visibility == CommentVisibility.INTERNAL && "HTML".equals(format)) {
+            content = InternalCommentHtml.clean(content);
+        } else if (content.length() > 20000) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "评论内容不能超过20000个字符");
+        }
+        if (visibility == CommentVisibility.PUBLIC && "PLAIN_TEXT".equals(format)) {
+            content = org.jsoup.nodes.Entities.escape(content).replace("\n", "<br>");
+            format = "HTML";
+        }
+        if (visibility == CommentVisibility.PUBLIC) {
+            content = InternalCommentHtml.cleanPublic(content);
+        }
+        if (visibility == CommentVisibility.INTERNAL && input.getAttachments() != null
+                && !input.getAttachments().isEmpty()) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "内部备注图片须内嵌在正文中，不支持公开附件");
+        }
+        List<Long> mentionTargets = visibility == CommentVisibility.INTERNAL
+                ? resolveInternalMentionTargets(input.getMentionedUserIds(), currentUserId)
+                : resolveCommentMentionTargets(mergeExplicitAndHtmlMentions(input.getMentionedUserIds(), content), currentUserId);
         TicketCommentPO comment = new TicketCommentPO();
         comment.setTicketId(ticketId);
         comment.setUserId(currentUserId);
         comment.setContent(content.trim());
         comment.setType(CommentType.COMMENT.getCode());
+        comment.setVisibility(visibility.name());
+        comment.setContentFormat(format);
         commentMapper.insert(comment);
 
-        List<Long> combinedMentions = mergeExplicitAndHtmlMentions(input.getMentionedUserIds(), content);
-        List<Long> mentionTargets = resolveCommentMentionTargets(combinedMentions, currentUserId);
         if (!mentionTargets.isEmpty()) {
-            String plainSummary = toCommentPlainSummary(content);
-            eventPublisher.publishEvent(new TicketCommentMentionEvent(ticketId, mentionTargets,
-                    currentUserId, plainSummary));
+            String plainSummary = visibility == CommentVisibility.PUBLIC ? toCommentPlainSummary(content) : null;
+            eventPublisher.publishEvent(new TicketCommentMentionEvent(ticketId, comment.getId(), visibility.name(),
+                    mentionTargets, currentUserId, plainSummary));
         }
         return comment.getId();
+    }
+
+    private List<Long> resolveInternalMentionTargets(List<Long> requested, Long authorId) {
+        if (requested == null || requested.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (requested.size() > AppConstants.MAX_TICKET_COMMENT_MENTIONS) {
+            throw BusinessException.of(ErrorCode.PARAM_ERROR, "最多@提醒20人");
+        }
+        LinkedHashSet<Long> targets = new LinkedHashSet<>();
+        for (Long id : requested) {
+            if (!commentPolicy.canAccessInternal(id)) {
+                throw BusinessException.of(ErrorCode.PARAM_ERROR, "通知对象必须是有权访问内部系统的启用企微员工");
+            }
+            if (!Objects.equals(id, authorId)) {
+                targets.add(id);
+            }
+        }
+        return new ArrayList<>(targets);
+    }
+
+    public List<com.miduo.cloud.ticket.entity.dto.user.UserListOutput> getInternalCommentRecipients(
+            Long ticketId, Long userId, String keyword) {
+        commentPolicy.requireInternalAccess(userId);
+        if (ticketMapper.selectById(ticketId) == null) {
+            throw BusinessException.of(ErrorCode.TICKET_NOT_FOUND);
+        }
+        String search = keyword == null ? "" : keyword.trim();
+        List<SysUserPO> users = userMapper.selectList(new LambdaQueryWrapper<SysUserPO>()
+                .eq(SysUserPO::getAccountStatus, 1)
+                .isNotNull(SysUserPO::getWecomUserid).ne(SysUserPO::getWecomUserid, "")
+                .and(!search.isEmpty(), q -> q.like(SysUserPO::getName, search).or().like(SysUserPO::getEmployeeNo, search))
+                .orderByAsc(SysUserPO::getName).last("LIMIT 100"));
+        return users.stream().filter(u -> org.springframework.util.StringUtils.hasText(u.getWecomUserid()))
+                .map(u -> {
+                    com.miduo.cloud.ticket.entity.dto.user.UserListOutput recipient =
+                            new com.miduo.cloud.ticket.entity.dto.user.UserListOutput();
+                    recipient.setId(u.getId());
+                    recipient.setName(u.getName());
+                    recipient.setEmployeeNo(u.getEmployeeNo());
+                    recipient.setAvatarUrl(u.getAvatarUrl());
+                    return recipient;
+                }).collect(Collectors.toList());
     }
 
     private static List<Long> mergeExplicitAndHtmlMentions(List<Long> explicit, String html) {
@@ -877,7 +968,9 @@ public class TicketApplicationService {
         List<TicketCommentPO> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<TicketCommentPO>()
                         .eq(TicketCommentPO::getTicketId, ticket.getId())
+                        .eq(TicketCommentPO::getVisibility, CommentVisibility.PUBLIC.name())
                         .orderByAsc(TicketCommentPO::getCreateTime)
+                        .orderByAsc(TicketCommentPO::getId)
         );
         if (comments != null) {
             for (TicketCommentPO c : comments) {
@@ -1359,6 +1452,7 @@ public class TicketApplicationService {
     }
 
     private TicketDetailOutput buildDetailOutput(TicketPO ticket, Long currentUserId) {
+        boolean internalAccess = commentPolicy.canAccessInternal(currentUserId);
         TicketDetailOutput output = new TicketDetailOutput();
         output.setId(ticket.getId());
         output.setTicketNo(ticket.getTicketNo());
@@ -1477,8 +1571,11 @@ public class TicketApplicationService {
         List<TicketCommentPO> comments = commentMapper.selectList(
                 new LambdaQueryWrapper<TicketCommentPO>()
                         .eq(TicketCommentPO::getTicketId, ticket.getId())
+                        .eq(!internalAccess, TicketCommentPO::getVisibility, CommentVisibility.PUBLIC.name())
                         .orderByDesc(TicketCommentPO::getCreateTime)
+                        .orderByDesc(TicketCommentPO::getId)
         );
+        output.setCanWriteComments(internalAccess);
         if (comments != null) {
             for (TicketCommentPO c : comments) {
                 if (c.getUserId() != null) userIds.add(c.getUserId());
@@ -1545,6 +1642,8 @@ public class TicketApplicationService {
             Map<Long, SysUserPO> finalUserMap2 = userMap;
             output.setComments(comments.stream().map(c -> {
                 TicketDetailOutput.CommentOutput co = new TicketDetailOutput.CommentOutput();
+                co.setVisibility(c.getVisibility());
+                co.setContentFormat(c.getContentFormat());
                 co.setId(c.getId());
                 co.setUserId(c.getUserId());
                 SysUserPO commentUser = finalUserMap2.get(c.getUserId());

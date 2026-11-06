@@ -1,0 +1,192 @@
+{
+  "passed": true,
+  "database": "mts3_http",
+  "backend": "http://127.0.0.1:18080",
+  "checks": [
+    "bound enabled employee read/write",
+    "unbound external cannot read/write internal",
+    "disabled and anonymous denied",
+    "real image bytes persisted and read only in authorized detail",
+    "no private attachment/CDN URL",
+    "external/SVG/invalid image rejected",
+    "private/public HTML sanitized",
+    "public reply visible",
+    "legacy plain text format retained",
+    "API key forced internal",
+    "binding/status revocation effective with existing JWT",
+    "comment content absent from operation log",
+    "real signed plugin launch and public-only detail",
+    "plugin public reply preserves video",
+    "other plugin owner denied"
+  ],
+  "observations": [
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991002,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991002,
+      "status": 200,
+      "code": 403
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991004,
+      "status": 401,
+      "code": 401
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991004,
+      "status": 401,
+      "code": 401
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": "anonymous/API-key",
+      "status": 401,
+      "code": 401
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": "anonymous/API-key",
+      "status": 401,
+      "code": 401
+    },
+    {
+      "path": "/api/open/ticket/MTS3-INTEGRATION",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 1001
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 1001
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 1001
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/ticket/MTS3-INTEGRATION",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/user/api-key/create",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991001,
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/ticket/991003/comment",
+      "actor": 991001,
+      "status": 200,
+      "code": 403
+    },
+    {
+      "path": "/api/ticket/detail/991003",
+      "actor": 991001,
+      "status": 401,
+      "code": 401
+    },
+    {
+      "path": "/api/open/v1/plugin/launch-token",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/v1/plugin/tickets/MTS3-INTEGRATION/detail",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/v1/plugin/tickets/MTS3-INTEGRATION/messages",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/ticket/MTS3-INTEGRATION",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/v1/plugin/launch-token",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 200
+    },
+    {
+      "path": "/api/open/v1/plugin/tickets/MTS3-INTEGRATION/detail",
+      "actor": "anonymous/API-key",
+      "status": 200,
+      "code": 1002
+    }
+  ]
+}

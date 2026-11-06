@@ -38,6 +38,12 @@ import java.util.stream.Collectors;
 @Component
 public class TicketEventNotificationListener {
 
+    @javax.annotation.Resource
+    private com.miduo.cloud.ticket.application.ticket.TicketCommentPolicy commentPolicy;
+
+    @javax.annotation.Resource
+    private com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.mapper.TicketCommentMapper commentMapper;
+
     private final NotificationOrchestrator notificationOrchestrator;
     private final WecomGroupPushService wecomGroupPushService;
     private final WebhookDispatchService webhookDispatchService;
@@ -90,7 +96,8 @@ public class TicketEventNotificationListener {
      * 评论 @ 提醒必须在事务提交后同步分发：不可与 {@link Async} 叠在同类监听器上，
      * 否则会在提交前进入代理逻辑，导致通知不可靠。
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void onTicketCommentMention(TicketCommentMentionEvent event) {
         if (event == null || event.getTicketId() == null || event.getMentionedUserIds() == null
                 || event.getMentionedUserIds().isEmpty()) {
@@ -98,6 +105,26 @@ public class TicketEventNotificationListener {
         }
         TicketPO ticket = ticketMapper.selectById(event.getTicketId());
         if (ticket == null) {
+            return;
+        }
+        if (event.getCommentId() == null) {
+            return;
+        }
+        com.miduo.cloud.ticket.infrastructure.persistence.mybatis.ticket.po.TicketCommentPO comment =
+                commentMapper.selectById(event.getCommentId());
+        if (comment == null || !Objects.equals(comment.getTicketId(), event.getTicketId())
+                || !Objects.equals(comment.getVisibility(), event.getVisibility())) {
+            return;
+        }
+        if ("INTERNAL".equals(comment.getVisibility())) {
+            for (Long uid : new LinkedHashSet<>(event.getMentionedUserIds())) {
+                if (!Objects.equals(uid, event.getCommentAuthorUserId()) && commentPolicy.canAccessInternal(uid)) {
+                    notificationOrchestrator.dispatchInternalCommentMention(uid, ticket.getId());
+                }
+            }
+            return;
+        }
+        if (!"PUBLIC".equals(comment.getVisibility())) {
             return;
         }
         String authorName = resolveUserName(event.getCommentAuthorUserId());

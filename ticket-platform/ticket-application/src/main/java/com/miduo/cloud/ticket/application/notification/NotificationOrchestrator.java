@@ -142,6 +142,14 @@ public class NotificationOrchestrator {
         return false;
     }
 
+    /** 内部备注只能站内提醒，且不接受备注正文作为参数。 */
+    public void dispatchInternalCommentMention(Long userId, Long ticketId) {
+        if (userId != null && isSiteEnabled(getUserPreference(userId, NotificationType.COMMENT_MENTION.getCode()))) {
+            siteNotificationSender.send(userId, ticketId, null, NotificationType.COMMENT_MENTION.getCode(),
+                    "内部备注提醒", "有一条内部备注提及你");
+        }
+    }
+
     private int getAggregateMinutes() {
         LambdaQueryWrapper<SystemConfigPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SystemConfigPO::getConfigKey, "notification_aggregate_minutes");

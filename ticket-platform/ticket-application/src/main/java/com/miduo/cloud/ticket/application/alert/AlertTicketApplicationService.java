@@ -490,6 +490,7 @@ public class AlertTicketApplicationService {
                 safeString(event.getTargetIdent()),
                 event.getTriggerTime() != null ? formatTimestamp(event.getTriggerTime()) : "未知"));
         comment.setType("system");
+        comment.setVisibility("INTERNAL");
         commentMapper.insert(comment);
     }
 

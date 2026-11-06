@@ -70,7 +70,8 @@ public class AgentApiKeyAuthenticationFilter extends OncePerRequestFilter {
             List<String> roles = userRepository.findRoleCodes(user.getId());
             List<SimpleGrantedAuthority> authorities = roles != null
                     ? roles.stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r.toUpperCase())).collect(Collectors.toList())
-                    : Collections.emptyList();
+                    : new java.util.ArrayList<>();
+            authorities.add(new SimpleGrantedAuthority("AGENT_API_KEY"));
 
             SecurityUserDetails userDetails = new SecurityUserDetails(
                     user.getId(), user.getName(), user.getWecomUserid(), roles, authorities);

@@ -282,7 +282,7 @@ public class TicketController {
      * 接口编号：API000508
      * 产品文档功能：工单详情 - 评论区发表评论（可选 mentionedUserIds 触发 @ 提醒）
      */
-    @OperationLog(moduleName = "工单管理", operationItem = "新增评论")
+    @OperationLog(moduleName = "工单管理", operationItem = "新增评论", recordParams = false)
     @PostMapping("/{id}/comment")
     @Operation(summary = "新增工单评论", description = "接口编号：API000508。请求体可含 mentionedUserIds（最多20人）用于评论@提醒")
     public ApiResult<Long> addComment(@PathVariable Long id,
@@ -298,6 +298,12 @@ public class TicketController {
             throw BusinessException.of(ErrorCode.UNAUTHORIZED);
         }
         return userId;
+    }
+
+    @GetMapping("/{id}/comment/recipients")
+    public ApiResult<List<com.miduo.cloud.ticket.entity.dto.user.UserListOutput>> getInternalCommentRecipients(
+            @PathVariable Long id, @RequestParam(required = false) String keyword) {
+        return ApiResult.success(ticketService.getInternalCommentRecipients(id, getCurrentUserId(), keyword));
     }
 
     private boolean hasAllTicketPermission() {
