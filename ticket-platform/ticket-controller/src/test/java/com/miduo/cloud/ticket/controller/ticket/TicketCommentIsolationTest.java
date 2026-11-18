@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.miduo.cloud.ticket.application.ticket.TicketApplicationService;
 import com.miduo.cloud.ticket.application.ticket.TicketCommentPolicy;
+import com.miduo.cloud.ticket.application.workflow.TicketWorkflowAppService;
 import com.miduo.cloud.ticket.common.exception.BusinessException;
 import com.miduo.cloud.ticket.domain.common.event.TicketCommentMentionEvent;
 import com.miduo.cloud.ticket.entity.dto.ticket.TicketCommentInput;
@@ -96,6 +97,28 @@ class TicketCommentIsolationTest {
         assertEquals(Arrays.asList("legacy comment", "legacy operation", "legacy system"), jdbc.queryForList("SELECT content FROM ticket_comment ORDER BY id", String.class));
         jdbc.update("INSERT INTO ticket_comment(ticket_id,content) VALUES (42,'new system')");
         assertEquals("INTERNAL", jdbc.queryForObject("SELECT visibility FROM ticket_comment WHERE content='new system'", String.class));
+    }
+
+    @Test
+    void operationRemarksArePublicForNewAndHistoricalComments() {
+        jdbc.update("INSERT INTO ticket_comment(ticket_id,user_id,content,type) VALUES "
+                + "(42,7,'past transition remark','OPERATION'), "
+                + "(42,7,'private comment','COMMENT'), (42,7,'private system note','system')");
+        new ResourceDatabasePopulator(new FileSystemResource(
+                "../ticket-bootstrap/src/main/resources/db/migration/V74__publish_ticket_operation_comments.sql"))
+                .execute(jdbc.getDataSource());
+
+        TicketWorkflowAppService workflowService = new TicketWorkflowAppService(
+                null, null, comments, null, null, null, null, null, null, null, null, null, null, null);
+        ReflectionTestUtils.invokeMethod(workflowService, "saveOperationComment", 42L, 7L, "new transition remark");
+
+        List<String> publicComments = new ArrayList<>();
+        service.getPublicTicketDetail("MTS-42").getComments().forEach(comment -> publicComments.add(comment.getContent()));
+        assertEquals(5, publicComments.size());
+        assertTrue(publicComments.contains("past transition remark"));
+        assertTrue(publicComments.contains("new transition remark"));
+        assertFalse(publicComments.contains("private comment"));
+        assertFalse(publicComments.contains("private system note"));
     }
 
     @Test

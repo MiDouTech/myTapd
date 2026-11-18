@@ -6,6 +6,7 @@ import com.miduo.cloud.ticket.application.ticket.TicketBugApplicationService;
 import com.miduo.cloud.ticket.application.sla.SlaTimerService;
 import com.miduo.cloud.ticket.application.ticket.TicketTimeTrackApplicationService;
 import com.miduo.cloud.ticket.common.enums.CommentType;
+import com.miduo.cloud.ticket.common.enums.CommentVisibility;
 import com.miduo.cloud.ticket.common.enums.ErrorCode;
 import com.miduo.cloud.ticket.common.enums.TicketAssignType;
 import com.miduo.cloud.ticket.common.enums.TicketStatus;
@@ -844,7 +845,7 @@ public class TicketWorkflowAppService extends BaseApplicationService {
         comment.setUserId(operatorId);
         comment.setContent(content);
         comment.setType(CommentType.OPERATION.getCode());
-        comment.setVisibility("INTERNAL");
+        comment.setVisibility(CommentVisibility.PUBLIC.name());
         ticketCommentMapper.insert(comment);
     }
 
