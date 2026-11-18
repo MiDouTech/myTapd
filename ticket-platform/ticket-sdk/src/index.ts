@@ -845,52 +845,54 @@ class TicketSdkImpl {
     try {
       const detail = await this.fetchTicketDetail(ticketNo)
       container.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:14px;">
-          <button type="button" data-action="back-to-tickets" style="align-self:flex-start;border:none;background:transparent;color:#606266;cursor:pointer;padding:0;">← 返回我的工单</button>
-          <div>
-            <div style="font-size:16px;font-weight:600;color:#303133;">${escapeHtml(detail.title)}</div>
-            <div style="font-size:12px;color:#909399;margin-top:5px;">${escapeHtml(detail.ticketNo)} · ${escapeHtml(detail.statusLabel || detail.status)}</div>
-          </div>
-          <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
-          <div>
-            <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
-            <div data-role="ticket-messages">${this.renderTicketMessages(
-              Array.isArray(detail.messages) ? detail.messages.slice(-5) : [],
-            )}</div>
-          </div>
-          <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
-            <style>
-              [data-role="supplement-content"]:focus{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
-              [data-action="pick-supplement-file"]:hover,[data-action="pick-supplement-file"].is-dragover{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;background:#eef7ff!important;box-shadow:0 0 0 2px rgba(22,117,209,.10) inset;}
-              [data-action="pick-supplement-file"]:focus-visible{outline:2px solid ${this.config?.theme?.primaryColor ?? '#1675d1'};outline-offset:2px;}
-              [data-role="supplement-upload-card"]:hover{border-color:#c6e2ff!important;box-shadow:0 4px 12px rgba(22,117,209,.08);}
-            </style>
-            <label for="miduo-ticket-supplement-content" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 补充说明</label>
-            <textarea id="miduo-ticket-supplement-content" data-role="supplement-content" maxlength="4000" placeholder="请详细补充问题说明、最新复现步骤或结果；相关截图和视频可在下方上传" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;outline:none;line-height:1.6;font:inherit;font-size:14px;"></textarea>
-            <div data-role="supplement-attachment-zone" style="margin-top:16px;">
-              <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
-              <button type="button" data-action="pick-supplement-file" aria-label="上传补充附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${this.config?.theme?.primaryColor ?? '#1675d1'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
-                <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
-                  <span style="font-size:14px;font-weight:600;color:${this.config?.theme?.primaryColor ?? '#1675d1'};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
-                  <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
-                </span>
-              </button>
+        <div data-role="ticket-detail-scroll" role="region" aria-label="工单详情" tabindex="0" style="flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;">
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <button type="button" data-action="back-to-tickets" style="align-self:flex-start;border:none;background:transparent;color:#606266;cursor:pointer;padding:0;">← 返回我的工单</button>
+            <div>
+              <div style="font-size:16px;font-weight:600;color:#303133;">${escapeHtml(detail.title)}</div>
+              <div style="font-size:12px;color:#909399;margin-top:5px;">${escapeHtml(detail.ticketNo)} · ${escapeHtml(detail.statusLabel || detail.status)}</div>
             </div>
-            <input data-role="supplement-files" type="file" accept="image/*,video/*" multiple style="display:none;" />
-            <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="supplement-upload-empty">暂无附件，上传后会在这里预览，可删除</span></div>
-            <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
-            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
-              <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
-              <button type="button" data-action="submit-supplement" style="padding:7px 12px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">提交补充</button>
+            <div style="background:#f5f7fa;border-radius:6px;padding:10px;font-size:13px;line-height:1.6;color:#606266;white-space:pre-wrap;">${escapeHtml(htmlToPlainText(detail.description) || '暂无问题描述')}</div>
+            <div>
+              <div style="font-weight:600;font-size:14px;margin-bottom:8px;">最近沟通</div>
+              <div data-role="ticket-messages">${this.renderTicketMessages(
+                Array.isArray(detail.messages) ? detail.messages.slice(-5) : [],
+              )}</div>
             </div>
+            <div data-role="supplement-editor" style="display:none;border-top:1px solid #ebeef5;padding-top:12px;">
+              <style>
+                [data-role="supplement-content"]:focus{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;box-shadow:0 0 0 2px rgba(22,117,209,.12);}
+                [data-action="pick-supplement-file"]:hover,[data-action="pick-supplement-file"].is-dragover{border-color:${this.config?.theme?.primaryColor ?? '#1675d1'}!important;background:#eef7ff!important;box-shadow:0 0 0 2px rgba(22,117,209,.10) inset;}
+                [data-action="pick-supplement-file"]:focus-visible{outline:2px solid ${this.config?.theme?.primaryColor ?? '#1675d1'};outline-offset:2px;}
+                [data-role="supplement-upload-card"]:hover{border-color:#c6e2ff!important;box-shadow:0 4px 12px rgba(22,117,209,.08);}
+              </style>
+              <label for="miduo-ticket-supplement-content" style="display:block;margin-bottom:6px;font-size:14px;color:#303133;"><span style="color:#f56c6c;">*</span> 补充说明</label>
+              <textarea id="miduo-ticket-supplement-content" data-role="supplement-content" maxlength="4000" placeholder="请详细补充问题说明、最新复现步骤或结果；相关截图和视频可在下方上传" style="width:100%;height:140px;box-sizing:border-box;padding:10px;border:1px solid #dcdfe6;border-radius:4px;resize:vertical;outline:none;line-height:1.6;font:inherit;font-size:14px;"></textarea>
+              <div data-role="supplement-attachment-zone" style="margin-top:16px;">
+                <div style="margin-bottom:8px;font-size:14px;color:#303133;">附件上传</div>
+                <button type="button" data-action="pick-supplement-file" aria-label="上传补充附件，支持点击、拖拽、鼠标移入后 Ctrl+V 粘贴图片和视频" style="width:100%;min-height:112px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;border:1px dashed #b8d9fb;background:#f8fbff;border-radius:8px;cursor:pointer;color:inherit;text-align:center;transition:border-color .2s,background .2s,box-shadow .2s;">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="${this.config?.theme?.primaryColor ?? '#1675d1'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto;"><path d="M7 18a4.6 4.6 0 0 1-.7-9.15A6 6 0 0 1 17.7 7a4 4 0 0 1-.7 8H9"/><path d="m9 12 3-3 3 3M12 9v9"/></svg>
+                  <span style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+                    <span style="font-size:14px;font-weight:600;color:${this.config?.theme?.primaryColor ?? '#1675d1'};">点击 / 拖拽 / Ctrl+V 粘贴上传</span>
+                    <span style="font-size:12px;color:#909399;line-height:1.4;">支持 jpg、png、mp4，单文件 ≤ 50MB；最多 9 张图片、3 个视频</span>
+                  </span>
+                </button>
+              </div>
+              <input data-role="supplement-files" type="file" accept="image/*,video/*" multiple style="display:none;" />
+              <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="supplement-upload-empty">暂无附件，上传后会在这里预览，可删除</span></div>
+              <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+                <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
+                <button type="button" data-action="submit-supplement" style="padding:7px 12px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">提交补充</button>
+              </div>
+            </div>
+            <div data-role="ticket-actions" style="display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #ebeef5;padding-top:12px;">
+              <button type="button" data-action="show-supplement" style="padding:8px 14px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">补充信息</button>
+              <button type="button" data-action="urge-ticket" ${detail.canUrge ? '' : 'disabled'} title="${escapeHtml(detail.urgeDisabledReason || '')}" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:${detail.canUrge ? 'pointer' : 'not-allowed'};color:${detail.canUrge ? '#606266' : '#c0c4cc'};">催单${detail.urgeCount ? `（${detail.urgeCount}）` : ''}</button>
+              <button type="button" data-action="open-public-detail" style="padding:8px 14px;border:none;background:transparent;color:#1675d1;cursor:pointer;">查看完整详情</button>
+            </div>
+            <div data-role="detail-message" style="font-size:13px;color:#67c23a;"></div>
           </div>
-          <div data-role="ticket-actions" style="display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #ebeef5;padding-top:12px;">
-            <button type="button" data-action="show-supplement" style="padding:8px 14px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">补充信息</button>
-            <button type="button" data-action="urge-ticket" ${detail.canUrge ? '' : 'disabled'} title="${escapeHtml(detail.urgeDisabledReason || '')}" style="padding:8px 14px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:${detail.canUrge ? 'pointer' : 'not-allowed'};color:${detail.canUrge ? '#606266' : '#c0c4cc'};">催单${detail.urgeCount ? `（${detail.urgeCount}）` : ''}</button>
-            <button type="button" data-action="open-public-detail" style="padding:8px 14px;border:none;background:transparent;color:#1675d1;cursor:pointer;">查看完整详情</button>
-          </div>
-          <div data-role="detail-message" style="font-size:13px;color:#67c23a;"></div>
         </div>`
 
       {
