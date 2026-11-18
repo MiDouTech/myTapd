@@ -301,7 +301,7 @@ jobs:
           chmod 600 ~/.git-credentials
 
           # 克隆静态仓库
-          git clone "${STATIC_REPO_URL}" _static_repo
+          git clone --depth=1 --branch main "${STATIC_REPO_URL}" _static_repo
 
           # 创建目录并复制 ZIP
           DEST_DIR="_static_repo/${STATIC_REPO_PATH}/${ARTIFACT}/${VERSION}"
@@ -312,9 +312,22 @@ jobs:
           cd _static_repo
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
-          git add .
-          git commit -m "chore: publish frontend ${VERSION} [skip ci]"
-          git push
+          git add -- "${STATIC_REPO_PATH}/${ARTIFACT}/${VERSION}/${ARTIFACT}.zip"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: publish frontend ${VERSION} [skip ci]"
+          fi
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              break
+            fi
+            if [[ "$attempt" -eq 5 ]]; then
+              exit 1
+            fi
+            # 其他发布任务可能已更新 main，保留其提交后再重试。
+            sleep "$((attempt * 2))"
+            git fetch origin main
+            git rebase FETCH_HEAD
+          done
 
           # 输出下载链接
           DOWNLOAD_URL="${STATIC_REPO_URL}/-/git/raw/main/${STATIC_REPO_PATH}/${ARTIFACT}/${VERSION}/${ARTIFACT}.zip?download=true"
