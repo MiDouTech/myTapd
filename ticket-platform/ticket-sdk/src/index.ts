@@ -880,11 +880,6 @@ class TicketSdkImpl {
               </div>
               <input data-role="supplement-files" type="file" accept="image/*,video/*" multiple style="display:none;" />
               <div data-role="supplement-upload-list" style="margin-top:8px;font-size:12px;line-height:1.6;color:#909399;word-break:break-all;"><span data-role="supplement-upload-empty">暂无附件，上传后会在这里预览，可删除</span></div>
-              <div data-role="supplement-message" style="font-size:12px;margin-top:6px;color:#909399;"></div>
-              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
-                <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
-                <button type="button" data-action="submit-supplement" style="padding:7px 12px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">提交补充</button>
-              </div>
             </div>
             <div data-role="ticket-actions" style="display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #ebeef5;padding-top:12px;">
               <button type="button" data-action="show-supplement" style="padding:8px 14px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">补充信息</button>
@@ -892,6 +887,13 @@ class TicketSdkImpl {
               <button type="button" data-action="open-public-detail" style="padding:8px 14px;border:none;background:transparent;color:#1675d1;cursor:pointer;">查看完整详情</button>
             </div>
             <div data-role="detail-message" style="font-size:13px;color:#67c23a;"></div>
+          </div>
+        </div>
+        <div data-role="supplement-footer" hidden style="flex:0 0 auto;padding-top:10px;border-top:1px solid #ebeef5;">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;">
+            <div data-role="supplement-message" role="status" style="flex:1 1 160px;min-width:0;font-size:12px;color:#909399;overflow-wrap:anywhere;"></div>
+            <button type="button" data-action="cancel-supplement" style="padding:7px 12px;border:1px solid #dcdfe6;background:#fff;border-radius:4px;cursor:pointer;">取消</button>
+            <button type="button" data-action="submit-supplement" style="padding:7px 12px;border:none;background:${this.config?.theme?.primaryColor ?? '#1675d1'};color:#fff;border-radius:4px;cursor:pointer;">提交补充</button>
           </div>
         </div>`
 
@@ -902,14 +904,16 @@ class TicketSdkImpl {
           void this.renderMyTickets(panel).catch((error) => this.renderMyTicketsFatalError(panel, error))
         })
         container.querySelector('[data-action="open-public-detail"]')?.addEventListener('click', () => this.openPublicTicket(detail.ticketNo))
-        container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => {
-          ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'block'
-          ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'none'
-        })
-        container.querySelector('[data-action="cancel-supplement"]')?.addEventListener('click', () => {
-          ;(container.querySelector('[data-role="supplement-editor"]') as HTMLElement).style.display = 'none'
-          ;(container.querySelector('[data-role="ticket-actions"]') as HTMLElement).style.display = 'flex'
-        })
+        const supplementEditor = container.querySelector<HTMLElement>('[data-role="supplement-editor"]')!
+        const supplementFooter = container.querySelector<HTMLElement>('[data-role="supplement-footer"]')!
+        const ticketActions = container.querySelector<HTMLElement>('[data-role="ticket-actions"]')!
+        const setSupplementOpen = (open: boolean) => {
+          supplementEditor.style.display = open ? 'block' : 'none'
+          supplementFooter.hidden = !open
+          ticketActions.style.display = open ? 'none' : 'flex'
+        }
+        container.querySelector('[data-action="show-supplement"]')?.addEventListener('click', () => setSupplementOpen(true))
+        container.querySelector('[data-action="cancel-supplement"]')?.addEventListener('click', () => setSupplementOpen(false))
         const supplementContentEl = container.querySelector('[data-role="supplement-content"]') as HTMLTextAreaElement
         const supplementFilesEl = container.querySelector('[data-role="supplement-files"]') as HTMLInputElement
         const supplementDropzone = container.querySelector('[data-action="pick-supplement-file"]') as HTMLButtonElement
