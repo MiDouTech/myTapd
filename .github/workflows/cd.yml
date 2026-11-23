@@ -1,4 +1,4 @@
-name: CD – Build & Push Docker Images
+name: myTapd - CD – Build & Push Docker Images
 
 # 合并到受保护分支或推送版本 Tag 后触发
 on:
