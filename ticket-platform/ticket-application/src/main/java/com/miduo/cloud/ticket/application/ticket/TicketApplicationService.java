@@ -661,6 +661,19 @@ public class TicketApplicationService {
         return saveComment(ticketId, input, currentUserId, visibility);
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteComment(Long ticketId, Long commentId, Long currentUserId) {
+        commentPolicy.requireInternalAccess(currentUserId);
+        int deleted = commentMapper.delete(new LambdaQueryWrapper<TicketCommentPO>()
+                .eq(TicketCommentPO::getId, commentId)
+                .eq(TicketCommentPO::getTicketId, ticketId)
+                .eq(TicketCommentPO::getUserId, currentUserId)
+                .eq(TicketCommentPO::getType, CommentType.COMMENT.getCode()));
+        if (deleted == 0) {
+            throw BusinessException.of(ErrorCode.FORBIDDEN, "只能删除自己发布的评论");
+        }
+    }
+
     /** 仅供已完成插件归属校验的服务调用，不暴露为客户端可选 source 参数。 */
     @Transactional(rollbackFor = Exception.class)
     public Long addPluginComment(Long ticketId, TicketCommentInput input, Long currentUserId) {

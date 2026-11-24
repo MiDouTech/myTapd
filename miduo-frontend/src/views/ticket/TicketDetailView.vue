@@ -18,6 +18,7 @@ import {
   closeTicket,
   createTicketModule,
   deleteTicketAttachment,
+  deleteTicketComment,
   followTicket,
   getTicketDetail,
   getTicketModuleList,
@@ -100,6 +101,7 @@ const nodeDurationItems = ref<TicketNodeDurationItem[]>([])
 const bugSubmitLoading = ref(false)
 const attachmentPreviewVisible = ref(false)
 const attachmentPreviewUrl = ref('')
+const deletingCommentId = ref<number>()
 
 const MOBILE_BREAKPOINT = 768
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
@@ -1313,12 +1315,23 @@ function openAttachmentPreview(filePath?: string): void {
 }
 
 function handleCommentImageClick(event: MouseEvent): void {
-  const target = event.target as HTMLElement
-  if (target.tagName === 'IMG') {
-    const src = (target as HTMLImageElement).src
-    if (src) {
-      openAttachmentPreview(src)
+  const image = event.target
+  if (image instanceof HTMLImageElement) openAttachmentPreview(image.src)
+}
+
+async function handleDeleteComment(commentId: number): Promise<void> {
+  if (deletingCommentId.value != null) return
+
+  const id = ticketId.value
+  deletingCommentId.value = commentId
+  try {
+    await deleteTicketComment(id, commentId)
+    if (ticketId.value === id && detail.value?.comments) {
+      detail.value.comments = detail.value.comments.filter((comment) => comment.id !== commentId)
     }
+    notifySuccess('评论已删除')
+  } finally {
+    deletingCommentId.value = undefined
   }
 }
 
@@ -2682,6 +2695,30 @@ watch(
                 >操作记录</el-tag
               >
               <span class="comment-time">{{ formatDateTime(comment.createTime) }}</span>
+              <el-popconfirm
+                v-if="
+                  detail.canWriteComments &&
+                  comment.type === 'COMMENT' &&
+                  comment.userId != null &&
+                  comment.userId === currentUserId
+                "
+                title="确定删除这条评论吗？"
+                confirm-button-text="删除"
+                cancel-button-text="取消"
+                @confirm="handleDeleteComment(comment.id)"
+              >
+                <template #reference>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    :loading="deletingCommentId === comment.id"
+                    :disabled="deletingCommentId != null"
+                  >
+                    删除
+                  </el-button>
+                </template>
+              </el-popconfirm>
             </div>
             <div
               v-if="
@@ -4104,13 +4141,13 @@ watch(
   }
 
   :deep(img) {
-    display: block !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    height: auto !important;
+    display: block;
+    max-width: min(100%, 360px);
+    max-height: 240px;
+    width: auto;
+    height: auto;
     border-radius: 4px;
     cursor: zoom-in;
-    transition: opacity 0.15s;
     object-fit: contain;
 
     &:hover {
@@ -4119,20 +4156,8 @@ watch(
   }
 
   :deep(figure) {
-    display: block !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    margin: 0 0 8px !important;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-
-  :deep(figure img) {
-    display: block !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    height: auto !important;
-    object-fit: contain;
+    max-width: 100%;
+    margin: 0 0 8px;
   }
 
   :deep(table) {
