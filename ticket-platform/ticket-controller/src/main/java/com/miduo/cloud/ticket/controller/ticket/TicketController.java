@@ -292,6 +292,14 @@ public class TicketController {
         return ApiResult.success(commentId);
     }
 
+    @OperationLog(moduleName = "工单管理", operationItem = "删除评论", recordParams = false)
+    @DeleteMapping("/{id}/comment/{commentId}")
+    @Operation(summary = "删除本人发布的工单评论")
+    public ApiResult<Void> deleteComment(@PathVariable Long id, @PathVariable Long commentId) {
+        ticketService.deleteComment(id, commentId, getCurrentUserId());
+        return ApiResult.success();
+    }
+
     private Long getCurrentUserId() {
         Long userId = SecurityUtil.getCurrentUserId();
         if (userId == null) {

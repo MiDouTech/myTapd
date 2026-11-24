@@ -314,6 +314,10 @@ export function addTicketComment(id: number, payload: TicketCommentPayload): Pro
   return request.post<number>(`/ticket/${id}/comment`, payload)
 }
 
+export function deleteTicketComment(ticketId: number, commentId: number): Promise<void> {
+  return request.del<void>(`/ticket/${ticketId}/comment/${commentId}`)
+}
+
 export function getInternalCommentRecipients(
   id: number,
   keyword?: string,

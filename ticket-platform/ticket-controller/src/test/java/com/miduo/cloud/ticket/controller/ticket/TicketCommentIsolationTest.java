@@ -92,6 +92,27 @@ class TicketCommentIsolationTest {
     }
 
     @Test
+    void onlyAuthorCanDeleteCommentsOnTheSpecifiedTicket() {
+        jdbc.update("INSERT INTO ticket_comment(ticket_id,user_id,content,type,visibility,content_format)"
+                + " VALUES (42,7,'private note','COMMENT','INTERNAL','HTML')");
+        Long noteId = jdbc.queryForObject("SELECT id FROM ticket_comment WHERE content='private note'", Long.class);
+        Long replyId = jdbc.queryForObject("SELECT id FROM ticket_comment WHERE content='legacy comment'", Long.class);
+        Long operationId = jdbc.queryForObject("SELECT id FROM ticket_comment WHERE content='legacy operation'", Long.class);
+
+        assertThrows(BusinessException.class, () -> service.deleteComment(42L, noteId, 8L));
+        assertThrows(BusinessException.class, () -> service.deleteComment(43L, noteId, 7L));
+        assertThrows(BusinessException.class, () -> service.deleteComment(42L, operationId, 7L));
+        assertEquals(0, jdbc.queryForObject("SELECT deleted FROM ticket_comment WHERE id=?", Integer.class, noteId));
+
+        service.deleteComment(42L, noteId, 7L);
+        service.deleteComment(42L, replyId, 7L);
+        assertNull(comments.selectById(noteId));
+        assertNull(comments.selectById(replyId));
+        assertNotNull(comments.selectById(operationId));
+        verifyNoInteractions(events);
+    }
+
+    @Test
     void migrationPreservesEveryHistoricalTypeAndDefaultsNewRowsToInternal() {
         assertEquals(Arrays.asList("PUBLIC", "PUBLIC", "PUBLIC"), jdbc.queryForList("SELECT visibility FROM ticket_comment ORDER BY id", String.class));
         assertEquals(Arrays.asList("legacy comment", "legacy operation", "legacy system"), jdbc.queryForList("SELECT content FROM ticket_comment ORDER BY id", String.class));
